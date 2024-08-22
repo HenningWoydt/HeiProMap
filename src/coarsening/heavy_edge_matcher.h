@@ -1,75 +1,85 @@
 #ifndef SERIALPROCESSMAPPING_HEAVY_EDGE_MATCHER_H
 #define SERIALPROCESSMAPPING_HEAVY_EDGE_MATCHER_H
 
-#include "../datastructures/graph.h"
-#include "../datastructures/iterators/active_vertex_iterator.h"
+#include "../interfaces/IGraph.h"
+#include "../interfaces/IMatcher.h"
 
-namespace SPM {
+namespace HeiProMap {
 
-    class HeavyEdgeMatcher {
+    class HeavyEdgeMatcher : public IMatcher {
     private:
-        Graph *p_g = nullptr;
-        std::vector<s32> marker;
+        IGraph *m_p_g = nullptr;
+        IActiveVertexManager *m_p_av_manager = nullptr;
+
+        u32 m_mark = 0;
+        std::vector<u32> m_used;
 
     public:
         HeavyEdgeMatcher() = default;
 
-        void initialize(Graph *t_g){
-            p_g = t_g;
-            marker.resize((*p_g).get_n(), -1);
+        void initialize(IGraph *t_p_g,
+                        IActiveVertexManager *t_p_av_manager) final {
+            ASSERT(t_p_g != nullptr);
+            ASSERT(t_p_av_manager != nullptr);
+
+            m_p_g = t_p_g;
+            m_p_av_manager = t_p_av_manager;
+
+            m_mark = 0;
+            m_used.resize(m_p_g->get_n(), 0);
         }
 
-        void match(std::vector<Edge> &matches, s32 level) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
-            ASSERT(marker.size() == g.get_n());
+        void match(std::vector<Edge> &matches) final {
+            ASSERT(m_p_g != nullptr);
+            ASSERT(m_p_av_manager != nullptr);
+            ASSERT(m_used.size() == m_p_g->get_n());
 
+            m_mark += 1;
             matches.clear();
 
-            // first check degree 1 vertices
-            for (ActiveVertexIterator avi(g); avi.not_end(); avi.next()) {
-                vertex_t u = avi.get();
-                ASSERT(g.get_vertex_state(u) == 1);
-                if (marker[u] != level && g[u].size() == 1) {
-                    if (marker[g[u][0].v] != level) {
-                        marker[u] = level;
-                        marker[g[u][0].v] = level;
+            // first check vertices with degree 1
+            for (m_p_av_manager->reset_iterator(); m_p_av_manager->available(); m_p_av_manager->next()) {
+                vertex_t u = m_p_av_manager->get();
+                ASSERT(m_p_av_manager->is_active(u));
 
-                        matches.emplace_back(g[u][0].v, u); // pull u into v
+                if (m_used[u] != m_mark && m_p_g->n_neighbors(u) == 1) {
+                    const EdgeW &e = m_p_g->neighbor(u, 0);
+                    if (m_used[e.v] != m_mark) {
+                        m_used[u] = m_mark;
+                        m_used[e.v] = m_mark;
+
+                        matches.emplace_back(e.v, u); // pull u into v
                     }
                 }
             }
 
             // check all other vertices
-            for (ActiveVertexIterator avi(g); avi.not_end(); avi.next()) {
-                vertex_t u = avi.get();
-                ASSERT(g.get_vertex_state(u) == 1);
+            for (m_p_av_manager->reset_iterator(); m_p_av_manager->available(); m_p_av_manager->next()) {
+                vertex_t u = m_p_av_manager->get();
+                ASSERT(m_p_av_manager->is_active(u));
 
-                if (marker[u] != level && g[u].size() > 1) {
-
-                    bool found = false;
+                if (m_used[u] != m_mark) {
                     size_t best_idx;
-                    weight_t max_weight;
+                    weight_t max_weight = 0;
 
-                    for (size_t i = 0; i < g[u].size(); ++i) {
-                        const EdgeW &e = g[u][i];
+                    for (size_t i = 0; i < m_p_g->n_neighbors(u); ++i) {
+                        const EdgeW &e = m_p_g->neighbor(u, i);
                         ASSERT(u != e.v);
-                        ASSERT(g.get_vertex_state(e.v) == 1);
-                        if (marker[e.v] != level) {
-                            if (!found || e.w > max_weight) {
+                        ASSERT(m_p_av_manager->is_active(e.v));
+                        if (m_used[e.v] != m_mark) {
+                            if (e.w > max_weight) {
                                 best_idx = i;
                                 max_weight = e.w;
-                                found = true;
                             }
                         }
                     }
 
-                    if (found) {
-                        const EdgeW &e = g[u][best_idx];
-                        marker[u] = level;
-                        marker[e.v] = level;
+                    if (max_weight != 0) {
+                        const EdgeW &e = m_p_g->neighbor(u, best_idx);
+                        m_used[u] = m_mark;
+                        m_used[e.v] = m_mark;
 
-                        if (g[u].size() > g[e.v].size()) {
+                        if (m_p_g->n_neighbors(u) > m_p_g->n_neighbors(e.v)) {
                             matches.emplace_back(u, e.v);
                         } else {
                             matches.emplace_back(e.v, u);
@@ -78,22 +88,28 @@ namespace SPM {
                 }
             }
 
+#if ASSERT_ENABLED
             for (const Edge &e: matches) {
                 ASSERT(e.u != e.v);
-                ASSERT(g.get_vertex_state(e.u) == 1);
-                ASSERT(g.get_vertex_state(e.v) == 1);
+                ASSERT(m_p_av_manager->is_active(e.u));
+                ASSERT(m_p_av_manager->is_active(e.v));
             }
+#endif
 
-            for (u64 i = 0; i < matches.size(); ++i) {
-                for (u64 j = i + 1; j < matches.size(); ++j) {
-                    bool not_used_twice = true;
-                    not_used_twice &= matches[i].u != matches[j].u;
-                    not_used_twice &= matches[i].u != matches[j].v;
-                    not_used_twice &= matches[i].v != matches[j].u;
-                    not_used_twice &= matches[i].v != matches[j].v;
-                    // ASSERT(not_used_twice);
+#if ASSERT_ENABLED
+            std::vector<u8> hit(m_p_g->get_n(), 0);
+            for (auto & e : matches) {
+                hit[e.u] += 1;
+                hit[e.v] += 1;
+
+                if(hit[e.u] == 2){
+                    ASSERT(false);
+                }
+                if(hit[e.v] == 2){
+                    ASSERT(false);
                 }
             }
+#endif
 
         }
     };

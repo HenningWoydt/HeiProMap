@@ -8,50 +8,64 @@
 #include "../utility/utils.h"
 #include "../datastructures/graph.h"
 #include "../utility/qap.h"
-#include "../datastructures/iterators/active_vertex_iterator.h"
 #include "../datastructures/distance_oracle.h"
-#include "../datastructures/iterators/boundary_vertex_iterator.h"
+#include "../interfaces/IRefiner.h"
+#include "../utility/assert_state.h"
 
-namespace SPM {
+namespace HeiProMap {
 
-    class LabelPropagationRefinement {
+    class LabelPropagationRefinement : public IRefiner {
     private:
-        Graph *p_g = nullptr;
-        std::vector<u64> hierarchy;
-        std::vector<u64> distance;
-        u64 k = 0;
-        f64 imbalance = 0;
-        u64 lmax = 0;
-        DistanceOracle *dist_o = nullptr;
+        IGraph *m_p_g = nullptr;
+        IActiveVertexManager *m_p_av_manager = nullptr;
+        IBoundaryVertexManager *m_p_bv_manager = nullptr;
+        IPartitionManager *m_p_p_manger = nullptr;
+        IDistanceOracle *m_p_d_oracle = nullptr;
 
-        std::vector<s32> used;
-        std::vector<u8> neighbor_changed;
-        s32 mark = -1;
+        std::vector<partition_t> m_hierarchy;
+        std::vector<weight_t> m_distance;
+        partition_t m_k = 0;
+        weight_t m_lmax = 0;
+
+        std::vector<s32> m_used;
+        std::vector<u8> m_neighbor_changed;
+        s32 m_mark = -1;
 
     public:
         LabelPropagationRefinement() = default;
 
-        void initialize(Graph *t_g,
-                        std::vector<u64> &t_hierarchy,
-                        std::vector<u64> &t_distance,
-                        u64 t_k,
-                        f64 t_imbalance,
-                        u64 t_lmax,
-                        DistanceOracle *t_dist_o) {
-            p_g = t_g;
-            hierarchy = t_hierarchy;
-            distance = t_distance;
-            k = t_k;
-            imbalance = t_imbalance;
-            lmax = t_lmax;
-            dist_o = t_dist_o;
+        void initialize(IGraph *t_p_g,
+                        IActiveVertexManager *t_p_av_manager,
+                        IBoundaryVertexManager *t_p_bv_manager,
+                        IPartitionManager *t_p_p_manger,
+                        IDistanceOracle *t_p_d_oracle,
+                        std::vector<partition_t> &t_hierarchy,
+                        std::vector<weight_t> &t_distance,
+                        weight_t t_lmax) final {
+            ASSERT(t_p_g != nullptr);
+            ASSERT(t_p_av_manager != nullptr);
+            ASSERT(t_p_bv_manager != nullptr);
+            ASSERT(t_p_p_manger != nullptr);
+            ASSERT(t_p_d_oracle != nullptr);
 
-            used.resize(t_g->get_n(), -1);
+            m_p_g = t_p_g;
+            m_p_av_manager = t_p_av_manager;
+            m_p_bv_manager = t_p_bv_manager;
+            m_p_p_manger = t_p_p_manger;
+            m_p_d_oracle = t_p_d_oracle;
+
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+            m_k = prod<partition_t>(m_hierarchy);
+            m_lmax = t_lmax;
+
+            m_used.resize(m_p_g->get_n(), -1);
         }
 
+        /*
         void refine_basic(PartitionManager &pm) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
+            ASSERT(m_p_g != nullptr);
+            Graph &g = *m_p_g;
 
             bool move_occurred = true;
             u64 max_iteration = 10;
@@ -104,8 +118,8 @@ namespace SPM {
         }
 
         void refine_pq(PartitionManager &pm) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
+            ASSERT(m_p_g != nullptr);
+            Graph &g = *m_p_g;
 
             bool move_occurred = true;
             u64 max_iteration = 10;
@@ -194,8 +208,8 @@ namespace SPM {
         }
 
         void refine_exhaustive(PartitionManager &pm) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
+            ASSERT(m_p_g != nullptr);
+            Graph &g = *m_p_g;
 
             // vector to mark which entries need to be updated
             std::vector<u8> to_update(g.get_n(), 1);
@@ -259,13 +273,13 @@ namespace SPM {
                 }
             }
         }
+        */
 
-        void refine(PartitionManager &pm) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
-
-            std::vector<partition_t> moves_to_check;
-            std::vector<u64> qaps;
+        void refine() final {
+            ASSERT(m_p_g != nullptr);
+            ASSERT(m_p_av_manager != nullptr);
+            ASSERT(m_p_p_manger != nullptr);
+            ASSERT(m_p_d_oracle != nullptr);
 
             bool global_move_occurred = true;
             u64 global_max_iteration = 2;
@@ -273,49 +287,52 @@ namespace SPM {
                 global_move_occurred = false;
 
                 std::vector<u64> local_max_iterations = {1, 3, 5};
-                for (size_t i = 0; i < distance.size(); ++i) {
-                    u64 dist = distance[distance.size() - 1 - i];
+                for (size_t distance_i = 0; distance_i < m_distance.size(); ++distance_i) {
+                    weight_t dist = m_distance[m_distance.size() - 1 - distance_i];
 
                     bool local_move_occurred = true;
-                    for (u64 local_iteration = 0; local_iteration < local_max_iterations[distance.size() - 1 - i] && local_move_occurred; ++local_iteration) {
-                        mark += 1;
+                    for (u64 local_iteration = 0; local_iteration < local_max_iterations[m_distance.size() - 1 - distance_i] && local_move_occurred; ++local_iteration) {
+                        m_mark += 1;
                         local_move_occurred = false;
 
-                        for (BoundaryVertexIterator bvi(pm.get_bvm()); bvi.not_end(); bvi.next()) {
-                            vertex_t u = bvi.get();
-                            if (used[u] == mark) {
+                        for (m_p_bv_manager->reset_iterator(); m_p_bv_manager->available(); m_p_bv_manager->next()) {
+                            vertex_t u = m_p_bv_manager->get();
+                            if (m_used[u] == m_mark) {
                                 // we already used u in this iteration
                                 continue;
                             }
 
-                            weight_t u_weight = g.get_vertex_weight(u);
-                            vertex_t u_id = pm[u];
+                            weight_t u_weight = m_p_g->get_weight(u);
+                            partition_t u_id = (*m_p_p_manger)[u];
+                            weight_t u_qap = std::numeric_limits<weight_t>::max();
 
                             // make the move that reduces qap the most
-                            moves_to_check.clear();
-                            for (EdgeW &e: g[u]) {
+                            partition_t best_u_id = u_id;
+                            weight_t best_qap_delta = 0;
+                            for (size_t i = 0; i < m_p_g->n_neighbors(u); ++i) {
+                                const EdgeW &e = m_p_g->neighbor(u, i);
                                 vertex_t v = e.v;
-                                vertex_t v_id = pm[v];
+                                partition_t v_id = (*m_p_p_manger)[v];
 
-                                if (u_id != v_id && pm.get_pweight(v_id) + u_weight <= lmax && (*dist_o).get(u_id, v_id) == dist) {
-                                    // initialize with current qap
-                                    moves_to_check.push_back(v_id);
-                                }
-                            }
+                                if (u_id != v_id && (*m_p_p_manger).get_bweight(v_id) + u_weight <= m_lmax && m_p_d_oracle->get(u_id, v_id) == dist) {
 
-                            vertex_t best_u_id = u_id;
-                            if(!moves_to_check.empty()){
-                                u64 curr_qap = get_u_qap(g, u, pm, *dist_o);
-                                get_u_qap(g, u, moves_to_check, qaps, pm, *dist_o);
-                                size_t best_idx = argmin(qaps);
-                                if(qaps[best_idx] < curr_qap){
-                                    best_u_id = moves_to_check[best_idx];
+                                    if (u_qap == std::numeric_limits<weight_t>::max()) {
+                                        u_qap = get_u_qap(*m_p_g, u, *m_p_p_manger, *m_p_d_oracle);
+                                    }
+
+                                    weight_t qap_delta = u_qap - get_u_qap(*m_p_g, u, v_id, *m_p_p_manger, *m_p_d_oracle);
+
+                                    if (qap_delta > best_qap_delta) {
+                                        best_qap_delta = qap_delta;
+                                        best_u_id = v_id;
+                                    }
                                 }
                             }
 
                             if (best_u_id != u_id) {
-                                pm.move(u, best_u_id);
-                                used[u] = mark;
+                                m_p_bv_manager->move(u, u_id, best_u_id);
+                                m_p_p_manger->move(u, u_id, best_u_id);
+                                m_used[u] = m_mark;
                                 local_move_occurred = true;
                             }
                         }

@@ -1,6 +1,6 @@
 #include "utils.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     std::vector<std::string> split(const std::string &str,
                                    char c) {
@@ -103,7 +103,7 @@ namespace SPM {
         lock.unlock();
     }
 
-    f64 get_seconds(std::chrono::high_resolution_clock::time_point sp, std::chrono::high_resolution_clock::time_point ep){
+    f64 get_seconds(std::chrono::high_resolution_clock::time_point sp, std::chrono::high_resolution_clock::time_point ep) {
         return (f64) std::chrono::duration_cast<std::chrono::nanoseconds>(ep - sp).count() / 1e9;;
     }
 
@@ -122,7 +122,7 @@ namespace SPM {
         return s;
     }
 
-    void counting_sort(std::vector<EdgeUVW> &edges, std::vector<EdgeUVW> &edges_help, std::vector<weight_t> &help, weight_t min_w, weight_t max_w){
+    void counting_sort(std::vector<EdgeUVW> &edges, std::vector<EdgeUVW> &edges_help, std::vector<weight_t> &help, weight_t min_w, weight_t max_w) {
         if (edges.empty()) return;
 
         // Step 2: Create the count array
@@ -130,7 +130,7 @@ namespace SPM {
         std::fill(help.begin(), help.end(), 0);
 
         // Step 3: Count the occurrences of each weight
-        for (const auto &edge : edges) {
+        for (const auto &edge: edges) {
             help[edge.w - min_w]++;
         }
 
@@ -152,14 +152,14 @@ namespace SPM {
     }
 
     size_t own_lower_bound_guaranteed(const std::vector<EdgeW> &edges, vertex_t v) {
-        if(edges[0].v == v){ return 0; }
-        if(edges[1].v == v){ return 1; }
-        if(edges[2].v == v){ return 2; }
-        if(edges[3].v == v){ return 3; }
-        if(edges[4].v == v){ return 4; }
-        if(edges[5].v == v){ return 5; }
-        if(edges[6].v == v){ return 6; }
-        if(edges[7].v == v){ return 7; }
+        if (edges[0].v == v) { return 0; }
+        if (edges[1].v == v) { return 1; }
+        if (edges[2].v == v) { return 2; }
+        if (edges[3].v == v) { return 3; }
+        if (edges[4].v == v) { return 4; }
+        if (edges[5].v == v) { return 5; }
+        if (edges[6].v == v) { return 6; }
+        if (edges[7].v == v) { return 7; }
 
         size_t left = 8;
         size_t right = edges.size();
@@ -207,12 +207,12 @@ namespace SPM {
         out.close();
     }
 
-    std::vector<partition_t> read_partition(const std::string &file_path){
+    std::vector<partition_t> read_partition(const std::string &file_path) {
         std::vector<partition_t> vec;
         partition_t x;
 
         std::fstream in(file_path);
-        while(in >> x){
+        while (in >> x) {
             vec.push_back(x);
         }
 

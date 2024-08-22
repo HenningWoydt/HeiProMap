@@ -5,7 +5,7 @@
 #include "macros.h"
 #include "utils.h"
 
-namespace SPM {
+namespace HeiProMap {
 
 #define to_JSON_MACRO(x) (std::string("\"") + (#x) + "\" : " + to_JSON_value(x) + ",\n")
 

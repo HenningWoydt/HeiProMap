@@ -11,6 +11,7 @@ build/*
 data/test/tiny/*
 data/subgraphs/*
 data/mapping/*
+data/out/*
 !data/mapping/PGPgiantcompo.graph
 
 utility/*.png

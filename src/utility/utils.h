@@ -13,7 +13,7 @@
 #include "definitions.h"
 #include "macros.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     /**
      * Splits a string into multiple sub-strings. The specified character will
@@ -162,8 +162,8 @@ namespace SPM {
     size_t argmin(const std::vector<T> &vec) {
         size_t idx = 0;
 
-        for(size_t i = 1; i < vec.size(); ++i){
-            if(vec[i] < vec[idx]){
+        for (size_t i = 1; i < vec.size(); ++i) {
+            if (vec[i] < vec[idx]) {
                 idx = i;
             }
         }
@@ -175,8 +175,8 @@ namespace SPM {
     size_t argmax(const std::vector<T> &vec) {
         size_t idx = 0;
 
-        for(size_t i = 1; i < vec.size(); ++i){
-            if(vec[i] > vec[idx]){
+        for (size_t i = 1; i < vec.size(); ++i) {
+            if (vec[i] > vec[idx]) {
                 idx = i;
             }
         }

@@ -1,140 +1,147 @@
-#ifndef SERIALPROCESSMAPPING_PARALLEL_REFINEMENT_SOLVER_H
-#define SERIALPROCESSMAPPING_PARALLEL_REFINEMENT_SOLVER_H
+#ifndef HEIDELBERGPROCESSMAPPING_PARALLEL_REFINEMENT_SOLVER_H
+#define HEIDELBERGPROCESSMAPPING_PARALLEL_REFINEMENT_SOLVER_H
 
-#include "../../utility/definitions.h"
-#include "../../utility/macros.h"
-#include "../../utility/utils.h"
-#include "../../utility/qap.h"
-#include "../../datastructures/graph.h"
-#include "../../datastructures/distance_oracle.h"
-#include "../../datastructures/partition_manager.h"
-#include "../../coarsening/greedy_edge_matcher.h"
-#include "../../coarsening/heavy_edge_matcher.h"
-#include "../../coarsening/simple_clustering.h"
-#include "../../partitioning/kaffpa_partitioner.h"
-#include "../../refinement/label_propagation_refinement.h"
-#include "../../refinement/identity_refinement.h"
-#include "../../refinement/quotient_graph_refinement.h"
-#include "../../datastructures/statistic_collector.h"
-#include "../refinement/parallel_label_propagation_refinement.h"
-
-namespace SPM {
+namespace HeiProMap {
 
     class ParallelRefinementSolver {
     private:
-        // graph
-        Graph g;
-        std::string graph_in;
-
-        // partition
-        PartitionManager pm;
-        std::string mapping_in;
+        // main structures
+        Graph m_g;
+        ActiveVertexManager m_av_manager;
+        PartitionManager m_p_manager;
+        BoundaryVertexManager m_bv_manager;
 
         // distance
-        std::vector<u64> hierarchy;
-        std::vector<u64> distance;
-        u64 k;
-        f64 imbalance;
-        DistanceOracle dist_o;
-
-        // threads
-        u64 n_threads = 1;
+        std::vector<partition_t> m_hierarchy;
+        std::vector<weight_t> m_distance;
+        partition_t m_k;
+        DistanceOracle m_d_oracle;
 
         // balance
-        u64 lmax = 0;
+        weight_t m_lmax = 0;
+
+        // multilevel
+        vertex_t m_threshold;
+
+        // matching
+        // GreedyEdgeMatcher gem;
+        HeavyEdgeMatcher m_he_matcher;
+        // SimpleClustering sc;
+
+        std::vector<std::vector<Edge>> m_matches;
+
+        // partitioning
+        KaffpaPartitioner m_kaffpa_partitioner;
 
         // refinement
-        ParallelLabelPropagationRefinement mt_label_prop;
+        LabelPropagationRefinement m_lp_refine;
+        IdentityRefinement m_i_refine;
+        // QuotientGraphRefinement qgr;
 
         // statistics
-        StatisticCollector stat_collect;
-        u64 qap = 0;
-        vertex_t n_active = 0;
-        size_t matches_size = 0;
+        StatisticCollector m_stat_collect;
 
     public:
-        ParallelRefinementSolver(const std::string &graph_in,
-                                 const std::string &mapping_in,
-                                 std::vector<u64> &hierarchy,
-                                 std::vector<u64> &distance,
-                                 u64 k,
-                                 f64 imbalance,
-                                 u64 n_threads)
-                :
-                graph_in(graph_in),
-                mapping_in(mapping_in),
-                hierarchy(hierarchy),
-                distance(distance),
-                k(k),
-                imbalance(imbalance),
-                n_threads(n_threads) {
+        ParallelRefinementSolver(const std::string &t_graph_in,
+                                 const std::string &t_mapping_in,
+                                 std::vector<partition_t> &t_hierarchy,
+                                 std::vector<weight_t> &t_distance,
+                                 f64 t_imbalance,
+                                 u64 n_threads) {
             auto sp_graph_io = std::chrono::high_resolution_clock::now();
-            g = Graph(graph_in);
+            m_g.initialize(t_graph_in, 1);
             auto ep_graph_io = std::chrono::high_resolution_clock::now();
 
             auto sp_io = std::chrono::high_resolution_clock::now();
 
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+            m_k = prod<partition_t>(m_hierarchy);
+
+            // manager
+            m_av_manager.initialize(&m_g);
+            m_p_manager.initialize(&m_g, &m_av_manager, m_k);
+            m_bv_manager.initialize(&m_g, &m_av_manager, &m_p_manager, m_k);
+            HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
+
             // distance
-            dist_o = DistanceOracle(k, hierarchy, distance);
+            m_d_oracle.initialize(m_hierarchy, m_distance);
 
             // balance
-            lmax = get_lmax(imbalance, k, g.get_sum_vertex_weights());
+            m_lmax = ceil((1.0 + t_imbalance) * ((f64) m_g.get_weight() / (f64) m_k));
 
-            // partition
-            pm.initialize(&g, k);
-            pm.set_partition(read_partition(mapping_in));
+            // multilevel
+            m_threshold = m_g.get_n() / 500;
+
+            // matching
+            // gem.initialize(&g);
+            m_he_matcher.initialize(&m_g, &m_av_manager);
+            // sc.initialize(&g);
+
+            // partitioning
+            m_kaffpa_partitioner.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, m_hierarchy, m_distance, t_imbalance);
 
             // refinement
-            mt_label_prop.initialize(&g, hierarchy, distance, k, imbalance, lmax, &dist_o, n_threads);
+            m_i_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, m_hierarchy, m_distance, m_lmax);
+            m_lp_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, m_hierarchy, m_distance, m_lmax);
+            // qgr.initialize(&g, hierarchy, distance, k, imbalance, lmax, &dist_o);
 
             auto ep_io = std::chrono::high_resolution_clock::now();
-            stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
+            m_stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
         }
 
         std::vector<vertex_t> solve() {
             partition();
             refine();
 
-            stat_collect.set_final(qap, pm.get_pweights(), lmax);
-            stat_collect.finalize();
-            std::cout << stat_collect.to_JSON() << std::endl;
+#if STATISTICCOLLECTOR
+            weight_t qap = get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle);
+            std::vector<weight_t> pweights;
+            for (partition_t id = 0; id < m_k; ++id) { pweights.push_back(m_p_manager.get_bweight(id)); }
+            m_stat_collect.set_final(qap, pweights, m_lmax);
+#endif
+            m_stat_collect.finalize();
 
-            return pm.get_partition();
+            std::cout << m_stat_collect.to_JSON() << std::endl;
+
+            std::vector<partition_t> p(m_g.get_n());
+            for (vertex_t u = 0; u < m_g.get_n(); ++u) { p[u] = m_p_manager[u]; }
+
+            return p;
         }
 
     private:
         void partition() {
             auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            pm.init_after_partition();
+            m_kaffpa_partitioner.partition();
 
             auto ep_partition = std::chrono::high_resolution_clock::now();
-#if STATISTICCOLLECTOR
-            qap = get_qap(g, pm, hierarchy, distance);
-#endif
+            m_stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
 
-            stat_collect.set_partition(get_seconds(sp_partition, ep_partition), qap, pm.get_pweights(), lmax);
+            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+#if STATISTICCOLLECTOR
+            m_stat_collect.set_partition_stats(get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle), m_p_manager.get_bweights(), m_lmax);
+#endif
         }
 
         void refine() {
             auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            mt_label_prop.refine(pm);
+            // m_i_refine.refine();
+            m_lp_refine.refine();
+            // qgr.refine(pm);
 
             auto ep_refinement = std::chrono::high_resolution_clock::now();
+            m_stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), 0);
 
+            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
 #if STATISTICCOLLECTOR
-            qap = get_qap(g, pm, hierarchy, distance);
-#endif
-            stat_collect.set_refinement(get_seconds(sp_refinement, ep_refinement), 0, qap);
-
-#if STATISTICCOLLECTOR
-            qap = get_qap(g, pm, hierarchy, distance);
+            m_stat_collect.set_refinement_stats(0, get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle));
 #endif
         }
     };
 
 }
 
-
-#endif //SERIALPROCESSMAPPING_PARALLEL_REFINEMENT_SOLVER_H
+#endif //HEIDELBERGPROCESSMAPPING_PARALLEL_REFINEMENT_SOLVER_H

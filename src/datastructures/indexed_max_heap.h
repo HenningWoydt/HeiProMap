@@ -11,7 +11,7 @@
 #include "../utility/utils.h"
 #include "../utility/macros.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     /**
      * One entry in the IndexedMaxHeap.
@@ -69,10 +69,10 @@ namespace SPM {
             bubble_down(indices[key]);
         }
 
-        void push_update(size_t key, T t){
-            if(entry_exists(key)){
+        void push_update(size_t key, T t) {
+            if (entry_exists(key)) {
                 update(key, t);
-            } else{
+            } else {
                 push(key, t);
             }
         }

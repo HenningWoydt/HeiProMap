@@ -1,6 +1,8 @@
 #ifndef SERIALPROCESSMAPPING_PARALLEL_LABEL_PROPAGATION_REFINEMENT_H
 #define SERIALPROCESSMAPPING_PARALLEL_LABEL_PROPAGATION_REFINEMENT_H
 
+/*
+
 #include <queue>
 #include <omp.h>
 #include <atomic>
@@ -10,11 +12,10 @@
 #include "../../utility/utils.h"
 #include "../../datastructures/graph.h"
 #include "../../utility/qap.h"
-#include "../../datastructures/iterators/active_vertex_iterator.h"
 #include "../../datastructures/distance_oracle.h"
 #include "../../datastructures/iterators/boundary_vertex_iterator.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     class ParallelLabelPropagationRefinement {
     private:
@@ -65,7 +66,7 @@ namespace SPM {
             std::vector<s64> best_qap_deltas(n_threads);
             std::vector<vertex_t> boundary_vertices;
 
-            u64 max_iterations = 100;
+            u64 max_iterations = 1000;
             bool move_occurred = true;
 
             for(u64 iteration = 0; iteration < max_iterations && move_occurred; ++iteration) {
@@ -78,12 +79,11 @@ namespace SPM {
                     boundary_vertices.emplace_back(u);
                 }
 
-
 #pragma omp parallel default(none) shared(g, pm, boundary_vertices, best_us, best_ids, best_qap_deltas) num_threads(n_threads)
                 {
                     u64 thread_id = omp_get_thread_num();
-                    vertex_t local_best_u = std::numeric_limits<vertex_t>::max();
-                    partition_t local_best_id = std::numeric_limits<vertex_t>::max();
+                    vertex_t local_best_u;
+                    partition_t local_best_id;
                     s64 local_best_qap_delta = -std::numeric_limits<s64>::max();
 #pragma omp for
                     for (size_t i = 0; i < boundary_vertices.size(); ++i) {
@@ -100,6 +100,7 @@ namespace SPM {
                                 weight_t v_id_weight = pm.get_pweight(v_id);
 
                                 if (u_id != v_id && v_id_weight + u_weight <= lmax) {
+                                    // check if v_id is a better option
                                     s64 qap_delta = u_qap - get_u_qap(g, u, v_id, pm, *dist_o);
                                     if (qap_delta > local_best_qap_delta && qap_delta > 0) {
                                         local_best_u = u;
@@ -127,5 +128,7 @@ namespace SPM {
         }
     };
 }
+
+ */
 
 #endif //SERIALPROCESSMAPPING_PARALLEL_LABEL_PROPAGATION_REFINEMENT_H

@@ -8,7 +8,7 @@
 #include <limits>
 // #include <boost/align/aligned_allocator.hpp>
 
-namespace SPM {
+namespace HeiProMap {
     /**
      * All data is 64 byte aligned.
      */
@@ -29,7 +29,7 @@ namespace SPM {
     typedef double f64;
 
     typedef u32 vertex_t;
-    typedef u32 weight_t;
+    typedef s32 weight_t;
     typedef u32 partition_t;
 
     const size_t HEAP_TOMBSTONE = std::numeric_limits<size_t>::max();
@@ -41,7 +41,7 @@ namespace SPM {
         vertex_t v;
         weight_t w;
 
-        EdgeW(vertex_t v, vertex_t w) {
+        EdgeW(vertex_t v, weight_t w) {
             this->v = v;
             this->w = w;
         }
@@ -68,7 +68,7 @@ namespace SPM {
         }
     };
 
-    class EdgeUVW{
+    class EdgeUVW {
     public:
         vertex_t u;
         vertex_t v;
@@ -76,34 +76,38 @@ namespace SPM {
 
     public:
         EdgeUVW() = default;
+
         EdgeUVW(vertex_t u, vertex_t v, vertex_t w) : u(u), v(v), w(w) {}
 
         bool operator<(const EdgeUVW &e) const {
             return w < e.w;
         }
+
         bool operator>(const EdgeUVW &e) const {
             return w < e.w;
         }
     };
 
-    class MovePQ{
+    class MovePQ {
     public:
         vertex_t p_id;
         s64 qap_delta;
 
     public:
         MovePQ() = default;
+
         MovePQ(vertex_t p_id, s64 qap_delta) : p_id(p_id), qap_delta(qap_delta) {}
 
         bool operator>(const MovePQ &m) const {
             return qap_delta > m.qap_delta;
         }
+
         bool operator<(const MovePQ &m) const {
             return qap_delta < m.qap_delta;
         }
     };
 
-    class Move{
+    class Move {
     public:
         vertex_t u;
         vertex_t p_id;
@@ -111,28 +115,32 @@ namespace SPM {
 
     public:
         Move() = default;
+
         Move(vertex_t t_u, vertex_t p_id, s64 qap_delta) : u(t_u), p_id(p_id), qap_delta(qap_delta) {}
 
         bool operator>(const Move &m) const {
             return qap_delta > m.qap_delta;
         }
+
         bool operator<(const Move &m) const {
             return qap_delta < m.qap_delta;
         }
     };
 
-    class Swap{
+    class Swap {
     public:
         vertex_t u;
         s64 qap_delta;
 
     public:
         Swap() = default;
+
         Swap(vertex_t t_u, s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
 
         bool operator>(const Swap &m) const {
             return qap_delta > m.qap_delta;
         }
+
         bool operator<(const Swap &m) const {
             return qap_delta < m.qap_delta;
         }

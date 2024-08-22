@@ -6,10 +6,10 @@
 #include "../utility/utils.h"
 #include "graph.h"
 #include "../utility/qap.h"
-#include "iterators/active_vertex_iterator.h"
 #include "distance_oracle.h"
+#include "../interfaces/IBoundaryVertexManager.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     /**
      * A class that allows for quick access to the current boundary vertices,
@@ -35,308 +35,242 @@ namespace SPM {
      *  - BoundaryVertexIterator and BlockBoundaryVertexIterator are additionally
      *    responsible for cleaning the vectors of vertices that are wrongly placed.
      */
-    class BoundaryVertexManager {
+    class BoundaryVertexManager : public IBoundaryVertexManager {
     private:
-        Graph *p_g = nullptr;
-        const std::vector<partition_t> &partition; // current partition
-        u64 k = 0;
+        IGraph *m_p_g = nullptr;
+        IActiveVertexManager *m_p_av_manager = nullptr;
+        IPartitionManager *m_p_p_manger = nullptr;
+
+        partition_t m_k = 0;
+
+        vertex_t m_n_boundary = 0;
 
         // Current number of edges to other boundary vertices
-        std::vector<u64> n_boundary_edges;
+        std::vector<vertex_t> m_n_boundary_edges;
 
         // Current boundary for each block. Can be inconsistent!
-        std::vector<std::vector<vertex_t>> boundaries;
+        std::vector<std::vector<vertex_t>> m_boundaries;
+
+        // iteration
+        size_t iterator_idx;
+        std::vector<size_t> iterator_indices;
+
+        // block iteration
+        std::vector<size_t> b_iterator_indices;
 
     public:
-        explicit BoundaryVertexManager(std::vector<partition_t> &t_partition) : partition(t_partition) {};
+        // initialization
+        void initialize(IGraph *t_p_g,
+                        IActiveVertexManager *t_p_av_manager,
+                        IPartitionManager *t_p_p_manger,
+                        partition_t t_k) final {
+            ASSERT(t_p_g != nullptr);
+            ASSERT(t_p_av_manager != nullptr);
+            ASSERT(t_p_p_manger != nullptr);
 
-        /**
-         * Initializes the object.
-         *
-         * @param t_g The graph.
-         * @param t_k The number of blocks.
-         */
-        void initialize(Graph *t_g, u64 t_k) {
-            p_g = t_g;
-            k = t_k;
+            m_p_g = t_p_g;
+            m_p_av_manager = t_p_av_manager;
+            m_p_p_manger = t_p_p_manger;
+            m_k = t_k;
 
-            n_boundary_edges.resize(p_g->get_n(), 0);
-            boundaries.resize(k);
+            m_n_boundary_edges.resize(m_p_g->get_n(), 0);
+            m_boundaries.resize(m_k);
+
+            // iteration
+            iterator_idx = 0;
+            iterator_indices.resize(m_k, 0);
+
+            // block iteration
+            b_iterator_indices.resize(m_k, 0);
         }
 
-        /**
-         * Inserts the vertex u to the block b. Vertex u has to be in no block.
-         * If vertex u is currently in another block, then use move(u, b)!
-         *
-         * @param u The vertex u.
-         * @param u_id The block b.
-         */
-        void insert(vertex_t u, partition_t u_id){
-            ASSERT(u < p_g->get_n());
-            ASSERT(u_id < k);
+        // add
+        vertex_t get_n_boundary() const final { return m_n_boundary; }
+
+        void insert(vertex_t u, partition_t id) final {
+            ASSERT(u < m_p_g->get_n());
+            ASSERT(id < m_k);
 
             // add connections to other boundary vertices
             bool is_boundary = false;
-            for(EdgeW &e : (*p_g)[u]){
-                partition_t v_id = partition[e.v];
-                if(v_id != u_id){
+            for (size_t i = 0; i < m_p_g->n_neighbors(u); ++i) {
+                const EdgeW &e = m_p_g->neighbor(u, i);
+                partition_t v_id = (*m_p_p_manger)[e.v];
+                if (v_id != id) {
                     // u and v are boundary vertices in different blocks
-                    n_boundary_edges[u] += 1;
+                    m_n_boundary_edges[u] += 1;
                     is_boundary = true;
                 }
             }
 
-            if(is_boundary){
+            if (is_boundary) {
                 // put u in its respective boundary queue
-                boundaries[u_id].emplace_back(u);
+                m_n_boundary += 1;
+                m_boundaries[id].emplace_back(u);
             }
         }
 
-        /**
-         * Moves the vertex u to the block b. Vertex u has to be in another
-         * block. If vertex u is currently not in another block, then use
-         * insert(u, b)!
-         *
-         * @param u The vertex u.
-         * @param new_b The block b.
-         */
-        void move(vertex_t u, partition_t new_b){
-            ASSERT(u < p_g->get_n());
-            ASSERT(new_b < k);
+        void move(vertex_t u, partition_t old_id, partition_t new_id) final {
+            ASSERT(u < m_p_g->get_n());
+            ASSERT(new_id < m_k);
+            ASSERT(new_id != old_id);
 
-            partition_t old_b = partition[u];
-            if(old_b == new_b){
-                // u is already in b, do nothing
-                return;
-            }
-
-            // put u in b
-            emplace_if_not_exists(new_b, u);
+            remove_if_exists(old_id, u);
 
             // new boundary vertices could be discovered and other could be removed
-            for(EdgeW &e : (*p_g)[u]){
-                partition_t v_id = partition[e.v];
-                if (v_id == new_b){
+            for (size_t i = 0; i < m_p_g->n_neighbors(u); ++i) {
+                const EdgeW &e = m_p_g->neighbor(u, i);
+                partition_t v_id = (*m_p_p_manger)[e.v];
+
+                if (v_id == new_id) {
                     // u was moved to the same block as v, both loose 1 boundary edge
-                    ASSERT(n_boundary_edges[u] > 0);
-                    ASSERT(n_boundary_edges[e.v] > 0);
-                    n_boundary_edges[u] -= 1;
-                    n_boundary_edges[e.v] -= 1;
-                } else if (v_id == old_b){
+                    ASSERT(m_n_boundary_edges[u] > 0);
+                    ASSERT(m_n_boundary_edges[e.v] > 0);
+                    m_n_boundary_edges[u] -= 1;
+                    m_n_boundary_edges[e.v] -= 1;
+                    if (m_n_boundary_edges[u] == 0) { m_n_boundary -= 1; }
+                    if (m_n_boundary_edges[e.v] == 0) { m_n_boundary -= 1; }
+                }
+                if (v_id == old_id) {
                     // u was moved to a different block as v, both gain 1 boundary edge
-                    n_boundary_edges[u] += 1;
-                    n_boundary_edges[e.v] += 1;
-                    emplace_if_not_exists(v_id, e.v);
+                    m_n_boundary_edges[u] += 1;
+                    m_n_boundary_edges[e.v] += 1;
+                    if (m_n_boundary_edges[u] == 1) {
+                        m_n_boundary += 1;
+                    }
+                    if (m_n_boundary_edges[e.v] == 1) {
+                        m_n_boundary += 1;
+                        emplace_if_not_exists(v_id, e.v);
+                    }
                 }
                 // else, v and b are in different blocks and still connected, nothing changes
             }
+
+            if (m_n_boundary_edges[u] > 0) {
+                emplace_if_not_exists(new_id, u);
+            }
         }
 
-        /**
-         * Use this function before uncontraction of u and v in the graph.
-         *
-         * @param u The vertex u.
-         */
-        void pre_uncontract(vertex_t u){
-            partition_t u_id = partition[u];
-            if(n_boundary_edges[u] == 0){
-                // u is not a boundary edge, so nothing to do
+        // check
+        bool is_boundary(vertex_t u) const final {
+            return m_n_boundary_edges[u] > 0;
+        }
+
+        // uncontract
+        void uncontract(vertex_t u, vertex_t v) final {
+            ASSERT(u != v);
+            ASSERT((*m_p_p_manger)[u] == (*m_p_p_manger)[v]);
+            ASSERT(m_p_av_manager->is_active(u));
+            ASSERT(m_p_av_manager->is_active(v));
+            ASSERT(!is_boundary(v));
+
+            if (!is_boundary(u)) {
                 return;
             }
+            ASSERT(m_n_boundary_edges[u] > 0);
 
-            // decrement all boundary edges from u
-            for(EdgeW &e: (*p_g)[u]){
-                partition_t v_id = partition[e.v];
-                if(v_id != u_id){
-                    // is a boundary edge, decrement
-                    n_boundary_edges[u] -= 1;
-                    n_boundary_edges[e.v] -= 1;
-                    // NOTE: after_contract() will be called shortly, this will
-                    // reconnect u and e.v, if they are still neighbors
+            partition_t v_id = (*m_p_p_manger)[v];
+
+            for (size_t i = 0; i < m_p_g->n_neighbors(v); ++i) {
+                const EdgeW &e = m_p_g->neighbor(v, i);
+                vertex_t ev = e.v;
+                ASSERT(m_p_av_manager->is_active(ev));
+
+                partition_t ev_id = (*m_p_p_manger)[ev];
+
+                if (ev_id != v_id) {
+                    m_n_boundary_edges[v] += 1;
+                    if (m_n_boundary_edges[v] == 1) {
+                        m_n_boundary += 1;
+                        emplace_if_not_exists(v_id, v);
+                    }
+                    if (m_p_g->edge_exists(u, ev)) {
+                        m_n_boundary_edges[ev] += 1;
+                        // both u and v are connected to ev, so ev gains
+                    } else {
+                        ASSERT(m_n_boundary_edges[u] > 0);
+                        m_n_boundary_edges[u] -= 1;
+                        if (m_n_boundary_edges[u] == 0) {
+                            m_n_boundary -= 1;
+                        }
+                        // only v is connected to ev, so u looses
+                    }
                 }
             }
         }
 
-        /**
-         * Use this function after uncontraction of u and v in the graph.
-         *
-         * @param u The vertex u.
-         * @param v The vertex v.
-         */
-        void after_uncontract(vertex_t u, vertex_t v){
-            partition_t u_id = partition[u];
-            partition_t v_id = partition[v];
-            ASSERT(u_id == v_id);
+        // iteration
+        void reset_iterator() final {
+            iterator_idx = 0;
+            std::fill(iterator_indices.begin(), iterator_indices.end(), 0);
+        }
 
-            // increment boundary edges from u
-            for(EdgeW &e: (*p_g)[u]){
-                partition_t ev_id = partition[e.v];
-                if(ev_id != u_id){
-                    // is a boundary edge, increment
-                    n_boundary_edges[u] += 1;
-                    n_boundary_edges[e.v] += 1;
+        vertex_t get() final { return m_boundaries[iterator_idx][iterator_indices[iterator_idx]]; }
+
+        void next() final { iterator_indices[iterator_idx] += 1; }
+
+        bool available() final {
+            for (partition_t i = 0; i < m_k; ++i) {
+                while (iterator_indices[iterator_idx] < m_boundaries[iterator_idx].size() && !is_boundary(m_boundaries[iterator_idx][iterator_indices[iterator_idx]])) {
+                    m_boundaries[iterator_idx][iterator_indices[iterator_idx]] = m_boundaries[iterator_idx].back();
+                    m_boundaries[iterator_idx].pop_back();
                 }
-            }
 
-            // increment boundary edges from v
-            for(EdgeW &e: (*p_g)[v]){
-                partition_t ev_id = partition[e.v];
-                if(ev_id != v_id){
-                    // is a boundary edge, increment
-                    n_boundary_edges[v] += 1;
-                    n_boundary_edges[e.v] += 1;
-                }
-            }
-
-            // check if v becomes a boundary vertex
-            if(n_boundary_edges[v] > 0){
-                boundaries[v_id].emplace_back(v);
-            }
-        }
-
-        /**
-         * Determines whether u is a boundary vertex.
-         *
-         * @param u The vertex u.
-         * @return True if u is a boundary vertex, false else.
-         */
-        bool is_boundary_vertex(vertex_t u) const {
-            return n_boundary_edges[u] > 0;
-        }
-
-        /**
-         * Returns the block of vertex u.
-         *
-         * @param u The vertex u.
-         * @return The block and BLOCK_TOMBSTONE if u is not a boundary vertex.
-         */
-        partition_t get_b(vertex_t u){
-            return partition[u];
-        }
-
-        /**
-         * Removes the vertex u from the boundary.
-         *
-         * @param u The vertex u.
-         */
-         /*
-        void remove(vertex_t u){
-            ASSERT(u < p_g->get_n());
-            ids[u] = BLOCK_TOMBSTONE; // mark as not in any block
-        }
-          */
-
-        /**
-         * Removes wrongly placed and duplicate entries from block b.
-         *
-         * @param b The block b.
-         */
-        void tidy_up(partition_t b){
-            // remove unnecessary entries
-            for(size_t i = 0; i < boundaries[b].size(); ++i){
-                if(partition[i] != b){
-                    boundaries[b] = boundaries.back();
-                    boundaries.pop_back();
-                    i -= 1;
-                    continue;
-                }
-            }
-
-            // remove duplicate entries
-            std::sort(boundaries[b].begin(), boundaries[b].end());
-            boundaries[b].erase(std::unique(boundaries[b].begin(), boundaries[b].end()), boundaries[b].end());
-        }
-
-        /**
-         * Removes wrongly placed and duplicate entries from all blocks.
-         */
-        void tidy_up(){
-            for(partition_t b = 0; b < k; ++b){
-                tidy_up(b);
-            }
-        }
-
-        const std::vector<partition_t> &get_partition(){
-            return partition;
-        }
-
-        const std::vector<u64> &get_n_boundary_edges(){
-            return n_boundary_edges;
-        }
-
-        std::vector<std::vector<vertex_t>> &get_boundaries(){
-            return boundaries;
-        }
-
-        partition_t get_k(){
-            return k;
-        }
-
-        bool holds_all_boundary_vertices(){
-            for (ActiveVertexIterator avi((*p_g)); avi.not_end(); avi.next()) {
-                vertex_t u = avi.get();
-                if(n_boundary_edges[u] != n_boundary_edges_via_graph(u)){
-                    return false;
-                }
-            }
-            return true;
-        }
-
-    private:
-        /**
-         * Determines whether a vertex is currently a boundary vertex.
-         * Determines via own structure.
-         *
-         * @param u The vertex.
-         * @return True if it is a boundary vertex, false else.
-         */
-        bool is_boundary_vertex_via_self(vertex_t u){
-            if(n_boundary_edges[u] == 0){
-                // u must have boundary edges
-                return false;
-            }
-            std::cout << u << " " << partition[u] << " " << n_boundary_edges[u] << std::endl;
-            std::cout << to_string(boundaries[partition[u]]) << std::endl;
-            ASSERT(std::find(boundaries[partition[u]].begin(), boundaries[partition[u]].end(), u) != boundaries[partition[u]].end());
-            return true;
-        }
-
-        bool is_boundary_vertex_via_graph(vertex_t u){
-            partition_t u_id = partition[u];
-            for(EdgeW &e : (*p_g)[u]){
-                partition_t v_id = partition[e.v];
-                if(u_id != v_id){
+                if (iterator_indices[iterator_idx] < m_boundaries[iterator_idx].size()) {
                     return true;
                 }
+
+                iterator_idx = (iterator_idx + 1) % m_k;
             }
             return false;
         }
 
-        u64 n_boundary_edges_via_graph(vertex_t u){
-            u64 count = 0;
-            partition_t u_id = partition[u];
-            for(EdgeW &e : (*p_g)[u]){
-                partition_t v_id = partition[e.v];
-                if(u_id != v_id){
-                    count += 1;
-                }
+        // block iteration
+        void reset_iterator(partition_t id) final { b_iterator_indices[id] = 0; }
+
+        vertex_t get(partition_t id) final { return m_boundaries[id][b_iterator_indices[id]]; }
+
+        void next(partition_t id) final { b_iterator_indices[id] += 1; }
+
+        bool available(partition_t id) final {
+            while (b_iterator_indices[id] < m_boundaries[id].size() && !is_boundary(m_boundaries[id][b_iterator_indices[id]])) {
+                m_boundaries[id][b_iterator_indices[id]] = m_boundaries[id].back();
+                m_boundaries[id].pop_back();
             }
-            return count;
+
+            return b_iterator_indices[id] < m_boundaries[id].size();
         }
 
-        void emplace_if_not_exists(partition_t b, vertex_t u){
-            for(size_t i = 0; i< boundaries[b].size(); ++i){
-                if(boundaries[b][i] == u){
+    private:
+        void emplace_if_not_exists(partition_t b, vertex_t u) {
+            for (size_t i = 0; i < m_boundaries[b].size(); ++i) {
+                if (m_boundaries[b][i] == u) {
                     return;
                 }
-                if(partition[boundaries[b][i]] != b){
-                    boundaries[b][i] = boundaries[b].back();
-                    boundaries[b].pop_back();
+                if ((*m_p_p_manger)[m_boundaries[b][i]] != b) {
+                    m_boundaries[b][i] = m_boundaries[b].back();
+                    m_boundaries[b].pop_back();
                     i -= 1;
                     continue;
                 }
             }
-            boundaries[b].emplace_back(u);
+            m_boundaries[b].emplace_back(u);
+        }
+
+        void remove_if_exists(partition_t b, vertex_t u) {
+            for (size_t i = 0; i < m_boundaries[b].size(); ++i) {
+                if (m_boundaries[b][i] == u) {
+                    m_boundaries[b][i] = m_boundaries[b].back();
+                    m_boundaries[b].pop_back();
+                    return;
+                }
+                if ((*m_p_p_manger)[m_boundaries[b][i]] != b) {
+                    m_boundaries[b][i] = m_boundaries[b].back();
+                    m_boundaries[b].pop_back();
+                    i -= 1;
+                    continue;
+                }
+            }
         }
     };
 

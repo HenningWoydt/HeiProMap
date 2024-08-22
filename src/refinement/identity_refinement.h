@@ -5,19 +5,24 @@
 #include "../utility/macros.h"
 #include "../utility/utils.h"
 #include "../datastructures/graph.h"
+#include "../interfaces/IRefiner.h"
 
-namespace SPM {
+namespace HeiProMap {
 
-    class IdentityRefinement {
-    private:
-
+    class IdentityRefinement : public IRefiner {
     public:
-        IdentityRefinement() = default;
+        // initialization
+        void initialize([[maybe_unused]] IGraph *t_p_g,
+                        [[maybe_unused]] IActiveVertexManager *t_p_av_manager,
+                        [[maybe_unused]] IBoundaryVertexManager *t_p_bv_manager,
+                        [[maybe_unused]] IPartitionManager *t_p_p_manger,
+                        [[maybe_unused]] IDistanceOracle *t_p_d_oracle,
+                        [[maybe_unused]] std::vector<partition_t> &t_hierarchy,
+                        [[maybe_unused]] std::vector<weight_t> &t_distance,
+                        [[maybe_unused]] weight_t t_lmax) final {}
 
-        void refine(std::vector<vertex_t> &partition,
-                    std::vector<u64> &pweights) {
-            // do nothing
-        }
+        // refine
+        void refine() final {}
     };
 }
 

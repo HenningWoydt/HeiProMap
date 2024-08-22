@@ -1,10 +1,12 @@
 #ifndef SERIALPROCESSMAPPING_SIMPLE_CLUSTERING_H
 #define SERIALPROCESSMAPPING_SIMPLE_CLUSTERING_H
 
+/*
+
 #include "../datastructures/graph.h"
 #include "../datastructures/iterators/active_vertex_iterator.h"
 
-namespace SPM {
+namespace HeiProMap {
     class SimpleClustering {
     private:
         Graph *p_g = nullptr;
@@ -99,5 +101,7 @@ namespace SPM {
         }
     };
 }
+
+ */
 
 #endif //SERIALPROCESSMAPPING_SIMPLE_CLUSTERING_H

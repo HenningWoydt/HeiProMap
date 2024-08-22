@@ -10,7 +10,7 @@
 #define STATISTICCOLLECTOR true
 #endif
 
-namespace SPM {
+namespace HeiProMap {
 
     class StatisticCollector {
 
@@ -25,22 +25,22 @@ namespace SPM {
         // matching
         f64 total_matching_time = 0.0;
 #if STATISTICCOLLECTOR
-    std::vector<f64> matching_time;
-    std::vector<u64> matching_size;
-    u64 total_matching_size = 0;
+        std::vector<f64> matching_time;
+        std::vector<vertex_t> matching_size;
+        vertex_t total_matching_size = 0;
 #endif
 
         // coarsening
 #if STATISTICCOLLECTOR
         std::vector<f64> coarsening_time;
-        std::vector<u64> coarsening_end_size;
+        std::vector<vertex_t> coarsening_end_size;
 #endif
         f64 total_coarsening_time = 0.0;
 
         // uncoarsening
 #if STATISTICCOLLECTOR
         std::vector<f64> uncoarsening_time;
-        std::vector<u64> uncoarsening_end_size;
+        std::vector<vertex_t> uncoarsening_end_size;
 #endif
         f64 total_uncoarsening_time = 0.0;
 
@@ -55,20 +55,20 @@ namespace SPM {
         f64 totaL_partition_time = 0.0;
 #if STATISTICCOLLECTOR
         u64 partition_end_qap = 0;
-        u64 partition_end_max_pweight = 0.0;
+        weight_t partition_end_max_pweight = 0.0;
         f64 partition_end_avg_pweight = 0.0;
-        u64 partition_end_min_pweight = 0.0;
-        std::vector<u64> partition_end_pweights;
+        weight_t partition_end_min_pweight = 0.0;
+        std::vector<weight_t> partition_end_pweights;
         bool partition_end_balanced = false;
 #endif
 
         // final information
 #if STATISTICCOLLECTOR
         u64 final_qap = 0;
-        u64 final_max_pweight = 0.0;
+        weight_t final_max_pweight = 0.0;
         f64 final_avg_pweight = 0.0;
-        u64 final_min_pweight = 0.0;
-        std::vector<u64> final_pweights;
+        weight_t final_min_pweight = 0.0;
+        std::vector<weight_t> final_pweights;
         u64 final_lmax = 0;
         bool final_balanced = false;
 #endif
@@ -81,54 +81,76 @@ namespace SPM {
         }
 
 
-        inline void finalize(){
+        inline void finalize() {
             total_time = total_graph_io_time + total_io_time + total_matching_time + total_coarsening_time + totaL_partition_time + total_uncoarsening_time + total_refinement_time;
         }
 
-        inline void set_io(f64 graph_time, f64 time){
+        inline void set_io(f64 graph_time, f64 time) {
             total_graph_io_time = graph_time;
             total_io_time = time;
         }
 
-        inline void set_matching(f64 time, u64 level, u64 size) {
+        inline void set_matching_time(f64 time, u64 level) {
             total_matching_time += time;
 #if STATISTICCOLLECTOR
             resize(level);
             matching_time[level] = time;
+#endif
+        }
+
+        inline void set_matching_stats(u64 level, vertex_t size) {
+#if STATISTICCOLLECTOR
             matching_size[level] = size;
             total_matching_size += size;
 #endif
         }
 
-        inline void set_coarsening(f64 time, u64 level, u64 size) {
+
+        inline void set_coarsening_time(f64 time, u64 level) {
             total_coarsening_time += time;
 #if STATISTICCOLLECTOR
             resize(level);
             coarsening_time[level] = time;
+#endif
+        }
+
+        inline void set_coarsening_stats(vertex_t size, u64 level) {
+#if STATISTICCOLLECTOR
             coarsening_end_size[level] = size;
 #endif
         }
 
-        inline void set_uncoarsening(f64 time, u64 level, u64 size) {
+        inline void set_uncoarsening_time(f64 time, u64 level) {
             total_uncoarsening_time += time;
 #if STATISTICCOLLECTOR
             resize(level);
             uncoarsening_time[level] = time;
+#endif
+        }
+
+        inline void set_uncoarsening_stats(u64 level, vertex_t size) {
+#if STATISTICCOLLECTOR
             uncoarsening_end_size[level] = size;
 #endif
         }
 
-        inline void set_refinement(f64 time, u64 level, u64 objective) {
+        inline void set_refinement_time(f64 time, u64 level) {
             total_refinement_time += time;
 #if STATISTICCOLLECTOR
             resize(level);
             refinement_time[level] = time;
+#endif
+        }
+
+        inline void set_refinement_stats(u64 level, u64 objective) {
+#if STATISTICCOLLECTOR
             refinement_end_qap[level] = objective;
 #endif
         }
 
-        inline void set_partition(f64 time, u64 end_objective, const std::vector<u64> &pweights, u64 lmax) {
-            totaL_partition_time = time;
+        inline void set_partition_time(f64 time) { totaL_partition_time = time; }
+
+        inline void set_partition_stats(u64 end_objective, const std::vector<weight_t> &pweights, weight_t lmax) {
 #if STATISTICCOLLECTOR
             partition_end_qap = end_objective;
             partition_end_pweights = pweights;
@@ -139,7 +161,7 @@ namespace SPM {
 #endif
         }
 
-        inline void set_final(u64 end_objective, const std::vector<u64> &pweights, u64 lmax) {
+        inline void set_final(u64 end_objective, const std::vector<weight_t> &pweights, weight_t lmax) {
 #if STATISTICCOLLECTOR
             final_qap = end_objective;
             final_pweights = pweights;
@@ -151,7 +173,7 @@ namespace SPM {
 #endif
         }
 
-        std::string to_JSON(){
+        std::string to_JSON() {
             std::string s = "{\n";
 
             s += to_JSON_MACRO(total_time);

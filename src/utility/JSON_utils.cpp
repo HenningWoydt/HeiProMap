@@ -1,6 +1,6 @@
 #include "JSON_utils.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     std::string to_JSON_value(const u8 x) { return std::to_string(x); }
 

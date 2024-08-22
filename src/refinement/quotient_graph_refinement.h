@@ -1,6 +1,8 @@
 #ifndef SERIALPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H
 #define SERIALPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H
 
+/*
+
 #include <queue>
 
 #include "../utility/definitions.h"
@@ -8,13 +10,12 @@
 #include "../utility/utils.h"
 #include "../datastructures/graph.h"
 #include "../utility/qap.h"
-#include "../datastructures/iterators/active_vertex_iterator.h"
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/iterators/boundary_vertex_iterator.h"
 #include "../datastructures/iterators/block_boundary_vertex_iterator.h"
 #include "../datastructures/indexed_max_heap.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     class QuotientGraphRefinement {
 
@@ -295,5 +296,7 @@ namespace SPM {
 
 
 }
+
+ */
 
 #endif //SERIALPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H

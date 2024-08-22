@@ -8,7 +8,7 @@
 #include "../../../utility/definitions.h"
 #include "../../../datastructures/boundary_vertex_manager.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     class ParallelBoundaryVertexIterator {
     private:

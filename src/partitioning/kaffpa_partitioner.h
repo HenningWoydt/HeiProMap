@@ -9,56 +9,74 @@
 #include "../utility/qap.h"
 
 #include "interface/kaHIP_interface.h"
+#include "../interfaces/IPartitioner.h"
+#include "../interfaces/IBoundaryVertexManager.h"
 
-namespace SPM {
+namespace HeiProMap {
 
-    class KaffpaPartitioner {
+    class KaffpaPartitioner : public IPartitioner {
 
     private:
-        Graph *p_g = nullptr;
-        std::vector<u64> hierarchy;
-        std::vector<u64> distance;
-        u64 k = 0;
-        f64 imbalance = 0;
+        IGraph *m_p_g = nullptr;
+        IActiveVertexManager *m_p_av_manager = nullptr;
+        IBoundaryVertexManager *m_p_bv_manager = nullptr;
+        IPartitionManager *m_p_p_manager = nullptr;
+        std::vector<partition_t> m_hierarchy;
+        std::vector<weight_t> m_distance;
+        f64 m_imbalance = 0;
 
     public:
-        KaffpaPartitioner() = default;
+        // initialization
+        void initialize(IGraph *t_p_g,
+                        IActiveVertexManager *t_p_av_manager,
+                        IBoundaryVertexManager *t_p_bv_manager,
+                        IPartitionManager *t_p_p_manager,
+                        std::vector<partition_t> &t_hierarchy,
+                        std::vector<weight_t> &t_distance,
+                        f64 t_imbalance) final {
+            ASSERT(t_p_g != nullptr);
+            ASSERT(t_p_av_manager != nullptr);
+            ASSERT(t_p_bv_manager != nullptr);
+            ASSERT(t_p_p_manager != nullptr);
+            ASSERT(t_imbalance >= 0.0);
 
-        void initialize(Graph *t_g,
-                        std::vector<u64> &t_hierarchy,
-                        std::vector<u64> &t_distance,
-                        u64 t_k,
-                        f64 t_imbalance){
-            p_g = t_g;
-            hierarchy = t_hierarchy;
-            distance = t_distance;
-            k = t_k;
-            imbalance = t_imbalance;
+            m_p_g = t_p_g;
+            m_p_av_manager = t_p_av_manager;
+            m_p_bv_manager = t_p_bv_manager;
+            m_p_p_manager = t_p_p_manager;
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+            m_imbalance = t_imbalance;
         }
 
-        void partition(PartitionManager &pm,
-                       int kaffpa_config) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
-            ASSERT(imbalance >= 0.0);
+        // partition
+        void partition() final {
+            ASSERT(m_p_g != nullptr);
+            ASSERT(m_p_av_manager != nullptr);
+            ASSERT(m_p_bv_manager != nullptr);
+            ASSERT(m_p_p_manager != nullptr);
+
+            // number of vertices and edges
+            int n = 0;
+            int m = 0;
 
             // build translation table
             TranslationTable tt;
             vertex_t translate = 0;
-            for (vertex_t u = 0; u < g.get_n(); ++u) {
-                if (g.get_vertex_state(u) == 1) {
-                    tt.add(u, translate);
-                    translate += 1;
-                }
-            }
+            for (m_p_av_manager->reset_iterator(); m_p_av_manager->available(); m_p_av_manager->next()) {
+                vertex_t u = m_p_av_manager->get();
+                ASSERT(m_p_av_manager->is_active(u));
 
-            // number of vertices and edges
-            int n = (int) g.get_n_active();
-            int m = (int) g.get_m_active();
+                tt.add(u, translate);
+                translate += 1;
+
+                n += 1;
+                m += (int) m_p_g->n_neighbors(u);
+            }
 
             // vertex weights
             int *v_weights = (int *) malloc(n * sizeof(int));
-            for (int i = 0; i < n; ++i) { v_weights[i] = (int) g.get_vertex_weight(tt.get_o(i)); }
+            for (int i = 0; i < n; ++i) { v_weights[i] = (int) m_p_g->get_weight(tt.get_o(i)); }
 
             // pointer to adjacency lists
             int *adj_ptr = (int *) malloc((n + 1) * sizeof(int));
@@ -67,29 +85,31 @@ namespace SPM {
 
             // set adj_ptr
             adj_ptr[0] = 0;
-            for (int u = 0; u < n; ++u) {
+            for (int new_u = 0; new_u < n; ++new_u) {
+                vertex_t old_u = tt.get_o(new_u);
                 int insert_idx = 0;
-                for (EdgeW e: g[tt.get_o(u)]) {
-                    adj[adj_ptr[u] + insert_idx] = (int) tt.get_n(e.v);
-                    e_weights[adj_ptr[u] + insert_idx] = (int) e.w;
+                for (size_t i = 0; i < m_p_g->n_neighbors(old_u); ++i) {
+                    const EdgeW &e = m_p_g->neighbor(old_u, i);
+                    adj[adj_ptr[new_u] + insert_idx] = (int) tt.get_n(e.v);
+                    e_weights[adj_ptr[new_u] + insert_idx] = (int) e.w;
                     insert_idx += 1;
                 }
-                adj_ptr[u + 1] = adj_ptr[u] + insert_idx;
+                adj_ptr[new_u + 1] = adj_ptr[new_u] + insert_idx;
             }
             // imbalance
-            double kaffpa_imbalance = imbalance;
+            double kaffpa_imbalance = m_imbalance;
 
             // hierarchy
-            int *kaffpa_hierarchy = (int *) malloc(hierarchy.size() * sizeof(int));
-            for (u64 i = 0; i < hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int) hierarchy[i]; }
+            int *kaffpa_hierarchy = (int *) malloc(m_hierarchy.size() * sizeof(int));
+            for (u64 i = 0; i < m_hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int) m_hierarchy[i]; }
 
             // distance
-            int *kaffpa_distance = (int *) malloc(distance.size() * sizeof(int));
-            for (u64 i = 0; i < distance.size(); ++i) { kaffpa_distance[i] = (int) distance[i]; }
+            int *kaffpa_distance = (int *) malloc(m_distance.size() * sizeof(int));
+            for (u64 i = 0; i < m_distance.size(); ++i) { kaffpa_distance[i] = (int) m_distance[i]; }
 
             // mode
             int kaffpa_map_mode = MAPMODE_BISECTION; // TODO: Figure out why MAPMODE_MULTISECTION does not work
-            int kaffpa_partition_mode = kaffpa_config;
+            int kaffpa_partition_mode = KAFFPA_FAST;
 
             // partition result
             int *kaffpa_partition = (int *) malloc(n * sizeof(int));
@@ -97,11 +117,15 @@ namespace SPM {
             int kaffpa_edgecut, kaffpa_qap;
 
             // execute kaffpa
-            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int) hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, false, 0, &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
+            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int) m_hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, false, 0, &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
 
-            // get result
-            for (int i = 0; i < n; ++i) {
-                pm[tt.get_o(i)] = kaffpa_partition[i];
+            // first read partition
+            for (int new_u = 0; new_u < n; ++new_u) {
+                m_p_p_manager->set(tt.get_o(new_u), kaffpa_partition[new_u]);
+            }
+            // then initialize boundary vertices
+            for (int new_u = 0; new_u < n; ++new_u) {
+                m_p_bv_manager->insert(tt.get_o(new_u), kaffpa_partition[new_u]);
             }
 
             free(v_weights);

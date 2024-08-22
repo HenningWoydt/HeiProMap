@@ -1,10 +1,12 @@
 #ifndef SERIALPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
 #define SERIALPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
 
+/*
+
 #include "../datastructures/graph.h"
 #include "../datastructures/iterators/active_vertex_iterator.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     class GreedyEdgeMatcher {
     private:
@@ -80,6 +82,9 @@ namespace SPM {
 
         }
     };
+
 }
+
+ */
 
 #endif //SERIALPROCESSMAPPING_GREEDY_EDGE_MATCHER_H

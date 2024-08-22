@@ -17,8 +17,10 @@ add_subdirectory(extern/KaHIP)
 
 # Compiler Flags
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
 # set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g3 -DNDEBUG -march=native -Wall -Wextra -pedantic")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
+set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
 set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -Wall -Wextra -pedantic")
 
 # Find all source and header files
@@ -30,17 +32,20 @@ file(GLOB_RECURSE Test_SOURCES CONFIGURE_DEPENDS "tests/*.cpp")
 file(GLOB_RECURSE Test_HEADERS CONFIGURE_DEPENDS "tests/*.h")
 
 add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS} ${SOURCES})
+add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS} ${SOURCES})
 add_executable(MtHeiProMapRefinement application/MtHeiProMapRefinement.cpp ${HEADERS} ${SOURCES})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)
 if (OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found")
+    target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
     target_link_libraries(MtHeiProMapRefinement OpenMP::OpenMP_CXX)
 endif ()
 
 # Link KaHIP library
 target_link_libraries(HeiProMap kahip)
+target_link_libraries(MtHeiProMap kahip)
 target_link_libraries(MtHeiProMapRefinement kahip)
 
 add_subdirectory(external_tools/googletest)

@@ -1,10 +1,12 @@
 #ifndef SERIALPROCESSMAPPING_SIMPLE_EDGE_MATCHER_H
 #define SERIALPROCESSMAPPING_SIMPLE_EDGE_MATCHER_H
 
+/*
+
 #include "../datastructures/graph.h"
 #include "../datastructures/iterators/active_vertex_iterator.h"
 
-namespace SPM {
+namespace HeiProMap {
     class SimpleEdgeMatcher {
     public:
         void match(Graph &g, std::vector<Edge> &matches, std::vector<s32> &marker, s32 level) {
@@ -56,5 +58,7 @@ namespace SPM {
         }
     };
 }
+
+ */
 
 #endif //SERIALPROCESSMAPPING_SIMPLE_EDGE_MATCHER_H

@@ -1,27 +1,8 @@
-#ifndef HEIDELBERGPROCESSMAPPING_SOLVER_H
-#define HEIDELBERGPROCESSMAPPING_SOLVER_H
-
-#include "../utility/definitions.h"
-#include "../utility/macros.h"
-#include "../utility/utils.h"
-#include "graph.h"
-#include "statistic_collector.h"
-#include "../partitioning/kaffpa_partitioner.h"
-#include "../utility/qap.h"
-#include "../coarsening/simple_edge_matcher.h"
-#include "../coarsening/greedy_edge_matcher.h"
-#include "../coarsening/heavy_edge_matcher.h"
-#include "../refinement/identity_refinement.h"
-#include "../refinement/label_propagation_refinement.h"
-#include "partition_manager.h"
-#include "../refinement/quotient_graph_refinement.h"
-#include "../coarsening/simple_clustering.h"
-#include "active_vertex_manager.h"
-#include "boundary_vertex_manager.h"
-#include "../utility/assert_state.h"
+#ifndef HEIDELBERGPROCESSMAPPING_PARALLEL_SOLVER_H
+#define HEIDELBERGPROCESSMAPPING_PARALLEL_SOLVER_H
 
 namespace HeiProMap {
-    class Solver {
+    class ParallelSolver {
     private:
         // main structures
         Graph m_g;
@@ -60,10 +41,11 @@ namespace HeiProMap {
         StatisticCollector m_stat_collect;
 
     public:
-        Solver(std::string &t_graph_in,
-               std::vector<partition_t> &t_hierarchy,
-               std::vector<weight_t> &t_distance,
-               f64 t_imbalance) {
+        ParallelSolver(std::string &t_graph_in,
+                       std::vector<partition_t> &t_hierarchy,
+                       std::vector<weight_t> &t_distance,
+                       f64 t_imbalance,
+                       u64 t_n_threads) {
             auto sp_graph_io = std::chrono::high_resolution_clock::now();
             m_g.initialize(t_graph_in, 1);
             auto ep_graph_io = std::chrono::high_resolution_clock::now();
@@ -152,7 +134,7 @@ namespace HeiProMap {
             auto ep_partition = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
 
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            // HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_partition_stats(get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle), m_p_manager.get_bweights(), m_lmax);
 #endif
@@ -185,7 +167,7 @@ namespace HeiProMap {
             auto ep_coarse = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);
 
-            HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
+            // HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_coarsening_stats(m_av_manager.get_n_active(), level);
 #endif
@@ -209,7 +191,7 @@ namespace HeiProMap {
             auto ep_uncoarse = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);
 
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            // HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_uncoarsening_stats(level, m_av_manager.get_n_active());
 #endif
@@ -232,5 +214,4 @@ namespace HeiProMap {
         }
     };
 }
-
-#endif //HEIDELBERGPROCESSMAPPING_SOLVER_H
+#endif //HEIDELBERGPROCESSMAPPING_PARALLEL_SOLVER_H

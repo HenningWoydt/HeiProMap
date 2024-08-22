@@ -7,7 +7,7 @@
 #include "../utility/definitions.h"
 #include "../utility/macros.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     class TranslationTable {
     private:

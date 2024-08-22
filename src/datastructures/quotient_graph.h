@@ -1,16 +1,17 @@
 #ifndef SERIALPROCESSMAPPING_QUOTIENT_GRAPH_H
 #define SERIALPROCESSMAPPING_QUOTIENT_GRAPH_H
 
+/*
+
 #include "../utility/definitions.h"
 #include "../utility/macros.h"
 #include "../utility/utils.h"
 #include "graph.h"
 #include "../utility/qap.h"
-#include "iterators/active_vertex_iterator.h"
 #include "distance_oracle.h"
 #include "boundary_vertex_manager.h"
 
-namespace SPM {
+namespace HeiProMap {
 
     class QuotientGraph {
     private:
@@ -47,5 +48,7 @@ namespace SPM {
     };
 
 }
+
+ */
 
 #endif //SERIALPROCESSMAPPING_QUOTIENT_GRAPH_H

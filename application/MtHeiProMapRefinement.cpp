@@ -6,37 +6,31 @@
 #include "../src/datastructures/solver.h"
 #include "../src/parallel/datastructures/parallel_refinement_solver.h"
 
-using namespace SPM;
+using namespace HeiProMap;
 
 int main(int argc, char *argv[]) {
     auto sp = std::chrono::high_resolution_clock::now();
     {
-        // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_in = "afshell9.txt"; std::string mapping_out = "afshell9_refinement.txt";
-        // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "2cubes_sphere.txt";
-        std::string graph_in = "../data/mapping/eur.graph"; std::string mapping_in = "eur.txt"; std::string mapping_out = "eur_refinement.txt";
-        // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "rgg24.txt";
-        // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "deu.txt";
-        // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_out = "PGPgiantcompo.txt";
+        // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_in = "../data/out/partition/afshell9.txt"; std::string mapping_out = "../data/out/refinement/afshell9_refinement.txt";
+        // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_in = "../data/out/partition/2cubes_sphere.txt"; std::string mapping_out = "../data/out/refinement/2cubes_sphere.txt";
+        // std::string graph_in = "../data/mapping/eur.graph"; std::string mapping_in = "../data/out/partition/eur.txt"; std::string mapping_out = "../data/out/refinement/eur_refinement.txt";
+        std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_in = "../data/out/partition/rgg24.txt"; std::string mapping_out = "../data/out/refinement/rgg24.txt";
+        // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_in = "../data/out/partition/deu.txt"; std::string mapping_out = "../data/out/refinement/deu.txt";
+        // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_in = "../data/out/partition/PGPgiantcompo.txt"; std::string mapping_out = "../data/out/refinement/PGPgiantcompo.txt";
         // std::string graph_in = "../data/test/manual_graphs/0.graph";
         std::string statistics_out = "statistics.JSON";
         std::string hierarchy_string = "4:8:6";
         std::string distance_string = "1:10:100";
         f64 imbalance = 0.03;
-        u64 n_threads = 6;
+        u64 n_threads = 10;
 
-        std::vector<u64> hierarchy = convert<u64>(split(hierarchy_string, ':'));
-        std::vector<u64> distance = convert<u64>(split(distance_string, ':'));
-        u64 k = prod<u64>(hierarchy);
-
-        auto sp_graph_io = std::chrono::high_resolution_clock::now();
-        Graph g(graph_in);
-        auto ep_graph_io = std::chrono::high_resolution_clock::now();
+        std::vector<partition_t> hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
+        std::vector<weight_t> distance = convert<weight_t>(split(distance_string, ':'));
 
         ParallelRefinementSolver solver(graph_in,
                                         mapping_in,
                                         hierarchy,
                                         distance,
-                                        k,
                                         imbalance,
                                         n_threads);
         std::vector<partition_t> partition = solver.solve();
