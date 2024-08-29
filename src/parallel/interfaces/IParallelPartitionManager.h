@@ -27,6 +27,8 @@ namespace HeiProMap {
                                 IParallelActiveVertexManager *t_p_av_manager,
                                 partition_t k,
                                 u64 n_threads) = 0;
+
+        virtual bool is_boundary(vertex_t u) = 0;
     };
 
 }

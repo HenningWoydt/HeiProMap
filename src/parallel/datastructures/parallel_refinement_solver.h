@@ -76,7 +76,7 @@ namespace HeiProMap {
             m_p_manager.initialize(&m_g, &m_av_manager, m_k, n_threads);
             m_bv_manager.initialize(&m_g, &m_av_manager, &m_p_manager, m_k, n_threads);
             m_d_oracle.initialize(m_hierarchy, m_distance, n_threads);
-            m_qgraph.initialize(m_k, n_threads);
+            m_qgraph.initialize(&m_g, &m_p_manager, &m_d_oracle, m_k, n_threads);
             HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
 
             // mult threading
@@ -183,11 +183,13 @@ namespace HeiProMap {
         void refine() {
             auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            // m_i_refine.refine();
-            m_lp_refine.refine();
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-            m_qg_refine.refine();
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            for(size_t i = 0; i < 1; ++i) {
+                // m_i_refine.refine();
+                // m_lp_refine.refine();
+                HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+                m_qg_refine.refine();
+                HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            }
 
             auto ep_refinement = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), 0);

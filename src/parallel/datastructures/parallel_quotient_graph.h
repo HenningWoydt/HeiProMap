@@ -8,6 +8,10 @@ namespace HeiProMap {
 
     class ParallelQuotientGraph : public IParallelQuotientGraph {
     private:
+        IParallelGraph *m_p_g = nullptr;
+        IParallelPartitionManager *m_p_p_manager = nullptr;
+        IParallelDistanceOracle *m_p_d_oracle = nullptr;
+
         partition_t m_k = 0;
         u64 m_n_threads = 1;
 
@@ -18,8 +22,15 @@ namespace HeiProMap {
         s32 m_mark = -1;
 
     public:
-        void initialize(partition_t t_k,
+        void initialize(IParallelGraph *t_p_g,
+                        IParallelPartitionManager *t_p_p_manager,
+                        IParallelDistanceOracle *t_p_d_oracle,
+                        partition_t t_k,
                         u64 t_n_threads) final {
+            m_p_g = t_p_g;
+            m_p_p_manager = t_p_p_manager;
+            m_p_d_oracle = t_p_d_oracle;
+
             m_k = t_k;
             m_n_threads = t_n_threads;
 
@@ -45,6 +56,17 @@ namespace HeiProMap {
             partition_t min = std::min(u, v);
             partition_t max = std::max(u, v);
             return m_adj_mtx[min * m_k + max] > 0;
+        }
+
+        void move(vertex_t u, partition_t old_id, partition_t new_id) final {
+            for(size_t i = 0; i < m_p_g->size(u); ++i){
+                vertex_t v = m_p_g->neighbor(u, i);
+                partition_t v_id = (*m_p_p_manager)[v];
+                weight_t w = m_p_g->get_weight(u, i);
+
+                m_adj_mtx[std::min(old_id, v_id) * m_k + std::max(old_id, v_id)] -= w;
+                m_adj_mtx[std::min(new_id, v_id) * m_k + std::max(new_id, v_id)] += w;
+            }
         }
 
         void get_matching_hierarchy(std::vector<std::vector<QGraphUV>> &matching_hierarchy) final {

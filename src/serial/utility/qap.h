@@ -25,6 +25,13 @@ namespace HeiProMap {
                        partition_t id,
                        IPartitionManager &p_manager,
                        IDistanceOracle &d_oracle);
+
+    s64 get_u_qap_delta(IGraph &g,
+                       vertex_t u,
+                       partition_t old_id,
+                       partition_t new_id,
+                       IPartitionManager &p_manager,
+                       IDistanceOracle &d_oracle);
 }
 
 #endif //SERIALPROCESSMAPPING_QAP_H

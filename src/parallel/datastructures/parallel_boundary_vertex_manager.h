@@ -262,12 +262,14 @@ namespace HeiProMap {
                 if (m_boundaries[b][i] == u) {
                     return;
                 }
+                /*
                 if ((*m_p_p_manger)[m_boundaries[b][i]] != b) {
                     m_boundaries[b][i] = m_boundaries[b].back();
                     m_boundaries[b].pop_back();
                     i -= 1;
                     continue;
                 }
+                 */
             }
             m_boundaries[b].emplace_back(u);
         }
@@ -279,12 +281,14 @@ namespace HeiProMap {
                     m_boundaries[b].pop_back();
                     return;
                 }
+                /*
                 if ((*m_p_p_manger)[m_boundaries[b][i]] != b) {
                     m_boundaries[b][i] = m_boundaries[b].back();
                     m_boundaries[b].pop_back();
                     i -= 1;
                     continue;
                 }
+                 */
             }
         }
     };

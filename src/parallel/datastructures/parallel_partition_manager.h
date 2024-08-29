@@ -19,6 +19,8 @@ namespace HeiProMap {
         IParallelActiveVertexManager *m_p_av_manager = nullptr;
         partition_t m_k = 0;
 
+        u64 m_n_threads = 1;
+
         // actual partition
         std::vector<partition_t> partition;
 
@@ -32,13 +34,15 @@ namespace HeiProMap {
         void initialize(IParallelGraph *t_p_g,
                         IParallelActiveVertexManager *t_p_av_manager,
                         partition_t t_k,
-                        u64 n_threads) final {
+                        u64 t_n_threads) final {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);
 
             m_p_g = t_p_g;
             m_p_av_manager = t_p_av_manager;
             m_k = t_k;
+
+            m_n_threads = t_n_threads;
 
             // actual partition
             partition.resize(m_p_g->get_n());
@@ -56,6 +60,16 @@ namespace HeiProMap {
             ASSERT(m_p_g != nullptr);
             m_p_bweights[id] += m_p_g->get_weight(u);
             partition[u] = id;
+        }
+
+        bool is_boundary(vertex_t u) final {
+            partition_t u_id = partition[u];
+            for(size_t i = 0; i < m_p_g->size(u); ++i){
+                if(u_id != partition[m_p_g->neighbor(u, i)]){
+                    return true;
+                }
+            }
+            return false;
         }
 
         void move(vertex_t u, partition_t old_id, partition_t new_id) final {

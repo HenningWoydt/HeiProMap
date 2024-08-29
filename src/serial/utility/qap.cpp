@@ -61,4 +61,24 @@ namespace HeiProMap {
 
         return qap;
     }
+
+    s64 get_u_qap_delta(IGraph &g,
+                        vertex_t u,
+                        partition_t old_id,
+                        partition_t new_id,
+                        IPartitionManager &p_manager,
+                        IDistanceOracle &d_oracle) {
+        s64 qap_delta = 0;
+        for (size_t i = 0; i < g.size(u); ++i) {
+            vertex_t v = g.neighbor(u, i);
+            weight_t ew = g.get_weight(u, i);
+            partition_t v_id = p_manager[v];
+
+            weight_t old_d = d_oracle.get(old_id, v_id);
+            weight_t new_d = d_oracle.get(new_id, v_id);
+            qap_delta += (old_d * ew) - (new_d * ew);
+        }
+
+        return qap_delta;
+    }
 }
