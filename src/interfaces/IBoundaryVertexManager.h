@@ -8,9 +8,9 @@
 #include <numeric>
 #include <random>
 
-#include "../utility/definitions.h"
-#include "../utility/utils.h"
-#include "../utility/macros.h"
+#include "../definitions.h"
+#include "../macros.h"
+#include "../serial/utility/utils.h"
 
 #include "IGraph.h"
 #include "IActiveVertexManager.h"
@@ -20,12 +20,6 @@ namespace HeiProMap {
 
     class IBoundaryVertexManager {
     public:
-        // initialization
-        virtual void initialize(IGraph *t_p_g,
-                                IActiveVertexManager *t_p_av_manager,
-                                IPartitionManager *t_p_p_manger,
-                                partition_t t_k) = 0;
-
         // add
         virtual vertex_t get_n_boundary() const = 0;
 

@@ -8,9 +8,9 @@
 #include <numeric>
 #include <random>
 
-#include "../utility/definitions.h"
-#include "../utility/utils.h"
-#include "../utility/macros.h"
+#include "../definitions.h"
+#include "../macros.h"
+#include "../serial/utility/utils.h"
 
 #include "IGraph.h"
 #include "IActiveVertexManager.h"
@@ -21,15 +21,6 @@ namespace HeiProMap {
 
     class IPartitioner {
     public:
-        // initialization
-        virtual void initialize(IGraph *t_p_g,
-                                IActiveVertexManager *t_p_av_manager,
-                                IBoundaryVertexManager *t_p_bv_manager,
-                                IPartitionManager *t_p_p_manager,
-                                std::vector<partition_t> &t_hierarchy,
-                                std::vector<weight_t> &t_distance,
-                                f64 t_imbalance) = 0;
-
         // partition
         virtual void partition() = 0;
 

@@ -1,10 +1,10 @@
 #include <iostream>
 
-#include "../src/utility/definitions.h"
-#include "../src/utility/macros.h"
-#include "../src/utility/utils.h"
+#include "../src/definitions.h"
+#include "../src/macros.h"
+#include "../src/serial/utility/utils.h"
 
-#include "../src/datastructures/solver.h"
+#include "../src/serial/datastructures/solver.h"
 
 using namespace HeiProMap;
 

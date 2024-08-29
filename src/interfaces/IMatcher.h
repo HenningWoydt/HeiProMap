@@ -8,9 +8,9 @@
 #include <numeric>
 #include <random>
 
-#include "../utility/definitions.h"
-#include "../utility/utils.h"
-#include "../utility/macros.h"
+#include "../definitions.h"
+#include "../macros.h"
+#include "../serial/utility/utils.h"
 #include "IGraph.h"
 #include "IActiveVertexManager.h"
 
@@ -18,12 +18,8 @@ namespace HeiProMap {
 
     class IMatcher {
     public:
-        // initialize
-        virtual void initialize(IGraph *t_p_g,
-                                IActiveVertexManager *t_p_av_manager) = 0;
-
         // matching
-        virtual void match(std::vector<Edge> &t_matches) = 0;
+        virtual void match(std::vector<EdgeUV> &t_matches) = 0;
     };
 
 }

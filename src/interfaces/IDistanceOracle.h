@@ -8,9 +8,9 @@
 #include <numeric>
 #include <random>
 
-#include "../utility/definitions.h"
-#include "../utility/utils.h"
-#include "../utility/macros.h"
+#include "../definitions.h"
+#include "../macros.h"
+#include "../serial/utility/utils.h"
 
 #include "IGraph.h"
 #include "IActiveVertexManager.h"
@@ -20,10 +20,6 @@ namespace HeiProMap {
 
     class IDistanceOracle {
     public:
-        // initialization
-        virtual void initialize(std::vector<partition_t> &t_hierarchy,
-                                std::vector<weight_t> &t_distance) = 0;
-
         // distances
         virtual weight_t get(vertex_t u_id, vertex_t v_id) const = 0;
 

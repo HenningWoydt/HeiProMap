@@ -8,9 +8,9 @@
 #include <numeric>
 #include <random>
 
-#include "../utility/definitions.h"
-#include "../utility/utils.h"
-#include "../utility/macros.h"
+#include "../definitions.h"
+#include "../macros.h"
+#include "../serial/utility/utils.h"
 
 #include "IGraph.h"
 #include "IActiveVertexManager.h"
@@ -19,11 +19,6 @@ namespace HeiProMap {
 
     class IPartitionManager {
     public:
-        // initialization
-        virtual void initialize(IGraph *t_p_g,
-                                IActiveVertexManager *t_p_av_manager,
-                                partition_t k) = 0;
-
         // read
         virtual const partition_t &operator[](vertex_t u) const = 0;
 

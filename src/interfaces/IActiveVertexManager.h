@@ -7,9 +7,6 @@ namespace HeiProMap {
 
     class IActiveVertexManager {
     public:
-        // initialize
-        virtual void initialize(IGraph *t_p_g) = 0;
-
         // active vertex manipulation
         virtual vertex_t get_n_active() const = 0;
 

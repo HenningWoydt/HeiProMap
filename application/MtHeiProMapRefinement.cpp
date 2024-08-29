@@ -1,9 +1,8 @@
 #include <iostream>
 
-#include "../src/utility/definitions.h"
-#include "../src/utility/macros.h"
-#include "../src/utility/utils.h"
-#include "../src/datastructures/solver.h"
+#include "../src/definitions.h"
+#include "../src/macros.h"
+#include "../src/serial/utility/utils.h"
 #include "../src/parallel/datastructures/parallel_refinement_solver.h"
 
 using namespace HeiProMap;
@@ -11,10 +10,10 @@ using namespace HeiProMap;
 int main(int argc, char *argv[]) {
     auto sp = std::chrono::high_resolution_clock::now();
     {
-        // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_in = "../data/out/partition/afshell9.txt"; std::string mapping_out = "../data/out/refinement/afshell9_refinement.txt";
+        std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_in = "../data/out/partition/afshell9.txt"; std::string mapping_out = "../data/out/refinement/afshell9_refinement.txt";
         // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_in = "../data/out/partition/2cubes_sphere.txt"; std::string mapping_out = "../data/out/refinement/2cubes_sphere.txt";
         // std::string graph_in = "../data/mapping/eur.graph"; std::string mapping_in = "../data/out/partition/eur.txt"; std::string mapping_out = "../data/out/refinement/eur_refinement.txt";
-        std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_in = "../data/out/partition/rgg24.txt"; std::string mapping_out = "../data/out/refinement/rgg24.txt";
+        // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_in = "../data/out/partition/rgg24.txt"; std::string mapping_out = "../data/out/refinement/rgg24.txt";
         // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_in = "../data/out/partition/deu.txt"; std::string mapping_out = "../data/out/refinement/deu.txt";
         // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_in = "../data/out/partition/PGPgiantcompo.txt"; std::string mapping_out = "../data/out/refinement/PGPgiantcompo.txt";
         // std::string graph_in = "../data/test/manual_graphs/0.graph";
@@ -34,7 +33,7 @@ int main(int argc, char *argv[]) {
                                         imbalance,
                                         n_threads);
         std::vector<partition_t> partition = solver.solve();
-        write_partition(partition, mapping_out);
+        // parallel_write_partition(partition, mapping_out, n_threads);
     }
     auto ep = std::chrono::high_resolution_clock::now();
     std::cout << "Total time: " << get_seconds(sp, ep) << std::endl;
