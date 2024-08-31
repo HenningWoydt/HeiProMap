@@ -5,11 +5,18 @@
 
 namespace HeiProMap {
 
+    template<typename TParallelGraph,
+             typename TParallelActiveVertexManager,
+             typename TParallelPartitionManager,
+             typename TParallelDistanceOracle>
     class IParallelQuotientGraph : public IQuotientGraph {
+        static_assert(std::is_base_of<IParallelGraph, TParallelGraph>::value, "TParallelGraph must inherit from IParallelGraph");
+        static_assert(std::is_base_of<IParallelPartitionManager<TParallelGraph, TParallelActiveVertexManager>, TParallelPartitionManager>::value, "TParallelPartitionManager must inherit from IParallelPartitionManager");
+        static_assert(std::is_base_of<IParallelDistanceOracle, TParallelDistanceOracle>::value, "TParallelDistanceOracle must inherit from IParallelDistanceOracle");
     public:
-        virtual void initialize(IParallelGraph *t_p_g,
-                                IParallelPartitionManager *t_p_p_manager,
-                                IParallelDistanceOracle *t_p_d_oracle,
+        virtual void initialize(TParallelGraph *t_p_g,
+                                TParallelPartitionManager *t_p_p_manager,
+                                TParallelDistanceOracle *t_p_d_oracle,
                                 partition_t k,
                                 u64 n_threads) = 0;
 

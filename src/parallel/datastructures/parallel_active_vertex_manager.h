@@ -10,9 +10,12 @@
 
 namespace HeiProMap {
 
-    class ParallelActiveVertexManager : public IParallelActiveVertexManager {
+    template<typename TParallelGraph>
+    class ParallelActiveVertexManager : public IParallelActiveVertexManager<TParallelGraph> {
     private:
-        IParallelGraph *m_p_g = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+
+        u64 m_n_threads = 1;
 
         // active states
         std::vector<bool> m_states;
@@ -24,11 +27,13 @@ namespace HeiProMap {
 
     public:
         // initialize
-        void initialize(IParallelGraph *t_p_g,
+        void initialize(TParallelGraph *t_p_g,
                         u64 n_threads) final {
             ASSERT(t_p_g != nullptr);
 
             m_p_g = t_p_g;
+
+            m_n_threads = n_threads;
 
             m_states.resize(m_p_g->get_n(), true);
             m_vertices.resize(m_p_g->get_n());

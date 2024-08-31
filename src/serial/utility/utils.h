@@ -28,6 +28,7 @@ namespace HeiProMap {
     std::vector<std::string> split(const std::string &str,
                                    char c);
 
+
     /**
      * Converts a string into the specified datatype. Conversion is done via
      * string stream and ">>" operator.

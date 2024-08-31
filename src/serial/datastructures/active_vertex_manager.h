@@ -10,9 +10,10 @@
 
 namespace HeiProMap {
 
-    class ActiveVertexManager : public ISerialActiveVertexManager {
+    template<typename TSerialGraph>
+    class ActiveVertexManager : public ISerialActiveVertexManager<TSerialGraph> {
     private:
-        ISerialGraph *m_p_g = nullptr;
+        TSerialGraph *m_p_g = nullptr;
 
         // active states
         std::vector<bool> m_states;
@@ -24,7 +25,7 @@ namespace HeiProMap {
 
     public:
         // initialize
-        void initialize(ISerialGraph *t_p_g) final {
+        void initialize(TSerialGraph *t_p_g) final {
             ASSERT(t_p_g != nullptr);
 
             m_p_g = t_p_g;

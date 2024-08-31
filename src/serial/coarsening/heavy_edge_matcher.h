@@ -7,10 +7,11 @@
 
 namespace HeiProMap {
 
-    class HeavyEdgeMatcher : public ISerialMatcher {
+    template<typename TSerialGraph, typename TSerialActiveVertexManager>
+    class HeavyEdgeMatcher : public ISerialMatcher<TSerialGraph, TSerialActiveVertexManager> {
     private:
-        ISerialGraph *m_p_g = nullptr;
-        ISerialActiveVertexManager *m_p_av_manager = nullptr;
+        TSerialGraph *m_p_g = nullptr;
+        TSerialActiveVertexManager *m_p_av_manager = nullptr;
 
         u32 m_mark = 0;
         std::vector<u32> m_used;
@@ -18,8 +19,8 @@ namespace HeiProMap {
     public:
         HeavyEdgeMatcher() = default;
 
-        void initialize(ISerialGraph *t_p_g,
-                        ISerialActiveVertexManager *t_p_av_manager) final {
+        void initialize(TSerialGraph *t_p_g,
+                        TSerialActiveVertexManager *t_p_av_manager) final {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);
 

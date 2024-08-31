@@ -27,16 +27,16 @@ namespace HeiProMap {
         // main structures
         std::string m_mapping_in;
         ParallelStaticCSRGraph m_g;
-        ParallelActiveVertexManager m_av_manager;
-        ParallelPartitionManager m_p_manager;
-        ParallelBoundaryVertexManager m_bv_manager;
-        ParallelQuotientGraph m_qgraph;
+        ParallelActiveVertexManager< typeof(m_g) > m_av_manager;
+        ParallelPartitionManager<typeof(m_g), typeof(m_av_manager)> m_p_manager;
+        ParallelBoundaryVertexManager<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager)> m_bv_manager;
+        ParallelDistanceOracle m_d_oracle;
+        ParallelQuotientGraph<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_qgraph;
 
         // distance
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
         partition_t m_k;
-        ParallelDistanceOracle m_d_oracle;
 
         // mult threading
         u64 m_n_threads;
@@ -45,9 +45,9 @@ namespace HeiProMap {
         weight_t m_lmax = 0;
 
         // refinement
-        ParallelLabelPropagationRefinement m_lp_refine;
+        ParallelLabelPropagationRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle), typeof(m_qgraph)> m_lp_refine;
         // IdentityRefinement m_i_refine;
-        ParallelQuotientGraphRefinement m_qg_refine;
+        ParallelQuotientGraphRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle), typeof(m_qgraph)> m_qg_refine;
 
         // statistics
         StatisticCollector m_stat_collect;
@@ -185,7 +185,7 @@ namespace HeiProMap {
 
             for(size_t i = 0; i < 1; ++i) {
                 // m_i_refine.refine();
-                // m_lp_refine.refine();
+                m_lp_refine.refine();
                 HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
                 m_qg_refine.refine();
                 HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));

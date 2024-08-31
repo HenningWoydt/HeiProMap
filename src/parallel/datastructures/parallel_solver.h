@@ -17,6 +17,7 @@
 #include "../coarsening/parallel_heavy_edge_matcher.h"
 #include "../partitioning/parallel_kaffpa_partitioner.h"
 #include "../refinement/parallel_label_propagation_refinement.h"
+#include "../refinement/parallel_quotient_graph_refinement.h"
 #include "parallel_distance_oracle.h"
 #include "parallel_quotient_graph.h"
 
@@ -25,16 +26,16 @@ namespace HeiProMap {
     private:
         // main structures
         ParallelGraph m_g;
-        ParallelActiveVertexManager m_av_manager;
-        ParallelPartitionManager m_p_manager;
-        ParallelBoundaryVertexManager m_bv_manager;
-        ParallelQuotientGraph m_qgraph;
+        ParallelActiveVertexManager<typeof(m_g)> m_av_manager;
+        ParallelPartitionManager<typeof(m_g), typeof(m_av_manager)> m_p_manager;
+        ParallelBoundaryVertexManager<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager)> m_bv_manager;
+        ParallelDistanceOracle m_d_oracle;
+        ParallelQuotientGraph<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_qgraph;
 
         // distance
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
         partition_t m_k;
-        ParallelDistanceOracle m_d_oracle;
 
         // balance
         weight_t m_lmax = 0;
@@ -47,18 +48,17 @@ namespace HeiProMap {
 
         // matching
         // GreedyEdgeMatcher gem;
-        ParallelHeavyEdgeMatcher m_he_matcher;
+        ParallelHeavyEdgeMatcher<typeof(m_g), typeof(m_av_manager)> m_he_matcher;
         // SimpleClustering sc;
 
         std::vector<std::vector<EdgeUV>> m_matches;
 
         // partitioning
-        ParallelKaffpaPartitioner m_kaffpa_partitioner;
+        ParallelKaffpaPartitioner<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager)> m_kaffpa_partitioner;
 
         // refinement
-        ParallelLabelPropagationRefinement m_lp_refine;
-        // IdentityRefinement m_i_refine;
-        // QuotientGraphRefinement qgr;
+        ParallelLabelPropagationRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle), typeof(m_qgraph)> m_lp_refine;
+        ParallelQuotientGraphRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle), typeof(m_qgraph)> m_qg_refine;
 
         // statistics
         StatisticCollector m_stat_collect;
@@ -83,7 +83,7 @@ namespace HeiProMap {
             m_av_manager.initialize(&m_g, t_n_threads);
             m_p_manager.initialize(&m_g, &m_av_manager, m_k, t_n_threads);
             m_bv_manager.initialize(&m_g, &m_av_manager, &m_p_manager, m_k, t_n_threads);
-            m_qgraph.initialize(m_k, t_n_threads);
+            m_qgraph.initialize(&m_g, &m_p_manager, &m_d_oracle, m_k, t_n_threads);
             HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
 
             // distance
@@ -109,7 +109,7 @@ namespace HeiProMap {
             // refinement
             // m_i_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, m_hierarchy, m_distance, m_lmax);
             m_lp_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, &m_qgraph, m_hierarchy, m_distance, m_lmax, t_n_threads);
-            // qgr.initialize(&g, hierarchy, distance, k, imbalance, lmax, &dist_o);
+            m_qg_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, &m_qgraph, m_hierarchy, m_distance, m_lmax, t_n_threads);
 
             auto ep_io = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -158,6 +158,20 @@ namespace HeiProMap {
 
             m_kaffpa_partitioner.partition();
 
+            // then initialize quotient graph
+            for(m_av_manager.reset_iterator(); m_av_manager.available(); m_av_manager.next()){
+                vertex_t u = m_av_manager.get();
+                for(size_t i = 0; i < m_g.size(u); ++i){
+                    vertex_t v = m_g.neighbor(u, i);
+                    weight_t w = m_g.get_weight(u, i);
+
+                    partition_t u_id = m_p_manager[u];
+                    partition_t v_id = m_p_manager[v];
+
+                    m_qgraph.add_edge(u_id, v_id, w);
+                }
+            }
+
             auto ep_partition = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
 
@@ -185,6 +199,17 @@ namespace HeiProMap {
 
         void coarsening(s32 level) {
             auto sp_coarse = std::chrono::high_resolution_clock::now();
+
+            /*
+            std::vector<std::vector<EdgeUV>> hierarchy;
+            m_he_matcher.get_matching_hierarchy(m_matches.back(), hierarchy);
+
+            std::cout << "level : " << level << " " << hierarchy.size() << std::endl;
+            for(auto &h : hierarchy){
+                std::cout << h.size() << " ";
+            }
+            std::cout << std::endl;
+             */
 
 // #pragma omp parallel for default(none) num_threads(m_n_threads)
             for (auto &e: m_matches.back()) {
@@ -229,8 +254,10 @@ namespace HeiProMap {
             auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             // m_i_refine.refine();
-            m_lp_refine.refine();
-            // qgr.refine(pm);
+            // m_lp_refine.refine();
+            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            m_qg_refine.refine();
+            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
 
             auto ep_refinement = std::chrono::high_resolution_clock::now();
             m_stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);

@@ -20,11 +20,14 @@
 
 namespace HeiProMap {
 
+    template<typename TParallelGraph, typename TParallelActiveVertexManager>
     class IParallelPartitionManager : public IPartitionManager {
+        static_assert(std::is_base_of<IParallelGraph, TParallelGraph>::value, "TParallelGraph must inherit from IParallelGraph");
+        static_assert(std::is_base_of<IParallelActiveVertexManager<TParallelGraph>, TParallelActiveVertexManager>::value, "TParallelActiveVertexManager must inherit from IParallelActiveVertexManager");
     public:
         // initialization
-        virtual void initialize(IParallelGraph *t_p_g,
-                                IParallelActiveVertexManager *t_p_av_manager,
+        virtual void initialize(TParallelGraph *t_p_g,
+                                TParallelActiveVertexManager *t_p_av_manager,
                                 partition_t k,
                                 u64 n_threads) = 0;
 

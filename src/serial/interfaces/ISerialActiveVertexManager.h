@@ -6,10 +6,12 @@
 
 namespace HeiProMap {
 
+    template<typename TSerialGraph>
     class ISerialActiveVertexManager : public IActiveVertexManager {
+        static_assert(std::is_base_of<ISerialGraph, TSerialGraph>::value, "TSerialGraph must inherit from ISerialGraph");
     public:
         // initialize
-        virtual void initialize(ISerialGraph *t_p_g) = 0;
+        virtual void initialize(TSerialGraph *t_p_g) = 0;
     };
 
 }

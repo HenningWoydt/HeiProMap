@@ -26,9 +26,9 @@ namespace HeiProMap {
     private:
         // main structures
         CSRGraph m_g;
-        ActiveVertexManager m_av_manager;
-        PartitionManager m_p_manager;
-        BoundaryVertexManager m_bv_manager;
+        ActiveVertexManager<typeof(m_g)> m_av_manager;
+        PartitionManager<typeof(m_g), typeof(m_av_manager)> m_p_manager;
+        BoundaryVertexManager<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager)> m_bv_manager;
 
         // distance
         std::vector<partition_t> m_hierarchy;
@@ -44,17 +44,17 @@ namespace HeiProMap {
 
         // matching
         // GreedyEdgeMatcher gem;
-        HeavyEdgeMatcher m_he_matcher;
+        HeavyEdgeMatcher<typeof(m_g), typeof(m_av_manager)> m_he_matcher;
         // SimpleClustering sc;
 
         std::vector<std::vector<EdgeUV>> m_matches;
 
         // partitioning
-        KaffpaPartitioner m_kaffpa_partitioner;
+        KaffpaPartitioner<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager)> m_kaffpa_partitioner;
 
         // refinement
-        LabelPropagationRefinement m_lp_refine;
-        IdentityRefinement m_i_refine;
+        LabelPropagationRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_lp_refine;
+        IdentityRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_i_refine;
         // QuotientGraphRefinement qgr;
 
         // statistics

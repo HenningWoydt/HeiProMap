@@ -10,10 +10,11 @@
 
 namespace HeiProMap {
 
-    class PartitionManager : public ISerialPartitionManager {
+    template<typename TSerialGraph, typename TSerialActiveVertexManager>
+    class PartitionManager : public ISerialPartitionManager<TSerialGraph, TSerialActiveVertexManager> {
     private:
-        ISerialGraph *m_p_g = nullptr;
-        ISerialActiveVertexManager *m_p_av_manager = nullptr;
+        TSerialGraph *m_p_g = nullptr;
+        TSerialActiveVertexManager *m_p_av_manager = nullptr;
         partition_t m_k = 0;
 
         // actual partition
@@ -23,8 +24,8 @@ namespace HeiProMap {
         std::vector<weight_t> bweights;
 
     public:
-        void initialize(ISerialGraph *t_p_g,
-                        ISerialActiveVertexManager *t_p_av_manager,
+        void initialize(TSerialGraph *t_p_g,
+                        TSerialActiveVertexManager *t_p_av_manager,
                         partition_t t_k) final {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);

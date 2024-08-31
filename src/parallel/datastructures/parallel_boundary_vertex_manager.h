@@ -10,35 +10,12 @@
 
 namespace HeiProMap {
 
-    /**
-     * A class that allows for quick access to the current boundary vertices,
-     * either for the complete graph (BoundaryVertexIterator) or for individual
-     * blocks (BlockBoundaryVertexIterator).
-     *
-     * HOW TO USE:
-     *  - Use BoundaryVertexIterator to iterate across all boundary vertices.
-     *  - Use BlockBoundaryVertexIterator to iterate across all boundary
-     *    vertices of one block.
-     *  - All modifications to the boundary happen instantly! If you move/remove
-     *    vertices during an iteration newly discovered boundary vertices will
-     *    occur at the end of the iteration and removed vertices will not appear.
-     *    The same vertex can appear multiple times, but never twice in the same
-     *    block.
-     *  - move(u, b) moves vertex u to block b.
-     *  - remove(u) removes vertex u from the boundary.
-     *  - tidy_up() removes duplicates and unnecessary entries for all blocks.
-     *  - tidy_up(u) removes duplicates and unnecessary entries for block b.
-     *
-     *
-     * DEVELOPER NOTES:
-     *  - BoundaryVertexIterator and BlockBoundaryVertexIterator are additionally
-     *    responsible for cleaning the vectors of vertices that are wrongly placed.
-     */
-    class ParallelBoundaryVertexManager : public IParallelBoundaryVertexManager {
+    template<typename TParallelGraph, typename TParallelActiveVertexManager, typename TParallelPartitionManager>
+    class ParallelBoundaryVertexManager : public IParallelBoundaryVertexManager<TParallelGraph, TParallelActiveVertexManager, TParallelPartitionManager> {
     private:
-        IParallelGraph *m_p_g = nullptr;
-        IParallelActiveVertexManager *m_p_av_manager = nullptr;
-        IParallelPartitionManager *m_p_p_manger = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+        TParallelActiveVertexManager *m_p_av_manager = nullptr;
+        TParallelPartitionManager *m_p_p_manger = nullptr;
 
         partition_t m_k = 0;
 
@@ -53,7 +30,7 @@ namespace HeiProMap {
         u64 m_n_threads = 1;
 
         // iteration
-        size_t iterator_idx;
+        size_t iterator_idx = 0;
         std::vector<size_t> iterator_indices;
 
         // block iteration
@@ -61,9 +38,9 @@ namespace HeiProMap {
 
     public:
         // initialization
-        void initialize(IParallelGraph *t_p_g,
-                        IParallelActiveVertexManager *t_p_av_manager,
-                        IParallelPartitionManager *t_p_p_manger,
+        void initialize(TParallelGraph *t_p_g,
+                        TParallelActiveVertexManager *t_p_av_manager,
+                        TParallelPartitionManager *t_p_p_manger,
                         partition_t t_k,
                         u64 n_threads) final {
             ASSERT(t_p_g != nullptr);

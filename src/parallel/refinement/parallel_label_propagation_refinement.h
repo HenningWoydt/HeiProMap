@@ -9,14 +9,20 @@
 
 namespace HeiProMap {
 
-    class ParallelLabelPropagationRefinement : public IParallelRefiner {
+    template<typename TParallelGraph,
+             typename TParallelActiveVertexManager,
+             typename TParallelBoundaryVertexManager,
+             typename TParallelPartitionManager,
+             typename TParallelDistanceOracle,
+             typename TParallelQuotientGraph>
+    class ParallelLabelPropagationRefinement : public IParallelRefiner<TParallelGraph, TParallelActiveVertexManager, TParallelBoundaryVertexManager, TParallelPartitionManager, TParallelDistanceOracle, TParallelQuotientGraph> {
     private:
-        IParallelGraph *m_p_g = nullptr;
-        IParallelActiveVertexManager *m_p_av_manager = nullptr;
-        IParallelBoundaryVertexManager *m_p_bv_manager = nullptr;
-        IParallelPartitionManager *m_p_p_manger = nullptr;
-        IParallelDistanceOracle *m_p_d_oracle = nullptr;
-        IParallelQuotientGraph *m_p_qgraph = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+        TParallelActiveVertexManager *m_p_av_manager = nullptr;
+        TParallelBoundaryVertexManager *m_p_bv_manager = nullptr;
+        TParallelPartitionManager *m_p_p_manger = nullptr;
+        TParallelDistanceOracle *m_p_d_oracle = nullptr;
+        TParallelQuotientGraph *m_p_qgraph = nullptr;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
         weight_t m_lmax = 0;
@@ -29,12 +35,12 @@ namespace HeiProMap {
     public:
         ParallelLabelPropagationRefinement() = default;
 
-        void initialize(IParallelGraph *t_p_g,
-                        IParallelActiveVertexManager *t_p_av_manager,
-                        IParallelBoundaryVertexManager *t_p_bv_manager,
-                        IParallelPartitionManager *t_p_p_manger,
-                        IParallelDistanceOracle *t_p_d_oracle,
-                        IParallelQuotientGraph *t_p_qgraph,
+        void initialize(TParallelGraph *t_p_g,
+                        TParallelActiveVertexManager *t_p_av_manager,
+                        TParallelBoundaryVertexManager *t_p_bv_manager,
+                        TParallelPartitionManager *t_p_p_manger,
+                        TParallelDistanceOracle *t_p_d_oracle,
+                        TParallelQuotientGraph *t_p_qgraph,
                         std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
                         weight_t t_lmax,
@@ -144,7 +150,7 @@ namespace HeiProMap {
             u64 max_global_iterations = 10;
             bool global_move_occurred = true;
 
-            std::vector<u64> local_max_iterations = {1, 25, 50};
+            std::vector<u64> local_max_iterations = {1, 3, 5};
             bool local_move_occurred = true;
 
             for (u64 global_iteration = 0; global_iteration < max_global_iterations && global_move_occurred; ++global_iteration) {
@@ -160,8 +166,8 @@ namespace HeiProMap {
 #pragma omp parallel default(none) firstprivate(h) shared(best_us, best_ids, best_qap_deltas, std::cerr) num_threads(m_n_threads)
                         {
                             u64 thread_id = omp_get_thread_num();
-                            vertex_t local_best_u;
-                            partition_t local_best_id;
+                            vertex_t local_best_u = 0;
+                            partition_t local_best_id = 0;
                             s64 local_best_qap_delta = -std::numeric_limits<s64>::max();
 
                             for (size_t i = thread_id; i < m_p_bv_manager->get_n_boundary(); i += m_n_threads) {
@@ -205,6 +211,7 @@ namespace HeiProMap {
                             partition_t new_id = best_ids[max_idx];
                             m_p_p_manger->move(u, old_id, new_id);
                             m_p_bv_manager->move(u, old_id, new_id);
+                            m_p_qgraph->move(u, old_id, new_id);
                             local_move_occurred = true;
                         }
                     }

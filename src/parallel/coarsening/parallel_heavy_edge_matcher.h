@@ -5,10 +5,11 @@
 
 namespace HeiProMap {
 
-    class ParallelHeavyEdgeMatcher : public IParallelMatcher {
+    template<typename TParallelGraph, typename TParallelActiveVertexManager>
+    class ParallelHeavyEdgeMatcher : public IParallelMatcher<TParallelGraph, TParallelActiveVertexManager> {
     private:
-        IParallelGraph *m_p_g = nullptr;
-        IParallelActiveVertexManager *m_p_av_manager = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+        TParallelActiveVertexManager *m_p_av_manager = nullptr;
 
         u64 m_n_threads = 1;
 
@@ -18,8 +19,8 @@ namespace HeiProMap {
     public:
         ParallelHeavyEdgeMatcher() = default;
 
-        void initialize(IParallelGraph *t_p_g,
-                        IParallelActiveVertexManager *t_p_av_manager,
+        void initialize(TParallelGraph *t_p_g,
+                        TParallelActiveVertexManager *t_p_av_manager,
                         u64 n_threads) final {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);
@@ -115,7 +116,45 @@ namespace HeiProMap {
                 }
             }
 #endif
+        }
 
+        void get_matching_hierarchy(std::vector<EdgeUV> matches, std::vector<std::vector<EdgeUV>> &hierarchy){
+            hierarchy.clear();
+
+            while(!matches.empty() && hierarchy.size() < 10){
+                m_mark += 1;
+                hierarchy.emplace_back();
+                for(size_t i = 0; i < matches.size(); ++i){
+                    vertex_t u = matches[i].u;
+                    vertex_t v = matches[i].v;
+                    if(m_used[u] != m_mark && m_used[v] != m_mark){
+                        hierarchy.back().emplace_back(matches[i]);
+
+                        for(size_t j = 0; j < m_p_g->size(u); ++j){
+                            vertex_t uv = m_p_g->neighbor(u, j);
+                            m_used[uv] = m_mark;
+                            for(size_t jj = 0; jj < m_p_g->size(uv); ++jj){
+                                vertex_t uvv = m_p_g->neighbor(uv, jj);
+                                m_used[uvv] = m_mark;
+                            }
+                        }
+
+                        for(size_t j = 0; j < m_p_g->size(v); ++j){
+                            vertex_t vv = m_p_g->neighbor(v, j);
+                            m_used[vv] = m_mark;
+                            for(size_t jj = 0; jj < m_p_g->size(vv); ++jj){
+                                vertex_t vvv = m_p_g->neighbor(vv, jj);
+                                m_used[vvv] = m_mark;
+                            }
+                        }
+
+                        matches[i] = matches.back();
+                        matches.pop_back();
+                    }
+                }
+            }
+
+            hierarchy.emplace_back(matches);
         }
     };
 }

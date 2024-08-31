@@ -13,14 +13,15 @@
 
 namespace HeiProMap {
 
-    class IdentityRefinement : public ISerialRefiner {
+    template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    class IdentityRefinement : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
     public:
         // initialization
-        void initialize([[maybe_unused]] ISerialGraph *t_p_g,
-                        [[maybe_unused]] ISerialActiveVertexManager *t_p_av_manager,
-                        [[maybe_unused]] ISerialBoundaryVertexManager *t_p_bv_manager,
-                        [[maybe_unused]] ISerialPartitionManager *t_p_p_manger,
-                        [[maybe_unused]] ISerialDistanceOracle *t_p_d_oracle,
+        void initialize([[maybe_unused]] TSerialGraph *t_p_g,
+                        [[maybe_unused]] TSerialActiveVertexManager *t_p_av_manager,
+                        [[maybe_unused]] TSerialBoundaryVertexManager *t_p_bv_manager,
+                        [[maybe_unused]] TSerialPartitionManager *t_p_p_manger,
+                        [[maybe_unused]] TSerialDistanceOracle *t_p_d_oracle,
                         [[maybe_unused]] std::vector<partition_t> &t_hierarchy,
                         [[maybe_unused]] std::vector<weight_t> &t_distance,
                         [[maybe_unused]] weight_t t_lmax) final {}

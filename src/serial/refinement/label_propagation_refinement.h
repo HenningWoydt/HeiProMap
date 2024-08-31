@@ -16,13 +16,14 @@
 
 namespace HeiProMap {
 
-    class LabelPropagationRefinement : public ISerialRefiner {
+    template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    class LabelPropagationRefinement : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
     private:
-        ISerialGraph *m_p_g = nullptr;
-        ISerialActiveVertexManager *m_p_av_manager = nullptr;
-        ISerialBoundaryVertexManager *m_p_bv_manager = nullptr;
-        ISerialPartitionManager *m_p_p_manger = nullptr;
-        ISerialDistanceOracle *m_p_d_oracle = nullptr;
+        TSerialGraph *m_p_g = nullptr;
+        TSerialActiveVertexManager *m_p_av_manager = nullptr;
+        TSerialBoundaryVertexManager *m_p_bv_manager = nullptr;
+        TSerialPartitionManager *m_p_p_manger = nullptr;
+        TSerialDistanceOracle *m_p_d_oracle = nullptr;
 
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
@@ -36,11 +37,11 @@ namespace HeiProMap {
     public:
         LabelPropagationRefinement() = default;
 
-        void initialize(ISerialGraph *t_p_g,
-                        ISerialActiveVertexManager *t_p_av_manager,
-                        ISerialBoundaryVertexManager *t_p_bv_manager,
-                        ISerialPartitionManager *t_p_p_manger,
-                        ISerialDistanceOracle *t_p_d_oracle,
+        void initialize(TSerialGraph *t_p_g,
+                        TSerialActiveVertexManager *t_p_av_manager,
+                        TSerialBoundaryVertexManager *t_p_bv_manager,
+                        TSerialPartitionManager *t_p_p_manger,
+                        TSerialDistanceOracle *t_p_d_oracle,
                         std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
                         weight_t t_lmax) final {

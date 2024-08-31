@@ -8,23 +8,25 @@
 
 namespace HeiProMap {
 
-    class ParallelKaffpaPartitioner : public IParallelPartitioner {
-
+    template<typename TParallelGraph, typename TParallelActiveVertexManager, typename TParallelBoundaryVertexManager, typename TParallelPartitionManager>
+    class ParallelKaffpaPartitioner : public IParallelPartitioner<TParallelGraph, TParallelActiveVertexManager, TParallelBoundaryVertexManager, TParallelPartitionManager> {
     private:
-        IParallelGraph *m_p_g = nullptr;
-        IParallelActiveVertexManager *m_p_av_manager = nullptr;
-        IParallelBoundaryVertexManager *m_p_bv_manager = nullptr;
-        IParallelPartitionManager *m_p_p_manager = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+        TParallelActiveVertexManager *m_p_av_manager = nullptr;
+        TParallelBoundaryVertexManager *m_p_bv_manager = nullptr;
+        TParallelPartitionManager *m_p_p_manager = nullptr;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
         f64 m_imbalance = 0;
 
+        u64 m_n_threads = 1;
+
     public:
         // initialization
-        void initialize(IParallelGraph *t_p_g,
-                        IParallelActiveVertexManager *t_p_av_manager,
-                        IParallelBoundaryVertexManager *t_p_bv_manager,
-                        IParallelPartitionManager *t_p_p_manager,
+        void initialize(TParallelGraph *t_p_g,
+                        TParallelActiveVertexManager *t_p_av_manager,
+                        TParallelBoundaryVertexManager *t_p_bv_manager,
+                        TParallelPartitionManager *t_p_p_manager,
                         std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
                         f64 t_imbalance,
@@ -42,6 +44,8 @@ namespace HeiProMap {
             m_hierarchy = t_hierarchy;
             m_distance = t_distance;
             m_imbalance = t_imbalance;
+
+            m_n_threads = n_threads;
         }
 
         // partition

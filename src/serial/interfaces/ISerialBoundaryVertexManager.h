@@ -15,12 +15,16 @@
 
 namespace HeiProMap {
 
+    template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
     class ISerialBoundaryVertexManager : public IBoundaryVertexManager {
+        static_assert(std::is_base_of<ISerialGraph, TSerialGraph>::value, "TSerialGraph must inherit from ISerialGraph");
+        static_assert(std::is_base_of<ISerialActiveVertexManager<TSerialGraph>, TSerialActiveVertexManager>::value, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
+        static_assert(std::is_base_of<ISerialPartitionManager<TSerialGraph, TSerialActiveVertexManager>, TSerialPartitionManager>::value, "TSerialPartitionManager must inherit from ISerialPartitionManager");
     public:
         // initialization
-        virtual void initialize(ISerialGraph *t_p_g,
-                                ISerialActiveVertexManager *t_p_av_manager,
-                                ISerialPartitionManager *t_p_p_manger,
+        virtual void initialize(TSerialGraph *t_p_g,
+                                TSerialActiveVertexManager *t_p_av_manager,
+                                TSerialPartitionManager *t_p_p_manger,
                                 partition_t t_k) = 0;
     };
 

@@ -13,10 +13,11 @@
 
 namespace HeiProMap {
 
-    class ParallelPartitionManager : public IParallelPartitionManager {
+    template<typename TParallelGraph, typename TParallelActiveVertexManager>
+    class ParallelPartitionManager : public IParallelPartitionManager<TParallelGraph, TParallelActiveVertexManager> {
     private:
-        IParallelGraph *m_p_g = nullptr;
-        IParallelActiveVertexManager *m_p_av_manager = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+        TParallelActiveVertexManager *m_p_av_manager = nullptr;
         partition_t m_k = 0;
 
         u64 m_n_threads = 1;
@@ -31,8 +32,8 @@ namespace HeiProMap {
 
         ~ParallelPartitionManager() { free(m_p_bweights); }
 
-        void initialize(IParallelGraph *t_p_g,
-                        IParallelActiveVertexManager *t_p_av_manager,
+        void initialize(TParallelGraph *t_p_g,
+                        TParallelActiveVertexManager *t_p_av_manager,
                         partition_t t_k,
                         u64 t_n_threads) final {
             ASSERT(t_p_g != nullptr);

@@ -6,11 +6,15 @@
 
 namespace HeiProMap {
 
-    class ParallelQuotientGraph : public IParallelQuotientGraph {
+    template<typename TParallelGraph,
+             typename TParallelActiveVertexManager,
+             typename TParallelPartitionManager,
+             typename TParallelDistanceOracle>
+    class ParallelQuotientGraph : public IParallelQuotientGraph<TParallelGraph, TParallelActiveVertexManager, TParallelPartitionManager, TParallelDistanceOracle> {
     private:
-        IParallelGraph *m_p_g = nullptr;
-        IParallelPartitionManager *m_p_p_manager = nullptr;
-        IParallelDistanceOracle *m_p_d_oracle = nullptr;
+        TParallelGraph *m_p_g = nullptr;
+        TParallelPartitionManager *m_p_p_manager = nullptr;
+        TParallelDistanceOracle *m_p_d_oracle = nullptr;
 
         partition_t m_k = 0;
         u64 m_n_threads = 1;
@@ -22,9 +26,9 @@ namespace HeiProMap {
         s32 m_mark = -1;
 
     public:
-        void initialize(IParallelGraph *t_p_g,
-                        IParallelPartitionManager *t_p_p_manager,
-                        IParallelDistanceOracle *t_p_d_oracle,
+        void initialize(TParallelGraph *t_p_g,
+                        TParallelPartitionManager *t_p_p_manager,
+                        TParallelDistanceOracle *t_p_d_oracle,
                         partition_t t_k,
                         u64 t_n_threads) final {
             m_p_g = t_p_g;

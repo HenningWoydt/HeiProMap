@@ -7,7 +7,7 @@
 
 using namespace HeiProMap;
 
-int main(int argc, char *argv[]) {
+int main() {
     auto sp = std::chrono::high_resolution_clock::now();
     {
         std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_in = "../data/out/partition/afshell9.txt"; std::string mapping_out = "../data/out/refinement/afshell9_refinement.txt";

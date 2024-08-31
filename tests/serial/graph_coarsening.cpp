@@ -12,8 +12,8 @@ namespace HeiProMap {
 
     void compare_coarsening(const std::string &graph_in){
         Graph g;g.initialize(graph_in);
-        ActiveVertexManager g_av_manager;g_av_manager.initialize(&g);
-        HeavyEdgeMatcher g_he_matcher;g_he_matcher.initialize(&g, &g_av_manager);
+        ActiveVertexManager<typeof(g)> g_av_manager;g_av_manager.initialize(&g);
+        HeavyEdgeMatcher<typeof(g), typeof(g_av_manager)> g_he_matcher;g_he_matcher.initialize(&g, &g_av_manager);
         std::vector<EdgeUV> g_matches;
         g_matches.reserve(g_av_manager.get_n_active() / 2);
         g_he_matcher.match(g_matches);
@@ -26,8 +26,8 @@ namespace HeiProMap {
         auto g_ep = std::chrono::high_resolution_clock::now();
 
         CSRGraph csr_g;csr_g.initialize(graph_in);
-        ActiveVertexManager csr_g_av_manager;csr_g_av_manager.initialize(&csr_g);
-        HeavyEdgeMatcher csr_g_he_matcher;csr_g_he_matcher.initialize(&csr_g, &csr_g_av_manager);
+        ActiveVertexManager<typeof(csr_g)> csr_g_av_manager;csr_g_av_manager.initialize(&csr_g);
+        HeavyEdgeMatcher<typeof(csr_g), typeof(csr_g_av_manager)> csr_g_he_matcher;csr_g_he_matcher.initialize(&csr_g, &csr_g_av_manager);
         std::vector<EdgeUV> csr_g_matches;
         csr_g_matches.reserve(csr_g_av_manager.get_n_active() / 2);
         csr_g_he_matcher.match(csr_g_matches);

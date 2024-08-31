@@ -36,11 +36,12 @@ namespace HeiProMap {
      *  - BoundaryVertexIterator and BlockBoundaryVertexIterator are additionally
      *    responsible for cleaning the vectors of vertices that are wrongly placed.
      */
-    class BoundaryVertexManager : public ISerialBoundaryVertexManager {
+    template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
+    class BoundaryVertexManager : public ISerialBoundaryVertexManager<TSerialGraph, TSerialActiveVertexManager, TSerialPartitionManager> {
     private:
-        ISerialGraph *m_p_g = nullptr;
-        ISerialActiveVertexManager *m_p_av_manager = nullptr;
-        ISerialPartitionManager *m_p_p_manger = nullptr;
+        TSerialGraph *m_p_g = nullptr;
+        TSerialActiveVertexManager *m_p_av_manager = nullptr;
+        TSerialPartitionManager *m_p_p_manger = nullptr;
 
         partition_t m_k = 0;
 
@@ -53,7 +54,7 @@ namespace HeiProMap {
         std::vector<std::vector<vertex_t>> m_boundaries;
 
         // iteration
-        size_t iterator_idx;
+        size_t iterator_idx = 0;
         std::vector<size_t> iterator_indices;
 
         // block iteration
@@ -61,9 +62,9 @@ namespace HeiProMap {
 
     public:
         // initialization
-        void initialize(ISerialGraph *t_p_g,
-                        ISerialActiveVertexManager *t_p_av_manager,
-                        ISerialPartitionManager *t_p_p_manger,
+        void initialize(TSerialGraph *t_p_g,
+                        TSerialActiveVertexManager *t_p_av_manager,
+                        TSerialPartitionManager *t_p_p_manger,
                         partition_t t_k) final {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);

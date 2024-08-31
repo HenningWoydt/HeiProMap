@@ -15,23 +15,23 @@
 
 namespace HeiProMap {
 
-    class KaffpaPartitioner : public ISerialPartitioner {
-
+    template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager>
+    class KaffpaPartitioner : public ISerialPartitioner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager> {
     private:
-        ISerialGraph *m_p_g = nullptr;
-        ISerialActiveVertexManager *m_p_av_manager = nullptr;
-        ISerialBoundaryVertexManager *m_p_bv_manager = nullptr;
-        ISerialPartitionManager *m_p_p_manager = nullptr;
+        TSerialGraph *m_p_g = nullptr;
+        TSerialActiveVertexManager *m_p_av_manager = nullptr;
+        TSerialBoundaryVertexManager *m_p_bv_manager = nullptr;
+        TSerialPartitionManager *m_p_p_manager = nullptr;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
         f64 m_imbalance = 0;
 
     public:
         // initialization
-        void initialize(ISerialGraph *t_p_g,
-                        ISerialActiveVertexManager *t_p_av_manager,
-                        ISerialBoundaryVertexManager *t_p_bv_manager,
-                        ISerialPartitionManager *t_p_p_manager,
+        void initialize(TSerialGraph *t_p_g,
+                        TSerialActiveVertexManager *t_p_av_manager,
+                        TSerialBoundaryVertexManager *t_p_bv_manager,
+                        TSerialPartitionManager *t_p_p_manager,
                         std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
                         f64 t_imbalance) final {
