@@ -7,7 +7,7 @@
 #include "../utility/JSON_utils.h"
 
 #ifndef STATISTICCOLLECTOR
-#define STATISTICCOLLECTOR true
+#define STATISTICCOLLECTOR false
 #endif
 
 namespace HeiProMap {

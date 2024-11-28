@@ -1,20 +1,14 @@
-#ifndef SERIALPROCESSMAPPING_IDENTITY_REFINEMENT_H
-#define SERIALPROCESSMAPPING_IDENTITY_REFINEMENT_H
+#ifndef HEIDELBERGPROCESSMAPPING_IDENTITY_REFINEMENT_H
+#define HEIDELBERGPROCESSMAPPING_IDENTITY_REFINEMENT_H
 
 #include "../../definitions.h"
-#include "../../macros.h"
-#include "../utility/utils.h"
-#include "../datastructures/graph.h"
 #include "../../interfaces/IRefiner.h"
 #include "../interfaces/ISerialRefiner.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
-#include "../interfaces/ISerialDistanceOracle.h"
 
 namespace HeiProMap {
 
     template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    class IdentityRefinement : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
+    class IdentityRefinement final : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
     public:
         // initialization
         void initialize([[maybe_unused]] TSerialGraph *t_p_g,
@@ -24,11 +18,11 @@ namespace HeiProMap {
                         [[maybe_unused]] TSerialDistanceOracle *t_p_d_oracle,
                         [[maybe_unused]] std::vector<partition_t> &t_hierarchy,
                         [[maybe_unused]] std::vector<weight_t> &t_distance,
-                        [[maybe_unused]] weight_t t_lmax) final {}
+                        [[maybe_unused]] weight_t t_lmax) override {}
 
         // refine
-        void refine() final {}
+        void refine() override {}
     };
 }
 
-#endif //SERIALPROCESSMAPPING_IDENTITY_REFINEMENT_H
+#endif //HEIDELBERGPROCESSMAPPING_IDENTITY_REFINEMENT_H

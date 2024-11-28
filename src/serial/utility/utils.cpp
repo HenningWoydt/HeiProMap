@@ -244,12 +244,14 @@ namespace HeiProMap {
     }
 
     void write_partition(const std::vector<partition_t> &partition, const std::string &file_path) {
-        std::stringstream ss;
-        for (u64 i: partition) {
-            ss << i << "\n";
+        std::ofstream out(file_path, std::ios::binary);  // Open file in binary mode for faster writing
+        if (!out.is_open()) return;                      // Ensure the file is open before proceeding
+
+        // Write each partition element directly to the file, separating them by newlines
+        for (const auto &i : partition) {
+            out << i << '\n';                            // Write each element followed by a newline
         }
-        std::ofstream out(file_path);
-        out << ss.rdbuf();
+
         out.close();
     }
 

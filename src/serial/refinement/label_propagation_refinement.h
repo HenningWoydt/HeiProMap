@@ -1,38 +1,32 @@
-#ifndef SERIALPROCESSMAPPING_LABEL_PROPAGATION_REFINEMENT_H
-#define SERIALPROCESSMAPPING_LABEL_PROPAGATION_REFINEMENT_H
+#ifndef HEIDELBERGPROCESSMAPPING_LABEL_PROPAGATION_REFINEMENT_H
+#define HEIDELBERGPROCESSMAPPING_LABEL_PROPAGATION_REFINEMENT_H
 
 #include <queue>
 
 #include "../../definitions.h"
 #include "../../macros.h"
-#include "../utility/utils.h"
-#include "../datastructures/graph.h"
-#include "../utility/qap.h"
-#include "../datastructures/distance_oracle.h"
-#include "../../interfaces/IRefiner.h"
-#include "../utility/assert_state.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialRefiner.h"
+#include "../utility/qap.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
 
     template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    class LabelPropagationRefinement : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
-    private:
-        TSerialGraph *m_p_g = nullptr;
-        TSerialActiveVertexManager *m_p_av_manager = nullptr;
-        TSerialBoundaryVertexManager *m_p_bv_manager = nullptr;
-        TSerialPartitionManager *m_p_p_manger = nullptr;
-        TSerialDistanceOracle *m_p_d_oracle = nullptr;
+    class LabelPropagationRefinement final : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
+        TSerialGraph *p_g = nullptr;
+        TSerialActiveVertexManager *p_av_manager = nullptr;
+        TSerialBoundaryVertexManager *p_bv_manager = nullptr;
+        TSerialPartitionManager *p_p_manger = nullptr;
+        TSerialDistanceOracle *p_d_oracle = nullptr;
 
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        std::vector<partition_t> hierarchy;
+        std::vector<weight_t> distance;
+        partition_t k = 0;
+        weight_t lmax = 0;
 
-        std::vector<s32> m_used;
-        std::vector<u8> m_neighbor_changed;
-        s32 m_mark = -1;
+        std::vector<s32> used;
+        std::vector<u8> neighbor_changed;
+        s32 mark = -1;
 
     public:
         LabelPropagationRefinement() = default;
@@ -44,25 +38,25 @@ namespace HeiProMap {
                         TSerialDistanceOracle *t_p_d_oracle,
                         std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
-                        weight_t t_lmax) final {
+                        weight_t t_lmax) override {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);
             ASSERT(t_p_bv_manager != nullptr);
             ASSERT(t_p_p_manger != nullptr);
             ASSERT(t_p_d_oracle != nullptr);
 
-            m_p_g = t_p_g;
-            m_p_av_manager = t_p_av_manager;
-            m_p_bv_manager = t_p_bv_manager;
-            m_p_p_manger = t_p_p_manger;
-            m_p_d_oracle = t_p_d_oracle;
+            p_g = t_p_g;
+            p_av_manager = t_p_av_manager;
+            p_bv_manager = t_p_bv_manager;
+            p_p_manger = t_p_p_manger;
+            p_d_oracle = t_p_d_oracle;
 
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
-            m_k = prod<partition_t>(m_hierarchy);
-            m_lmax = t_lmax;
+            hierarchy = t_hierarchy;
+            distance = t_distance;
+            k = prod<partition_t>(hierarchy);
+            lmax = t_lmax;
 
-            m_used.resize(m_p_g->get_n(), -1);
+            used.resize(p_g->get_n(), -1);
         }
 
         /*
@@ -278,7 +272,7 @@ namespace HeiProMap {
         }
         */
 
-        void refine() final {
+        void refine() override {
             ASSERT(m_p_g != nullptr);
             ASSERT(m_p_av_manager != nullptr);
             ASSERT(m_p_p_manger != nullptr);
@@ -290,39 +284,39 @@ namespace HeiProMap {
                 global_move_occurred = false;
 
                 std::vector<u64> local_max_iterations = {1, 3, 5};
-                for (size_t distance_i = 0; distance_i < m_distance.size(); ++distance_i) {
-                    weight_t dist = m_distance[m_distance.size() - 1 - distance_i];
+                for (size_t distance_i = 0; distance_i < distance.size(); ++distance_i) {
+                    weight_t dist = distance[distance.size() - 1 - distance_i];
 
                     bool local_move_occurred = true;
-                    for (u64 local_iteration = 0; local_iteration < local_max_iterations[m_distance.size() - 1 - distance_i] && local_move_occurred; ++local_iteration) {
-                        m_mark += 1;
+                    for (u64 local_iteration = 0; local_iteration < local_max_iterations[distance.size() - 1 - distance_i] && local_move_occurred; ++local_iteration) {
+                        mark += 1;
                         local_move_occurred = false;
 
-                        for (m_p_bv_manager->reset_iterator(); m_p_bv_manager->available(); m_p_bv_manager->next()) {
-                            vertex_t u = m_p_bv_manager->get();
-                            if (m_used[u] == m_mark) {
+                        for (p_bv_manager->reset_iterator(); p_bv_manager->available(); p_bv_manager->next()) {
+                            vertex_t u = p_bv_manager->get();
+                            if (used[u] == mark) {
                                 // we already used u in this iteration
                                 continue;
                             }
 
-                            weight_t u_weight = m_p_g->get_weight(u);
-                            partition_t u_id = (*m_p_p_manger)[u];
+                            weight_t u_weight = p_g->get_weight(u);
+                            partition_t u_id = (*p_p_manger)[u];
                             weight_t u_qap = std::numeric_limits<weight_t>::max();
 
                             // make the move that reduces qap the most
                             partition_t best_u_id = u_id;
                             weight_t best_qap_delta = 0;
-                            for (size_t i = 0; i < m_p_g->size(u); ++i) {
-                                vertex_t v = m_p_g->neighbor(u, i);
-                                partition_t v_id = (*m_p_p_manger)[v];
+                            for (size_t i = 0; i < p_g->size(u); ++i) {
+                                vertex_t v = p_g->neighbor(u, i);
+                                partition_t v_id = (*p_p_manger)[v];
 
-                                if (u_id != v_id && (*m_p_p_manger).get_bweight(v_id) + u_weight <= m_lmax && m_p_d_oracle->get(u_id, v_id) == dist) {
+                                if (u_id != v_id && (*p_p_manger).get_bweight(v_id) + u_weight <= lmax && p_d_oracle->get(u_id, v_id) == dist) {
 
                                     if (u_qap == std::numeric_limits<weight_t>::max()) {
-                                        u_qap = get_u_qap(*m_p_g, u, *m_p_p_manger, *m_p_d_oracle);
+                                        u_qap = get_u_qap(*p_g, u, *p_p_manger, *p_d_oracle);
                                     }
 
-                                    weight_t qap_delta = u_qap - get_u_qap(*m_p_g, u, v_id, *m_p_p_manger, *m_p_d_oracle);
+                                    weight_t qap_delta = u_qap - get_u_qap(*p_g, u, v_id, *p_p_manger, *p_d_oracle);
 
                                     if (qap_delta > best_qap_delta) {
                                         best_qap_delta = qap_delta;
@@ -332,9 +326,9 @@ namespace HeiProMap {
                             }
 
                             if (best_u_id != u_id) {
-                                m_p_bv_manager->move(u, u_id, best_u_id);
-                                m_p_p_manger->move(u, u_id, best_u_id);
-                                m_used[u] = m_mark;
+                                p_bv_manager->move(u, u_id, best_u_id);
+                                p_p_manger->move(u, u_id, best_u_id);
+                                used[u] = mark;
                                 local_move_occurred = true;
                             }
                         }
@@ -346,4 +340,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //SERIALPROCESSMAPPING_LABEL_PROPAGATION_REFINEMENT_H
+#endif //HEIDELBERGPROCESSMAPPING_LABEL_PROPAGATION_REFINEMENT_H

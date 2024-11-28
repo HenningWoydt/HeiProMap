@@ -13,8 +13,8 @@ int main() {
     {
         // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_out = "../data/out/partition/afshell9.txt";
         // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
-        // std::string graph_in = "../data/mapping/eur.graph"; std::string mapping_out = "../data/out/partition/eur.txt";
-        std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "../data/out/partition/rgg24.txt";
+        std::string graph_in = "../data/mapping/eur.graph"; std::string mapping_out = "../data/out/partition/eur.txt";
+        // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "../data/out/partition/rgg24.txt";
         // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "../data/out/partition/deu.txt";
         // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_out = "../data/out/partition/PGPgiantcompo.txt";
         // std::string graph_in = "../data/test/manual_graphs/0.graph";

@@ -12,6 +12,7 @@ namespace HeiProMap {
 
     class IRefiner {
     public:
+        virtual ~IRefiner() = default;
         // refine
         virtual void refine() = 0;
     };

@@ -1,110 +1,111 @@
 #ifndef HEIDELBERGPROCESSMAPPING_SOLVER_H
 #define HEIDELBERGPROCESSMAPPING_SOLVER_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
-#include "../utility/utils.h"
-#include "graph.h"
-#include "statistic_collector.h"
-#include "../partitioning/kaffpa_partitioner.h"
-#include "../utility/qap.h"
-#include "../coarsening/simple_edge_matcher.h"
-#include "../coarsening/greedy_edge_matcher.h"
-#include "../coarsening/heavy_edge_matcher.h"
-#include "../refinement/identity_refinement.h"
-#include "../refinement/label_propagation_refinement.h"
-#include "partition_manager.h"
-#include "../refinement/quotient_graph_refinement.h"
-#include "../coarsening/simple_clustering.h"
 #include "active_vertex_manager.h"
 #include "boundary_vertex_manager.h"
-#include "../utility/assert_state.h"
 #include "csr_graph.h"
+#include "graph.h"
+#include "partition_manager.h"
+#include "statistic_collector.h"
+#include "../../definitions.h"
+#include "../../macros.h"
+#include "../coarsening/greedy_edge_matcher.h"
+#include "../coarsening/heavy_edge_matcher.h"
+#include "../coarsening/simple_clustering.h"
+#include "../coarsening/simple_edge_matcher.h"
+#include "../partitioning/kaffpa_partitioner.h"
+#include "../refinement/identity_refinement.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
+#include "../utility/assert_state.h"
+#include "../utility/qap.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
+    /**
+     * Solver for serial Process Mapping.
+     */
     class Solver {
-    private:
-        // main structures
-        CSRGraph m_g;
-        ActiveVertexManager<typeof(m_g)> m_av_manager;
-        PartitionManager<typeof(m_g), typeof(m_av_manager)> m_p_manager;
-        BoundaryVertexManager<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager)> m_bv_manager;
+        CSRGraph g;
+        ActiveVertexManager<typeof(g)> av_manager;
+        PartitionManager<typeof(g), typeof(av_manager)> p_manager;
+        BoundaryVertexManager<typeof(g), typeof(av_manager), typeof(p_manager)> bv_manager;
 
         // distance
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        partition_t m_k;
-        DistanceOracle m_d_oracle;
+        std::vector<partition_t> hierarchy;
+        std::vector<weight_t> distance;
+        partition_t k;
+        DistanceOracle d_oracle;
 
         // balance
-        weight_t m_lmax = 0;
+        weight_t lmax = 0;
 
         // multilevel
-        vertex_t m_threshold;
+        vertex_t threshold;
 
         // matching
-        // GreedyEdgeMatcher gem;
-        HeavyEdgeMatcher<typeof(m_g), typeof(m_av_manager)> m_he_matcher;
+        GreedyEdgeMatcher<typeof(g), typeof(av_manager)> ge_matcher;
+        HeavyEdgeMatcher<typeof(g), typeof(av_manager)> he_matcher;
         // SimpleClustering sc;
 
-        std::vector<std::vector<EdgeUV>> m_matches;
+        std::vector<std::vector<EdgeUV>> matches;
 
         // partitioning
-        KaffpaPartitioner<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager)> m_kaffpa_partitioner;
+        KaffpaPartitioner<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager)> kaffpa_partitioner;
 
         // refinement
-        LabelPropagationRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_lp_refine;
-        IdentityRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_i_refine;
+        LabelPropagationRefinement<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> lp_refine;
+        IdentityRefinement<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> i_refine;
         // QuotientGraphRefinement qgr;
 
         // statistics
-        StatisticCollector m_stat_collect;
+        StatisticCollector stat_collect;
 
     public:
-        Solver(std::string &t_graph_in,
-               std::vector<partition_t> &t_hierarchy,
-               std::vector<weight_t> &t_distance,
-               f64 t_imbalance) {
-            auto sp_graph_io = std::chrono::high_resolution_clock::now();
-            m_g.initialize(t_graph_in);
-            auto ep_graph_io = std::chrono::high_resolution_clock::now();
+        Solver(const std::string& t_graph_in,
+               const std::vector<partition_t>& t_hierarchy,
+               const std::vector<weight_t>& t_distance,
+               const f64 t_imbalance) {
+            const auto sp_graph_io = std::chrono::high_resolution_clock::now();
+            g.initialize(t_graph_in);
+            const auto ep_graph_io = std::chrono::high_resolution_clock::now();
 
-            auto sp_io = std::chrono::high_resolution_clock::now();
+            const auto sp_io = std::chrono::high_resolution_clock::now();
 
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
-            m_k = prod<partition_t>(m_hierarchy);
+            hierarchy = t_hierarchy;
+            distance  = t_distance;
+            k         = prod<partition_t>(hierarchy);
 
             // manager
-            m_av_manager.initialize(&m_g);
-            m_p_manager.initialize(&m_g, &m_av_manager, m_k);
-            m_bv_manager.initialize(&m_g, &m_av_manager, &m_p_manager, m_k);
-            HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
+            av_manager.initialize(&g);
+            p_manager.initialize(&g, &av_manager, k);
+            bv_manager.initialize(&g, &av_manager, &p_manager, k);
+            HEAVYASSERT(assert_state_pre_partitioning(g, av_manager));
 
             // distance
-            m_d_oracle.initialize(m_hierarchy, m_distance);
+            d_oracle.initialize(hierarchy, distance);
 
             // balance
-            m_lmax = ceil((1.0 + t_imbalance) * ((f64) m_g.get_weight() / (f64) m_k));
+            lmax = ceil((1.0 + t_imbalance) * ((f64)g.get_weight() / (f64)k));
 
             // multilevel
-            m_threshold = m_g.get_n() / 500;
+            threshold = g.get_n() / 500;
 
             // matching
-            // gem.initialize(&g);
-            m_he_matcher.initialize(&m_g, &m_av_manager);
+            ge_matcher.initialize(&g, &av_manager);
+            he_matcher.initialize(&g, &av_manager);
             // sc.initialize(&g);
 
             // partitioning
-            m_kaffpa_partitioner.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, m_hierarchy, m_distance, t_imbalance);
+            kaffpa_partitioner.initialize(&g, &av_manager, &bv_manager, &p_manager, hierarchy, distance, t_imbalance);
 
             // refinement
-            m_i_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, m_hierarchy, m_distance, m_lmax);
-            m_lp_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, m_hierarchy, m_distance, m_lmax);
+            i_refine.initialize(&g, &av_manager, &bv_manager, &p_manager, &d_oracle, hierarchy, distance, lmax);
+            lp_refine.initialize(&g, &av_manager, &bv_manager, &p_manager, &d_oracle, hierarchy, distance, lmax);
             // qgr.initialize(&g, hierarchy, distance, k, imbalance, lmax, &dist_o);
 
-            auto ep_io = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
+            const auto ep_io = std::chrono::high_resolution_clock::now();
+            stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
         }
 
         std::vector<vertex_t> solve() {
@@ -116,12 +117,12 @@ namespace HeiProMap {
             for (partition_t id = 0; id < m_k; ++id) { pweights.push_back(m_p_manager.get_bweight(id)); }
             m_stat_collect.set_final(qap, pweights, m_lmax);
 #endif
-            m_stat_collect.finalize();
+            stat_collect.finalize();
 
-            std::cout << m_stat_collect.to_JSON() << std::endl;
+            std::cout << stat_collect.to_JSON() << std::endl;
 
-            std::vector<partition_t> p(m_g.get_n());
-            for (vertex_t u = 0; u < m_g.get_n(); ++u) { p[u] = m_p_manager[u]; }
+            std::vector<partition_t> p(g.get_n());
+            for (vertex_t u = 0; u < g.get_n(); ++u) { p[u] = p_manager[u]; }
 
             return p;
         }
@@ -130,45 +131,50 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (!(m_av_manager.get_n_active() <= m_threshold || m_av_manager.get_n_active() <= m_k * 64)) {
+            while (!(av_manager.get_n_active() <= threshold || av_manager.get_n_active() <= k * 64)) {
                 matching(level);
                 coarsening(level);
                 level += 1;
             }
 
+            std::cout << "partition" << std::endl;
             partition();
 
             while (level > 0) {
                 level -= 1;
+                std::cout << level <<  " uncoarsening" << std::endl;
                 uncoarsening(level);
                 refinement(level);
             }
         }
 
         void partition() {
-            auto sp_partition = std::chrono::high_resolution_clock::now();
+            const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            m_kaffpa_partitioner.partition();
+            kaffpa_partitioner.partition();
 
-            auto ep_partition = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
+            const auto ep_partition = std::chrono::high_resolution_clock::now();
+            stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
 
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            HEAVYASSERT(assert_state_after_partitioning(g, av_manager, p_manager, bv_manager, k));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_partition_stats(get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle), m_p_manager.get_bweights(), m_lmax);
 #endif
         }
 
         void matching(s32 level) {
-            auto sp_match = std::chrono::high_resolution_clock::now();
+            const auto sp_match = std::chrono::high_resolution_clock::now();
 
-            m_matches.emplace_back();
-            m_matches.back().reserve(m_av_manager.get_n_active() / 2);
+            matches.emplace_back();
+            matches.back().reserve(av_manager.get_n_active() / 2);
 
-            m_he_matcher.match(m_matches.back());
+            // ge_matcher.match(matches.back());
+            he_matcher.match(matches.back());
 
-            auto ep_match = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);
+            std::cout << level << " " << matches.back().size() << std::endl;
+
+            const auto ep_match = std::chrono::high_resolution_clock::now();
+            stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);
 
 #if STATISTICCOLLECTOR
             m_stat_collect.set_matching_stats(level, m_matches.back().size());
@@ -176,57 +182,57 @@ namespace HeiProMap {
         }
 
         void coarsening(s32 level) {
-            auto sp_coarse = std::chrono::high_resolution_clock::now();
+            const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
-            for (auto &e: m_matches.back()) {
-                m_g.contract(e.u, e.v);
-                m_av_manager.contract(e.u, e.v);
+            for (const auto& e : matches.back()) {
+                g.contract(e.u, e.v);
+                av_manager.contract(e.u, e.v);
             }
 
-            auto ep_coarse = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);
+            const auto ep_coarse = std::chrono::high_resolution_clock::now();
+            stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);
 
-            HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
+            HEAVYASSERT(assert_state_pre_partitioning(g, av_manager));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_coarsening_stats(m_av_manager.get_n_active(), level);
 #endif
         }
 
         void uncoarsening(s32 level) {
-            auto sp_uncoarse = std::chrono::high_resolution_clock::now();
+            const auto sp_uncoarse = std::chrono::high_resolution_clock::now();
 
-            for (size_t i = 0; i < m_matches.back().size(); ++i) {
-                u64 idx = m_matches.back().size() - 1 - i;
-                vertex_t u = m_matches.back()[idx].u;
-                vertex_t v = m_matches.back()[idx].v;
+            for (size_t i = 0; i < matches.back().size(); ++i) {
+                const u64 idx    = matches.back().size() - 1 - i;
+                const vertex_t u = matches.back()[idx].u;
+                const vertex_t v = matches.back()[idx].v;
 
-                m_g.uncontract(u, v);
-                m_av_manager.uncontract(u, v);
-                m_p_manager.uncontract(u, v);
-                m_bv_manager.uncontract(u, v);
+                g.uncontract(u, v);
+                av_manager.uncontract(u, v);
+                p_manager.uncontract(u, v);
+                bv_manager.uncontract(u, v);
             }
-            m_matches.pop_back();
+            matches.pop_back();
 
-            auto ep_uncoarse = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);
+            const auto ep_uncoarse = std::chrono::high_resolution_clock::now();
+            stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);
 
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            HEAVYASSERT(assert_state_after_partitioning(g, av_manager, p_manager, bv_manager, k));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_uncoarsening_stats(level, m_av_manager.get_n_active());
 #endif
         }
 
         void refinement(s32 level) {
-            auto sp_refinement = std::chrono::high_resolution_clock::now();
+            const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            // m_i_refine.refine();
-            m_lp_refine.refine();
+            i_refine.refine();
+            lp_refine.refine();
             // qgr.refine(pm);
 
-            auto ep_refinement = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);
+            const auto ep_refinement = std::chrono::high_resolution_clock::now();
+            stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);
 
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
+            HEAVYASSERT(assert_state_after_partitioning(g, av_manager, p_manager, bv_manager, k));
 #if STATISTICCOLLECTOR
             m_stat_collect.set_refinement_stats(level, get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle));
 #endif

@@ -254,9 +254,9 @@ namespace HeiProMap {
             auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             // m_i_refine.refine();
-            // m_lp_refine.refine();
+            m_lp_refine.refine();
             HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-            m_qg_refine.refine();
+            // m_qg_refine.refine();
             HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
 
             auto ep_refinement = std::chrono::high_resolution_clock::now();

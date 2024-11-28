@@ -1,61 +1,60 @@
-#ifndef SERIALPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
-#define SERIALPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
+#ifndef HEIDELBERGPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
+#define HEIDELBERGPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
 
-/*
-
-#include "../datastructures/graph.h"
-#include "../datastructures/iterators/active_vertex_iterator.h"
+#include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
 
-    class GreedyEdgeMatcher {
-    private:
-        Graph *p_g = nullptr;
-        std::vector<s32> marker;
+    template<typename TSerialGraph, typename TSerialActiveVertexManager>
+    class GreedyEdgeMatcher final : public ISerialMatcher<TSerialGraph, TSerialActiveVertexManager> {
+        TSerialGraph *p_g = nullptr;
+        TSerialActiveVertexManager *p_av_manager = nullptr;
 
-        std::vector<EdgeUVW> edges;
-        std::vector<EdgeUVW> edges_help;
-        std::vector<weight_t> help;
+        u32 mark = 0;
+        std::vector<u32> used;
 
     public:
         GreedyEdgeMatcher() = default;
 
-        void initialize(Graph *t_g){
-            p_g = t_g;
-            marker.resize((*p_g).get_n(), -1);
+        void initialize(TSerialGraph *t_p_g,
+                        TSerialActiveVertexManager *t_p_av_manager) override {
+            ASSERT(t_p_g != nullptr);
+            ASSERT(t_p_av_manager != nullptr);
+
+            p_g = t_p_g;
+            p_av_manager = t_p_av_manager;
+
+            mark = 0;
+            used.resize(p_g->get_n(), 0);
         }
 
-        void match(std::vector<Edge> &matches, s32 level) {
-            Graph &g = *p_g;
-            ASSERT(marker.size() == g.get_n());
+        void match(std::vector<EdgeUV> &matches) override {
+            ASSERT(p_g != nullptr);
+            ASSERT(p_av_manager != nullptr);
+            ASSERT(used.size() == p_g->get_n());
 
-            edges.clear();
-            edges.reserve(g.get_m());
+            std::vector<EdgeUVW> edges;
+            edges.reserve(p_g->get_m());
+            for (p_av_manager->reset_iterator(); p_av_manager->available(); p_av_manager->next()) {
+                const vertex_t u = p_av_manager->get();
+                ASSERT(p_av_manager->is_active(u));
 
-            for (ActiveVertexIterator avi(g); avi.not_end(); avi.next()) {
-                vertex_t u = avi.get();
-                ASSERT(g.get_vertex_state(u) == 1);
-
-                for (EdgeW &e: g[u]) {
-                    ASSERT(u != e.v);
-                    if (u < e.v) {
-                        f64 rating = (f64) e.w / (f64) (g[u].size() * g[e.v].size());
-
-                        edges.emplace_back(u, e.v, rating);
-                    }
+                for (size_t i = 0; i < p_g->size(u); ++i) {
+                    const vertex_t v = p_g->neighbor(u, i);
+                    const weight_t ew = p_g->get_weight(u, i);
+                    const f64 rating = (f64) ew / (f64) (p_g->size(u) * p_g->size(v));
+                    edges.emplace_back(u, v, rating);
                 }
             }
             std::sort(edges.begin(), edges.end(), std::greater<>());
 
-            // use counting sort
-            // counting_sort(edges, edges_help, help, min_w, max_w);
-
+            mark += 1;
             matches.clear();
-            for (EdgeUVW &e: edges) {
-                if (marker[e.u] != level && marker[e.v] != level) {
-                    marker[e.u] = level;
-                    marker[e.v] = level;
-                    if (g[e.u].size() > g[e.v].size()) {
+            for (const auto &e: edges) {
+                if (used[e.u] != mark && used[e.v] != mark) {
+                    used[e.u] = mark;
+                    used[e.v] = mark;
+                    if (p_g->size(e.u) > p_g->size(e.v)) {
                         matches.emplace_back(e.u, e.v);
                     } else {
                         matches.emplace_back(e.v, e.u);
@@ -63,28 +62,31 @@ namespace HeiProMap {
                 }
             }
 
-            for (const Edge &e: matches) {
+#if ASSERT_ENABLED
+            for (const EdgeUV &e: matches) {
                 ASSERT(e.u != e.v);
-                ASSERT(g.get_vertex_state(e.u) == 1);
-                ASSERT(g.get_vertex_state(e.v) == 1);
+                ASSERT(p_av_manager->is_active(e.u));
+                ASSERT(p_av_manager->is_active(e.v));
             }
+#endif
 
-            for (u64 i = 0; i < matches.size(); ++i) {
-                for (u64 j = i + 1; j < matches.size(); ++j) {
-                    bool not_used_twice = true;
-                    not_used_twice &= matches[i].u != matches[j].u;
-                    not_used_twice &= matches[i].u != matches[j].v;
-                    not_used_twice &= matches[i].v != matches[j].u;
-                    not_used_twice &= matches[i].v != matches[j].v;
-                    ASSERT(not_used_twice);
+#if ASSERT_ENABLED
+            std::vector<u8> hit(p_g->get_n(), 0);
+            for (auto & e : matches) {
+                hit[e.u] += 1;
+                hit[e.v] += 1;
+
+                if(hit[e.u] == 2){
+                    ASSERT(false);
+                }
+                if(hit[e.v] == 2){
+                    ASSERT(false);
                 }
             }
+#endif
 
         }
     };
-
 }
 
- */
-
-#endif //SERIALPROCESSMAPPING_GREEDY_EDGE_MATCHER_H
+#endif //HEIDELBERGPROCESSMAPPING_GREEDY_EDGE_MATCHER_H

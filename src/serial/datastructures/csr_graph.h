@@ -1,32 +1,24 @@
 #ifndef HEIDELBERGPROCESSMAPPING_CSR_GRAPH_H
 #define HEIDELBERGPROCESSMAPPING_CSR_GRAPH_H
 
-#include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
+#include <fcntl.h>
 #include <iostream>
+#include <unistd.h>
+#include <vector>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
 
-#include "../../definitions.h"
-#include "../utility/utils.h"
-#include "../../macros.h"
-#include "../../interfaces/IGraph.h"
 #include "arena_allocator.h"
 #include "small_vector.h"
+#include "../../definitions.h"
 #include "../interfaces/ISerialGraph.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
-
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
-    class CSRGraph : public ISerialGraph {
-
+    class CSRGraph final : public ISerialGraph {
     private:
         vertex_t m_n = 0; // original number of vertices
         vertex_t m_m = 0; // original number of edges
@@ -46,7 +38,7 @@ namespace HeiProMap {
         CSRGraph() = default;
 
         // initialization
-        void initialize(const std::string &graph_in) final {
+        void initialize(const std::string& graph_in) override {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -64,7 +56,7 @@ namespace HeiProMap {
             size_t file_size = fileInfo.st_size;
 
             // Memory-map the file
-            char *file_arr = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
+            char* file_arr = static_cast<char*>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
             if (file_arr == MAP_FAILED) {
                 std::cerr << "File " << graph_in << " Could not map the file!" << std::endl;
                 close(fd);
@@ -123,31 +115,31 @@ namespace HeiProMap {
             ++i; // now on the next line
 
             arena_allocator.initialize(m_m * 2);
-            EdgeVW *curr_ptr = arena_allocator.request(m_m * 2);
+            EdgeVW* curr_ptr = arena_allocator.request(m_m * 2);
             m_v_weights.reserve(m_n);
             m_adj.reserve(m_n);
 
             vertex_t u = 0;
-            if(fmt_1 == '0' && fmt_2 == '0'){
+            if (fmt_1 == '0' && fmt_2 == '0') {
                 m_v_weights.resize(m_n, 1);
-                m_g_weight = (weight_t) m_n;
+                m_g_weight = (weight_t)m_n;
                 while (true) {
                     if (file_arr[i] == '%') {
                         // this line is a comment, ignore it
-                        while(file_arr[i] != '\n'){ ++i; }
+                        while (file_arr[i] != '\n') { ++i; }
                         ++i;
                         continue;
                     }
                     // this line contains vertex information
 
-                    while(file_arr[i] == ' '){ ++i; }
+                    while (file_arr[i] == ' ') { ++i; }
 
-                    EdgeVW *start_ptr = curr_ptr;
+                    EdgeVW* start_ptr = curr_ptr;
                     while (file_arr[i] != '\n') {
                         // read in the edges
                         vertex_t v = 0;
-                        while(file_arr[i] != ' ' && file_arr[i] != '\n') { v = v * 10 + (file_arr[i++] - '0'); }
-                        while(file_arr[i] == ' '){ ++i; }
+                        while (file_arr[i] != ' ' && file_arr[i] != '\n') { v = v * 10 + (file_arr[i++] - '0'); }
+                        while (file_arr[i] == ' ') { ++i; }
 
                         curr_ptr->v = v - 1;
                         curr_ptr->w = 1;
@@ -159,28 +151,28 @@ namespace HeiProMap {
                     ++i;
                     u += 1;
 
-                    if (u+32 >= m_n) {
+                    if (u + 32 >= m_n) {
                         break;
                     }
                 }
                 while (true) {
                     if (file_arr[i] == '%') {
                         // this line is a comment, ignore it
-                        while(i < file_size && file_arr[i] != '\n'){ ++i; }
+                        while (i < file_size && file_arr[i] != '\n') { ++i; }
                         // move_while_not(file_arr, i, '\n', file_size);
                         ++i;
                         continue;
                     }
                     // this line contains vertex information
 
-                    while(i < file_size && file_arr[i] == ' '){ ++i; }
+                    while (i < file_size && file_arr[i] == ' ') { ++i; }
 
-                    EdgeVW *start_ptr = curr_ptr;
+                    EdgeVW* start_ptr = curr_ptr;
                     while (i < file_size && file_arr[i] != '\n') {
                         // read in the edges
                         vertex_t v = 0;
-                        for(;i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n';++i){v = v * 10 + (file_arr[i] - '0');}
-                        while(i < file_size && file_arr[i] == ' '){ ++i; }
+                        for (; i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n'; ++i) { v = v * 10 + (file_arr[i] - '0'); }
+                        while (i < file_size && file_arr[i] == ' ') { ++i; }
 
                         curr_ptr->v = v - 1;
                         curr_ptr->w = 1;
@@ -218,16 +210,15 @@ namespace HeiProMap {
                     m_v_weights.push_back(u_w);
                     m_g_weight += u_w;
 
-                    EdgeVW *start_ptr = curr_ptr;
+                    EdgeVW* start_ptr = curr_ptr;
                     while (i < file_size && file_arr[i] != '\n') {
                         // read in the edges
                         vertex_t v = 0;
                         while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { v = v * 10 + (file_arr[i++] - '0'); }
                         move_while(file_arr, i, ' ', file_size); // move to next number
 
-                        weight_t w = 1;
                         if (fmt_2 == '1') {
-                            w = 0;
+                            weight_t w = 0;
                             while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { w = w * 10 + (file_arr[i++] - '0'); }
                             move_while(file_arr, i, ' ', file_size); // move to next number
                         }
@@ -254,40 +245,29 @@ namespace HeiProMap {
         }
 
         // graph properties
-        vertex_t get_n() const final { return m_n; }
-
-        vertex_t get_m() const final { return m_m; }
-
-        weight_t get_weight() const final { return m_g_weight; }
+        vertex_t get_n() const override { return m_n; }
+        vertex_t get_m() const override { return m_m; }
+        weight_t get_weight() const override { return m_g_weight; }
 
         // vertex weights
-        weight_t get_weight(vertex_t u) const final { return m_v_weights[u]; }
-
-        size_t size(vertex_t u) const final { return m_adj[u].size(); }
-
-        vertex_t neighbor(vertex_t u, size_t idx) const final { return m_adj[u][idx].v; }
-        weight_t get_weight(vertex_t u, size_t idx) const final { return m_adj[u][idx].w; }
+        weight_t get_weight(const vertex_t u) const override { return m_v_weights[u]; }
+        size_t size(const vertex_t u) const override { return m_adj[u].size(); }
+        vertex_t neighbor(const vertex_t u, const size_t idx) const override { return m_adj[u][idx].v; }
+        weight_t get_weight(const vertex_t u, const size_t idx) const override { return m_adj[u][idx].w; }
 
         // edge manipulation
-        bool edge_exists(vertex_t u, vertex_t v) const final {
-            for(size_t i = 0; i < m_adj[u].size(); ++i){
-                if(m_adj[u][i].v == v){ return true; }
-            }
-            return false;
-        }
-
-        // coarsing and uncoarsing
-        void contract(vertex_t u, vertex_t v) final {
+        bool edge_exists(const vertex_t u, const vertex_t v) const override { return std::any_of(m_adj[u].begin(), m_adj[u].end(), [&](const auto& i) { return i.v == v; }); } // coarsening and uncoarsening
+        void contract(const vertex_t u, const vertex_t v) override {
             // add weight of v to u
             m_v_weights[u] += m_v_weights[v];
 
             // remove v from all its neighbors
-            for (const EdgeVW &e: m_adj[v]) {
+            for (const EdgeVW& e : m_adj[v]) {
                 remove_edge(e.v, v); // remove v from e.v
             }
 
             // connect neighbors of v to u, but not u
-            for (const EdgeVW &e: m_adj[v]) {
+            for (const EdgeVW& e : m_adj[v]) {
                 if (u != e.v) {
                     add_edge_with_weight(u, e.v, e.w);
                     add_edge_with_weight(e.v, u, e.w);
@@ -295,9 +275,9 @@ namespace HeiProMap {
             }
         }
 
-        void uncontract(vertex_t u, vertex_t v) final {
+        void uncontract(const vertex_t u, const vertex_t v) override {
             // remove neighbors of v from u
-            for (const EdgeVW &e: m_adj[v]) {
+            for (const EdgeVW& e : m_adj[v]) {
                 if (u != e.v) {
                     remove_edge_with_weight(u, e.v, e.w);
                     remove_edge_with_weight(e.v, u, e.w);
@@ -305,7 +285,7 @@ namespace HeiProMap {
             }
 
             // connect v to all its neighbors
-            for (const EdgeVW &e: m_adj[v]) {
+            for (const EdgeVW& e : m_adj[v]) {
                 add_edge_with_weight_guaranteed(e.v, v, e.w); // add v to e.v
             }
 
@@ -314,14 +294,14 @@ namespace HeiProMap {
         }
 
     private:
-        // coarsing
-        void remove_edge(vertex_t u, vertex_t v) {
-            size_t lower_idx = own_lower_bound_guaranteed(m_adj[u], v);
+        // coarsening
+        void remove_edge(const vertex_t u, const vertex_t v) {
+            const size_t lower_idx = own_lower_bound_guaranteed(m_adj[u], v);
             m_adj[u].erase(lower_idx);
         }
 
-        void add_edge_with_weight(vertex_t u, vertex_t v, weight_t weight = 1) {
-            size_t lower_idx = own_lower_bound_not_guaranteed(m_adj[u], v);
+        void add_edge_with_weight(const vertex_t u, const vertex_t v, const weight_t weight = 1) {
+            const size_t lower_idx = own_lower_bound_not_guaranteed(m_adj[u], v);
             if (lower_idx != m_adj[u].size() && m_adj[u][lower_idx].v == v) {
                 m_adj[u][lower_idx].w += weight;
             } else {
@@ -329,22 +309,20 @@ namespace HeiProMap {
             }
         }
 
-        // uncoarsing
-        void add_edge_with_weight_guaranteed(vertex_t u, vertex_t v, weight_t weight = 1) {
-            size_t lower_idx = own_lower_bound_not_guaranteed(m_adj[u], v);
+        // uncoarsening
+        void add_edge_with_weight_guaranteed(const vertex_t u, const vertex_t v, const weight_t weight = 1) {
+            const size_t lower_idx = own_lower_bound_not_guaranteed(m_adj[u], v);
             m_adj[u].insert(lower_idx, {v, weight}, arena_allocator);
         }
 
-        void remove_edge_with_weight(vertex_t u, vertex_t v, weight_t weight = 1) {
-            size_t lower_idx = own_lower_bound_guaranteed(m_adj[u], v);
+        void remove_edge_with_weight(const vertex_t u, const vertex_t v, const weight_t weight = 1) {
+            const size_t lower_idx = own_lower_bound_guaranteed(m_adj[u], v);
             m_adj[u][lower_idx].w -= weight;
             if (m_adj[u][lower_idx].w == 0) {
                 m_adj[u].erase(lower_idx);
             }
         }
-
     };
-
 }
 
 #endif //HEIDELBERGPROCESSMAPPING_CSR_GRAPH_H
