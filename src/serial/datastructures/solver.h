@@ -137,12 +137,10 @@ namespace HeiProMap {
                 level += 1;
             }
 
-            std::cout << "partition" << std::endl;
             partition();
 
             while (level > 0) {
                 level -= 1;
-                std::cout << level <<  " uncoarsening" << std::endl;
                 uncoarsening(level);
                 refinement(level);
             }
@@ -170,8 +168,6 @@ namespace HeiProMap {
 
             // ge_matcher.match(matches.back());
             he_matcher.match(matches.back());
-
-            std::cout << level << " " << matches.back().size() << std::endl;
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);

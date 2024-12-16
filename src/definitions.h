@@ -6,15 +6,8 @@
 #include <cstdlib>
 #include <algorithm>
 #include <limits>
-// #include <boost/align/aligned_allocator.hpp>
 
 namespace HeiProMap {
-    /**
-     * All data is 64 byte aligned.
-     */
-    // template<typename T>
-    // using AlignedVector = std::vector<T, boost::alignment::aligned_allocator<T, 64>>;
-
     typedef int8_t s8;
     typedef int16_t s16;
     typedef int32_t s32;
