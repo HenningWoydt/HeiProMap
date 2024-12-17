@@ -111,7 +111,7 @@ namespace HeiProMap {
 
             // mode
             int kaffpa_map_mode = MAPMODE_BISECTION; // TODO: Figure out why MAPMODE_MULTISECTION does not work
-            int kaffpa_partition_mode = KAFFPA_FAST;
+            int kaffpa_partition_mode = KAFFPA_STRONG;
 
             // partition result
             int *kaffpa_partition = (int *) malloc(n * sizeof(int));
