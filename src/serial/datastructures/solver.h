@@ -20,16 +20,21 @@
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
+#include "graph_csr.h"
 
 namespace HeiProMap {
     /**
      * Solver for serial Process Mapping.
      */
+
+#define GRAPH_TYPE GraphCSR
+
     class Solver {
-        CSRGraph g;
-        ActiveVertexManager<typeof(g)> av_manager;
-        PartitionManager<typeof(g), typeof(av_manager)> p_manager;
-        BoundaryVertexManager<typeof(g), typeof(av_manager), typeof(p_manager)> bv_manager;
+        std::vector<GRAPH_TYPE> graphs;
+        // GraphCSR g;
+        ActiveVertexManager<GRAPH_TYPE> av_manager;
+        // PartitionManager<typeof(g), typeof(av_manager)> p_manager;
+        // BoundaryVertexManager<typeof(g), typeof(av_manager), typeof(p_manager)> bv_manager;
 
         // distance
         std::vector<partition_t> hierarchy;
@@ -44,18 +49,18 @@ namespace HeiProMap {
         vertex_t threshold;
 
         // matching
-        GreedyEdgeMatcher<typeof(g), typeof(av_manager)> ge_matcher;
-        HeavyEdgeMatcher<typeof(g), typeof(av_manager)> he_matcher;
+        // GreedyEdgeMatcher<typeof(g), typeof(av_manager)> ge_matcher;
+        HeavyEdgeMatcher<GRAPH_TYPE, typeof(av_manager)> he_matcher;
         // SimpleClustering sc;
 
         std::vector<std::vector<EdgeUV>> matches;
 
         // partitioning
-        KaffpaPartitioner<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager)> kaffpa_partitioner;
+        // KaffpaPartitioner<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager)> kaffpa_partitioner;
 
         // refinement
-        LabelPropagationRefinement<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> lp_refine;
-        IdentityRefinement<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> i_refine;
+        // LabelPropagationRefinement<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> lp_refine;
+        // IdentityRefinement<typeof(g), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> i_refine;
         // QuotientGraphRefinement qgr;
 
         // statistics
@@ -67,8 +72,12 @@ namespace HeiProMap {
                const std::vector<weight_t>& t_distance,
                const f64 t_imbalance) {
             const auto sp_graph_io = std::chrono::high_resolution_clock::now();
+            GraphCSR g;
             g.initialize(t_graph_in);
+            graphs.push_back(g);
             const auto ep_graph_io = std::chrono::high_resolution_clock::now();
+
+            std::cout << "a" << std::endl;
 
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
@@ -78,8 +87,8 @@ namespace HeiProMap {
 
             // manager
             av_manager.initialize(&g);
-            p_manager.initialize(&g, &av_manager, k);
-            bv_manager.initialize(&g, &av_manager, &p_manager, k);
+            // p_manager.initialize(&g, &av_manager, k);
+            // bv_manager.initialize(&g, &av_manager, &p_manager, k);
             HEAVYASSERT(assert_state_pre_partitioning(g, av_manager));
 
             // distance
@@ -92,16 +101,16 @@ namespace HeiProMap {
             threshold = g.get_n() / 500;
 
             // matching
-            ge_matcher.initialize(&g, &av_manager);
+            // ge_matcher.initialize(&g, &av_manager);
             he_matcher.initialize(&g, &av_manager);
             // sc.initialize(&g);
 
             // partitioning
-            kaffpa_partitioner.initialize(&g, &av_manager, &bv_manager, &p_manager, hierarchy, distance, t_imbalance);
+            // kaffpa_partitioner.initialize(&g, &av_manager, &bv_manager, &p_manager, hierarchy, distance, t_imbalance);
 
             // refinement
-            i_refine.initialize(&g, &av_manager, &bv_manager, &p_manager, &d_oracle, hierarchy, distance, lmax);
-            lp_refine.initialize(&g, &av_manager, &bv_manager, &p_manager, &d_oracle, hierarchy, distance, lmax);
+            // i_refine.initialize(&g, &av_manager, &bv_manager, &p_manager, &d_oracle, hierarchy, distance, lmax);
+            // lp_refine.initialize(&g, &av_manager, &bv_manager, &p_manager, &d_oracle, hierarchy, distance, lmax);
             // qgr.initialize(&g, hierarchy, distance, k, imbalance, lmax, &dist_o);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
@@ -121,8 +130,8 @@ namespace HeiProMap {
 
             std::cout << stat_collect.to_JSON() << std::endl;
 
-            std::vector<partition_t> p(g.get_n());
-            for (vertex_t u = 0; u < g.get_n(); ++u) { p[u] = p_manager[u]; }
+            std::vector<partition_t> p(graphs.back().get_n());
+            // for (vertex_t u = 0; u < g.get_n(); ++u) { p[u] = p_manager[u]; }
 
             return p;
         }
@@ -134,6 +143,9 @@ namespace HeiProMap {
             while (!(av_manager.get_n_active() <= threshold || av_manager.get_n_active() <= k * 64)) {
                 matching(level);
                 coarsening(level);
+
+                std::cout << level << " " << av_manager.get_n_active() << " " << graphs.back().get_m() << std::endl;
+
                 level += 1;
             }
 
@@ -149,7 +161,7 @@ namespace HeiProMap {
         void partition() {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            kaffpa_partitioner.partition();
+            // kaffpa_partitioner.partition();
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
             stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
@@ -167,7 +179,7 @@ namespace HeiProMap {
             matches.back().reserve(av_manager.get_n_active() / 2);
 
             // ge_matcher.match(matches.back());
-            he_matcher.match(matches.back());
+            he_matcher.matches(&graphs.back(), matches.back());
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);
@@ -180,8 +192,11 @@ namespace HeiProMap {
         void coarsening(s32 level) {
             const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
+            GraphCSR g = graphs.back().contract_matching(matches.back());
+            graphs.push_back(g);
+
             for (const auto& e : matches.back()) {
-                g.contract(e.u, e.v);
+                // g.contract(e.u, e.v);
                 av_manager.contract(e.u, e.v);
             }
 
@@ -202,11 +217,12 @@ namespace HeiProMap {
                 const vertex_t u = matches.back()[idx].u;
                 const vertex_t v = matches.back()[idx].v;
 
-                g.uncontract(u, v);
-                av_manager.uncontract(u, v);
-                p_manager.uncontract(u, v);
-                bv_manager.uncontract(u, v);
+                // g.uncontract(u, v);
+                // av_manager.uncontract(u, v);
+                // p_manager.uncontract(u, v);
+                // bv_manager.uncontract(u, v);
             }
+            graphs.pop_back();
             matches.pop_back();
 
             const auto ep_uncoarse = std::chrono::high_resolution_clock::now();
@@ -221,8 +237,8 @@ namespace HeiProMap {
         void refinement(s32 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            i_refine.refine();
-            lp_refine.refine();
+            // i_refine.refine();
+            // lp_refine.refine();
             // qgr.refine(pm);
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

@@ -7,7 +7,7 @@ namespace HeiProMap {
 
     template<typename TSerialGraph, typename TSerialActiveVertexManager>
     class HeavyEdgeMatcher final : public ISerialMatcher<TSerialGraph, TSerialActiveVertexManager> {
-        TSerialGraph *p_g = nullptr;
+        // TSerialGraph *p_g = nullptr;
         TSerialActiveVertexManager *p_av_manager = nullptr;
 
         u32 mark = 0;
@@ -21,14 +21,17 @@ namespace HeiProMap {
             ASSERT(t_p_g != nullptr);
             ASSERT(t_p_av_manager != nullptr);
 
-            p_g = t_p_g;
+            // p_g = t_p_g;
             p_av_manager = t_p_av_manager;
 
             mark = 0;
-            used.resize(p_g->get_n(), 0);
+            used.resize(t_p_g->get_n(), mark);
         }
 
-        void match(std::vector<EdgeUV> &matches) override {
+        void match(std::vector<EdgeUV> &matches) override {}
+
+        void matches(TSerialGraph *g, std::vector<EdgeUV> &matches) {
+            TSerialGraph *p_g = g;
             ASSERT(p_g != nullptr);
             ASSERT(p_av_manager != nullptr);
             ASSERT(used.size() == p_g->get_n());
@@ -41,8 +44,13 @@ namespace HeiProMap {
                 vertex_t u = p_av_manager->get();
                 ASSERT(p_av_manager->is_active(u));
 
+                // std::cout << u << " " << used[u] << " " << p_g->size(u) << std::endl;
+
                 if (used[u] != mark && p_g->size(u) == 1) {
                     vertex_t v = p_g->neighbor(u, 0);
+
+                    // std::cout << u << " " << v << " " << used[u] << " " << used[v] << " " << p_g->size(u) << std::endl;
+
                     if (used[v] != mark) {
                         used[u] = mark;
                         used[v] = mark;
@@ -52,10 +60,14 @@ namespace HeiProMap {
                 }
             }
 
+            std::cout << matches.size() << std::endl;
+
             // check all other vertices
             for (p_av_manager->reset_iterator(); p_av_manager->available(); p_av_manager->next()) {
                 vertex_t u = p_av_manager->get();
                 ASSERT(p_av_manager->is_active(u));
+
+                // std::cout << u << " " << mark << " " << used[u] << " " << p_g->size(u) << std::endl;
 
                 if (used[u] != mark) {
                     size_t best_idx;
@@ -87,6 +99,8 @@ namespace HeiProMap {
                     }
                 }
             }
+
+            std::cout << "matching size " << matches.size() << std::endl;
 
 #if ASSERT_ENABLED
             for (const EdgeUV &e: matches) {

@@ -76,6 +76,10 @@ namespace HeiProMap {
         bool operator==(const EdgeUV &e) const {
             return (u == e.u && v == e.v);
         }
+
+        bool operator<(const EdgeUV &e) const {
+            return u < e.u;
+        }
     };
 
     class EdgeUVW {
