@@ -19,7 +19,7 @@ add_subdirectory(extern/KaHIP)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -fno-exceptions")
 # set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g3 -DNDEBUG -march=native -Wall -Wextra -pedantic")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -fno-exceptions")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -fno-exceptions")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -fno-exceptions")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -march=native -Wall -Wextra -pedantic -fno-exceptions")
 
@@ -44,37 +44,37 @@ file(GLOB_RECURSE Test_SOURCES_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.cpp"
 file(GLOB_RECURSE Test_HEADERS_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.h")
 
 add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL})
-add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
-add_executable(MtHeiProMapRefinement application/MtHeiProMapRefinement.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
+# add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
+# add_executable(MtHeiProMapRefinement application/MtHeiProMapRefinement.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)
 if (OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found")
-    target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
-    target_link_libraries(MtHeiProMapRefinement OpenMP::OpenMP_CXX)
+    # target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
+    # target_link_libraries(MtHeiProMapRefinement OpenMP::OpenMP_CXX)
 endif ()
 
 # Link KaHIP library
 target_link_libraries(HeiProMap kahip)
-target_link_libraries(MtHeiProMap kahip)
-target_link_libraries(MtHeiProMapRefinement kahip)
+# target_link_libraries(MtHeiProMap kahip)
+# target_link_libraries(MtHeiProMapRefinement kahip)
 
 add_subdirectory(external_tools/googletest)
 include(gmock)
 enable_testing()
 
 # Test executable
-add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
-add_executable(MtHeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL} ${Test_HEADERS_PARALLEL} ${Test_SOURCES_PARALLEL})
+# add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
+# add_executable(MtHeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL} ${Test_HEADERS_PARALLEL} ${Test_SOURCES_PARALLEL})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)
 if (OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found")
-    target_link_libraries(MtHeiProMap_gtest OpenMP::OpenMP_CXX)
+    # target_link_libraries(MtHeiProMap_gtest OpenMP::OpenMP_CXX)
 endif ()
 
 # Link to Google Test
-target_link_libraries(HeiProMap_gtest gtest gtest_main)
-target_link_libraries(MtHeiProMap_gtest gtest gtest_main)
+# target_link_libraries(HeiProMap_gtest gtest gtest_main)
+# target_link_libraries(MtHeiProMap_gtest gtest gtest_main)

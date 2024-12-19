@@ -11,9 +11,9 @@ int main() {
     const auto sp = std::chrono::high_resolution_clock::now();
     {
         // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_out = "../data/out/partition/afshell9.txt";
-        std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
+        // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
         // const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
-        // const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
+        const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
         // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "../data/out/partition/rgg24.txt";
         // std::string graph_in = "../data/mapping/rgg_n26.graph"; std::string mapping_out = "../data/out/partition/rgg_n26.txt";
         // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "../data/out/partition/deu.txt";

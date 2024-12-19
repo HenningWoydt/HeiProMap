@@ -1,12 +1,13 @@
-#ifndef MTRECPROMAP_JSON_UTILS_H
-#define MTRECPROMAP_JSON_UTILS_H
+#ifndef HEIDELBERGPROCESSMAPPING_JSON_UTILS_H
+#define HEIDELBERGPROCESSMAPPING_JSON_UTILS_H
+
+#include <string>
+#include <vector>
 
 #include "../../definitions.h"
-#include "../../macros.h"
-#include "utils.h"
+
 
 namespace HeiProMap {
-
 #define to_JSON_MACRO(x) (std::string("\"") + (#x) + "\" : " + to_JSON_value(x) + ",\n")
 
     std::string to_JSON_value(u8 x);
@@ -29,10 +30,10 @@ namespace HeiProMap {
 
     std::string to_JSON_value(f64 x);
 
-    std::string to_JSON_value(const std::string &s);
+    std::string to_JSON_value(const std::string& s);
 
-    template<typename T>
-    std::string to_JSON_value(const std::vector<T> &vec) {
+    template <typename T>
+    std::string to_JSON_value(const std::vector<T>& vec) {
         if (vec.empty()) {
             return "[]";
         }
@@ -47,7 +48,6 @@ namespace HeiProMap {
 
         return s;
     }
-
 }
 
-#endif //MTRECPROMAP_JSON_UTILS_H
+#endif //HEIDELBERGPROCESSMAPPING_JSON_UTILS_H

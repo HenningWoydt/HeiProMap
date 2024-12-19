@@ -1,13 +1,12 @@
-#ifndef MT_RECPROMAP_MACROS_H
-#define MT_RECPROMAP_MACROS_H
+#ifndef HEIDELBERGPROCESSMAPPING_MACROS_H
+#define HEIDELBERGPROCESSMAPPING_MACROS_H
 
-#include <string>
 #include <iostream>
+#include <string>
 
 namespace HeiProMap {
-
 #ifndef ASSERT_ENABLED
-#define ASSERT_ENABLED false
+#define ASSERT_ENABLED true
 #endif
 
 #ifndef HEAVYASSERT_ENABLED
@@ -28,7 +27,6 @@ namespace HeiProMap {
 #else
 #define HEAVYASSERT(condition) ((void)0)
 #endif
-
 }
 
-#endif //MT_RECPROMAP_MACROS_H
+#endif //HEIDELBERGPROCESSMAPPING_MACROS_H

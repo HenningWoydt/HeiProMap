@@ -1,19 +1,13 @@
-#ifndef MT_RECPROMAP_TRANSLATION_TABLE_H
-#define MT_RECPROMAP_TRANSLATION_TABLE_H
+#ifndef HEIDELBERGPROCESSMAPPING_TRANSLATION_TABLE_H
+#define HEIDELBERGPROCESSMAPPING_TRANSLATION_TABLE_H
 
-#include <map>
 #include <unordered_map>
 
 #include "../../definitions.h"
 #include "../../macros.h"
 
 namespace HeiProMap {
-
     class TranslationTable {
-    private:
-        // std::map<u64, u64> m_translation_o_to_n;
-        // std::map<u64, u64> m_translation_n_to_o;
-
         std::unordered_map<u64, u64> m_translation_o_to_n;
         std::unordered_map<u64, u64> m_translation_n_to_o;
 
@@ -76,23 +70,22 @@ namespace HeiProMap {
             m_translation_n_to_o.clear();
         }
 
-        void merge(TranslationTable &tt) {
+        void merge(TranslationTable& tt) {
             m_translation_n_to_o.merge(tt.m_translation_n_to_o);
             m_translation_o_to_n.merge(tt.m_translation_o_to_n);
         }
 
         void print() {
             std::cout << "Old to New" << std::endl;
-            for (const auto &[key, value]: m_translation_o_to_n) {
+            for (const auto& [key, value] : m_translation_o_to_n) {
                 std::cout << key << " : " << value << std::endl;
             }
             std::cout << "New to old" << std::endl;
-            for (const auto &[key, value]: m_translation_n_to_o) {
+            for (const auto& [key, value] : m_translation_n_to_o) {
                 std::cout << key << " : " << value << std::endl;
             }
         }
     };
-
 }
 
-#endif //MT_RECPROMAP_TRANSLATION_TABLE_H
+#endif //HEIDELBERGPROCESSMAPPING_TRANSLATION_TABLE_H

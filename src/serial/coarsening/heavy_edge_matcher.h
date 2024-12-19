@@ -1,55 +1,38 @@
 #ifndef HEIDELBERGPROCESSMAPPING_HEAVY_EDGE_MATCHER_H
 #define HEIDELBERGPROCESSMAPPING_HEAVY_EDGE_MATCHER_H
 
+#include <vector>
+
+#include "../../definitions.h"
+#include "../../macros.h"
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-
-    template<typename TSerialGraph, typename TSerialActiveVertexManager>
+    template <typename TSerialGraph, typename TSerialActiveVertexManager>
     class HeavyEdgeMatcher final : public ISerialMatcher<TSerialGraph, TSerialActiveVertexManager> {
-        // TSerialGraph *p_g = nullptr;
-        TSerialActiveVertexManager *p_av_manager = nullptr;
-
         u32 mark = 0;
         std::vector<u32> used;
 
     public:
         HeavyEdgeMatcher() = default;
 
-        void initialize(TSerialGraph *t_p_g,
-                        TSerialActiveVertexManager *t_p_av_manager) override {
-            ASSERT(t_p_g != nullptr);
-            ASSERT(t_p_av_manager != nullptr);
-
-            // p_g = t_p_g;
-            p_av_manager = t_p_av_manager;
-
+        void initialize(const size_t n) override {
             mark = 0;
-            used.resize(t_p_g->get_n(), mark);
+            used.resize(n, mark);
         }
 
-        void match(std::vector<EdgeUV> &matches) override {}
-
-        void matches(TSerialGraph *g, std::vector<EdgeUV> &matches) {
-            TSerialGraph *p_g = g;
-            ASSERT(p_g != nullptr);
-            ASSERT(p_av_manager != nullptr);
-            ASSERT(used.size() == p_g->get_n());
-
+        void match(const TSerialGraph& g,
+                   TSerialActiveVertexManager& av_manager,
+                   std::vector<EdgeUV>& matches) override {
             mark += 1;
             matches.clear();
 
             // first check vertices with degree 1
-            for (p_av_manager->reset_iterator(); p_av_manager->available(); p_av_manager->next()) {
-                vertex_t u = p_av_manager->get();
-                ASSERT(p_av_manager->is_active(u));
+            for (vertex_t u : av_manager) {
+                ASSERT(av_manager.is_active(u));
 
-                // std::cout << u << " " << used[u] << " " << p_g->size(u) << std::endl;
-
-                if (used[u] != mark && p_g->size(u) == 1) {
-                    vertex_t v = p_g->neighbor(u, 0);
-
-                    // std::cout << u << " " << v << " " << used[u] << " " << used[v] << " " << p_g->size(u) << std::endl;
+                if (used[u] != mark && g.size(u) == 1) {
+                    vertex_t v = g.neighbor(u, 0);
 
                     if (used[v] != mark) {
                         used[u] = mark;
@@ -60,38 +43,33 @@ namespace HeiProMap {
                 }
             }
 
-            std::cout << matches.size() << std::endl;
-
             // check all other vertices
-            for (p_av_manager->reset_iterator(); p_av_manager->available(); p_av_manager->next()) {
-                vertex_t u = p_av_manager->get();
-                ASSERT(p_av_manager->is_active(u));
-
-                // std::cout << u << " " << mark << " " << used[u] << " " << p_g->size(u) << std::endl;
+            for (vertex_t u : av_manager) {
+                ASSERT(av_manager.is_active(u));
 
                 if (used[u] != mark) {
                     size_t best_idx;
                     weight_t max_weight = 0;
 
-                    for (size_t i = 0; i < p_g->size(u); ++i) {
-                        vertex_t v = p_g->neighbor(u, i);
-                        weight_t ew = p_g->get_weight(u, i);
+                    for (size_t i = 0; i < g.size(u); ++i) {
+                        vertex_t v  = g.neighbor(u, i);
+                        weight_t ew = g.get_weight(u, i);
                         ASSERT(u != v);
-                        ASSERT(p_av_manager->is_active(v));
+                        ASSERT(av_manager.is_active(v));
                         if (used[v] != mark) {
                             if (ew > max_weight) {
-                                best_idx = i;
+                                best_idx   = i;
                                 max_weight = ew;
                             }
                         }
                     }
 
                     if (max_weight != 0) {
-                        vertex_t v = p_g->neighbor(u, best_idx);
-                        used[u] = mark;
-                        used[v] = mark;
+                        vertex_t v = g.neighbor(u, best_idx);
+                        used[u]    = mark;
+                        used[v]    = mark;
 
-                        if (p_g->size(u) > p_g->size(v)) {
+                        if (g.size(u) > g.size(v)) {
                             matches.emplace_back(u, v);
                         } else {
                             matches.emplace_back(v, u);
@@ -100,31 +78,28 @@ namespace HeiProMap {
                 }
             }
 
-            std::cout << "matching size " << matches.size() << std::endl;
-
 #if ASSERT_ENABLED
-            for (const EdgeUV &e: matches) {
+            for (const EdgeUV& e : matches) {
                 ASSERT(e.u != e.v);
-                ASSERT(p_av_manager->is_active(e.u));
-                ASSERT(p_av_manager->is_active(e.v));
+                ASSERT(av_manager.is_active(e.u));
+                ASSERT(av_manager.is_active(e.v));
             }
 #endif
 
 #if ASSERT_ENABLED
-            std::vector<u8> hit(p_g->get_n(), 0);
-            for (auto & e : matches) {
+            std::vector<u8> hit(g.get_n(), 0);
+            for (const auto& e : matches) {
                 hit[e.u] += 1;
                 hit[e.v] += 1;
 
-                if(hit[e.u] == 2){
+                if (hit[e.u] == 2) {
                     ASSERT(false);
                 }
-                if(hit[e.v] == 2){
+                if (hit[e.v] == 2) {
                     ASSERT(false);
                 }
             }
 #endif
-
         }
     };
 }

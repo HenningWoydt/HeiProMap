@@ -1,17 +1,17 @@
 .idea
 
-cmake-build-debug/*
-cmake-build-minsizerel/*
-cmake-build-release/*
-cmake-build-relwithdebinfo/*
+cmake-build-debug/
+cmake-build-minsizerel/
+cmake-build-release/
+cmake-build-relwithdebinfo/
 
-build/*
-.vscode
+build/
+.vscode/
 
 data/
 
-extern/KaHIP/*
+extern/KaHIP/
 
-extern/mt_kahypar_local/*
+extern/mt_kahypar_local/
 
-external_tools/googletest/*
+external_tools/googletest/

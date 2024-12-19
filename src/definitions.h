@@ -1,10 +1,7 @@
-#ifndef MT_RECPROMAP_DEFINITIONS_H
-#define MT_RECPROMAP_DEFINITIONS_H
+#ifndef HEIDELBERGPROCESSMAPPING_DEFINITIONS_H
+#define HEIDELBERGPROCESSMAPPING_DEFINITIONS_H
 
-#include <vector>
 #include <cstdint>
-#include <cstdlib>
-#include <algorithm>
 #include <limits>
 
 namespace HeiProMap {
@@ -25,7 +22,7 @@ namespace HeiProMap {
     typedef s32 weight_t;
     typedef u32 partition_t;
 
-    const size_t HEAP_TOMBSTONE = std::numeric_limits<size_t>::max();
+    constexpr size_t HEAP_TOMBSTONE = std::numeric_limits<size_t>::max();
 
     /**
      * Struct that holds a vertex and a weight.
@@ -36,12 +33,12 @@ namespace HeiProMap {
 
         EdgeVW() = default;
 
-        EdgeVW(vertex_t v, weight_t w) {
+        EdgeVW(const vertex_t v, const weight_t w) {
             this->v = v;
             this->w = w;
         }
 
-        bool operator<(const EdgeVW &y) const {
+        bool operator<(const EdgeVW& y) const {
             return v < y.v;
         }
     };
@@ -68,16 +65,16 @@ namespace HeiProMap {
         vertex_t u;
         vertex_t v;
 
-        EdgeUV(vertex_t u, vertex_t v) {
+        EdgeUV(const vertex_t u, const vertex_t v) {
             this->u = u;
             this->v = v;
         }
 
-        bool operator==(const EdgeUV &e) const {
+        bool operator==(const EdgeUV& e) const {
             return (u == e.u && v == e.v);
         }
 
-        bool operator<(const EdgeUV &e) const {
+        bool operator<(const EdgeUV& e) const {
             return u < e.u;
         }
     };
@@ -91,13 +88,13 @@ namespace HeiProMap {
     public:
         EdgeUVW() = default;
 
-        EdgeUVW(vertex_t u, vertex_t v, vertex_t w) : u(u), v(v), w(w) {}
+        EdgeUVW(const vertex_t u, const vertex_t v, const vertex_t w) : u(u), v(v), w(w) {}
 
-        bool operator<(const EdgeUVW &e) const {
+        bool operator<(const EdgeUVW& e) const {
             return w < e.w;
         }
 
-        bool operator>(const EdgeUVW &e) const {
+        bool operator>(const EdgeUVW& e) const {
             return w < e.w;
         }
     };
@@ -110,13 +107,13 @@ namespace HeiProMap {
     public:
         MovePQ() = default;
 
-        MovePQ(vertex_t p_id, s64 qap_delta) : p_id(p_id), qap_delta(qap_delta) {}
+        MovePQ(const vertex_t p_id, const s64 qap_delta) : p_id(p_id), qap_delta(qap_delta) {}
 
-        bool operator>(const MovePQ &m) const {
+        bool operator>(const MovePQ& m) const {
             return qap_delta > m.qap_delta;
         }
 
-        bool operator<(const MovePQ &m) const {
+        bool operator<(const MovePQ& m) const {
             return qap_delta < m.qap_delta;
         }
     };
@@ -130,13 +127,13 @@ namespace HeiProMap {
     public:
         Move() = default;
 
-        Move(vertex_t t_u, vertex_t p_id, s64 qap_delta) : u(t_u), p_id(p_id), qap_delta(qap_delta) {}
+        Move(const vertex_t t_u, const vertex_t p_id, const s64 qap_delta) : u(t_u), p_id(p_id), qap_delta(qap_delta) {}
 
-        bool operator>(const Move &m) const {
+        bool operator>(const Move& m) const {
             return qap_delta > m.qap_delta;
         }
 
-        bool operator<(const Move &m) const {
+        bool operator<(const Move& m) const {
             return qap_delta < m.qap_delta;
         }
     };
@@ -149,17 +146,17 @@ namespace HeiProMap {
     public:
         Swap() = default;
 
-        Swap(vertex_t t_u, s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
+        Swap(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
 
-        bool operator>(const Swap &m) const {
+        bool operator>(const Swap& m) const {
             return qap_delta > m.qap_delta;
         }
 
-        bool operator<(const Swap &m) const {
+        bool operator<(const Swap& m) const {
             return qap_delta < m.qap_delta;
         }
 
-        bool operator<=(const Swap &m) const {
+        bool operator<=(const Swap& m) const {
             return qap_delta <= m.qap_delta;
         }
     };
@@ -171,7 +168,6 @@ namespace HeiProMap {
         KAFFPA_ECO,
         KAFFPA_FAST
     };
-
 }
 
-#endif //MT_RECPROMAP_DEFINITIONS_H
+#endif //HEIDELBERGPROCESSMAPPING_DEFINITIONS_H

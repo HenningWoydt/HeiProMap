@@ -1,5 +1,5 @@
-#ifndef SERIALPROCESSMAPPING_INDEXED_MAX_HEAP_H
-#define SERIALPROCESSMAPPING_INDEXED_MAX_HEAP_H
+#ifndef HEIDELBERGPROCESSMAPPING_INDEXED_MAX_HEAP_H
+#define HEIDELBERGPROCESSMAPPING_INDEXED_MAX_HEAP_H
 
 #include <vector>
 #include <fstream>
@@ -12,13 +12,12 @@
 #include "../../macros.h"
 
 namespace HeiProMap {
-
     /**
      * One entry in the IndexedMaxHeap.
      *
      * @tparam T The value.
      */
-    template<typename T>
+    template <typename T>
     class IndexedMaxHeapEntry {
     public:
         size_t key;
@@ -39,12 +38,12 @@ namespace HeiProMap {
      *
      * @tparam T The value.
      */
-    template<typename T>
+    template <typename T>
     class IndexedMaxHeap {
     private:
         size_t n = 0;
-        std::vector<IndexedMaxHeapEntry<T>> heap;  // The heap array
-        std::vector<size_t> indices;               // Mapping of keys to heap indices
+        std::vector<IndexedMaxHeapEntry<T>> heap; // The heap array
+        std::vector<size_t> indices; // Mapping of keys to heap indices
 
     public:
         IndexedMaxHeap() = default;
@@ -85,10 +84,10 @@ namespace HeiProMap {
         void pop() {
             ASSERT(!empty());
 
-            size_t last_index = heap.size() - 1;
+            size_t last_index    = heap.size() - 1;
             indices[heap[0].key] = HEAP_TOMBSTONE;
             if (last_index > 0) {
-                heap[0] = heap[last_index];
+                heap[0]              = heap[last_index];
                 indices[heap[0].key] = 0;
                 heap.pop_back();
                 bubble_down(0);
@@ -102,7 +101,7 @@ namespace HeiProMap {
             return heap[0].key;
         }
 
-        T &top() {
+        T& top() {
             ASSERT(!heap.empty());
             return heap[0].val;
         }
@@ -137,9 +136,9 @@ namespace HeiProMap {
             size_t last_index = heap.size() - 1;
 
             while (true) {
-                size_t left_child_index = 2 * index + 1;
+                size_t left_child_index  = 2 * index + 1;
                 size_t right_child_index = 2 * index + 2;
-                size_t largest_index = index;
+                size_t largest_index     = index;
 
                 if (left_child_index <= last_index && heap[left_child_index].val > heap[largest_index].val) {
                     largest_index = left_child_index;
@@ -163,4 +162,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //SERIALPROCESSMAPPING_INDEXED_MAX_HEAP_H
+#endif //HEIDELBERGPROCESSMAPPING_INDEXED_MAX_HEAP_H

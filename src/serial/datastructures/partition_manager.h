@@ -1,72 +1,52 @@
-#ifndef SERIALPROCESSMAPPING_PARTITION_MANAGER_H
-#define SERIALPROCESSMAPPING_PARTITION_MANAGER_H
+#ifndef HEIDELBERGPROCESSMAPPING_PARTITION_MANAGER_H
+#define HEIDELBERGPROCESSMAPPING_PARTITION_MANAGER_H
 
 #include "../../definitions.h"
-#include "../../macros.h"
-#include "../utility/utils.h"
-#include "../utility/qap.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
 #include "../interfaces/ISerialPartitionManager.h"
 
 namespace HeiProMap {
-
-    template<typename TSerialGraph, typename TSerialActiveVertexManager>
-    class PartitionManager : public ISerialPartitionManager<TSerialGraph, TSerialActiveVertexManager> {
-    private:
-        TSerialGraph *m_p_g = nullptr;
-        TSerialActiveVertexManager *m_p_av_manager = nullptr;
+    class PartitionManager final : public ISerialPartitionManager {
+        vertex_t m_n    = 0;
         partition_t m_k = 0;
 
-        // actual partition
         std::vector<partition_t> partition;
-
-        // partition weights
         std::vector<weight_t> bweights;
 
     public:
-        void initialize(TSerialGraph *t_p_g,
-                        TSerialActiveVertexManager *t_p_av_manager,
-                        partition_t t_k) final {
-            ASSERT(t_p_g != nullptr);
-            ASSERT(t_p_av_manager != nullptr);
-
-            m_p_g = t_p_g;
-            m_p_av_manager = t_p_av_manager;
+        void initialize(const vertex_t t_n,
+                        const partition_t t_k) override {
+            m_n = t_n;
             m_k = t_k;
 
-            // actual partition
-            partition.resize(m_p_g->get_n());
-
-            // partition weights
+            partition.resize(m_n);
             bweights.resize(m_k, 0);
         }
 
         // read
-        const partition_t &operator[](vertex_t u) const final { return partition[u]; }
+        const partition_t& operator[](const vertex_t u) const override { return partition[u]; }
 
         // write
-        void set(vertex_t u, partition_t id) final {
-            ASSERT(m_p_g != nullptr);
-            bweights[id] += m_p_g->get_weight(u);
+        void set(const vertex_t u, const weight_t w, const partition_t id) override {
+            bweights[id] += w;
             partition[u] = id;
         }
 
-        void move(vertex_t u, partition_t old_id, partition_t new_id) final {
-            ASSERT(m_p_g != nullptr);
-            bweights[old_id] -= m_p_g->get_weight(u);
-            bweights[new_id] += m_p_g->get_weight(u);
+        void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) override {
+            bweights[old_id] -= w;
+            bweights[new_id] += w;
             partition[u] = new_id;
         }
 
-        // weights
-        weight_t get_bweight(partition_t id) const final { return bweights[id]; }
+        weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
+        std::vector<weight_t> get_bweights() const override { return bweights; }
+        void uncontract(const vertex_t u, const vertex_t v) override { partition[v] = partition[u]; }
 
-        std::vector<weight_t> get_bweights() const final { return bweights; }
-
-        // uncoarsing
-        void uncontract(vertex_t u, vertex_t v) final { partition[v] = partition[u]; }
+        void uncontract(const std::vector<EdgeUV>& matches) override {
+            for (const auto [u, v] : matches) {
+                partition[v] = partition[u];
+            }
+        }
     };
-
 }
 
-#endif //SERIALPROCESSMAPPING_PARTITION_MANAGER_H
+#endif //HEIDELBERGPROCESSMAPPING_PARTITION_MANAGER_H

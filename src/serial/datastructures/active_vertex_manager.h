@@ -1,46 +1,31 @@
 #ifndef HEIDELBERGPROCESSMAPPING_ACTIVE_VERTEX_MANAGER_H
 #define HEIDELBERGPROCESSMAPPING_ACTIVE_VERTEX_MANAGER_H
 
+#include <numeric>
+
 #include "../../definitions.h"
-#include "../utility/utils.h"
-#include "../../macros.h"
-#include "../../interfaces/IGraph.h"
-#include "../../interfaces/IActiveVertexManager.h"
 #include "../interfaces/ISerialActiveVertexManager.h"
 
 namespace HeiProMap {
-
-    template<typename TSerialGraph>
-    class ActiveVertexManager : public ISerialActiveVertexManager<TSerialGraph> {
-    private:
-        TSerialGraph *m_p_g = nullptr;
-
+    class ActiveVertexManager final : public ISerialActiveVertexManager {
         // active states
         std::vector<bool> m_states;
         std::vector<vertex_t> m_vertices;
         vertex_t m_n_active = 0;
 
-        // iterator
-        size_t idx = 0;
-
     public:
         // initialize
-        void initialize(TSerialGraph *t_p_g) final {
-            ASSERT(t_p_g != nullptr);
-
-            m_p_g = t_p_g;
-
-            m_states.resize(m_p_g->get_n(), true);
-            m_vertices.resize(m_p_g->get_n());
+        void initialize(const size_t n) override {
+            m_states.resize(n, true);
+            m_vertices.resize(n);
             std::iota(m_vertices.begin(), m_vertices.end(), 0);
-            m_n_active = m_p_g->get_n();
-            idx = 0;
+            m_n_active = n;
         }
 
         // active vertex manipulation
-        vertex_t get_n_active() const final { return m_n_active; }
+        vertex_t get_n_active() const override { return m_n_active; }
 
-        void activate_vertex(vertex_t u) final {
+        void activate_vertex(const vertex_t u) override {
             if (!m_states[u]) {
                 m_states[u] = true;
                 m_vertices.push_back(u);
@@ -48,32 +33,36 @@ namespace HeiProMap {
             }
         }
 
-        void disable_vertex(vertex_t u) final {
+        void disable_vertex(const vertex_t u) override {
             if (m_states[u]) {
                 m_states[u] = false;
                 m_n_active -= 1;
             }
         }
 
-        bool is_active(vertex_t u) const final { return m_states[u]; }
+        bool is_active(const vertex_t u) const override { return m_states[u]; }
+        bool is_disabled(const vertex_t u) const override { return !m_states[u]; }
+        bool get_state(const vertex_t u) const override { return m_states[u]; }
 
-        bool is_disabled(vertex_t u) const final { return !m_states[u]; }
+        void contract(const std::vector<EdgeUV>& matches) override {
+            for (const auto [u, v] : matches) {
+                disable_vertex(v);
+            }
+        }
 
-        bool get_state(vertex_t u) const final { return m_states[u]; }
-
-        // coarsing and uncoarsing
-        void contract([[maybe_unused]] vertex_t u, vertex_t v) final { disable_vertex(v); }
-
-        void uncontract([[maybe_unused]] vertex_t u, vertex_t v) final { activate_vertex(v); }
+        void uncontract(const std::vector<EdgeUV>& matches) override {
+            for (const auto [u, v] : matches) {
+                activate_vertex(v);
+            }
+        }
 
         // iteration
-        void reset_iterator() final { idx = 0; }
+        // void reset_iterator() override { idx = 0; }
+        // vertex_t get() const override { return m_vertices[idx]; }
+        // void next() override { idx += 1; }
 
-        vertex_t get() final { return m_vertices[idx]; }
-
-        void next() final { idx += 1; }
-
-        bool available() final {
+        /*
+        bool available() override {
             while (idx < m_vertices.size() && is_disabled(m_vertices[idx])) {
                 m_vertices[idx] = m_vertices.back();
                 m_vertices.pop_back();
@@ -81,8 +70,59 @@ namespace HeiProMap {
 
             return idx < m_vertices.size();
         }
-    };
+        */
 
+        class Iterator {
+            std::vector<vertex_t>& m_vertices;
+            std::vector<bool>& m_states;
+            size_t m_idx = 0;
+
+        public:
+            // Constructor
+            Iterator(std::vector<vertex_t>& vertices,
+                     std::vector<bool>& states) : m_vertices(vertices), m_states(states) {
+                // Skip disabled vertices during initialization
+                advance_to_next_valid();
+            }
+
+            // Dereference operator
+            vertex_t operator*() const {
+                return m_vertices[m_idx];
+            }
+
+            // Pre-increment operator
+            Iterator& operator++() {
+                // Remove the current inactive vertex from the vector
+                if (!m_states[m_vertices[m_idx]]) {
+                    m_vertices[m_idx] = m_vertices.back();
+                    m_vertices.pop_back();
+                } else {
+                    ++m_idx;
+                }
+
+                // Advance to the next valid vertex
+                advance_to_next_valid();
+                return *this;
+            }
+
+            bool operator!=(const Iterator& other) const {
+                return m_idx != other.m_vertices.size();
+            }
+
+        private:
+            // Helper to advance the iterator to the next active vertex
+            void advance_to_next_valid() const {
+                while (m_idx < m_vertices.size() && !m_states[m_vertices[m_idx]]) {
+                    // Pop inactive vertices out of the container
+                    m_vertices[m_idx] = m_vertices.back();
+                    m_vertices.pop_back();
+                }
+            }
+        };
+
+        Iterator begin() { return {m_vertices, m_states}; }
+        Iterator end() { return {m_vertices, m_states}; }
+    };
 }
 
 #endif //HEIDELBERGPROCESSMAPPING_ACTIVE_VERTEX_MANAGER_H
