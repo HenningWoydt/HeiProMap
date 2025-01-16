@@ -12,6 +12,7 @@
 #include "../../macros.h"
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../partitioning/kaffpa_partitioner.h"
+#include "../partitioning/global_multisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
@@ -44,9 +45,6 @@ namespace HeiProMap {
         std::vector<std::vector<EdgeUV>> matches;
         // GreedyEdgeMatcher<typeof(graphs[0]), typeof(av_manager)> ge_matcher;
         HeavyEdgeMatcher<typeof(graphs[0]), typeof(av_manager)> he_matcher;
-
-        // partitioning
-        KaffpaPartitioner<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> kaffpa_partitioner;
 
         // refinement
         LabelPropagationRefinement<typeof(graphs[0]), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> lp_refine;
@@ -144,7 +142,8 @@ namespace HeiProMap {
         void partition() {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            KaffpaPartitioner<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> partitioner;
+            // KaffpaPartitioner<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> partitioner;
+            GlobalMultisectionPartitioner<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> partitioner;
             partitioner.partition(graphs.back(), av_manager, p_manager, hierarchy, distance, m_imbalance);
 
             // initialize boundary vertices
@@ -220,7 +219,7 @@ namespace HeiProMap {
         void refinement(const s32 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle);
+            // lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle);
             // qgr.refine(pm);
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

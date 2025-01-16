@@ -25,18 +25,18 @@ namespace HeiProMap {
 #endif
 
         // coarsening
+        f64 total_coarsening_time = 0.0;
 #if STATISTICCOLLECTOR
         std::vector<f64> coarsening_time = {0.0};
         std::vector<vertex_t> coarsening_end_size = {0};
 #endif
-        f64 total_coarsening_time = 0.0;
 
         // uncoarsening
+        f64 total_uncoarsening_time = 0.0;
 #if STATISTICCOLLECTOR
         std::vector<f64> uncoarsening_time = {0.0};
         std::vector<vertex_t> uncoarsening_end_size = {0};
 #endif
-        f64 total_uncoarsening_time = 0.0;
 
         // refinement
         f64 total_refinement_time = 0.0;

@@ -234,6 +234,7 @@ namespace HeiProMap {
             neighborhoods.resize(n + 1);
             neighborhoods[0] = 0;
             edges.resize(m + 1);
+            vertex_weights = g.vertex_weights;
 
             // define the state of each vertex
             constexpr u8 NOT_MATCHED    = 0;

@@ -11,12 +11,13 @@ int main() {
     const auto sp = std::chrono::high_resolution_clock::now();
     {
         // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_out = "../data/out/partition/afshell9.txt";
-        // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
+        std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
         // const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
-        const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
+        // const std::string graph_in = "../data/mapping/as-skitter.graph"; const std::string mapping_out = "../data/out/partition/as-skitter.txt"; // 13.801.154
+        // const std::string graph_in = "../data/mapping/wiki-Talk.graph"; const std::string mapping_out = "../data/out/partition/wiki-Talk.txt"; // 80.794.192
         // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "../data/out/partition/rgg24.txt";
         // std::string graph_in = "../data/mapping/rgg_n26.graph"; std::string mapping_out = "../data/out/partition/rgg_n26.txt";
-        // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "../data/out/partition/deu.txt";
+        // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "../data/out/partition/deu.txt"; // 177.128
         // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_out = "../data/out/partition/PGPgiantcompo.txt";
         // std::string graph_in = "../data/test/manual_graphs/0.graph";
         const std::string statistics_out   = "statistics.JSON";
