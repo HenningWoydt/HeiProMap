@@ -17,6 +17,7 @@
 #include "../utility/qap.h"
 #include "../utility/utils.h"
 #include "../utility/assert_state.h"
+#include "quotient_graph.h"
 
 namespace HeiProMap {
     /**
@@ -27,6 +28,7 @@ namespace HeiProMap {
         ActiveVertexManager av_manager;
         PartitionManager p_manager;
         BoundaryVertexManager<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> bv_manager;
+        QuotientGraph q_graph;
 
         // distance
         std::vector<partition_t> hierarchy;
@@ -71,6 +73,7 @@ namespace HeiProMap {
             av_manager.initialize(graphs.back().get_n());
             p_manager.initialize(graphs.back().get_n(), k);
             bv_manager.initialize(graphs.back().get_n(), k);
+            q_graph.initialize(k);
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), av_manager));
 
             // distance
@@ -118,7 +121,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > k * 16) {
+            while (av_manager.get_n_active() > k * 4) {
                 matching(level);
                 coarsening(level);
 
@@ -146,18 +149,21 @@ namespace HeiProMap {
         void partition() {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            // KaffpaPartitioner<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> partitioner;
-            GlobalMultisectionPartitioner<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> partitioner;
+            // KaffpaPartitioner partitioner;
+            GlobalMultisectionPartitioner partitioner;
             partitioner.partition(graphs.back(), av_manager, p_manager, hierarchy, distance, m_imbalance);
 
-            // initialize boundary vertices
+            // initialize boundary vertices and quotient graph
             for (const vertex_t u : av_manager) {
                 for (size_t i = 0; i < graphs.back().size(u); ++i) {
                     const vertex_t v = graphs.back().neighbor(u, i);
                     const weight_t w = graphs.back().get_weight(u, i);
+                    const partition_t u_id = p_manager[u];
+                    const partition_t v_id = p_manager[v];
 
-                    if (p_manager[u] != p_manager[v]) {
-                        bv_manager.add(u, p_manager[u]);
+                    if (u_id != v_id) {
+                        bv_manager.add(u, u_id); // boundary vertex
+                        q_graph.add_edge(u_id, v_id, w); // quotient graph
                     }
                 }
             }

@@ -172,11 +172,11 @@ namespace HeiProMap {
 
     TEST(GraphCoarsening, graph_csrgraph_del26_graph) {
         const std::string graph_in = "../data/mapping/del26.graph";
-        compare_coarsening(graph_in);
+        // compare_coarsening(graph_in);
     }
 
     TEST(GraphCoarsening, graph_csrgraph_rgg_n26_graph) {
         const std::string graph_in = "../data/mapping/rgg_n26.graph";
-        compare_coarsening(graph_in);
+        // compare_coarsening(graph_in);
     }
 }

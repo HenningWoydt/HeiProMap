@@ -46,12 +46,13 @@ namespace HeiProMap {
             imh_v = IndexedMaxHeap<s64>(n);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
         void refine(TSerialGraph& g,
                     TSerialActiveVertexManager& av_manager,
                     TSerialBoundaryVertexManager& bv_manager,
                     TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle) {
+                    TSerialDistanceOracle& d_oracle,
+                    TSerialQuotientGraph& q_graph) {
             ASSERT(p_g != nullptr);
             Graph &g = *p_g;
             QuotientGraph &qg = pm.get_qg();

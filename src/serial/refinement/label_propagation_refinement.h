@@ -12,27 +12,26 @@
 namespace HeiProMap {
     class LabelPropagationRefinement final : public ISerialRefiner {
         std::vector<partition_t> hierarchy;
-        std::vector<weight_t> distance;
-        partition_t k = 0;
-        weight_t lmax = 0;
+        std::vector<weight_t>    distance;
+        partition_t              k    = 0;
+        weight_t                 lmax = 0;
 
         std::vector<s32> used;
-        std::vector<u8> neighbor_changed;
-        s32 mark = -1;
+        std::vector<u8>  neighbor_changed;
+        s32              mark = -1;
 
-        std::vector<u64> local_max_iterations = {1, 3, 9};
+        std::vector<u64> local_max_iterations = {1, 3, 5};
 
-        std::random_device rd;
-        std::mt19937 gen;
+        std::random_device                    rd;
+        std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
 
     public:
-        LabelPropagationRefinement() : gen(rd()), dis(0.0f, 1.0f) {
-        }
+        LabelPropagationRefinement() : gen(rd()), dis(0.0f, 1.0f) {}
 
         void initialize(const vertex_t n,
-                        std::vector<partition_t>& t_hierarchy,
-                        std::vector<weight_t>& t_distance,
+                        std::vector<partition_t> &t_hierarchy,
+                        std::vector<weight_t> &t_distance,
                         const weight_t t_lmax) override {
             hierarchy = t_hierarchy;
             distance  = t_distance;
@@ -255,40 +254,41 @@ namespace HeiProMap {
         }
         */
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-        void refine(TSerialGraph& g,
-                    TSerialActiveVertexManager& av_manager,
-                    TSerialBoundaryVertexManager& bv_manager,
-                    TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle) {
-            bool global_move_occurred = true;
-            u64 global_max_iteration = 3;
-            for (u64 global_iteration = 0; global_iteration < global_max_iteration && global_move_occurred; ++global_iteration) {
+        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+        void refine(TSerialGraph &g,
+                    TSerialActiveVertexManager &av_manager,
+                    TSerialBoundaryVertexManager &bv_manager,
+                    TSerialPartitionManager &p_manager,
+                    TSerialDistanceOracle &d_oracle) {
+            bool     global_move_occurred = true;
+            u64      global_max_iteration = 3;
+            for (u64 global_iteration     = 0; global_iteration < global_max_iteration && global_move_occurred; ++global_iteration) {
                 global_move_occurred = false;
 
                 for (size_t distance_i = 0; distance_i < distance.size(); ++distance_i) {
                     weight_t dist = distance[distance.size() - 1 - distance_i];
 
-                    bool local_move_occurred = true;
-                    for (u64 local_iteration = 0; local_iteration < local_max_iterations[distance.size() - 1 - distance_i] && local_move_occurred; ++local_iteration) {
+                    bool     local_move_occurred = true;
+                    u64 local_max_iteration = local_max_iterations[distance.size() - 1 - distance_i];
+                    for (u64 local_iteration     = 0; local_iteration < local_max_iteration && local_move_occurred; ++local_iteration) {
                         mark += 1;
                         local_move_occurred = false;
 
                         std::vector<partition_t> gain_0_ids;
-                        for (vertex_t u : bv_manager) {
+                        for (vertex_t            u: bv_manager) {
                             if (used[u] == mark) { continue; } // we already used u in this iteration
 
                             gain_0_ids.clear(); // clear old ids
 
-                            weight_t u_weight = g.get_weight(u);
-                            partition_t u_id = p_manager[u];
-                            weight_t u_qap = std::numeric_limits<weight_t>::max();
+                            weight_t    u_weight = g.get_weight(u);
+                            partition_t u_id     = p_manager[u];
+                            weight_t    u_qap    = std::numeric_limits<weight_t>::max();
 
                             // make the move that reduces qap the most
-                            partition_t best_u_id = u_id;
-                            weight_t best_qap_delta = 0;
-                            for (size_t i = 0; i < g.size(u); ++i) {
-                                vertex_t v = g.neighbor(u, i);
+                            partition_t best_u_id      = u_id;
+                            weight_t    best_qap_delta = 0;
+                            for (size_t i              = 0; i < g.size(u); ++i) {
+                                vertex_t    v    = g.neighbor(u, i);
                                 partition_t v_id = p_manager[v];
 
                                 if (u_id != v_id && p_manager.get_bweight(v_id) + u_weight <= lmax && d_oracle.get(u_id, v_id) == dist) {
@@ -301,7 +301,7 @@ namespace HeiProMap {
                                     }
                                     if (qap_delta > best_qap_delta) {
                                         best_qap_delta = qap_delta;
-                                        best_u_id = v_id;
+                                        best_u_id      = v_id;
                                     }
                                 }
                             }

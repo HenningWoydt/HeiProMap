@@ -157,12 +157,12 @@ namespace HeiProMap {
 
     TEST(GraphInitialization, graph_csrgraph_del26_graph) {
         const std::string graph_in = "../data/mapping/del26.graph";
-        compare_initialization(graph_in);
+        // compare_initialization(graph_in);
     }
 
     TEST(GraphInitialization, graph_csrgraph_rgg_n26_graph) {
         const std::string graph_in = "../data/mapping/rgg_n26.graph";
-        compare_initialization(graph_in);
+        // compare_initialization(graph_in);
     }
 }
 

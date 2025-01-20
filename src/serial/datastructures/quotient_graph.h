@@ -21,20 +21,17 @@ namespace HeiProMap {
 
             m_adj_mtx.resize(k * k, 0);
         }
-
-        void add_edge(partition_t u, partition_t v, weight_t w) {
+        void add_edge(partition_t u, partition_t v, weight_t w) override {
             partition_t min = std::min(u, v);
             partition_t max = std::max(u, v);
             m_adj_mtx[min * k + max] += w;
         }
-
-        void remove_edge(partition_t u, partition_t v, weight_t w) {
+        void remove_edge(partition_t u, partition_t v, weight_t w) override {
             partition_t min = std::min(u, v);
             partition_t max = std::max(u, v);
             m_adj_mtx[min * k + max] -= w;
         }
-
-        bool has_edge(partition_t u, partition_t v) {
+        bool has_edge(partition_t u, partition_t v) override {
             partition_t min = std::min(u, v);
             partition_t max = std::max(u, v);
             return m_adj_mtx[min * k + max] > 0;
