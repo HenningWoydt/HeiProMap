@@ -8,22 +8,25 @@
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    template <typename TSerialGraph, typename TSerialActiveVertexManager>
-    class HeavyEdgeMatcher final : public ISerialMatcher<TSerialGraph, TSerialActiveVertexManager> {
+    class HeavyEdgeMatcher final : public ISerialMatcher {
         u32 mark = 0;
         std::vector<u32> used;
+
+        weight_t l_max = 0;
 
     public:
         HeavyEdgeMatcher() = default;
 
-        void initialize(const size_t n) override {
+        void initialize(const size_t n, const weight_t l_max) override {
             mark = 0;
             used.resize(n, mark);
+            this->l_max = l_max;
         }
 
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
         void match(const TSerialGraph& g,
                    TSerialActiveVertexManager& av_manager,
-                   std::vector<EdgeUV>& matches) override {
+                   std::vector<EdgeUV>& matches) {
             mark += 1;
             matches.clear();
 
@@ -34,7 +37,7 @@ namespace HeiProMap {
                 if (used[u] != mark && g.size(u) == 1) {
                     vertex_t v = g.neighbor(u, 0);
 
-                    if (used[v] != mark) {
+                    if (used[v] != mark && g.get_weight(u) + g.get_weight(v) <= l_max) {
                         used[u] = mark;
                         used[v] = mark;
 
@@ -56,7 +59,7 @@ namespace HeiProMap {
                         weight_t ew = g.get_weight(u, i);
                         ASSERT(u != v);
                         ASSERT(av_manager.is_active(v));
-                        if (used[v] != mark) {
+                        if (used[v] != mark && g.get_weight(u) + g.get_weight(v) <= l_max) {
                             if (ew > max_weight) {
                                 best_idx   = i;
                                 max_weight = ew;

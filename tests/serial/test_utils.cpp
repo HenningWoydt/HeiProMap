@@ -1,64 +1,45 @@
 #include "test_utils.h"
 
 namespace HeiProMap {
-
-    void graphs_are_equal(IGraph &g1, IGraph &g2){
+    void graphs_are_equal(const ISerialGraph& g1, const ISerialGraph& g2) {
+        // compare number of vertices
         EXPECT_EQ(g1.get_n(), g2.get_n());
+
+        // compare number of edges
+        EXPECT_EQ(g1.get_m(), g2.get_m());
+
+        // compare graph weight
         EXPECT_EQ(g1.get_weight(), g2.get_weight());
 
-        for(vertex_t u = 0; u < g1.get_n(); ++u){
+        // compare vertex weights
+        for (vertex_t u = 0; u < g1.get_n(); u++) {
             EXPECT_EQ(g1.get_weight(u), g2.get_weight(u));
         }
 
-        for(vertex_t u = 0; u < g1.get_n(); ++u){
-            for(size_t i = 0; i < g1.size(u); ++i){
+        // compare neighborhood sizes
+        for (vertex_t u = 0; u < g1.get_n(); u++) {
+            EXPECT_EQ(g1.size(u), g2.size(u));
+        }
+
+        // compare neighborhoods
+        std::vector<EdgeVW> g1_neighborhood;
+        std::vector<EdgeVW> g2_neighborhood;
+        for (vertex_t u = 0; u < g1.get_n(); u++) {
+            g1_neighborhood.clear();
+            g2_neighborhood.clear();
+            for (size_t i = 0; i < g1.size(u); i++) {
                 vertex_t v = g1.neighbor(u, i);
-                EXPECT_TRUE(g2.edge_exists(u, v));
+                weight_t w = g1.get_weight(u, i);
+                g1_neighborhood.emplace_back(v, w);
             }
-        }
-
-        for(vertex_t u = 0; u < g2.get_n(); ++u){
-            for(size_t i = 0; i < g2.size(u); ++i){
+            for (size_t i = 0; i < g2.size(u); i++) {
                 vertex_t v = g2.neighbor(u, i);
-                EXPECT_TRUE(g1.edge_exists(u, v));
+                weight_t w = g2.get_weight(u, i);
+                g2_neighborhood.emplace_back(v, w);
             }
+            std::sort(g1_neighborhood.begin(), g1_neighborhood.end());
+            std::sort(g2_neighborhood.begin(), g2_neighborhood.end());
+            EXPECT_EQ(g1_neighborhood, g2_neighborhood);
         }
     }
-
-    void graphs_are_equal(IGraph &g1, IActiveVertexManager &av_manager1,
-                          IGraph &g2, IActiveVertexManager &av_manager2){
-        EXPECT_EQ(av_manager1.get_n_active(), av_manager2.get_n_active());
-        EXPECT_EQ(g1.get_weight(), g2.get_weight());
-
-        for (av_manager1.reset_iterator(); av_manager1.available(); av_manager1.next()) {
-            vertex_t u = av_manager1.get();
-            EXPECT_EQ(g1.get_weight(u), g2.get_weight(u));
-        }
-
-        for (av_manager1.reset_iterator(); av_manager1.available(); av_manager1.next()) {
-            vertex_t u = av_manager1.get();
-            for(size_t i = 0; i < g1.size(u); ++i){
-                vertex_t v = g1.neighbor(u, i);
-                EXPECT_TRUE(g2.edge_exists(u, v));
-            }
-        }
-
-        for (av_manager2.reset_iterator(); av_manager2.available(); av_manager2.next()) {
-            vertex_t u = av_manager2.get();
-            for(size_t i = 0; i < g2.size(u); ++i){
-                vertex_t v = g2.neighbor(u, i);
-                EXPECT_TRUE(g1.edge_exists(u, v));
-            }
-        }
-    }
-
-    void matchings_are_equal(const std::vector<EdgeUV> &match1, const std::vector<EdgeUV> &match2){
-        EXPECT_EQ(match1.size(), match2.size());
-
-        for(size_t i = 0; i < match1.size(); ++i){
-            EXPECT_EQ(match1[i].u, match2[i].u);
-            EXPECT_EQ(match1[i].v, match2[i].v);
-        }
-    }
-
 }

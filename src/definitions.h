@@ -41,6 +41,10 @@ namespace HeiProMap {
         bool operator<(const EdgeVW& y) const {
             return v < y.v;
         }
+
+        bool operator==(const EdgeVW& y) const {
+            return v == y.v && w == y.w;
+        }
     };
 
     /**

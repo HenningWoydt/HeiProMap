@@ -1,19 +1,13 @@
 #ifndef HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_H
 #define HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_H
 
-/*
-
-#include "../utility/definitions.h"
-#include "../utility/macros.h"
-#include "../utility/utils.h"
-#include "graph.h"
-#include "../utility/qap.h"
 #include "distance_oracle.h"
-#include "boundary_vertex_manager.h"
+#include "../../definitions.h"
+#include "../interfaces/ISerialQuotientGraph.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
-
-    class QuotientGraph {
+    class QuotientGraph final : public ISerialQuotientGraph {
     private:
         partition_t k = 0;
 
@@ -22,7 +16,7 @@ namespace HeiProMap {
     public:
         QuotientGraph() = default;
 
-        void initialize(partition_t t_k) {
+        void initialize(partition_t t_k) override {
             k = t_k;
 
             m_adj_mtx.resize(k * k, 0);
@@ -46,9 +40,6 @@ namespace HeiProMap {
             return m_adj_mtx[min * k + max] > 0;
         }
     };
-
 }
-
- */
 
 #endif //HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_H

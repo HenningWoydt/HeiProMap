@@ -10,8 +10,7 @@
 #include "../utility/utils.h"
 
 namespace HeiProMap {
-    template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    class LabelPropagationRefinement final : public ISerialRefiner<TSerialGraph, TSerialActiveVertexManager, TSerialBoundaryVertexManager, TSerialPartitionManager, TSerialDistanceOracle> {
+    class LabelPropagationRefinement final : public ISerialRefiner {
         std::vector<partition_t> hierarchy;
         std::vector<weight_t> distance;
         partition_t k = 0;
@@ -256,6 +255,7 @@ namespace HeiProMap {
         }
         */
 
+        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
         void refine(TSerialGraph& g,
                     TSerialActiveVertexManager& av_manager,
                     TSerialBoundaryVertexManager& bv_manager,

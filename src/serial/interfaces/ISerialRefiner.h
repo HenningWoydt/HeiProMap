@@ -8,14 +8,7 @@
 #include "ISerialDistanceOracle.h"
 
 namespace HeiProMap {
-    template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
     class ISerialRefiner {
-        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
-        static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
-        static_assert(std::is_base_of_v<ISerialBoundaryVertexManager<TSerialGraph, TSerialActiveVertexManager, TSerialPartitionManager>, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
-        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
-        static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
-
     public:
         virtual ~ISerialRefiner() = default;
         // initialization
@@ -23,6 +16,13 @@ namespace HeiProMap {
                                 std::vector<partition_t>& t_hierarchy,
                                 std::vector<weight_t>& t_distance,
                                 weight_t t_lmax) = 0;
+
+        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+        void refine(TSerialGraph& g,
+                    TSerialActiveVertexManager& av_manager,
+                    TSerialBoundaryVertexManager& bv_manager,
+                    TSerialPartitionManager& p_manager,
+                    TSerialDistanceOracle& d_oracle) {}
     };
 }
 

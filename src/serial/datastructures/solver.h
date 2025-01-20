@@ -43,11 +43,10 @@ namespace HeiProMap {
 
         // matching
         std::vector<std::vector<EdgeUV>> matches;
-        // GreedyEdgeMatcher<typeof(graphs[0]), typeof(av_manager)> ge_matcher;
-        HeavyEdgeMatcher<typeof(graphs[0]), typeof(av_manager)> he_matcher;
+        HeavyEdgeMatcher he_matcher;
 
         // refinement
-        LabelPropagationRefinement<typeof(graphs[0]), typeof(av_manager), typeof(bv_manager), typeof(p_manager), typeof(d_oracle)> lp_refine;
+        LabelPropagationRefinement lp_refine;
         // QuotientGraphRefinement qgr;
 
         // statistics
@@ -82,11 +81,11 @@ namespace HeiProMap {
             lmax        = std::ceil((1.0 + t_imbalance) * ((f64)graphs.back().get_weight() / (f64)k));
 
             // multilevel
-            threshold = graphs.back().get_n() / 500;
+            threshold = 0; // graphs.back().get_n() / 500;
 
             // matching
             // ge_matcher.initialize(graphs.back().get_n());
-            he_matcher.initialize(graphs.back().get_n());
+            he_matcher.initialize(graphs.back().get_n(), lmax);
 
             // refinement
             lp_refine.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
@@ -119,11 +118,16 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (!(av_manager.get_n_active() <= threshold || av_manager.get_n_active() <= k * 64)) {
+            while (av_manager.get_n_active() > k * 16) {
                 matching(level);
                 coarsening(level);
 
-                std::cout << level << " " << av_manager.get_n_active() << " " << graphs.back().get_m() << std::endl;
+                weight_t max_w = 0;
+                for (vertex_t u : av_manager) {
+                    max_w = std::max(max_w, graphs.back().get_weight(u));
+                }
+
+                std::cout << level << " " << av_manager.get_n_active() << " " << graphs.back().get_m() << " heavy vertex " << max_w << std::endl;
 
                 level += 1;
             }
@@ -150,6 +154,8 @@ namespace HeiProMap {
             for (const vertex_t u : av_manager) {
                 for (size_t i = 0; i < graphs.back().size(u); ++i) {
                     const vertex_t v = graphs.back().neighbor(u, i);
+                    const weight_t w = graphs.back().get_weight(u, i);
+
                     if (p_manager[u] != p_manager[v]) {
                         bv_manager.add(u, p_manager[u]);
                     }
@@ -219,7 +225,7 @@ namespace HeiProMap {
         void refinement(const s32 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            // lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle);
+            lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle);
             // qgr.refine(pm);
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

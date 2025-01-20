@@ -300,6 +300,9 @@ namespace HeiProMap {
     void move_while(const char* arr, size_t& i, const char& x, size_t size);
 
     void move_while_not(const char* arr, size_t& i, const char& x, size_t size);
+
+    void str_to_ints(const std::string& str,
+                     std::vector<u64>& ints);
 }
 
 #endif //HEIDELBERGPROCESSMAPPING_UTILS_H

@@ -1,32 +1,22 @@
 #ifndef HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H
 #define HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H
 
-/*
-
 #include <queue>
 
-#include "../utility/definitions.h"
-#include "../utility/macros.h"
-#include "../utility/utils.h"
-#include "../datastructures/graph.h"
-#include "../utility/qap.h"
 #include "../datastructures/distance_oracle.h"
-#include "../datastructures/iterators/boundary_vertex_iterator.h"
-#include "../datastructures/iterators/block_boundary_vertex_iterator.h"
 #include "../datastructures/indexed_max_heap.h"
+#include "../interfaces/ISerialRefiner.h"
+#include "../utility/qap.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
 
-    class QuotientGraphRefinement {
-
+    class QuotientGraphRefinement final : public ISerialRefiner {
     private:
-        Graph *p_g = nullptr;
-        std::vector<u64> hierarchy;
-        std::vector<u64> distance;
-        u64 k = 0;
-        f64 imbalance = 0;
-        u64 lmax = 0;
-        DistanceOracle *dist_o = nullptr;
+        std::vector<partition_t> hierarchy;
+        std::vector<weight_t> distance;
+        partition_t k = 0;
+        weight_t lmax = 0;
 
         // indexed max heaps
         IndexedMaxHeap<s64> imh_u;
@@ -40,29 +30,28 @@ namespace HeiProMap {
     public:
         QuotientGraphRefinement() = default;
 
-        void initialize(Graph *t_g,
-                        std::vector<u64> &t_hierarchy,
-                        std::vector<u64> &t_distance,
-                        u64 t_k,
-                        f64 t_imbalance,
-                        u64 t_lmax,
-                        DistanceOracle *t_dist_o) {
-            p_g = t_g;
+        void initialize(const vertex_t n,
+                        std::vector<partition_t>& t_hierarchy,
+                        std::vector<weight_t>& t_distance,
+                        const weight_t t_lmax) override {
             hierarchy = t_hierarchy;
-            distance = t_distance;
-            k = t_k;
-            imbalance = t_imbalance;
-            lmax = t_lmax;
-            dist_o = t_dist_o;
+            distance  = t_distance;
+            k         = prod<partition_t>(hierarchy);
+            lmax      = t_lmax;
+
+            used.resize(n, -1);
 
             // indexed max heaps
-            imh_u = IndexedMaxHeap<s64>(t_g->get_n());
-            imh_v = IndexedMaxHeap<s64>(t_g->get_n());
-
-            used.resize(t_g->get_n(), -1);
+            imh_u = IndexedMaxHeap<s64>(n);
+            imh_v = IndexedMaxHeap<s64>(n);
         }
 
-        void refine(PartitionManager &pm) {
+        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+        void refine(TSerialGraph& g,
+                    TSerialActiveVertexManager& av_manager,
+                    TSerialBoundaryVertexManager& bv_manager,
+                    TSerialPartitionManager& p_manager,
+                    TSerialDistanceOracle& d_oracle) {
             ASSERT(p_g != nullptr);
             Graph &g = *p_g;
             QuotientGraph &qg = pm.get_qg();
@@ -79,8 +68,6 @@ namespace HeiProMap {
                             continue;
                         }
 
-                        // std::cout << u_id << " " << v_id << std::endl;
-
                         bool local_move_occurred = true;
                         u64 local_max_iteration = 1;
                         for (u64 local_iteration = 0; local_iteration < local_max_iteration && local_move_occurred; ++local_iteration) {
@@ -92,12 +79,12 @@ namespace HeiProMap {
 
                             // add all u boundary vertices
                             imh_u.clear();
-                            for (BlockBoundaryVertexIterator bbvi(pm.get_bvm(), u_id); bbvi.not_end(); bbvi.next()) {
-                                vertex_t u = bbvi.get();
-                                for (EdgeW &e: g[u]) {
-                                    if (pm[e.v] == v_id) {
+                            for (vertex_t u : bv_manager[u_id]) {
+                                for (size_t i = 0; i < g.size(u); ++i) {
+                                    vertex_t v = g.neighbor(u, i);
+                                    if (p_manager[v] == v_id) {
                                         // u is connected to block v_id
-                                        s64 qap_delta = get_u_qap(g, u, pm, *dist_o) - get_u_qap(g, u, v_id, pm, *dist_o);
+                                        s64 qap_delta = get_u_qap(g, u, p_manager, d_oracle) - get_u_qap(g, u, v_id, p_manager, d_oracle);
                                         imh_u.push(u, qap_delta);
                                         break;
                                     }
@@ -106,27 +93,24 @@ namespace HeiProMap {
 
                             // add all v boundary vertices
                             imh_v.clear();
-                            for (BlockBoundaryVertexIterator bbvi(pm.get_bvm(), v_id); bbvi.not_end(); bbvi.next()) {
-                                vertex_t v = bbvi.get();
-                                for (EdgeW &e: g[v]) {
-                                    if (pm[e.v] == u_id) {
+                            for (vertex_t v : bv_manager[v_id]) {
+                                for (size_t i = 0; i < g.size(v); ++i) {
+                                    vertex_t u = g.neighbor(v, i);
+                                    if (p_manager[u] == u_id) {
                                         // v is connected to block u_id
-                                        s64 qap_delta = get_u_qap(g, v, pm, *dist_o) - get_u_qap(g, v, u_id, pm, *dist_o);
+                                        s64 qap_delta = get_u_qap(g, v, p_manager, d_oracle) - get_u_qap(g, v, u_id, p_manager, d_oracle);
                                         imh_v.push(v, qap_delta);
                                         break;
                                     }
                                 }
                             }
 
-                            std::cout << "a " << imh_u.size() << " " << imh_v.size() << std::endl;
-
                             // start moving vertices
                             while (!(imh_u.empty() && imh_v.empty())) {
-                                // std::cout << imh_u.size() << " " << imh_v.size() << std::endl;
 
                                 // get stats for u
                                 bool u_overloads_v = true;
-                                bool u_is_overloaded = pm.get_pweight(u_id) > lmax;
+                                bool u_is_overloaded = p_manager.get_pweight(u_id) > lmax;
                                 bool u_qap_improve = false;
                                 vertex_t u;
                                 s64 u_qap_delta;
@@ -134,12 +118,12 @@ namespace HeiProMap {
                                     u = imh_u.top_key();
                                     u_qap_delta = imh_u.top();
                                     u_qap_improve = u_qap_delta > 0;
-                                    u_overloads_v = pm.get_pweight(v_id) + g.get_vertex_weight(u) > lmax;
+                                    u_overloads_v = p_manager.get_pweight(v_id) + g.get_vertex_weight(u) > lmax;
                                 }
 
                                 // get stats for v
                                 bool v_overloads_u = true;
-                                bool v_is_overloaded = pm.get_pweight(v_id) > lmax;
+                                bool v_is_overloaded = p_manager.get_pweight(v_id) > lmax;
                                 bool v_qap_improve = false;
                                 vertex_t v;
                                 s64 v_qap_delta;
@@ -147,11 +131,8 @@ namespace HeiProMap {
                                     v = imh_v.top_key();
                                     v_qap_delta = imh_v.top();
                                     v_qap_improve = v_qap_delta > 0;
-                                    v_overloads_u = pm.get_pweight(u_id) + g.get_vertex_weight(v) > lmax;
+                                    v_overloads_u = p_manager.get_pweight(u_id) + g.get_vertex_weight(v) > lmax;
                                 }
-
-                                // std::cout << u_overloads_v << " " << u_is_overloaded << " " << u_qap_improve << " " << u << " " << u_qap_delta << std::endl;
-                                // std::cout << v_overloads_u << " " << v_is_overloaded << " " << v_qap_improve << " " << v << " " << v_qap_delta << std::endl;
 
                                 bool move = false;
                                 vertex_t v_to_move;
@@ -238,7 +219,7 @@ namespace HeiProMap {
                                 if (move) {
                                     moves.push_back(v_to_move);
                                     is_good.push_back(is_good_end);
-                                    pm.move(v_to_move, id_to_move);
+                                    p_manager.move(v_to_move, id_to_move);
                                     used[v_to_move] = mark;
 
                                     if (id_to_move == u_id) {
@@ -250,14 +231,15 @@ namespace HeiProMap {
                                     }
 
                                     // we have to push or update the neighbors that were not moved already
-                                    for (EdgeW &e: g[v_to_move]) {
-                                        if (pm[e.v] == u_id && used[e.v] != mark) {
-                                            s64 qap_delta = get_u_qap(g, u, pm, *dist_o) - get_u_qap(g, u, v_id, pm, *dist_o);
-                                            imh_u.push_update(e.v, qap_delta);
+                                    for (size_t i = 0; i < g.size(v_to_move); i++) {
+                                        vertex_t ev = g.neighbor(v_to_move, i);
+                                        if (p_manager[ev] == u_id && used[ev] != mark) {
+                                            s64 qap_delta = get_u_qap(g, u, p_manager, d_oracle) - get_u_qap(g, u, v_id, p_manager, d_oracle);
+                                            imh_u.push_update(ev, qap_delta);
                                         }
-                                        if (pm[e.v] == v_id && used[e.v] != mark) {
-                                            s64 qap_delta = get_u_qap(g, v, pm, *dist_o) - get_u_qap(g, v, u_id, pm, *dist_o);
-                                            imh_v.push_update(e.v, qap_delta);
+                                        if (p_manager[ev] == v_id && used[ev] != mark) {
+                                            s64 qap_delta = get_u_qap(g, v, p_manager, d_oracle) - get_u_qap(g, v, u_id, p_manager, d_oracle);
+                                            imh_v.push_update(ev, qap_delta);
                                         }
                                     }
                                 } else {
@@ -274,10 +256,10 @@ namespace HeiProMap {
                         for (size_t i = 0; i < moves.size(); ++i) {
                             if (is_good.back() == 0) {
                                 vertex_t u = moves.back();
-                                if (pm[u] == u_id) {
-                                    pm.move(u, v_id);
+                                if (p_manager[u] == u_id) {
+                                    p_manager.move(u, v_id);
                                 } else {
-                                    pm.move(u, u_id);
+                                    p_manager.move(u, u_id);
                                 }
 
                                 moves.pop_back();
@@ -296,7 +278,5 @@ namespace HeiProMap {
 
 
 }
-
- */
 
 #endif //HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H

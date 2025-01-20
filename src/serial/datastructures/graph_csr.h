@@ -228,12 +228,12 @@ namespace HeiProMap {
 
         GraphCSR(const GraphCSR& g, const std::vector<EdgeUV>& matching) {
             n      = g.get_n();
-            m      = g.get_true_m();
+            m      = 0;
             curr_m = 0;
             v_weights.resize(n);
             neighborhoods.resize(n + 1);
             neighborhoods[0] = 0;
-            edges.resize(m + 1);
+            edges.resize(g.get_m() + 1);
             vertex_weights = g.vertex_weights;
 
             // define the state of each vertex
@@ -327,14 +327,13 @@ namespace HeiProMap {
                         }
                     }
                 }
-
                 neighborhoods[u + 1] = curr_m;
             }
+            m = curr_m;
         }
 
         vertex_t get_n() const override { return n; }
         vertex_t get_m() const override { return m; }
-        vertex_t get_true_m() const { return curr_m; }
         weight_t get_weight() const override { return vertex_weights; }
         weight_t get_weight(const vertex_t u) const override { return v_weights[u]; }
         size_t size(const vertex_t u) const override { return neighborhoods[u + 1] - neighborhoods[u]; }

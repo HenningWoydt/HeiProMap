@@ -65,7 +65,7 @@ include(gmock)
 enable_testing()
 
 # Test executable
-# add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
+add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
 # add_executable(MtHeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL} ${Test_HEADERS_PARALLEL} ${Test_SOURCES_PARALLEL})
 
 # Link OpenMP library
@@ -76,5 +76,5 @@ if (OpenMP_CXX_FOUND)
 endif ()
 
 # Link to Google Test
-# target_link_libraries(HeiProMap_gtest gtest gtest_main)
+target_link_libraries(HeiProMap_gtest gtest gtest_main)
 # target_link_libraries(MtHeiProMap_gtest gtest gtest_main)

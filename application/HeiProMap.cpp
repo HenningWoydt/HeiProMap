@@ -11,7 +11,7 @@ int main() {
     const auto sp = std::chrono::high_resolution_clock::now();
     {
         // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_out = "../data/out/partition/afshell9.txt";
-        std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
+        std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt"; // 7.135.366
         // const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
         // const std::string graph_in = "../data/mapping/as-skitter.graph"; const std::string mapping_out = "../data/out/partition/as-skitter.txt"; // 13.801.154
         // const std::string graph_in = "../data/mapping/wiki-Talk.graph"; const std::string mapping_out = "../data/out/partition/wiki-Talk.txt"; // 80.794.192
