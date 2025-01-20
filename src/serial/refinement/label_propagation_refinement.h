@@ -254,12 +254,13 @@ namespace HeiProMap {
         }
         */
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
         void refine(TSerialGraph &g,
                     TSerialActiveVertexManager &av_manager,
                     TSerialBoundaryVertexManager &bv_manager,
                     TSerialPartitionManager &p_manager,
-                    TSerialDistanceOracle &d_oracle) {
+                    TSerialDistanceOracle &d_oracle,
+                    TSerialQuotientGraph& q_graph) {
             bool     global_move_occurred = true;
             u64      global_max_iteration = 3;
             for (u64 global_iteration     = 0; global_iteration < global_max_iteration && global_move_occurred; ++global_iteration) {
@@ -308,6 +309,7 @@ namespace HeiProMap {
 
                             if (best_u_id != u_id) {
                                 bv_manager.move(g, p_manager, u, u_id, best_u_id);
+                                q_graph.move(g, p_manager, u, u_id, best_u_id);
                                 p_manager.move(u, u_weight, u_id, best_u_id);
                                 used[u] = mark;
                                 local_move_occurred = true;
@@ -316,6 +318,7 @@ namespace HeiProMap {
                                     // if no positive gain, then random neutral swaps
                                     best_u_id = gain_0_ids.back();
                                     bv_manager.move(g, p_manager, u, u_id, best_u_id);
+                                    q_graph.move(g, p_manager, u, u_id, best_u_id);
                                     p_manager.move(u, u_weight, u_id, best_u_id);
                                     used[u] = mark;
                                     local_move_occurred = true;

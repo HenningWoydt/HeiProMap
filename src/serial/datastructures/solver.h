@@ -231,7 +231,7 @@ namespace HeiProMap {
         void refinement(const s32 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle);
+            lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             // qgr.refine(pm);
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

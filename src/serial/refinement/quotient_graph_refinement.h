@@ -53,10 +53,6 @@ namespace HeiProMap {
                     TSerialPartitionManager& p_manager,
                     TSerialDistanceOracle& d_oracle,
                     TSerialQuotientGraph& q_graph) {
-            ASSERT(p_g != nullptr);
-            Graph &g = *p_g;
-            QuotientGraph &qg = pm.get_qg();
-
             bool global_move_occurred = true;
             u64 global_max_iteration = 1;
             for (u64 global_iteration = 0; global_iteration < global_max_iteration && global_move_occurred; ++global_iteration) {
@@ -64,7 +60,7 @@ namespace HeiProMap {
 
                 for (partition_t u_id = 0; u_id < k; ++u_id) {
                     for (partition_t v_id = u_id + 1; v_id < k; ++v_id) {
-                        if (!qg.has_edge(u_id, v_id)) {
+                        if (!q_graph.has_edge(u_id, v_id)) {
                             // no boundary between u_id and v_id
                             continue;
                         }
