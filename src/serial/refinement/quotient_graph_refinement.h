@@ -10,7 +10,6 @@
 #include "../utility/utils.h"
 
 namespace HeiProMap {
-
     class QuotientGraphRefinement final : public ISerialRefiner {
     private:
         std::vector<partition_t> hierarchy;
@@ -19,10 +18,10 @@ namespace HeiProMap {
         weight_t lmax = 0;
 
         // indexed max heaps
-        IndexedMaxHeap<s64> imh_u;
-        IndexedMaxHeap<s64> imh_v;
+        IndexedMaxHeap<s64> boundary_vertices;
         std::vector<vertex_t> moves;
-        std::vector<u8> is_good;
+        std::vector<s64> curr_qap_gain;
+        s64 max_qap_gain = 0;
 
         std::vector<s32> used;
         s32 mark = -1;
@@ -42,21 +41,27 @@ namespace HeiProMap {
             used.resize(n, -1);
 
             // indexed max heaps
-            imh_u = IndexedMaxHeap<s64>(n);
-            imh_v = IndexedMaxHeap<s64>(n);
+            boundary_vertices = IndexedMaxHeap<s64>(n);
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(TSerialGraph& g,
-                    TSerialActiveVertexManager& av_manager,
-                    TSerialBoundaryVertexManager& bv_manager,
-                    TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle,
-                    TSerialQuotientGraph& q_graph) {
-            bool global_move_occurred = true;
-            u64 global_max_iteration = 1;
-            for (u64 global_iteration = 0; global_iteration < global_max_iteration && global_move_occurred; ++global_iteration) {
-                global_move_occurred = false;
+        void refine([[maybe_unused]] TSerialGraph& g,
+                    [[maybe_unused]] TSerialActiveVertexManager& av_manager,
+                    [[maybe_unused]] TSerialBoundaryVertexManager& bv_manager,
+                    [[maybe_unused]] TSerialPartitionManager& p_manager,
+                    [[maybe_unused]] TSerialDistanceOracle& d_oracle,
+                    [[maybe_unused]] TSerialQuotientGraph& q_graph) {
+            static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
+            static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
+            static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
+            static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
+            static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
+            static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
+
+            bool global_moved         = true;
+            u64 global_max_iterations = 2;
+            for (u64 global_i = 0; global_i < global_max_iterations && global_moved; ++global_i) {
+                global_moved = false;
 
                 for (partition_t u_id = 0; u_id < k; ++u_id) {
                     for (partition_t v_id = u_id + 1; v_id < k; ++v_id) {
@@ -65,215 +70,112 @@ namespace HeiProMap {
                             continue;
                         }
 
-                        bool local_move_occurred = true;
-                        u64 local_max_iteration = 1;
-                        for (u64 local_iteration = 0; local_iteration < local_max_iteration && local_move_occurred; ++local_iteration) {
-                            local_move_occurred = false;
-                            mark += 1;
+                        bool local_moved         = true;
+                        u64 local_max_iterations = 3;
+                        for (u64 local_i = 0; local_i < local_max_iterations && local_moved; ++local_i) {
+                            local_moved = false;
 
-                            moves.clear();
-                            is_good.clear();
-
-                            // add all u boundary vertices
-                            imh_u.clear();
+                            // add all boundary vertices with qap
+                            boundary_vertices.clear();
                             for (vertex_t u : bv_manager[u_id]) {
-                                for (size_t i = 0; i < g.size(u); ++i) {
-                                    vertex_t v = g.neighbor(u, i);
+                                for (const auto& [v, w] : g[u]) {
                                     if (p_manager[v] == v_id) {
                                         // u is connected to block v_id
-                                        s64 qap_delta = get_u_qap(g, u, p_manager, d_oracle) - get_u_qap(g, u, v_id, p_manager, d_oracle);
-                                        imh_u.push(u, qap_delta);
-                                        break;
-                                    }
-                                }
-                            }
+                                        if (!boundary_vertices.entry_exists(u)) {
+                                            s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                            boundary_vertices.push(u, qap_delta);
+                                        }
 
-                            // add all v boundary vertices
-                            imh_v.clear();
-                            for (vertex_t v : bv_manager[v_id]) {
-                                for (size_t i = 0; i < g.size(v); ++i) {
-                                    vertex_t u = g.neighbor(v, i);
-                                    if (p_manager[u] == u_id) {
                                         // v is connected to block u_id
-                                        s64 qap_delta = get_u_qap(g, v, p_manager, d_oracle) - get_u_qap(g, v, u_id, p_manager, d_oracle);
-                                        imh_v.push(v, qap_delta);
-                                        break;
+                                        if (!boundary_vertices.entry_exists(v)) {
+                                            s64 qap_delta = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
+                                            boundary_vertices.push(v, qap_delta);
+                                        }
                                     }
                                 }
                             }
 
-                            // start moving vertices
-                            while (!(imh_u.empty() && imh_v.empty())) {
+                            // make moves
+                            mark += 1;
+                            moves.clear();
+                            curr_qap_gain.clear();
+                            curr_qap_gain.push_back(0);
+                            max_qap_gain = 0;
+                            while (!boundary_vertices.empty()) {
+                                vertex_t vertex        = boundary_vertices.top_key();
+                                partition_t vertex_id  = p_manager[vertex];
+                                partition_t move_id    = u_id == vertex_id ? v_id : u_id;
+                                weight_t vertex_weight = g.get_weight(vertex);
+                                s64 qap_delta          = boundary_vertices.top();
+                                bool overloads         = p_manager.get_bweight(move_id) + vertex_weight > lmax;
 
-                                // get stats for u
-                                bool u_overloads_v = true;
-                                bool u_is_overloaded = p_manager.get_pweight(u_id) > lmax;
-                                bool u_qap_improve = false;
-                                vertex_t u;
-                                s64 u_qap_delta;
-                                if (!imh_u.empty()) {
-                                    u = imh_u.top_key();
-                                    u_qap_delta = imh_u.top();
-                                    u_qap_improve = u_qap_delta > 0;
-                                    u_overloads_v = p_manager.get_pweight(v_id) + g.get_vertex_weight(u) > lmax;
+                                boundary_vertices.pop();
+                                used[vertex] = mark;
+
+                                if (overloads || !bv_manager.is_boundary(vertex)) {
+                                    // if the move overloads the block, then do not move
+                                    // if the vertex is not boundary anymore, then do not move
+                                    continue;
                                 }
 
-                                // get stats for v
-                                bool v_overloads_u = true;
-                                bool v_is_overloaded = p_manager.get_pweight(v_id) > lmax;
-                                bool v_qap_improve = false;
-                                vertex_t v;
-                                s64 v_qap_delta;
-                                if (!imh_v.empty()) {
-                                    v = imh_v.top_key();
-                                    v_qap_delta = imh_v.top();
-                                    v_qap_improve = v_qap_delta > 0;
-                                    v_overloads_u = p_manager.get_pweight(u_id) + g.get_vertex_weight(v) > lmax;
-                                }
+                                // move the vertex
+                                moves.push_back(vertex);
+                                curr_qap_gain.push_back(curr_qap_gain.back() + qap_delta);
+                                max_qap_gain = std::max(max_qap_gain, curr_qap_gain.back());
 
-                                bool move = false;
-                                vertex_t v_to_move;
-                                partition_t id_to_move;
-                                u8 is_good_end;
-                                // determine which vertex to move
-                                if (u_overloads_v && v_overloads_u) {
-                                    // move no vertex, since we don't want to mess up balancing even more
-                                    // remove both vertices, since they are bad
-                                } else if (u_overloads_v && !v_overloads_u) {
-                                    // we can move v to u without overloading
-                                    if (v_qap_improve) {
-                                        // and additionally have a qap improvement
-                                        move = true;
-                                        is_good_end = 1;
-                                        v_to_move = v;
-                                        id_to_move = u_id;
-                                    } else if (u_is_overloaded) {
-                                        // qap gets worse, but u is currently overloaded, so execute the move
-                                        move = true;
-                                        is_good_end = 0; // but this is not a good end
-                                        v_to_move = v;
-                                        id_to_move = u_id;
-                                    }
-                                    // no qap improvement and u is not overloaded, no reason to move
-                                } else if (!u_overloads_v && v_overloads_u) {
-                                    // we can move u to v without overloading
-                                    if (u_qap_improve) {
-                                        // and additionally have a qap improvement
-                                        move = true;
-                                        is_good_end = 1;
-                                        v_to_move = u;
-                                        id_to_move = v_id;
-                                    } else if (v_is_overloaded) {
-                                        // qap gets worse, but v is currently overloaded, so execute the move
-                                        move = true;
-                                        is_good_end = 0; // but this is not a good move
-                                        v_to_move = u;
-                                        id_to_move = v_id;
-                                    }
-                                    // no qap improvement and v is not overloaded, no reason to move
-                                } else {
-                                    // we could move either way
-                                    if (u_qap_improve && v_qap_improve) {
-                                        if (u_qap_delta >= v_qap_delta) {
-                                            move = true;
-                                            is_good_end = 1;
-                                            v_to_move = u;
-                                            id_to_move = v_id;
-                                        } else {
-                                            move = true;
-                                            is_good_end = 1;
-                                            v_to_move = v;
-                                            id_to_move = u_id;
-                                        }
-                                    } else if (u_qap_improve && !v_qap_improve) {
-                                        move = true;
-                                        is_good_end = 1;
-                                        v_to_move = u;
-                                        id_to_move = v_id;
-                                    } else if (!u_qap_improve && v_qap_improve) {
-                                        move = true;
-                                        is_good_end = 1;
-                                        v_to_move = v;
-                                        id_to_move = u_id;
-                                    } else {
-                                        if (u_is_overloaded) {
-                                            // no improvement, but u is overloaded so move
-                                            move = true;
-                                            is_good_end = 0;
-                                            v_to_move = u;
-                                            id_to_move = v_id;
-                                        } else if (v_is_overloaded) {
-                                            // no improvement, but v is overloaded so move
-                                            move = true;
-                                            is_good_end = 0;
-                                            v_to_move = v;
-                                            id_to_move = u_id;
-                                        }
-                                        move = false; // move non
-                                    }
-                                }
+                                // make move in structures
+                                bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                                // q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                                p_manager.move(vertex, vertex_weight, vertex_id, move_id);
 
-                                if (move) {
-                                    moves.push_back(v_to_move);
-                                    is_good.push_back(is_good_end);
-                                    p_manager.move(v_to_move, id_to_move);
-                                    used[v_to_move] = mark;
-
-                                    if (id_to_move == u_id) {
-                                        // moving v to v_id
-                                        imh_v.pop();
-                                    } else {
-                                        // moving u to v_id
-                                        imh_u.pop();
+                                // we have to push or update the neighbors that were not moved already
+                                for (const auto& [neighbor, w] : g[vertex]) {
+                                    if (used[neighbor] == mark ||
+                                        (p_manager[neighbor] != vertex_id && p_manager[neighbor] != move_id) ||
+                                        !bv_manager.is_boundary(neighbor)) {
+                                        continue;
                                     }
 
-                                    // we have to push or update the neighbors that were not moved already
-                                    for (size_t i = 0; i < g.size(v_to_move); i++) {
-                                        vertex_t ev = g.neighbor(v_to_move, i);
-                                        if (p_manager[ev] == u_id && used[ev] != mark) {
-                                            s64 qap_delta = get_u_qap(g, u, p_manager, d_oracle) - get_u_qap(g, u, v_id, p_manager, d_oracle);
-                                            imh_u.push_update(ev, qap_delta);
-                                        }
-                                        if (p_manager[ev] == v_id && used[ev] != mark) {
-                                            s64 qap_delta = get_u_qap(g, v, p_manager, d_oracle) - get_u_qap(g, v, u_id, p_manager, d_oracle);
-                                            imh_v.push_update(ev, qap_delta);
-                                        }
-                                    }
-                                } else {
-                                    // remove both vertices, since they are both bad
-                                    if (!imh_u.empty()) { imh_u.pop(); }
-                                    if (!imh_v.empty()) { imh_v.pop(); }
+                                    partition_t old_id = p_manager[neighbor];
+                                    partition_t new_id = old_id == vertex_id ? move_id : vertex_id;
+
+                                    s64 new_qap_delta = get_u_qap_delta(g, neighbor, old_id, new_id, p_manager, d_oracle);
+                                    boundary_vertices.push_update(neighbor, new_qap_delta);
                                 }
                             }
-                        }
 
-                        std::cout << moves.size() << " ";
+                            // revert to state with best qap delta
+                            while (!curr_qap_gain.empty() && curr_qap_gain.back() != max_qap_gain) {
+                                vertex_t vertex        = moves.back();
+                                weight_t vertex_weight = g.get_weight(vertex);
+                                partition_t vertex_id  = p_manager[vertex];
+                                partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
-                        // revert to last good end
-                        for (size_t i = 0; i < moves.size(); ++i) {
-                            if (is_good.back() == 0) {
-                                vertex_t u = moves.back();
-                                if (p_manager[u] == u_id) {
-                                    p_manager.move(u, v_id);
-                                } else {
-                                    p_manager.move(u, u_id);
-                                }
+                                bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                                // q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                                p_manager.move(vertex, vertex_weight, vertex_id, move_id);
 
                                 moves.pop_back();
-                                is_good.pop_back();
-                            } else {
-                                break;
+                                curr_qap_gain.pop_back();
+                            }
+
+                            // keep quotient graph up to date
+                            for (vertex_t vertex : moves) {
+                                partition_t vertex_id = p_manager[vertex];
+                                partition_t move_id   = u_id == vertex_id ? v_id : u_id;
+                                q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                            }
+
+                            if (!moves.empty()) {
+                                local_moved = true;
                             }
                         }
-
-                        std::cout << moves.size() << std::endl;
+                        global_moved |= local_moved;
                     }
                 }
             }
         }
     };
-
-
 }
 
 #endif //HEIDELBERGPROCESSMAPPING_QUOTIENT_GRAPH_REFINEMENT_H

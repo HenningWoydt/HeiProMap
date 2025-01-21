@@ -45,7 +45,6 @@ namespace HeiProMap {
             ASSERT(new_id < k);
             ASSERT(new_id != old_id);
 
-            // first remove all edges from old_id
             for (size_t i = 0; i < g.size(u); ++i) {
                 vertex_t    v    = g.neighbor(u, i);
                 weight_t    w    = g.get_weight(u, i);

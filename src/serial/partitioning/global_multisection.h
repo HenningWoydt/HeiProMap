@@ -16,7 +16,7 @@ namespace HeiProMap {
                        TSerialActiveVertexManager &av_manager,
                        TSerialPartitionManager &p_manager,
                        const std::vector<partition_t> &hierarchy,
-                       const std::vector<weight_t> &distance,
+                       [[maybe_unused]] const std::vector<weight_t> &distance,
                        const f64 imbalance) {
             // references for better code readability
             const size_t l = hierarchy.size();

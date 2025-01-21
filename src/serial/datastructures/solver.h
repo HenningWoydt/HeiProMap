@@ -7,17 +7,18 @@
 #include "boundary_vertex_manager.h"
 #include "graph_csr.h"
 #include "partition_manager.h"
+#include "quotient_graph.h"
 #include "statistic_collector.h"
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../coarsening/heavy_edge_matcher.h"
-#include "../partitioning/kaffpa_partitioner.h"
 #include "../partitioning/global_multisection.h"
+#include "../partitioning/kaffpa_partitioner.h"
 #include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
+#include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
-#include "../utility/assert_state.h"
-#include "quotient_graph.h"
 
 namespace HeiProMap {
     /**
@@ -27,7 +28,7 @@ namespace HeiProMap {
         std::vector<GraphCSR> graphs;
         ActiveVertexManager av_manager;
         PartitionManager p_manager;
-        BoundaryVertexManager<typeof(graphs[0]), typeof(av_manager), typeof(p_manager)> bv_manager;
+        BoundaryVertexManager bv_manager;
         QuotientGraph q_graph;
 
         // distance
@@ -49,7 +50,7 @@ namespace HeiProMap {
 
         // refinement
         LabelPropagationRefinement lp_refine;
-        // QuotientGraphRefinement qgr;
+        QuotientGraphRefinement qg_refine;
 
         // statistics
         StatisticCollector stat_collect;
@@ -92,7 +93,7 @@ namespace HeiProMap {
 
             // refinement
             lp_refine.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
-            // qgr.initialize(&g, hierarchy, distance, k, imbalance, lmax, &dist_o);
+            qg_refine.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -232,7 +233,7 @@ namespace HeiProMap {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
-            // qgr.refine(pm);
+            qg_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();
             stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);

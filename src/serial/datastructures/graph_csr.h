@@ -38,7 +38,7 @@ namespace HeiProMap {
             }
 
             // Get the file size
-            struct stat fileInfo;
+            struct stat fileInfo{};
             if (fstat(fd, &fileInfo) == -1) {
                 std::cerr << "File " << graph_in << " Could not get file size!" << std::endl;
                 close(fd);
@@ -190,7 +190,7 @@ namespace HeiProMap {
                         // read in vertex weight
                         u_w = 0;
                         while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { u_w = u_w * 10 + (file_arr[i++] - '0'); }
-                        move_while(file_arr, i, ' ', file_size); // move to next number
+                        move_while(file_arr, i, ' ', file_size); // move to the next number
                     }
                     v_weights[u] = u_w;
                     vertex_weights += u_w;
@@ -199,13 +199,13 @@ namespace HeiProMap {
                         // read in the edges
                         vertex_t v = 0;
                         while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { v = v * 10 + (file_arr[i++] - '0'); }
-                        move_while(file_arr, i, ' ', file_size); // move to next number
+                        move_while(file_arr, i, ' ', file_size); // move to the next number
 
                         weight_t w = 1;
                         if (fmt_2 == '1') {
                             w = 0;
                             while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { w = w * 10 + (file_arr[i++] - '0'); }
-                            move_while(file_arr, i, ' ', file_size); // move to next number
+                            move_while(file_arr, i, ' ', file_size); // move to the next number
                         }
 
                         edges[curr_m++] = {v - 1, w};
@@ -268,7 +268,7 @@ namespace HeiProMap {
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 
-                        // if the edge is present then add the weight, else expand it
+                        // if the edge is present, then add the weight, else expand it
                         for (size_t j = neighborhoods[u]; j < curr_m - 1; ++j) {
                             if (edges[j].v == vv) {
                                 edges[j].w += ww;
@@ -295,7 +295,7 @@ namespace HeiProMap {
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 
-                        // if the edge is present then add the weight, else expand it
+                        // if the edge is present, then add the weight, else expand it
                         for (size_t j = neighborhoods[u]; j < curr_m - 1; ++j) {
                             if (edges[j].v == vv) {
                                 edges[j].w += ww;
@@ -317,7 +317,7 @@ namespace HeiProMap {
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 
-                        // if the edge is present then add the weight, else expand it
+                        // if the edge is present, then add the weight, else expand it
                         for (size_t j = neighborhoods[u]; j < curr_m - 1; ++j) {
                             if (edges[j].v == vv) {
                                 edges[j].w += ww;
@@ -348,6 +348,44 @@ namespace HeiProMap {
                 }
             }
             return false;
+        }
+
+        class NeighborhoodIterator {
+            vertex_t u;
+            std::vector<size_t>& neighborhoods;
+            std::vector<EdgeVW>& edges;
+
+        public:
+            NeighborhoodIterator(vertex_t u,
+                                 std::vector<size_t>& neighborhoods,
+                                 std::vector<EdgeVW>& edges) : u(u), neighborhoods(neighborhoods), edges(edges) {}
+
+            class Iterator {
+                std::vector<EdgeVW>& edges;
+                size_t idx;
+
+            public:
+                // Constructor
+                Iterator(std::vector<EdgeVW>& edges, size_t idx) : edges(edges), idx(idx) {}
+
+                // Dereference operator
+                EdgeVW operator*() const { return edges[idx]; }
+
+                // Pre-increment operator
+                Iterator& operator++() {
+                    idx++;
+                    return *this;
+                }
+
+                bool operator!=(const Iterator& other) const { return idx != other.idx; }
+            };
+
+            Iterator begin() const { return {edges, neighborhoods[u]}; }
+            Iterator end() const { return {edges, neighborhoods[u + 1]}; }
+        };
+
+        NeighborhoodIterator operator[](const vertex_t u) {
+            return {u, neighborhoods, edges};
         }
     };
 }

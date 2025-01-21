@@ -68,6 +68,13 @@ namespace HeiProMap {
             bubble_down(indices[key]);
         }
 
+        void increment(size_t key, T t) {
+            ASSERT(entry_exists(key));
+            heap[indices[key]].val += t;
+            bubble_up(indices[key]);
+            bubble_down(indices[key]);
+        }
+
         void push_update(size_t key, T t) {
             if (entry_exists(key)) {
                 update(key, t);
@@ -76,9 +83,22 @@ namespace HeiProMap {
             }
         }
 
+        void push_increment(size_t key, T t) {
+            if (entry_exists(key)) {
+                increment(key, t);
+            } else {
+                push(key, t);
+            }
+        }
+
         bool entry_exists(size_t key) {
             ASSERT(key < n);
             return indices[key] != HEAP_TOMBSTONE;
+        }
+
+        T get(size_t key) {
+            ASSERT(key < n);
+            return heap[indices[key]].val;
         }
 
         void pop() {

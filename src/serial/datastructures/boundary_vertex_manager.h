@@ -7,8 +7,7 @@
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 
 namespace HeiProMap {
-    template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-    class BoundaryVertexManager final : public ISerialBoundaryVertexManager<TSerialGraph, TSerialActiveVertexManager, TSerialPartitionManager> {
+    class BoundaryVertexManager final : public ISerialBoundaryVertexManager {
         vertex_t m_n    = 0;
         partition_t m_k = 0;
 
@@ -67,8 +66,8 @@ namespace HeiProMap {
                 }
             };
 
-            SubIterator begin() { return {m_sub_boundaries, m_n_boundary_edges}; }
-            SubIterator end() { return {m_sub_boundaries, m_n_boundary_edges}; }
+            SubIterator begin() const { return {m_sub_boundaries, m_n_boundary_edges}; }
+            SubIterator end() const { return {m_sub_boundaries, m_n_boundary_edges}; }
         };
 
         void initialize(const vertex_t t_n,
@@ -84,9 +83,11 @@ namespace HeiProMap {
             return SubBoundaryVertexManager(m_boundaries[u], m_n_boundary_edges);
         }
 
+        /*
         SubBoundaryVertexManager& operator[](const vertex_t u) const {
             return SubBoundaryVertexManager(m_boundaries[u], m_n_boundary_edges);
         }
+        */
 
         vertex_t get_n_boundary() const override { return m_n_boundary; }
         bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
@@ -99,15 +100,15 @@ namespace HeiProMap {
             m_n_boundary_edges[u] += 1;
         }
 
-        void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
+        template <typename TSerialGraph, typename TSerialPartitionManager>
+        void move(TSerialGraph& g, TSerialPartitionManager& p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
             ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 
             remove_if_exists(old_id, u);
 
             // new boundary vertices could be discovered and other could be removed
-            for (size_t i = 0; i < g.size(u); ++i) {
-                vertex_t v       = g.neighbor(u, i);
+            for (const auto& [v, w] : g[u]) {
                 partition_t v_id = p_manager[v];
 
                 if (v_id == new_id) {
@@ -116,32 +117,26 @@ namespace HeiProMap {
                     ASSERT(m_n_boundary_edges[v] > 0);
                     m_n_boundary_edges[u] -= 1;
                     m_n_boundary_edges[v] -= 1;
-                    if (m_n_boundary_edges[u] == 0) { m_n_boundary -= 1; }
-                    if (m_n_boundary_edges[v] == 0) { m_n_boundary -= 1; }
-                }
-                if (v_id == old_id) {
+                    m_n_boundary -= m_n_boundary_edges[u] == 0; // decrease by 1 if 0
+                    m_n_boundary -= m_n_boundary_edges[v] == 0; // decrease by 1 if 0
+                    if (m_n_boundary_edges[v] == 0) { remove_if_exists(v_id, v); }
+                } else if (v_id == old_id) {
                     // u was moved to a different block as v, both gain 1 boundary edge
                     m_n_boundary_edges[u] += 1;
                     m_n_boundary_edges[v] += 1;
-                    if (m_n_boundary_edges[u] == 1) {
-                        m_n_boundary += 1;
-                    }
-                    if (m_n_boundary_edges[v] == 1) {
-                        m_n_boundary += 1;
-                        emplace_if_not_exists(v_id, v);
-                    }
+                    m_n_boundary += m_n_boundary_edges[u] == 1; // add by 1 if 0
+                    m_n_boundary += m_n_boundary_edges[v] == 1; // add by 1 if 0
+                    if (m_n_boundary_edges[v] == 1) { emplace_if_not_exists(v_id, v); }
                 }
                 // else, v and u are in different blocks and still connected, nothing changes
             }
 
-            if (m_n_boundary_edges[u] > 0) {
-                emplace_if_not_exists(new_id, u);
-            }
+            if (m_n_boundary_edges[u] > 0) { emplace_if_not_exists(new_id, u); }
         }
 
         void emplace_if_not_exists(partition_t b, vertex_t u) {
-            for (size_t i = 0; i < m_boundaries[b].size(); ++i) {
-                if (m_boundaries[b][i] == u) {
+            for (const vertex_t v : m_boundaries[b]) {
+                if (v == u) {
                     return;
                 }
             }
@@ -158,11 +153,12 @@ namespace HeiProMap {
             }
         }
 
+        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
         void uncontract(std::vector<EdgeUV>& matches,
                         TSerialGraph& new_g, // the larger uncontracted graph
-                        TSerialGraph& old_g, // the smaller not contracted graph
-                        TSerialActiveVertexManager& av_manager,
-                        TSerialPartitionManager& p_manager) override {
+                        [[maybe_unused]] TSerialGraph& old_g, // the smaller not contracted graph
+                        [[maybe_unused]] TSerialActiveVertexManager& av_manager,
+                        TSerialPartitionManager& p_manager) {
             // get current boundary vertices
             std::vector<vertex_t> curr_boundary;
             for (vertex_t u : *this) {
@@ -174,7 +170,7 @@ namespace HeiProMap {
             for (auto& vec : m_boundaries) { vec.clear(); }
             m_n_boundary = 0;
 
-            // add all second matched vertices
+            // add all the second-matched vertices
             for (auto& [u, v] : matches) { curr_boundary.emplace_back(v); }
 
             // check all active vertices
