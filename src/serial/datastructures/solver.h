@@ -14,11 +14,12 @@
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
-#include "../refinement/label_propagation_refinement.h"
-#include "../refinement/quotient_graph_refinement.h"
+#include "../refinement/label_propagation_refinement_Faraj20.h"
+#include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
+#include "../coarsening/global_path_algorithm.h"
 
 namespace HeiProMap {
     /**
@@ -26,39 +27,40 @@ namespace HeiProMap {
      */
     class Solver {
         std::vector<GraphCSR> graphs;
-        ActiveVertexManager av_manager;
-        PartitionManager p_manager;
+        ActiveVertexManager   av_manager;
+        PartitionManager      p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
+        QuotientGraph         q_graph;
 
         // distance
         std::vector<partition_t> hierarchy;
-        std::vector<weight_t> distance;
-        partition_t k;
-        DistanceOracle d_oracle;
+        std::vector<weight_t>    distance;
+        partition_t              k;
+        DistanceOracle           d_oracle;
 
         // balance
-        f64 m_imbalance = 0.0;
-        weight_t lmax   = 0;
+        f64      m_imbalance = 0.0;
+        weight_t lmax        = 0;
 
         // multilevel
         vertex_t threshold;
 
         // matching
         std::vector<std::vector<EdgeUV>> matches;
-        HeavyEdgeMatcher he_matcher;
+        HeavyEdgeMatcher                 he_matcher;
+        GlobalPathAlgorithmMatcher       gpa_matcher;
 
         // refinement
-        LabelPropagationRefinement lp_refine;
-        QuotientGraphRefinement qg_refine;
+        LabelPropagationRefinementFaraj20 lp_refine_faraj20;
+        QuotientGraphRefinementFaraj20    qg_refine_faraj20;
 
         // statistics
         StatisticCollector stat_collect;
 
     public:
-        Solver(const std::string& t_graph_in,
-               const std::vector<partition_t>& t_hierarchy,
-               const std::vector<weight_t>& t_distance,
+        Solver(const std::string &t_graph_in,
+               const std::vector<partition_t> &t_hierarchy,
+               const std::vector<weight_t> &t_distance,
                const f64 t_imbalance) {
             const auto sp_graph_io = std::chrono::high_resolution_clock::now();
             graphs.emplace_back(t_graph_in);
@@ -82,7 +84,7 @@ namespace HeiProMap {
 
             // balance
             m_imbalance = t_imbalance;
-            lmax        = std::ceil((1.0 + t_imbalance) * ((f64)graphs.back().get_weight() / (f64)k));
+            lmax        = std::ceil((1.0 + t_imbalance) * ((f64) graphs.back().get_weight() / (f64) k));
 
             // multilevel
             threshold = 0; // graphs.back().get_n() / 500;
@@ -90,10 +92,11 @@ namespace HeiProMap {
             // matching
             // ge_matcher.initialize(graphs.back().get_n());
             he_matcher.initialize(graphs.back().get_n(), lmax);
+            gpa_matcher.initialize(graphs.back().get_n(), lmax);
 
             // refinement
-            lp_refine.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
-            qg_refine.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
+            lp_refine_faraj20.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
+            qg_refine_faraj20.initialize(graphs.back().get_n(), hierarchy, distance, lmax);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -103,9 +106,9 @@ namespace HeiProMap {
             internal_solve();
 
 #if STATISTICCOLLECTOR
-            weight_t qap = get_qap(graphs.back(), av_manager, p_manager, d_oracle);
+            weight_t              qap = get_qap(graphs.back(), av_manager, p_manager, d_oracle);
             std::vector<weight_t> pweights;
-            for (partition_t id = 0; id < k; ++id) { pweights.push_back(p_manager.get_bweight(id)); }
+            for (partition_t      id  = 0; id < k; ++id) { pweights.push_back(p_manager.get_bweight(id)); }
             stat_collect.set_final(qap, pweights, lmax);
 #endif
             stat_collect.finalize();
@@ -113,7 +116,7 @@ namespace HeiProMap {
             std::cout << stat_collect.to_JSON() << std::endl;
 
             std::vector<partition_t> p(graphs.back().get_n());
-            for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
+            for (vertex_t            u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
 
             return p;
         }
@@ -122,12 +125,12 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > k * 4) {
+            while (av_manager.get_n_active() > k * 64) {
                 matching(level);
                 coarsening(level);
 
-                weight_t max_w = 0;
-                for (vertex_t u : av_manager) {
+                weight_t      max_w = 0;
+                for (vertex_t u: av_manager) {
                     max_w = std::max(max_w, graphs.back().get_weight(u));
                 }
 
@@ -155,10 +158,10 @@ namespace HeiProMap {
             partitioner.partition(graphs.back(), av_manager, p_manager, hierarchy, distance, m_imbalance);
 
             // initialize boundary vertices and quotient graph
-            for (const vertex_t u : av_manager) {
+            for (const vertex_t u: av_manager) {
                 for (size_t i = 0; i < graphs.back().size(u); ++i) {
-                    const vertex_t v = graphs.back().neighbor(u, i);
-                    const weight_t w = graphs.back().get_weight(u, i);
+                    const vertex_t    v    = graphs.back().neighbor(u, i);
+                    const weight_t    w    = graphs.back().get_weight(u, i);
                     const partition_t u_id = p_manager[u];
                     const partition_t v_id = p_manager[v];
 
@@ -185,6 +188,7 @@ namespace HeiProMap {
             matches.back().reserve(av_manager.get_n_active() / 2);
 
             // ge_matcher.match(graphs.back(), av_manager, matches.back());
+            // gpa_matcher.match(graphs.back(), av_manager, matches.back());
             he_matcher.match(graphs.back(), av_manager, matches.back());
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
@@ -232,8 +236,8 @@ namespace HeiProMap {
         void refinement(const s32 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            lp_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
-            qg_refine.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            // lp_refine_faraj20.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            // qg_refine_faraj20.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();
             stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);

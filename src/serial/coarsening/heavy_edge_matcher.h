@@ -24,7 +24,7 @@ namespace HeiProMap {
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(const TSerialGraph& g,
+        void match(TSerialGraph& g,
                    TSerialActiveVertexManager& av_manager,
                    std::vector<EdgeUV>& matches) {
             mark += 1;

@@ -92,14 +92,14 @@ namespace HeiProMap {
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
 
         s64 qap_delta = 0;
-        for (size_t i = 0; i < g.size(u); ++i) {
-            vertex_t v       = g.neighbor(u, i);
-            weight_t ew      = g.get_weight(u, i);
+        for (const auto& [v, w] : g[u]) {
             partition_t v_id = p_manager[v];
 
-            weight_t old_d = d_oracle.get(old_id, v_id);
-            weight_t new_d = d_oracle.get(new_id, v_id);
-            qap_delta += (old_d * ew) - (new_d * ew);
+            weight_t old_d, new_d;
+            d_oracle.get(v_id, old_id, new_id, old_d, new_d);
+            // old_d = d_oracle.get(old_id, v_id);
+            // new_d = d_oracle.get(new_id, v_id);
+            qap_delta += (old_d - new_d) * w;
         }
 
         return qap_delta;

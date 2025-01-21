@@ -92,13 +92,32 @@ namespace HeiProMap {
     public:
         EdgeUVW() = default;
 
-        EdgeUVW(const vertex_t u, const vertex_t v, const vertex_t w) : u(u), v(v), w(w) {}
+        EdgeUVW(const vertex_t u, const vertex_t v, const f64 w) : u(u), v(v), w(w) {}
 
         bool operator<(const EdgeUVW& e) const {
             return w < e.w;
         }
 
         bool operator>(const EdgeUVW& e) const {
+            return w < e.w;
+        }
+    };
+
+    class EdgeF64VW {
+    public:
+        vertex_t v;
+        f64 w;
+
+    public:
+        EdgeF64VW() = default;
+
+        EdgeF64VW(const vertex_t v, const f64 w) : v(v), w(w) {}
+
+        bool operator<(const EdgeF64VW& e) const {
+            return w < e.w;
+        }
+
+        bool operator>(const EdgeF64VW& e) const {
             return w < e.w;
         }
     };

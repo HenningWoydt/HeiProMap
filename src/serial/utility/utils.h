@@ -21,7 +21,7 @@ namespace HeiProMap {
      * @param c The character.
      * @return Vector of sub-strings.
      */
-    std::vector<std::string> split(const std::string& str,
+    std::vector<std::string> split(const std::string &str,
                                    char c);
 
 
@@ -33,9 +33,9 @@ namespace HeiProMap {
      * @param str The string.
      * @return The converted string.
      */
-    template <typename T>
-    T convert_to(const std::string& str) {
-        T result;
+    template<typename T>
+    T convert_to(const std::string &str) {
+        T                  result;
         std::istringstream iss(str);
         iss >> result;
         return result;
@@ -48,11 +48,11 @@ namespace HeiProMap {
      * @param vec The vector.
      * @return Vector of transformed T's.
      */
-    template <typename T>
-    std::vector<T> convert(const std::vector<std::string>& vec) {
+    template<typename T>
+    std::vector<T> convert(const std::vector<std::string> &vec) {
         std::vector<T> v;
 
-        for (auto& s : vec) {
+        for (auto &s: vec) {
             v.push_back(convert_to<T>(s));
         }
 
@@ -66,18 +66,18 @@ namespace HeiProMap {
      * @param vec The vector.
      * @return Vector of transformed T's.
      */
-    template <typename T>
-    std::vector<T> convert(const std::vector<std::string>&& vec) {
+    template<typename T>
+    std::vector<T> convert(const std::vector<std::string> &&vec) {
         std::vector<T> v;
 
-        for (auto& s : vec) {
+        for (auto &s: vec) {
             v.push_back(convert_to<T>(s));
         }
 
         return v;
     }
 
-    void line_to_ints(const std::string& line, std::vector<u64>& ints);
+    void line_to_ints(const std::string &line, std::vector<u64> &ints);
 
     /**
      * Multiplies all elements in the vector.
@@ -87,12 +87,12 @@ namespace HeiProMap {
      * @param vec The vector.
      * @return The product.
      */
-    template <typename T1, typename T2>
-    T1 prod(const std::vector<T2>& vec) {
-        T1 p = (T1)1;
+    template<typename T1, typename T2>
+    T1 prod(const std::vector<T2> &vec) {
+        T1 p = (T1) 1;
 
-        for (auto& x : vec) {
-            p *= (T1)x;
+        for (auto &x: vec) {
+            p *= (T1) x;
         }
 
         return p;
@@ -106,12 +106,12 @@ namespace HeiProMap {
      * @param vec The vector.
      * @return The sum.
      */
-    template <typename T1, typename T2>
-    T1 sum(const std::vector<T2>& vec) {
-        T1 s = (T1)0;
+    template<typename T1, typename T2>
+    T1 sum(const std::vector<T2> &vec) {
+        T1 s = (T1) 0;
 
-        for (auto& x : vec) {
-            s += (T1)x;
+        for (auto &x: vec) {
+            s += (T1) x;
         }
 
         return s;
@@ -124,41 +124,41 @@ namespace HeiProMap {
      * @param vec The vector.
      * @return The maximum.
      */
-    template <typename T>
-    T max(const std::vector<T>& vec) {
+    template<typename T>
+    T max(const std::vector<T> &vec) {
         T m = vec[0];
 
-        for (auto& x : vec) {
+        for (auto &x: vec) {
             m = std::max(m, x);
         }
 
         return m;
     }
 
-    template <typename T>
-    T min(const std::vector<T>& vec) {
+    template<typename T>
+    T min(const std::vector<T> &vec) {
         T m = vec[0];
 
-        for (auto& x : vec) {
+        for (auto &x: vec) {
             m = std::min(m, x);
         }
 
         return m;
     }
 
-    template <typename T>
-    T avg(const std::vector<T>& vec) {
+    template<typename T>
+    T avg(const std::vector<T> &vec) {
         T m = 0;
 
-        for (auto& x : vec) {
+        for (auto &x: vec) {
             m += x;
         }
 
-        return (f64)m / (f64)vec.size();
+        return (f64) m / (f64) vec.size();
     }
 
-    template <typename T>
-    size_t argmin(const std::vector<T>& vec) {
+    template<typename T>
+    size_t argmin(const std::vector<T> &vec) {
         size_t idx = 0;
 
         for (size_t i = 1; i < vec.size(); ++i) {
@@ -170,8 +170,8 @@ namespace HeiProMap {
         return idx;
     }
 
-    template <typename T>
-    size_t argmax(const std::vector<T>& vec) {
+    template<typename T>
+    size_t argmax(const std::vector<T> &vec) {
         size_t idx = 0;
 
         for (size_t i = 1; i < vec.size(); ++i) {
@@ -192,9 +192,21 @@ namespace HeiProMap {
      * @param x The element to find.
      * @return Vector of transformed T's.
      */
-    template <typename T>
-    bool exists(const std::vector<T>& vec, const T& x) {
+    template<typename T>
+    bool exists(const std::vector<T> &vec, const T &x) {
         return std::find(vec.begin(), vec.end(), x) != vec.end();
+    }
+
+    template<typename T>
+    void print(const std::vector<T> &vec) {
+        std::cout << "[";
+        for (size_t i = 0; i < vec.size(); ++i) {
+            std::cout << vec[i];
+            if (i != vec.size() - 1) {
+                std::cout << ", ";
+            }
+        }
+        std::cout << "]" << std::endl;
     }
 
     /**
@@ -205,8 +217,8 @@ namespace HeiProMap {
      * @param vec The vector.
      * @return True if no duplicate exists, false else.
      */
-    template <typename T>
-    bool no_duplicates(const std::vector<T>& vec) {
+    template<typename T>
+    bool no_duplicates(const std::vector<T> &vec) {
         for (u64 i = 0; i < vec.size(); ++i) {
             for (u64 j = i + 1; j < vec.size(); ++j) {
                 if (vec[i] == vec[j]) {
@@ -217,8 +229,8 @@ namespace HeiProMap {
         return true;
     }
 
-    template <typename T>
-    bool no_duplicates_sorted(const std::vector<T>& vec) {
+    template<typename T>
+    bool no_duplicates_sorted(const std::vector<T> &vec) {
         if (vec.empty()) {
             return true;
         }
@@ -236,12 +248,12 @@ namespace HeiProMap {
      * @param path The file path.
      * @return True if the file exists, false else.
      */
-    bool file_exists(const std::string& path);
+    bool file_exists(const std::string &path);
 
-    std::string read_file(const std::string& path);
+    std::string read_file(const std::string &path);
 
-    template <typename T>
-    std::string to_string(const std::vector<T>& vec) {
+    template<typename T>
+    std::string to_string(const std::vector<T> &vec) {
         std::string s;
         if (vec.empty()) {
             s = "[]";
@@ -256,10 +268,10 @@ namespace HeiProMap {
         return s;
     }
 
-    std::string to_string(const std::vector<EdgeVW>& vec);
+    std::string to_string(const std::vector<EdgeVW> &vec);
 
-    template <typename T>
-    std::string concat(const std::vector<T>& vec) {
+    template<typename T>
+    std::string concat(const std::vector<T> &vec) {
         std::string s;
         if (vec.empty()) {
             s = "[]";
@@ -279,30 +291,30 @@ namespace HeiProMap {
     // Function to trim leading and trailing spaces
     std::string trim(std::string str);
 
-    bool startsWith(const std::string& s, const std::string& start);
+    bool startsWith(const std::string &s, const std::string &start);
 
-    bool endsWith(const std::string& s, const std::string& end);
+    bool endsWith(const std::string &s, const std::string &end);
 
-    void locked_print(std::mutex& lock, const std::string& s);
+    void locked_print(std::mutex &lock, const std::string &s);
 
     f64 get_seconds(std::chrono::high_resolution_clock::time_point sp, std::chrono::high_resolution_clock::time_point ep);
 
-    void counting_sort(std::vector<EdgeUVW>& edges, std::vector<EdgeUVW>& edges_help, std::vector<weight_t>& help, weight_t min_w, weight_t max_w);
+    void counting_sort(std::vector<EdgeUVW> &edges, std::vector<EdgeUVW> &edges_help, std::vector<weight_t> &help, weight_t min_w, weight_t max_w);
 
-    size_t own_lower_bound_guaranteed(const std::vector<EdgeVW>& edges, vertex_t v);
+    size_t own_lower_bound_guaranteed(const std::vector<EdgeVW> &edges, vertex_t v);
 
-    size_t own_lower_bound_not_guaranteed(const std::vector<EdgeVW>& edges, vertex_t v);
+    size_t own_lower_bound_not_guaranteed(const std::vector<EdgeVW> &edges, vertex_t v);
 
-    void write_partition(const std::vector<partition_t>& partition, const std::string& file_path);
+    void write_partition(const std::vector<partition_t> &partition, const std::string &file_path);
 
-    void read_partition(const std::string& file_path, std::vector<partition_t>& p);
+    void read_partition(const std::string &file_path, std::vector<partition_t> &p);
 
-    void move_while(const char* arr, size_t& i, const char& x, size_t size);
+    void move_while(const char *arr, size_t &i, const char &x, size_t size);
 
-    void move_while_not(const char* arr, size_t& i, const char& x, size_t size);
+    void move_while_not(const char *arr, size_t &i, const char &x, size_t size);
 
-    void str_to_ints(const std::string& str,
-                     std::vector<u64>& ints);
+    void str_to_ints(const std::string &str,
+                     std::vector<u64> &ints);
 }
 
 #endif //HEIDELBERGPROCESSMAPPING_UTILS_H

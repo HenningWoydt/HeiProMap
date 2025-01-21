@@ -12,7 +12,7 @@ namespace HeiProMap {
         virtual void initialize(size_t n, weight_t l_max) = 0;
 
         template<typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(const TSerialGraph &g,
+        void match(TSerialGraph &g,
                    TSerialActiveVertexManager &av_manager,
                    std::vector<EdgeUV> &matches) {}
     };

@@ -7,7 +7,7 @@
 #include "../../serial/datastructures/boundary_vertex_manager.h"
 #include "../../serial/coarsening/heavy_edge_matcher.h"
 #include "../../serial/partitioning/kaffpa_partitioner.h"
-#include "../../serial/refinement/label_propagation_refinement.h"
+#include "../../serial/refinement/label_propagation_refinement_Faraj20.h"
 #include "../../serial/refinement/identity_refinement.h"
 #include "../../serial/datastructures/statistic_collector.h"
 #include "parallel_boundary_vertex_manager.h"

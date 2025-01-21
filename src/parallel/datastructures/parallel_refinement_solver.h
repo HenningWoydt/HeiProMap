@@ -7,7 +7,7 @@
 #include "../../serial/datastructures/active_vertex_manager.h"
 #include "../../serial/datastructures/partition_manager.h"
 #include "../../serial/datastructures/boundary_vertex_manager.h"
-#include "../../serial/refinement/label_propagation_refinement.h"
+#include "../../serial/refinement/label_propagation_refinement_Faraj20.h"
 #include "../../serial/refinement/identity_refinement.h"
 #include "../../serial/datastructures/statistic_collector.h"
 #include "parallel_distance_oracle.h"
