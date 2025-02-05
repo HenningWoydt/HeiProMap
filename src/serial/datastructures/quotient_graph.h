@@ -66,6 +66,12 @@ namespace HeiProMap {
             return m_adj_mtx[min * k + max] > 0;
         }
 
+        weight_t get_weight(partition_t u, partition_t v) override {
+            partition_t min = std::min(u, v);
+            partition_t max = std::max(u, v);
+            return m_adj_mtx[min * k + max];
+        }
+
         template<typename TSerialGraph, typename TSerialPartitionManager>
         void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
             ASSERT(new_id < k);

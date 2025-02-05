@@ -27,10 +27,8 @@
 #ifndef HEIPROMAP_QUOTIENT_GRAPH_REFINEMENT_H
 #define HEIPROMAP_QUOTIENT_GRAPH_REFINEMENT_H
 
-#include <queue>
-
-#include "../datastructures/distance_oracle.h"
 #include "../datastructures/indexed_max_heap.h"
+#include "../interfaces/ISerialQuotientGraph.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"

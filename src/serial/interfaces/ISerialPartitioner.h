@@ -29,10 +29,6 @@
 
 #include <vector>
 
-#include "ISerialActiveVertexManager.h"
-#include "ISerialBoundaryVertexManager.h"
-#include "ISerialGraph.h"
-
 namespace HeiProMap {
     class ISerialPartitioner {
     public:

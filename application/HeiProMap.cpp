@@ -24,58 +24,64 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 #include "../src/definitions.h"
 #include "../src/macros.h"
 #include "../src/serial/datastructures/solver.h"
-#include "../src/serial/utility/utils.h"
 #include "../src/serial/utility/AlgorithmConfiguration.h"
+#include "../src/serial/utility/utils.h"
 
 using namespace HeiProMap;
 
-int main(const int argc, char *argv[]) {
+int main(const int argc, char* argv[]) {
     if (argc == 1) {
-
         const auto sp = std::chrono::high_resolution_clock::now();
         {
             std::vector<std::pair<std::string, std::string>> input = {
-                    {"--graph",                                              "../data/mapping/2cubes_sphere.mtx.graph"},
-                    {"--mapping",                                            "../data/out/partition/2cubes_sphere.txt"},
-                    {"--statistics",                                         "../data/out/statistics/2cubes_sphere.JSON"},
-                    {"--hierarchy",                                          "4:8:6"},
-                    {"--distance",                                           "1:10:100"},
-                    {"--imbalance",                                          "0.03"},
-                    {"--config",                                             "fast"},
-                    {"--seed",                                               "0"},
+                    {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
+                    {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
+                    {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
+                    {"--hierarchy", "4:8:6"},
+                    {"--distance", "1:10:100"},
+                    {"--imbalance", "0.03"},
+                    {"--config", "fast"},
+                    {"--seed", "0"},
 
-                    {"--coarsening-algorithm",                               "greedy-matching"},
+                    {"--coarsening-algorithm", "greedy-matching"},
 
                     {"--coarsening-algorithm-greedy-matching-pendant-first", "1"},
-                    {"--coarsening-algorithm-greedy-matching-no-overload",   "1"},
+                    {"--coarsening-algorithm-greedy-matching-no-overload", "1"},
 
                     // Partitioning
-                    {"--partitioning-algorithm",                             "multisection"},
+                    //{"--partitioning-algorithm",                             "kaffpa-multisection"},
+                    {"--partitioning-algorithm", "multisection"},
+
+                    {"--partitioning-algorithm-multisection-mode", "fast"},
 
                     // Refinement
-                    {"--enable-refinement-lable-propagation-faraj20",        "1"},
-                    {"--enable-refinement-quotient-graph-faraj20",           "1"}
+                    {"--enable-refinement-lable-propagation-faraj20", "0"},
+                    {"--enable-refinement-quotient-graph-faraj20", "0"}
 
 
-            };
+                };
 
             std::vector<std::string> args = {"HeiProMap"};
-            for (const auto &[key, val]: input) {
+            for (const auto& [key, val] : input) {
                 args.push_back(key);
                 args.push_back(val);
             }
 
             // Step 3: Prepare argc and argv.
             int argc = args.size();
+            if (argc < 0) {
+                std::cerr << "Error: Invalid argc size" << std::endl;
+                exit(EXIT_FAILURE);
+            }
 
             // Allocate an array of char* for argv.
-            char **argv = new char *[argc];
+            char** argv = new char*[argc];
 
             for (int i = 0; i < argc; ++i) {
                 // Allocate enough space for the string plus the null terminator.

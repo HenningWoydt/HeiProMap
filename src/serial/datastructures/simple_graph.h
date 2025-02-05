@@ -27,7 +27,6 @@
 #ifndef HEIPROMAP_SIMPLE_GRAPH_H
 #define HEIPROMAP_SIMPLE_GRAPH_H
 
-#include <fcntl.h>
 #include <iostream>
 #include <regex>
 #include <vector>

@@ -37,6 +37,7 @@ namespace HeiProMap {
         virtual void add_edge(partition_t u, partition_t v, weight_t w) = 0;
         virtual void remove_edge(partition_t u, partition_t v, weight_t w)  = 0;
         virtual bool has_edge(partition_t u, partition_t v) = 0;
+        virtual weight_t get_weight(partition_t u, partition_t v) = 0;
 
         template<typename TSerialGraph, typename TSerialPartitionManager>
         void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {}

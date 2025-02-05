@@ -218,6 +218,32 @@ namespace HeiProMap {
         return true;
     }
 
+    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TQuotientGraph>
+    bool assert_correct_quotient_graph([[maybe_unused]] TGraph& g,
+                                       [[maybe_unused]] TActiveVertexManager& av_manager,
+                                       [[maybe_unused]] TPartitionManager& p_manager,
+                                       [[maybe_unused]] TQuotientGraph& q_graph,
+                                       [[maybe_unused]] partition_t k) {
+        std::vector<weight_t> manual(k * k, 0);
+
+        for (vertex_t u : av_manager) {
+            partition_t u_id = p_manager[u];
+            for (const auto& [v, w] : g[u]) {
+                partition_t v_id = p_manager[v];
+
+                manual[u_id * k + v_id] += w;
+                manual[v_id * k + u_id] += w;
+            }
+        }
+
+        for (partition_t id_1 = 0; id_1 < k; ++id_1) {
+            for (partition_t id_2 = id_1 + 1; id_2 < k; ++id_2) {
+                ASSERT(manual[id_1 * k + id_2] == q_graph.get_weight(id_1, id_2));
+            }
+        }
+        return true;
+    }
+
     template <typename TGraph, typename TActiveVertexManager>
     bool assert_state_pre_partitioning([[maybe_unused]] TGraph& g,
                                        [[maybe_unused]] TActiveVertexManager& av_manager) {
@@ -239,11 +265,12 @@ namespace HeiProMap {
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TBoundaryVertexManager>
+    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TBoundaryVertexManager, typename TQuotientGraph>
     bool assert_state_after_partitioning([[maybe_unused]] TGraph& g,
                                          [[maybe_unused]] TActiveVertexManager& av_manager,
                                          [[maybe_unused]] TPartitionManager& p_manager,
                                          [[maybe_unused]] TBoundaryVertexManager& bv_manager,
+                                         [[maybe_unused]] TQuotientGraph& q_graph,
                                          [[maybe_unused]] partition_t k) {
         // check the right number of vertices active
         ASSERT(assert_n_active_vertices(g, av_manager));
@@ -271,6 +298,9 @@ namespace HeiProMap {
 
         // check the right vertices are boundary per block
         ASSERT(assert_correct_vertices_boundary_per_block(g, av_manager, p_manager, bv_manager, k));
+
+        // check the correct quotient graph
+        ASSERT(assert_correct_quotient_graph(g, av_manager, p_manager, q_graph, k));
 
         return true;
     }

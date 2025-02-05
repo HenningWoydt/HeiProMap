@@ -29,10 +29,6 @@
 
 #include <vector>
 
-#include "ISerialActiveVertexManager.h"
-#include "ISerialBoundaryVertexManager.h"
-#include "ISerialDistanceOracle.h"
-
 namespace HeiProMap {
     class ISerialRefiner {
     public:

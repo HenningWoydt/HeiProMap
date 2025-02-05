@@ -210,7 +210,7 @@ namespace HeiProMap {
     }
 
     /**
-     * Determines if an element exist in the vector. The "==" operator is used
+     * Determines if an element exists in the vector. The "==" operator is used
      * to determine if elements are equal.
      *
      * @tparam T Type of element and vector elements.

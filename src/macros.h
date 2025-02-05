@@ -36,7 +36,7 @@ namespace HeiProMap {
 #endif
 
 #ifndef HEAVYASSERT_ENABLED
-#define HEAVYASSERT_ENABLED false
+#define HEAVYASSERT_ENABLED true
 #endif
 
 #if (ASSERT_ENABLED)

@@ -28,7 +28,6 @@
 #define HEIPROMAP_ISERIALMATCHER_H
 
 #include "ISerialActiveVertexManager.h"
-#include "ISerialGraph.h"
 
 namespace HeiProMap {
     class ISerialMatcher {

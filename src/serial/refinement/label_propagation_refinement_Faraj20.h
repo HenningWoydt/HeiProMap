@@ -31,7 +31,6 @@
 #include <random>
 
 #include "../../definitions.h"
-#include "../../macros.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/utils.h"
 
@@ -40,7 +39,7 @@ namespace HeiProMap {
      * Executes label propagation refinement as described in
      * > Marcelo Fonseca Faraj, Alexander van der Grinten, Henning Meyerhenke, Jesper Larsson Träff, and Christian Schulz.
      * > High-quality Hierarchical Process Mapping.
-     * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania,Italy, volume 160 of LIPIcs, pages 4:1–4:15.
+     * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      */
     class LabelPropagationRefinementFaraj20 final : public ISerialRefiner {
         std::vector<partition_t> hierarchy;

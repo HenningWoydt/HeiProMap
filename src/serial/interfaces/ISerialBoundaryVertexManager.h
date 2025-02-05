@@ -27,7 +27,6 @@
 #ifndef HEIPROMAP_ISERIALBOUNDARYVERTEXMANAGER_H
 #define HEIPROMAP_ISERIALBOUNDARYVERTEXMANAGER_H
 
-#include "ISerialGraph.h"
 #include "ISerialPartitionManager.h"
 
 namespace HeiProMap {

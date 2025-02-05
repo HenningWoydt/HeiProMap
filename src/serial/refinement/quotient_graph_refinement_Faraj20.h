@@ -28,7 +28,6 @@
 #define HEIPROMAP_QUOTIENT_GRAPH_REFINEMENT_FARAJ20_H
 
 #include <algorithm>
-#include <queue>
 #include <random>
 
 #include "../datastructures/distance_oracle.h"
@@ -43,7 +42,7 @@ namespace HeiProMap {
      * Executes quotient graph refinement as described in
      * > Marcelo Fonseca Faraj, Alexander van der Grinten, Henning Meyerhenke, Jesper Larsson Träff, and Christian Schulz.
      * > High-quality Hierarchical Process Mapping.
-     * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania,Italy, volume 160 of LIPIcs, pages 4:1–4:15.
+     * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      * > Schloss Dagstuhl - Leibniz-Zentrum für Informatik, 2020.
      */
     class QuotientGraphRefinementFaraj20 final : public ISerialRefiner {

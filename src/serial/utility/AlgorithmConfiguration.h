@@ -30,11 +30,11 @@
 #include <string>
 #include <vector>
 
-#include "../../definitions.h"
 #include "utils.h"
+#include "../../definitions.h"
+#include "../partitioning/global_multisection.h"
 
 namespace HeiProMap {
-
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GREEDY_MATCHING,
@@ -42,7 +42,7 @@ namespace HeiProMap {
         COARSENING_ALG_GLOBAL_PATHS,
     };
 
-    COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
+    inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string& str) {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
         if (str == "greedy-matching") return COARSENING_ALG_GREEDY_MATCHING;
         if (str == "heavy-matching") return COARSENING_ALG_HEAVY_MATCHING;
@@ -50,18 +50,18 @@ namespace HeiProMap {
         return COARSENING_ALG_UNDEFINED;
     }
 
-    std::string coarsening_algorithm_to_string(COARSENING_ALGS alg) {
+    inline std::string coarsening_algorithm_to_string(COARSENING_ALGS alg) {
         switch (alg) {
-            case COARSENING_ALG_UNDEFINED:
-                return "undefined";
-            case COARSENING_ALG_GREEDY_MATCHING:
-                return "greedy-matching";
-            case COARSENING_ALG_HEAVY_MATCHING:
-                return "heavy-matching";
-            case COARSENING_ALG_GLOBAL_PATHS:
-                return "global-paths";
-            default:
-                return "UNDEFINED";
+        case COARSENING_ALG_UNDEFINED:
+            return "UNDEFINED";
+        case COARSENING_ALG_GREEDY_MATCHING:
+            return "greedy-matching";
+        case COARSENING_ALG_HEAVY_MATCHING:
+            return "heavy-matching";
+        case COARSENING_ALG_GLOBAL_PATHS:
+            return "global-paths";
+        default:
+            return "UNDEFINED";
         }
     }
 
@@ -76,23 +76,23 @@ namespace HeiProMap {
         PARTITIONING_ALG_MULTISECTION,
     };
 
-    PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
+    inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string& str) {
         if (str == "UNDEFINED") return PARTITIONING_ALG_UNDEFINED;
         if (str == "kaffpa-multisection") return PARTITIONING_ALG_KAFFPA_MULTISECTION;
         if (str == "multisection") return PARTITIONING_ALG_MULTISECTION;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
-    std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
+    inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
         switch (alg) {
-            case PARTITIONING_ALG_UNDEFINED:
-                return "UNDEFINED";
-            case PARTITIONING_ALG_KAFFPA_MULTISECTION:
-                return "kaffpa-multisection";
-            case PARTITIONING_ALG_MULTISECTION:
-                return "multisection";
-            default:
-                return "UNDEFINED";
+        case PARTITIONING_ALG_UNDEFINED:
+            return "UNDEFINED";
+        case PARTITIONING_ALG_KAFFPA_MULTISECTION:
+            return "kaffpa-multisection";
+        case PARTITIONING_ALG_MULTISECTION:
+            return "multisection";
+        default:
+            return "UNDEFINED";
         }
     }
 
@@ -102,37 +102,39 @@ namespace HeiProMap {
         std::string description;
         std::string default_val;
         std::string input;
-        bool        is_set;
+        bool is_set;
     };
 
     class AlgorithmConfiguration {
     private:
         std::vector<CommandLineOption> options = {
-                {"--help",                                               "",   "Produces the help message",                                                                                                                         "",                     "", false},
-                {"--graph",                                              "-g", "Filepath to the graph.",                                                                                                                            "",                     "", false},
-                {"--mapping",                                            "-m", "Output filepath to the generated mapping.",                                                                                                         "",                     "", false},
-                {"--statistics",                                         "",   "Output filepath to the statistics file.",                                                                                                           "HeiProMap_stats.JSON", "", false},
-                {"--hierarchy",                                          "-h", "Hierarchy in the form a1:a2:...:al .",                                                                                                              "",                     "", false},
-                {"--distance",                                           "-d", "Distance in the form d1:d2:...:dl .",                                                                                                               "",                     "", false},
-                {"--imbalance",                                          "-e", "Allowed imbalance (for example 0.03).",                                                                                                             "0.03",                 "", false},
-                {"--config",                                             "-c", "The configuration.",                                                                                                                                "",                     "", false},
-                {"--seed",                                               "",   "Seed for diversifying results.",                                                                                                                    "",                     "", false},
+                {"--help", "", "Produces the help message", "", "", false},
+                {"--graph", "-g", "Filepath to the graph.", "", "", false},
+                {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
+                {"--statistics", "", "Output filepath to the statistics file.", "HeiProMap_stats.JSON", "", false},
+                {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
+                {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
+                {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
+                {"--config", "-c", "The configuration.", "", "", false},
+                {"--seed", "", "Seed for diversifying results.", "", "", false},
 
-                // Coarsening
-                {"--coarsening-algorithm",                               "",   "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching-global-paths}.",                                             "global-paths",         "", false},
+                /** Coarsening */
+                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching-global-paths}.", "global-paths", "", false},
 
                 // Coarsening greedy matching
-                {"--coarsening-algorithm-greedy-matching-pendant-first", "",   "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.",          "1",                    "", false},
-                {"--coarsening-algorithm-greedy-matching-no-overload",   "",   "Whether the greedy matching algorithm can match vertices, if it would lead to overload. 1 equals no overload possible, while 0 enables overloads.", "1",                    "", false},
+                {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
+                {"--coarsening-algorithm-greedy-matching-no-overload", "", "Whether the greedy matching algorithm can match vertices, if it would lead to overload. 1 equals no overload possible, while 0 enables overloads.", "1", "", false},
 
-                // Partitioning
-                {"--partitioning-algorithm",                             "",   "Which partitioning algorithm to use. Allowed values are {kaffpa-multisection, multisection}.",                                                      "multisection",         "", false},
+                /** Partitioning */
+                {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa-multisection, multisection}.", "multisection", "", false},
+
+                // Partitioning multisection
+                {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
 
                 // Refinement
-                {"--enable-refinement-lable-propagation-faraj20",        "",   "Enables the label propagation by Faraj20.",                                                                                                         "1",                    "", false},
-                {"--enable-refinement-quotient-graph-faraj20",           "",   "Enables the quotient graph by Faraj20.",                                                                                                            "1",                    "", false}
-        };
-
+                {"--enable-refinement-lable-propagation-faraj20", "", "Enables the label propagation by Faraj20.", "1", "", false},
+                {"--enable-refinement-quotient-graph-faraj20", "", "Enables the quotient graph by Faraj20.", "1", "", false}
+            };
 
     public:
         // graph information
@@ -141,12 +143,12 @@ namespace HeiProMap {
         std::string statistics_out;
 
         // hierarchy information
-        std::string              hierarchy_string;
+        std::string hierarchy_string;
         std::vector<partition_t> hierarchy;
-        partition_t              k = 0;
+        partition_t k = 0;
 
         // distance information
-        std::string           distance_string;
+        std::string distance_string;
         std::vector<weight_t> distance;
 
         // balancing information
@@ -156,13 +158,16 @@ namespace HeiProMap {
         u64 seed = 0;
 
         // coarsening algorithm
-        std::string                 coarsening_algorithm_string;
-        COARSENING_ALGS             coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
+        std::string coarsening_algorithm_string;
+        COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
+
         GreedyMatchingConfiguration greedy_matching_config;
 
         // partitioning algorithm
-        std::string       partitioning_algorithm_string;
+        std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
+
+        GlobalMultisectionConfiguration global_multisection_config;
 
         // refinement algorithms
         bool do_refinement_label_propagation_faraj20 = false;
@@ -201,10 +206,13 @@ namespace HeiProMap {
             // actually set which algorithm to use
             coarsening_algorithm_string = get("--coarsening-algorithm");
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
         }
 
         void set_partitioning_algorithm() {
+            // initialize global multisection config
+            global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
+            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+
             // actually set which algorithm to use
             partitioning_algorithm_string = get("--partitioning-algorithm");
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
@@ -220,7 +228,7 @@ namespace HeiProMap {
             do_refinement_quotient_graph_faraj20    = get("--enable-refinement-quotient-graph-faraj20") == "1";
         }
 
-        AlgorithmConfiguration(int argc, char *argv[]) {
+        AlgorithmConfiguration(int argc, char* argv[]) {
             // read command lines into vector
             std::vector<std::string> args(argv, argv + argc);
 
@@ -234,7 +242,7 @@ namespace HeiProMap {
 
             // read all command line args
             for (int i = 1; i < argc; ++i) {
-                for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+                for (auto& [large_key, small_key, description, default_val, input, is_set] : options) {
                     if (large_key == args[i] || small_key == args[i]) {
                         input  = args[i + 1];
                         is_set = true;
@@ -264,8 +272,8 @@ namespace HeiProMap {
          * @param var The option in interest.
          * @return The input.
          */
-        std::string get(const std::string &var) {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+        std::string get(const std::string& var) {
+            for (const auto& [large_key, small_key, description, default_val, input, is_set] : options) {
                 if (large_key == var || small_key == var) {
                     if (input.empty()) {
                         std::cout << "Command Line \"" << var << "\" not set!" << std::endl;
@@ -284,8 +292,8 @@ namespace HeiProMap {
          * @param var The option in interest.
          * @return True if the option was entered, false else.
          */
-        bool is_set(const std::string &var) {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+        bool is_set(const std::string& var) {
+            for (const auto& [large_key, small_key, description, default_val, input, is_set] : options) {
                 if (large_key == var || small_key == var) {
                     return is_set;
                 }
@@ -298,7 +306,7 @@ namespace HeiProMap {
          * Prints the help message.
          */
         void print_help_message() {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+            for (const auto& [large_key, small_key, description, default_val, input, is_set] : options) {
                 if (small_key.empty()) {
                     std::cout << "[ " << large_key << "] - " << description << std::endl;
                 } else {
