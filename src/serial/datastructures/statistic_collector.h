@@ -1,5 +1,31 @@
-#ifndef HEIDELBERGPROCESSMAPPING_STATISTIC_COLLECTOR_H
-#define HEIDELBERGPROCESSMAPPING_STATISTIC_COLLECTOR_H
+/*******************************************************************************
+ * MIT License
+ *
+ * This file is part of HeiProMap.
+ *
+ * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ ******************************************************************************/
+
+#ifndef HEIPROMAP_STATISTIC_COLLECTOR_H
+#define HEIPROMAP_STATISTIC_COLLECTOR_H
 
 #ifndef STATISTICCOLLECTOR
 #define STATISTICCOLLECTOR true
@@ -19,38 +45,38 @@ namespace HeiProMap {
         // matching
         f64 total_matching_time = 0.0;
 #if STATISTICCOLLECTOR
-        std::vector<f64> matching_time = {0};
+        std::vector<f64> matching_time      = {0};
         std::vector<vertex_t> matching_size = {0};
-        vertex_t total_matching_size = 0;
+        vertex_t total_matching_size        = 0;
 #endif
 
         // coarsening
         f64 total_coarsening_time = 0.0;
 #if STATISTICCOLLECTOR
-        std::vector<f64> coarsening_time = {0.0};
+        std::vector<f64> coarsening_time          = {0.0};
         std::vector<vertex_t> coarsening_end_size = {0};
 #endif
 
         // uncoarsening
         f64 total_uncoarsening_time = 0.0;
 #if STATISTICCOLLECTOR
-        std::vector<f64> uncoarsening_time = {0.0};
+        std::vector<f64> uncoarsening_time          = {0.0};
         std::vector<vertex_t> uncoarsening_end_size = {0};
 #endif
 
         // refinement
         f64 total_refinement_time = 0.0;
 #if STATISTICCOLLECTOR
-        std::vector<f64> refinement_time = {0.0};
+        std::vector<f64> refinement_time    = {0.0};
         std::vector<u64> refinement_end_qap = {0};
 #endif
 
         // partition
         f64 totaL_partition_time = 0.0;
 #if STATISTICCOLLECTOR
-        u64 partition_end_qap = 0;
+        u64 partition_end_qap              = 0;
         weight_t partition_end_max_pweight = 0.0;
-        f64 partition_end_avg_pweight = 0.0;
+        f64 partition_end_avg_pweight      = 0.0;
         weight_t partition_end_min_pweight = 0.0;
         std::vector<weight_t> partition_end_pweights;
         bool partition_end_balanced = false;
@@ -58,12 +84,12 @@ namespace HeiProMap {
 
         // final information
 #if STATISTICCOLLECTOR
-        u64 final_qap = 0;
+        u64 final_qap              = 0;
         weight_t final_max_pweight = 0.0;
-        f64 final_avg_pweight = 0.0;
+        f64 final_avg_pweight      = 0.0;
         weight_t final_min_pweight = 0.0;
         std::vector<weight_t> final_pweights;
-        u64 final_lmax = 0;
+        u64 final_lmax      = 0;
         bool final_balanced = false;
 #endif
 
@@ -144,24 +170,24 @@ namespace HeiProMap {
 
         void set_partition_stats(const u64 end_objective, const std::vector<weight_t>& pweights, const weight_t lmax) {
 #if STATISTICCOLLECTOR
-            partition_end_qap = end_objective;
-            partition_end_pweights = pweights;
+            partition_end_qap         = end_objective;
+            partition_end_pweights    = pweights;
             partition_end_max_pweight = max(pweights);
-            partition_end_avg_pweight = (f64) avg(pweights);
+            partition_end_avg_pweight = (f64)avg(pweights);
             partition_end_min_pweight = min(pweights);
-            partition_end_balanced = partition_end_max_pweight <= lmax;
+            partition_end_balanced    = partition_end_max_pweight <= lmax;
 #endif
         }
 
         void set_final(const u64 end_objective, const std::vector<weight_t>& pweights, const weight_t lmax) {
 #if STATISTICCOLLECTOR
-            final_qap = end_objective;
-            final_pweights = pweights;
+            final_qap         = end_objective;
+            final_pweights    = pweights;
             final_max_pweight = max(pweights);
-            final_avg_pweight = (f64) avg(pweights);
+            final_avg_pweight = (f64)avg(pweights);
             final_min_pweight = min(pweights);
-            final_lmax = lmax;
-            final_balanced = final_max_pweight <= lmax;
+            final_lmax        = lmax;
+            final_balanced    = final_max_pweight <= lmax;
 #endif
         }
 
@@ -234,4 +260,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIDELBERGPROCESSMAPPING_STATISTIC_COLLECTOR_H
+#endif //HEIPROMAP_STATISTIC_COLLECTOR_H

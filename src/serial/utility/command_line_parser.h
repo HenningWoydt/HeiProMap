@@ -23,6 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  ******************************************************************************/
+
 #ifndef HEIPROMAP_COMMAND_LINE_PARSER_H
 #define HEIPROMAP_COMMAND_LINE_PARSER_H
 
