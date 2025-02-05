@@ -51,7 +51,7 @@ int main(const int argc, char* argv[]) {
 
                     {"--coarsening-algorithm", "greedy-matching"},
 
-                    {"--coarsening-algorithm-greedy-matching-pendant-first", "1"},
+                    {"--coarsening-algorithm-greedy-matching-pendant-first", "0"},
                     {"--coarsening-algorithm-greedy-matching-no-overload", "1"},
 
                     // Partitioning

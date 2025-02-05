@@ -210,7 +210,7 @@ namespace HeiProMap {
             matches.back().reserve(av_manager.get_n_active() / 2);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(graphs.back(), av_manager, matches.back());
+                ge_matcher.match(ac.greedy_edge_matcher_config, graphs.back(), av_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
                 he_matcher.match(graphs.back(), av_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {

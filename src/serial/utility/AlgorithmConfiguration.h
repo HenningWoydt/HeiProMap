@@ -32,6 +32,7 @@
 
 #include "utils.h"
 #include "../../definitions.h"
+#include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
 
 namespace HeiProMap {
@@ -64,11 +65,6 @@ namespace HeiProMap {
             return "UNDEFINED";
         }
     }
-
-    struct GreedyMatchingConfiguration {
-        bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
-        bool no_overload                  = false; // Matching an edge, should not create a vertex with a weight greater l_max.
-    };
 
     enum PARTITIONING_ALGS {
         PARTITIONING_ALG_UNDEFINED,
@@ -161,7 +157,7 @@ namespace HeiProMap {
         std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
 
-        GreedyMatchingConfiguration greedy_matching_config;
+        GreedyEdgeMatcherConfiguration greedy_edge_matcher_config;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;
@@ -200,8 +196,8 @@ namespace HeiProMap {
 
         void set_coarsening_algorithm() {
             // initialize greedy matching config
-            greedy_matching_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
-            greedy_matching_config.no_overload                  = get("--coarsening-algorithm-greedy-matching-no-overload") == "1";
+            greedy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
+            greedy_edge_matcher_config.no_overload                  = get("--coarsening-algorithm-greedy-matching-no-overload") == "1";
 
             // actually set which algorithm to use
             coarsening_algorithm_string = get("--coarsening-algorithm");

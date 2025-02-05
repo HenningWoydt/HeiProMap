@@ -35,8 +35,13 @@
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
+    struct GreedyEdgeMatcherConfiguration {
+        bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
+        bool no_overload                  = false; // Matching an edge, should not create a vertex with a weight greater l_max.
+    };
+
     class GreedyEdgeMatcher final : public ISerialMatcher {
-        u32              mark = 0;
+        u32 mark = 0;
         std::vector<u32> used;
 
         weight_t l_max = 0;
@@ -51,56 +56,109 @@ namespace HeiProMap {
             this->l_max = l_max;
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(TSerialGraph &g,
-                   TSerialActiveVertexManager &av_manager,
-                   std::vector<EdgeUV> &matches) {
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(GreedyEdgeMatcherConfiguration& config,
+                   TSerialGraph& g,
+                   TSerialActiveVertexManager& av_manager,
+                   std::vector<EdgeUV>& matches) {
+            mark += 1;
+            matches.clear();
+
             std::vector<EdgeUVW> edges;
             edges.reserve(g.get_m());
-            for (vertex_t u: av_manager) {
+
+            // first handle pendant vertices
+            if (config.match_pendant_vertices_first) {
+                for (vertex_t u : av_manager) {
+                    ASSERT(av_manager.is_active(u));
+
+                    if (g.size(u) != 1) {
+                        continue;
+                    }
+
+                    const vertex_t v  = g.neighbor(u, 0);
+                    const weight_t ew = g.get_weight(u, 0);
+                    const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
+                    edges.emplace_back(u, v, rating);
+                }
+                std::sort(edges.begin(), edges.end(), std::greater<>());
+
+                for (const auto& [u, v, w] : edges) {
+                    if (used[u] == mark || used[v] == mark) {
+                        continue;
+                    }
+
+                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > l_max) {
+                        continue;
+                    }
+
+                    if (used[u] != mark && used[v] != mark) {
+                        // use this edge
+                        used[u] = mark;
+                        used[v] = mark;
+                        if (g.size(u) > g.size(v)) {
+                            matches.emplace_back(u, v);
+                        } else {
+                            matches.emplace_back(v, u);
+                        }
+                    }
+                }
+            }
+
+            // handle all other vertices
+            for (vertex_t u : av_manager) {
                 ASSERT(av_manager.is_active(u));
 
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    const vertex_t v      = g.neighbor(u, i);
-                    const weight_t ew     = g.get_weight(u, i);
-                    const f64      rating = (f64) ew / (f64) (g.size(u) * g.size(v));
+                if (used[u] == mark) {
+                    continue;
+                }
+
+                for (const auto& [v, w] : g[u]) {
+                    if (used[v] == mark) {
+                        continue;
+                    }
+
+                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > l_max) {
+                        continue;
+                    }
+
+                    const f64 rating = (f64)w / (f64)(g.size(u) * g.size(v));
                     edges.emplace_back(u, v, rating);
                 }
             }
             std::sort(edges.begin(), edges.end(), std::greater<>());
 
-            mark += 1;
-            matches.clear();
-            for (const auto &e: edges) {
-                if (used[e.u] != mark && used[e.v] != mark) {
-                    used[e.u] = mark;
-                    used[e.v] = mark;
-                    if (g.size(e.u) > g.size(e.v)) {
-                        matches.emplace_back(e.u, e.v);
+            for (const auto& [u, v, w] : edges) {
+                if (used[u] != mark && used[v] != mark) {
+                    // use this edge
+                    used[u] = mark;
+                    used[v] = mark;
+                    if (g.size(u) > g.size(v)) {
+                        matches.emplace_back(u, v);
                     } else {
-                        matches.emplace_back(e.v, e.u);
+                        matches.emplace_back(v, u);
                     }
                 }
             }
 
 #if ASSERT_ENABLED
-            for (const EdgeUV &e: matches) {
-                ASSERT(e.u != e.v);
-                ASSERT(av_manager.is_active(e.u));
-                ASSERT(av_manager.is_active(e.v));
+            for (const auto& [u, v] : matches) {
+                ASSERT(u != v);
+                ASSERT(av_manager.is_active(u));
+                ASSERT(av_manager.is_active(v));
             }
 #endif
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (auto &e: matches) {
-                hit[e.u] += 1;
-                hit[e.v] += 1;
+            for (auto& [u, v] : matches) {
+                hit[u] += 1;
+                hit[v] += 1;
 
-                if (hit[e.u] == 2) {
+                if (hit[u] == 2) {
                     ASSERT(false);
                 }
-                if (hit[e.v] == 2) {
+                if (hit[v] == 2) {
                     ASSERT(false);
                 }
             }
