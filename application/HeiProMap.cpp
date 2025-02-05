@@ -25,45 +25,80 @@
  ******************************************************************************/
 
 #include <iostream>
+#include <cstring>
 
 #include "../src/definitions.h"
 #include "../src/macros.h"
 #include "../src/serial/datastructures/solver.h"
 #include "../src/serial/utility/utils.h"
+#include "../src/serial/utility/AlgorithmConfiguration.h"
 
 using namespace HeiProMap;
 
-int main(const int argc, const char* argv[]) {
-    const auto sp = std::chrono::high_resolution_clock::now();
-    {
-        // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_out = "../data/out/partition/afshell9.txt";
-        std::string graph_in    = "../data/mapping/2cubes_sphere.mtx.graph";
-        std::string mapping_out = "../data/out/partition/2cubes_sphere.txt"; // 7.135.366
-        // const std::string graph_in = "../data/mapping/eur.graph"; const std::string mapping_out = "../data/out/partition/eur.txt";
-        // const std::string graph_in = "../data/mapping/as-skitter.graph"; const std::string mapping_out = "../data/out/partition/as-skitter.txt"; // 13.801.154
-        // const std::string graph_in = "../data/mapping/wiki-Talk.graph"; const std::string mapping_out = "../data/out/partition/wiki-Talk.txt"; // 80.794.192
-        // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "../data/out/partition/rgg24.txt";
-        // std::string graph_in = "../data/mapping/rgg_n26.graph"; std::string mapping_out = "../data/out/partition/rgg_n26.txt";
-        // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "../data/out/partition/deu.txt"; // 177.128
-        // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_out = "../data/out/partition/PGPgiantcompo.txt";
-        // std::string graph_in = "../data/test/manual_graphs/0.graph";
-        const std::string statistics_out   = "statistics.JSON";
-        const std::string hierarchy_string = "4:8:6";
-        const std::string distance_string  = "1:10:100";
-        constexpr f64 imbalance            = 0.03;
+int main(const int argc, char *argv[]) {
+    if (argc == 1) {
 
-        const std::vector<partition_t> hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
-        const std::vector<weight_t> distance     = convert<weight_t>(split(distance_string, ':'));
+        const auto sp = std::chrono::high_resolution_clock::now();
+        {
+            std::vector<std::pair<std::string, std::string>> input = {
+                    {"--graph",                                              "../data/mapping/2cubes_sphere.mtx.graph"},
+                    {"--mapping",                                            "../data/out/partition/2cubes_sphere.txt"},
+                    {"--statistics",                                         "../data/out/statistics/2cubes_sphere.JSON"},
+                    {"--hierarchy",                                          "4:8:6"},
+                    {"--distance",                                           "1:10:100"},
+                    {"--imbalance",                                          "0.03"},
+                    {"--config",                                             "fast"},
+                    {"--seed",                                               "0"},
 
-        Solver solver(graph_in,
-                      hierarchy,
-                      distance,
-                      imbalance);
-        const std::vector<partition_t> partition = solver.solve();
-        write_partition(partition, mapping_out);
+                    {"--coarsening-algorithm",                               "greedy-matching"},
+
+                    {"--coarsening-algorithm-greedy-matching-pendant-first", "1"},
+                    {"--coarsening-algorithm-greedy-matching-no-overload",   "1"},
+
+                    // Partitioning
+                    {"--partitioning-algorithm",                             "multisection"},
+
+                    // Refinement
+                    {"--enable-refinement-lable-propagation-faraj20",        "1"},
+                    {"--enable-refinement-quotient-graph-faraj20",           "1"}
+
+
+            };
+
+            std::vector<std::string> args = {"HeiProMap"};
+            for (const auto &[key, val]: input) {
+                args.push_back(key);
+                args.push_back(val);
+            }
+
+            // Step 3: Prepare argc and argv.
+            int argc = args.size();
+
+            // Allocate an array of char* for argv.
+            char **argv = new char *[argc];
+
+            for (int i = 0; i < argc; ++i) {
+                // Allocate enough space for the string plus the null terminator.
+                argv[i] = new char[args[i].size() + 1];
+                std::strcpy(argv[i], args[i].c_str());
+            }
+
+            AlgorithmConfiguration ac(argc, argv);
+
+            Solver solver(ac);
+            solver.solve();
+
+            for (int i = 0; i < argc; ++i) { delete[] argv[i]; }
+            delete[] argv;
+        }
+        const auto ep = std::chrono::high_resolution_clock::now();
+        std::cout << "Total time: " << get_seconds(sp, ep) << std::endl;
+    } else {
+        AlgorithmConfiguration ac(argc, argv);
+
+        Solver solver(ac);
+        solver.solve();
     }
-    const auto ep = std::chrono::high_resolution_clock::now();
-    std::cout << "Total time: " << get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

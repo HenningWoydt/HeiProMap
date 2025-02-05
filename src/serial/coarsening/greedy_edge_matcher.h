@@ -35,31 +35,35 @@
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    template <typename TSerialGraph, typename TSerialActiveVertexManager>
-    class GreedyEdgeMatcher final : public ISerialMatcher<TSerialGraph, TSerialActiveVertexManager> {
-        u32 mark = 0;
+    class GreedyEdgeMatcher final : public ISerialMatcher {
+        u32              mark = 0;
         std::vector<u32> used;
+
+        weight_t l_max = 0;
 
     public:
         GreedyEdgeMatcher() = default;
 
-        void initialize(const size_t n) override {
+        void initialize(const size_t n, const weight_t l_max) override {
             mark = 0;
             used.resize(n, 0);
+
+            this->l_max = l_max;
         }
 
-        void match(const TSerialGraph& g,
-                   TSerialActiveVertexManager& av_manager,
-                   std::vector<EdgeUV>& matches) override {
+        template<typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(TSerialGraph &g,
+                   TSerialActiveVertexManager &av_manager,
+                   std::vector<EdgeUV> &matches) {
             std::vector<EdgeUVW> edges;
             edges.reserve(g.get_m());
-            for (vertex_t u : av_manager) {
+            for (vertex_t u: av_manager) {
                 ASSERT(av_manager.is_active(u));
 
                 for (size_t i = 0; i < g.size(u); ++i) {
-                    const vertex_t v  = g.neighbor(u, i);
-                    const weight_t ew = g.get_weight(u, i);
-                    const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
+                    const vertex_t v      = g.neighbor(u, i);
+                    const weight_t ew     = g.get_weight(u, i);
+                    const f64      rating = (f64) ew / (f64) (g.size(u) * g.size(v));
                     edges.emplace_back(u, v, rating);
                 }
             }
@@ -67,7 +71,7 @@ namespace HeiProMap {
 
             mark += 1;
             matches.clear();
-            for (const auto& e : edges) {
+            for (const auto &e: edges) {
                 if (used[e.u] != mark && used[e.v] != mark) {
                     used[e.u] = mark;
                     used[e.v] = mark;
@@ -80,7 +84,7 @@ namespace HeiProMap {
             }
 
 #if ASSERT_ENABLED
-            for (const EdgeUV& e : matches) {
+            for (const EdgeUV &e: matches) {
                 ASSERT(e.u != e.v);
                 ASSERT(av_manager.is_active(e.u));
                 ASSERT(av_manager.is_active(e.v));
@@ -89,7 +93,7 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (auto& e : matches) {
+            for (auto &e: matches) {
                 hit[e.u] += 1;
                 hit[e.v] += 1;
 
