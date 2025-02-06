@@ -27,10 +27,9 @@
 #ifndef HEIPROMAP_GLOBAL_PATH_ALGORITHM_H
 #define HEIPROMAP_GLOBAL_PATH_ALGORITHM_H
 
-#include <vector>
 #include <algorithm>
 #include <numeric>
-#include <deque>
+#include <vector>
 
 #include "../../definitions.h"
 #include "../../macros.h"

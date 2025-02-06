@@ -49,8 +49,11 @@ int main(const int argc, char* argv[]) {
                     {"--config", "fast"},
                     {"--seed", "0"},
 
-                    {"--coarsening-algorithm", "greedy-matching"},
+                    // coarsening
+                    // {"--coarsening-algorithm", "greedy-matching"},
+                    {"--coarsening-algorithm", "global-paths"},
 
+                    // coarsening - greedy configuration
                     {"--coarsening-algorithm-greedy-matching-pendant-first", "0"},
                     {"--coarsening-algorithm-greedy-matching-no-overload", "1"},
 
@@ -61,10 +64,10 @@ int main(const int argc, char* argv[]) {
                     {"--partitioning-algorithm-multisection-mode", "fast"},
 
                     // Refinement
-                    {"--enable-refinement-lable-propagation-faraj20", "0"},
-                    {"--enable-refinement-quotient-graph-faraj20", "0"}
+                    {"--refinement-lable-propagation-faraj20-enable", "0"},
 
-
+                    {"--refinement-quotient-graph-faraj20-enable", "1"},
+                    {"--refinement-quotient-graph-faraj20-max-iterations", "5"}
                 };
 
             std::vector<std::string> args = {"HeiProMap"};

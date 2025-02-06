@@ -270,7 +270,7 @@ namespace HeiProMap {
             }
 
             if (ac.do_refinement_quotient_graph_faraj20) {
-                qg_refine_faraj20.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

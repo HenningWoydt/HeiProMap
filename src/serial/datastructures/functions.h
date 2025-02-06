@@ -24,35 +24,31 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_MACROS_H
-#define HEIPROMAP_MACROS_H
+#ifndef HEIPROMAP_FUNCTIONS_H
+#define HEIPROMAP_FUNCTIONS_H
 
-#include <iostream>
-#include <string>
+#include <type_traits>
+
+#include "../../definitions.h"
+#include "../interfaces/ISerialGraph.h"
+#include "../interfaces/ISerialPartitionManager.h"
 
 namespace HeiProMap {
-#ifndef ASSERT_ENABLED
-#define ASSERT_ENABLED false
-#endif
+    template <typename TSerialGraph, typename TSerialPartitionManager>
+    bool is_boundary(TSerialGraph& g, TSerialPartitionManager& p_manager, vertex_t u) {
+        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
+        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
 
-#ifndef HEAVYASSERT_ENABLED
-#define HEAVYASSERT_ENABLED false
-#endif
+        partition_t u_id = p_manager[u];
 
-#if (ASSERT_ENABLED)
-    // Use ASSERT for quick operations like O(1) operations, for other Asserts use HEAVYASSERT
-#define ASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
-#else
-#define ASSERT(condition) ((void)0)
-#endif
-
-
-#if (HEAVYASSERT_ENABLED)
-    // Use HEAVYASSERT for expensive operations like O(n), O(n^2) operations, for faster Asserts use ASSERT
-#define HEAVYASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
-#else
-#define HEAVYASSERT(condition) ((void)0)
-#endif
+        for (const auto& [v, w] : g[u]) {
+            partition_t v_id = p_manager[v];
+            if (u_id != v_id) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
-#endif //HEIPROMAP_MACROS_H
+#endif //HEIPROMAP_FUNCTIONS_H

@@ -107,6 +107,31 @@ namespace HeiProMap {
     }
 
     template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    s64 get_u_qap_delta_by_idx(TSerialGraph& g,
+                            vertex_t u,
+                            partition_t old_id,
+                            partition_t new_id,
+                            TSerialPartitionManager& p_manager,
+                            TSerialDistanceOracle& d_oracle) {
+        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
+        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
+        static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
+
+        s64 qap_delta = 0;
+        for (size_t i = 0; i < g.size(u); ++i) {
+            vertex_t v       = g.neighbor(u, i);
+            weight_t w       = g.get_weight(u, i);
+            partition_t v_id = p_manager[v];
+
+            weight_t old_d, new_d;
+            d_oracle.get(v_id, old_id, new_id, old_d, new_d);
+            qap_delta += (old_d - new_d) * w;
+        }
+
+        return qap_delta;
+    }
+
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
     s64 get_u_qap_delta(TSerialGraph& g,
                         vertex_t u,
                         partition_t old_id,
@@ -123,8 +148,6 @@ namespace HeiProMap {
 
             weight_t old_d, new_d;
             d_oracle.get(v_id, old_id, new_id, old_d, new_d);
-            // old_d = d_oracle.get(old_id, v_id);
-            // new_d = d_oracle.get(new_id, v_id);
             qap_delta += (old_d - new_d) * w;
         }
 

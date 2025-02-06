@@ -27,6 +27,8 @@
 #ifndef HEIPROMAP_ISERIALPARTITIONMANAGER_H
 #define HEIPROMAP_ISERIALPARTITIONMANAGER_H
 
+#include <vector>
+
 #include "../../definitions.h"
 
 namespace HeiProMap {

@@ -78,7 +78,7 @@ namespace HeiProMap {
             return m_mtx[u_id * m_k + v_id];
         }
 
-        inline void get(partition_t u_id, partition_t v_id1, partition_t v_id2, weight_t &w1, weight_t &w2) const {
+        void get(partition_t u_id, partition_t v_id1, partition_t v_id2, weight_t &w1, weight_t &w2) const {
             ASSERT(u_id < m_k);
             ASSERT(v_id1 < m_k);
             ASSERT(v_id2 < m_k);

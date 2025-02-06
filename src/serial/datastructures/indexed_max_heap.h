@@ -28,13 +28,8 @@
 #define HEIPROMAP_INDEXED_MAX_HEAP_H
 
 #include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
 
 #include "../../definitions.h"
-#include "../utility/utils.h"
 #include "../../macros.h"
 
 namespace HeiProMap {

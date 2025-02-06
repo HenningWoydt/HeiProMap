@@ -127,9 +127,12 @@ namespace HeiProMap {
                 // Partitioning multisection
                 {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
 
-                // Refinement
-                {"--enable-refinement-lable-propagation-faraj20", "", "Enables the label propagation by Faraj20.", "1", "", false},
-                {"--enable-refinement-quotient-graph-faraj20", "", "Enables the quotient graph by Faraj20.", "1", "", false}
+                // Refinement Faraj20 label propagation
+                {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation by Faraj20.", "1", "", false},
+
+                // Refinement Faraj20 quotient graph
+                {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph by Faraj20.", "1", "", false},
+                {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run the algorithm at most.", "3", "", false}
             };
 
     public:
@@ -167,7 +170,9 @@ namespace HeiProMap {
 
         // refinement algorithms
         bool do_refinement_label_propagation_faraj20 = false;
-        bool do_refinement_quotient_graph_faraj20    = false;
+
+        bool do_refinement_quotient_graph_faraj20 = false;
+        QuotientGraphRefinementFaraj20Configuration quotient_graph_refinement_faraj20_config;
 
         AlgorithmConfiguration() = default;
 
@@ -207,7 +212,7 @@ namespace HeiProMap {
         void set_partitioning_algorithm() {
             // initialize global multisection config
             global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
-            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // actually set which algorithm to use
             partitioning_algorithm_string = get("--partitioning-algorithm");
@@ -218,10 +223,11 @@ namespace HeiProMap {
             // initialize label propagation faraj20 configuration
 
             // initialize quotient graph faraj20 configuration
+            quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
 
             // actually enable the configurations
-            do_refinement_label_propagation_faraj20 = get("--enable-refinement-lable-propagation-faraj20") == "1";
-            do_refinement_quotient_graph_faraj20    = get("--enable-refinement-quotient-graph-faraj20") == "1";
+            do_refinement_label_propagation_faraj20 = get("--refinement-lable-propagation-faraj20-enable") == "1";
+            do_refinement_quotient_graph_faraj20    = get("--refinement-quotient-graph-faraj20-enable") == "1";
         }
 
         AlgorithmConfiguration(int argc, char* argv[]) {
