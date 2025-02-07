@@ -66,8 +66,11 @@ int main(const int argc, char* argv[]) {
                     // Refinement
                     {"--refinement-lable-propagation-faraj20-enable", "0"},
 
-                    {"--refinement-quotient-graph-faraj20-enable", "1"},
-                    {"--refinement-quotient-graph-faraj20-max-iterations", "5"}
+                    {"--refinement-quotient-graph-faraj20-enable", "0"},
+                    {"--refinement-quotient-graph-faraj20-max-iterations", "5"},
+
+                    {"--refinement-k-way-fm-faraj20-enable", "1"},
+                    {"--refinement-k-way-fm-faraj20-max-iterations", "1"},
                 };
 
             std::vector<std::string> args = {"HeiProMap"};

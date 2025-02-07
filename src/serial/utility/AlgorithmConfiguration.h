@@ -34,6 +34,7 @@
 #include "../../definitions.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
+#include "../refinement/k_way_fm_refinement_Faraj20.h"
 
 namespace HeiProMap {
     enum COARSENING_ALGS {
@@ -128,11 +129,15 @@ namespace HeiProMap {
                 {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
 
                 // Refinement Faraj20 label propagation
-                {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation by Faraj20.", "1", "", false},
+                {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation refinement by Faraj20.", "1", "", false},
 
                 // Refinement Faraj20 quotient graph
-                {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph by Faraj20.", "1", "", false},
-                {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run the algorithm at most.", "3", "", false}
+                {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph refinement by Faraj20.", "1", "", false},
+                {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run quotient graph refinement at most.", "3", "", false},
+
+                // Refinement Faraj20 k-Way FM
+                {"--refinement-k-way-fm-faraj20-enable", "", "Enables the K-Way FM refinement by Faraj20.", "1", "", false},
+                {"--refinement-k-way-fm-faraj20-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "3", "", false}
             };
 
     public:
@@ -173,6 +178,9 @@ namespace HeiProMap {
 
         bool do_refinement_quotient_graph_faraj20 = false;
         QuotientGraphRefinementFaraj20Configuration quotient_graph_refinement_faraj20_config;
+
+        bool do_refinement_k_way_fm_faraj20 = false;
+        KWayFMRefinementFaraj20Configuration k_way_fm_refinement_faraj20_config;
 
         AlgorithmConfiguration() = default;
 
@@ -225,9 +233,13 @@ namespace HeiProMap {
             // initialize quotient graph faraj20 configuration
             quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
 
+            // initialize K-Way FM refinement faraj20 configuration
+            k_way_fm_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-k-way-fm-faraj20-max-iterations"));
+
             // actually enable the configurations
             do_refinement_label_propagation_faraj20 = get("--refinement-lable-propagation-faraj20-enable") == "1";
             do_refinement_quotient_graph_faraj20    = get("--refinement-quotient-graph-faraj20-enable") == "1";
+            do_refinement_k_way_fm_faraj20          = get("--refinement-k-way-fm-faraj20-enable") == "1";
         }
 
         AlgorithmConfiguration(int argc, char* argv[]) {

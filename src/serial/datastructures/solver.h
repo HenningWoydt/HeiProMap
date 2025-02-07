@@ -75,6 +75,7 @@ namespace HeiProMap {
         // refinement
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
         QuotientGraphRefinementFaraj20 qg_refine_faraj20;
+        KWayFMRefinementFaraj20 k_way_refine_faraj20;
 
         // statistics
         StatisticCollector stat_collect;
@@ -91,7 +92,7 @@ namespace HeiProMap {
 
             // manager
             av_manager.initialize(graphs.back().get_n());
-            p_manager.initialize(graphs.back().get_n(), ac.k);
+            p_manager.initialize(graphs.back().get_n(), ac.k, lmax);
             bv_manager.initialize(graphs.back().get_n(), ac.k);
             q_graph.initialize(ac.k);
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), av_manager));
@@ -110,6 +111,7 @@ namespace HeiProMap {
             // refinement
             lp_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
             qg_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
+            k_way_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -155,6 +157,8 @@ namespace HeiProMap {
             }
 
             partition();
+
+            std::cout << "After partition is overloaded: " << p_manager.is_overloaded() << std::endl;
 
             while (level > 0) {
                 level -= 1;
@@ -271,6 +275,10 @@ namespace HeiProMap {
 
             if (ac.do_refinement_quotient_graph_faraj20) {
                 qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_k_way_fm_faraj20) {
+                k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

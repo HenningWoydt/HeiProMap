@@ -96,7 +96,7 @@ namespace HeiProMap {
             return gains[2 * u + 1];
         }
 
-        void move()
+        void move(){}
 
         template <typename TSerialGraph, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
         void update(vertex_t u,

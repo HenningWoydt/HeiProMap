@@ -34,15 +34,18 @@ namespace HeiProMap {
     class PartitionManager final : public ISerialPartitionManager {
         vertex_t m_n    = 0;
         partition_t m_k = 0;
+        weight_t lmax   = 0;
 
         std::vector<partition_t> partition;
         std::vector<weight_t> bweights;
 
     public:
         void initialize(const vertex_t t_n,
-                        const partition_t t_k) override {
+                        const partition_t t_k,
+                        const weight_t t_lmax) override {
             m_n = t_n;
             m_k = t_k;
+            lmax = t_lmax;
 
             partition.resize(m_n);
             bweights.resize(m_k, 0);
@@ -71,6 +74,15 @@ namespace HeiProMap {
             for (const auto [u, v] : matches) {
                 partition[v] = partition[u];
             }
+        }
+
+        bool is_overloaded() override {
+            for (weight_t w : bweights) {
+                if (w > lmax) {
+                    return true;
+                }
+            }
+            return false;
         }
     };
 }
