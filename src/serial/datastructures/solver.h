@@ -42,6 +42,7 @@
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
+#include "../rebalance/simple_rebalancer.h"
 #include "../refinement/label_propagation_refinement_Faraj20.h"
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../utility/AlgorithmConfiguration.h"
@@ -90,6 +91,9 @@ namespace HeiProMap {
 
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
+            // balance
+            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs.back().get_weight() / (f64)ac.k));
+
             // manager
             av_manager.initialize(graphs.back().get_n());
             p_manager.initialize(graphs.back().get_n(), ac.k, lmax);
@@ -99,9 +103,6 @@ namespace HeiProMap {
 
             // distance
             d_oracle.initialize(ac.hierarchy, ac.distance);
-
-            // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs.back().get_weight() / (f64)ac.k));
 
             // matching
             ge_matcher.initialize(graphs.back().get_n(), lmax);
@@ -180,6 +181,14 @@ namespace HeiProMap {
                 partitioner.partition(ac.global_multisection_config, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance);
             } else {
                 std::cout << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+            if (ac.rebalancing_algorithm_id == REBALANCING_ALG_SIMPLE) {
+                SimpleRebalancer simple_rebalancer(graphs[0].get_n(), ac.k, lmax);
+                simple_rebalancer.rebalance(ac.simple_rebalancer_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            } else {
+                std::cout << "Rebalancing algorithm " << rebalancing_algorithm_to_string(ac.rebalancing_algorithm_id) << " with id " << ac.rebalancing_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 

@@ -148,6 +148,11 @@ namespace HeiProMap {
         }
 
         void solve_line(Path &p, std::vector<EdgeUV> &matches, f64 &matching_weight) {
+            if (p.size() == 1) {
+                matches.emplace_back(p.vertices[0], p.vertices[1]);
+                return;
+            }
+
             w.resize(p.size());
             m.resize(p.size());
             take.resize(p.size());

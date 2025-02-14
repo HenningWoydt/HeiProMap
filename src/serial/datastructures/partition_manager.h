@@ -77,7 +77,7 @@ namespace HeiProMap {
         }
 
         bool is_overloaded() override {
-            for (weight_t w : bweights) {
+            for (const weight_t w : bweights) {
                 if (w > lmax) {
                     return true;
                 }

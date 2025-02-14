@@ -93,6 +93,28 @@ namespace HeiProMap {
         }
     }
 
+    enum REBALANCING_ALGS {
+        REBALANCING_ALG_UNDEFINED,
+        REBALANCING_ALG_SIMPLE
+    };
+
+    inline REBALANCING_ALGS string_to_rebalancing_algorithm(const std::string& str) {
+        if (str == "UNDEFINED") return REBALANCING_ALG_UNDEFINED;
+        if (str == "simple") return REBALANCING_ALG_SIMPLE;
+        return REBALANCING_ALG_UNDEFINED;
+    }
+
+    inline std::string rebalancing_algorithm_to_string(REBALANCING_ALGS alg) {
+        switch (alg) {
+        case REBALANCING_ALG_UNDEFINED:
+            return "UNDEFINED";
+        case REBALANCING_ALG_SIMPLE:
+            return "simple";
+        default:
+            return "UNDEFINED";
+        }
+    }
+
     struct CommandLineOption {
         std::string large_key;
         std::string small_key;
@@ -127,6 +149,9 @@ namespace HeiProMap {
 
                 // Partitioning multisection
                 {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
+
+                /** Rebalancing */
+                {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
 
                 // Refinement Faraj20 label propagation
                 {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation refinement by Faraj20.", "1", "", false},
@@ -172,6 +197,12 @@ namespace HeiProMap {
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
         GlobalMultisectionConfiguration global_multisection_config;
+
+        // rebalance algorithm
+        std::string rebalancing_algorithm_string;
+        REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
+
+        SimpleRebalancerConfiguration simple_rebalancer_configuration;
 
         // refinement algorithms
         bool do_refinement_label_propagation_faraj20 = false;
@@ -227,6 +258,11 @@ namespace HeiProMap {
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
         }
 
+        void set_rebalancing_algorithm() {
+            rebalancing_algorithm_string = get("--rebalancing-algorithm");
+            rebalancing_algorithm_id     = string_to_rebalancing_algorithm(rebalancing_algorithm_string);
+        }
+
         void enable_refinement_algorithms() {
             // initialize label propagation faraj20 configuration
 
@@ -277,6 +313,7 @@ namespace HeiProMap {
 
             set_coarsening_algorithm();
             set_partitioning_algorithm();
+            set_rebalancing_algorithm();
             enable_refinement_algorithms();
         }
 

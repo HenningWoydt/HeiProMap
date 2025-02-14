@@ -63,6 +63,9 @@ int main(const int argc, char* argv[]) {
 
                     {"--partitioning-algorithm-multisection-mode", "fast"},
 
+                    // Rebalancing
+                    {"--rebalancing-algorithm", "simple"},
+
                     // Refinement
                     {"--refinement-lable-propagation-faraj20-enable", "0"},
 
@@ -70,7 +73,7 @@ int main(const int argc, char* argv[]) {
                     {"--refinement-quotient-graph-faraj20-max-iterations", "5"},
 
                     {"--refinement-k-way-fm-faraj20-enable", "1"},
-                    {"--refinement-k-way-fm-faraj20-max-iterations", "1"},
+                    {"--refinement-k-way-fm-faraj20-max-iterations", "5"},
                 };
 
             std::vector<std::string> args = {"HeiProMap"};
