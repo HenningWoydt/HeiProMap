@@ -222,7 +222,9 @@ namespace HeiProMap {
             edges.clear();
             for (vertex_t u: av_manager) {
                 for (const auto &[v, w]: g[u]) {
-                    f64 edge_rating = (((f64) w) * ((f64) w)) / (g.get_weight(u) * g.get_weight(v));
+                    // f64 edge_rating = (((f64) w) * ((f64) w)) / (g.get_weight(u) * g.get_weight(v));
+                    // f64 edge_rating = ((f64) w) / (g.size(u) * g.size(v));
+                    f64 edge_rating = ((f64) w) / (g.get_weight(u) * g.get_weight(v));
                     edges.push_back({u, v, edge_rating});
                 }
             }

@@ -35,6 +35,8 @@
 
 using namespace HeiProMap;
 
+// TODO: KaFFPa never allows a node v to participate in a contraction if the weight of v exceeds 1.5n / 20k
+
 int main(const int argc, char* argv[]) {
     if (argc == 1) {
         const auto sp = std::chrono::high_resolution_clock::now();
@@ -72,8 +74,13 @@ int main(const int argc, char* argv[]) {
                     {"--refinement-quotient-graph-faraj20-enable", "0"},
                     {"--refinement-quotient-graph-faraj20-max-iterations", "5"},
 
-                    {"--refinement-k-way-fm-faraj20-enable", "1"},
+                    {"--refinement-k-way-fm-faraj20-enable", "0"},
                     {"--refinement-k-way-fm-faraj20-max-iterations", "5"},
+
+                    {"--refinement-multi-try-fm-faraj20-enable", "0"},
+                    {"--refinement-multi-try-fm-faraj20-max-iterations", "0"},
+
+                    {"--refinement-hierarchy-aware-cycles-enable", "0"},
                 };
 
             std::vector<std::string> args = {"HeiProMap"};

@@ -73,8 +73,8 @@ namespace HeiProMap {
     class GlobalMultisectionPartitioner final : public ISerialPartitioner {
     public:
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-        void partition(const GlobalMultisectionConfiguration &config,
-            TSerialGraph& g,
+        void partition(const GlobalMultisectionConfiguration& config,
+                       TSerialGraph& g,
                        TSerialActiveVertexManager& av_manager,
                        TSerialPartitionManager& p_manager,
                        const std::vector<partition_t>& hierarchy,

@@ -77,6 +77,8 @@ namespace HeiProMap {
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
         QuotientGraphRefinementFaraj20 qg_refine_faraj20;
         KWayFMRefinementFaraj20 k_way_refine_faraj20;
+        MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
+        HierarchyAwareCycleRefinement hierarchy_aware_cycle_refinement;
 
         // statistics
         StatisticCollector stat_collect;
@@ -113,6 +115,8 @@ namespace HeiProMap {
             lp_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
             qg_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
             k_way_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
+            multi_try_fm_refinement_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
+            hierarchy_aware_cycle_refinement.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -143,7 +147,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 64) {
+            while (av_manager.get_n_active() > ac.k * 32) {
                 matching(level);
                 coarsening(level);
 
@@ -278,16 +282,24 @@ namespace HeiProMap {
         void refinement(const s32 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            if (ac.do_refinement_label_propagation_faraj20) {
-                lp_refine_faraj20.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
-            }
-
             if (ac.do_refinement_quotient_graph_faraj20) {
                 qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_k_way_fm_faraj20) {
                 k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_label_propagation_faraj20) {
+                lp_refine_faraj20.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_multi_try_fm_faraj20) {
+                multi_try_fm_refinement_faraj20.refine(ac.multi_try_fm_refinement_faraj20_configuration,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_hierarchy_aware_cycles_enable) {
+                hierarchy_aware_cycle_refinement.refine(ac.hierarchy_aware_cycles_configuration,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

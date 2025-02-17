@@ -34,7 +34,9 @@
 #include "../../definitions.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
+#include "../refinement/hierarchy_aware_cycle_refinement.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
+#include "../refinement/multi_try_fm_refinement_Faraj20.h"
 
 namespace HeiProMap {
     enum COARSENING_ALGS {
@@ -138,7 +140,7 @@ namespace HeiProMap {
                 {"--seed", "", "Seed for diversifying results.", "", "", false},
 
                 /** Coarsening */
-                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching-global-paths}.", "global-paths", "", false},
+                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, global-paths}.", "global-paths", "", false},
 
                 // Coarsening greedy matching
                 {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
@@ -153,16 +155,24 @@ namespace HeiProMap {
                 /** Rebalancing */
                 {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
 
+                /** Refinement */
                 // Refinement Faraj20 label propagation
-                {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation refinement by Faraj20.", "1", "", false},
+                {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation refinement by Faraj20.", "0", "", false},
 
                 // Refinement Faraj20 quotient graph
-                {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph refinement by Faraj20.", "1", "", false},
+                {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph refinement by Faraj20.", "0", "", false},
                 {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run quotient graph refinement at most.", "3", "", false},
 
                 // Refinement Faraj20 k-Way FM
-                {"--refinement-k-way-fm-faraj20-enable", "", "Enables the K-Way FM refinement by Faraj20.", "1", "", false},
-                {"--refinement-k-way-fm-faraj20-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "3", "", false}
+                {"--refinement-k-way-fm-faraj20-enable", "", "Enables the K-Way FM refinement by Faraj20.", "0", "", false},
+                {"--refinement-k-way-fm-faraj20-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "3", "", false},
+
+                // Refinement Faraj20 Multi-Try FM
+                {"--refinement-multi-try-fm-faraj20-enable", "", "Enables the Multi-Try FM refinement by Faraj20.", "0", "", false},
+                {"--refinement-multi-try-fm-faraj20-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "3", "", false},
+
+                // Refinement Hierarchy Aware Cycles
+                {"--refinement-hierarchy-aware-cycles-enable", "", "Enables the hierarchy aware cycles refinement.", "0", "", false},
             };
 
     public:
@@ -213,6 +223,12 @@ namespace HeiProMap {
         bool do_refinement_k_way_fm_faraj20 = false;
         KWayFMRefinementFaraj20Configuration k_way_fm_refinement_faraj20_config;
 
+        bool do_refinement_multi_try_fm_faraj20 = false;
+        MultiTryFmRefinementFaraj20Configuration multi_try_fm_refinement_faraj20_configuration;
+
+        bool do_refinement_hierarchy_aware_cycles_enable = false;
+        HierarchyAwareCyclesConfiguration hierarchy_aware_cycles_configuration;
+
         AlgorithmConfiguration() = default;
 
         void set_hierarchy() {
@@ -238,44 +254,77 @@ namespace HeiProMap {
             }
         }
 
-        void set_coarsening_algorithm() {
+        void set_coarsening_algorithm(const bool use_default = false) {
             // initialize greedy matching config
-            greedy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
-            greedy_edge_matcher_config.no_overload                  = get("--coarsening-algorithm-greedy-matching-no-overload") == "1";
+            if (use_default || is_set("--coarsening-algorithm-greedy-matching-pendant-first")) {
+                greedy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
+            }
+            if (use_default || is_set("--coarsening-algorithm-greedy-matching-no-overload")) {
+                greedy_edge_matcher_config.no_overload = get("--coarsening-algorithm-greedy-matching-no-overload") == "1";
+            }
 
             // actually set which algorithm to use
-            coarsening_algorithm_string = get("--coarsening-algorithm");
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            if (use_default || is_set("--coarsening-algorithm")) {
+                coarsening_algorithm_string = get("--coarsening-algorithm");
+                coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            }
         }
 
-        void set_partitioning_algorithm() {
+        void set_partitioning_algorithm(const bool use_default = false) {
             // initialize global multisection config
-            global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            if (use_default || is_set("--partitioning-algorithm-multisection-mode")) {
+                global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
+                global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            }
 
             // actually set which algorithm to use
-            partitioning_algorithm_string = get("--partitioning-algorithm");
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            if (use_default || is_set("--partitioning-algorithm")) {
+                partitioning_algorithm_string = get("--partitioning-algorithm");
+                partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            }
         }
 
-        void set_rebalancing_algorithm() {
-            rebalancing_algorithm_string = get("--rebalancing-algorithm");
-            rebalancing_algorithm_id     = string_to_rebalancing_algorithm(rebalancing_algorithm_string);
+        void set_rebalancing_algorithm(const bool use_default = false) {
+            if (use_default || is_set("--rebalancing-algorithm")) {
+                rebalancing_algorithm_string = get("--rebalancing-algorithm");
+                rebalancing_algorithm_id     = string_to_rebalancing_algorithm(rebalancing_algorithm_string);
+            }
         }
 
-        void enable_refinement_algorithms() {
+        void enable_refinement_algorithms(const bool use_default = false) {
             // initialize label propagation faraj20 configuration
 
             // initialize quotient graph faraj20 configuration
-            quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
+            if (use_default || is_set("--refinement-quotient-graph-faraj20-max-iterations")) {
+                quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
+            }
 
             // initialize K-Way FM refinement faraj20 configuration
-            k_way_fm_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-k-way-fm-faraj20-max-iterations"));
+            if (use_default || is_set("--refinement-k-way-fm-faraj20-max-iterations")) {
+                k_way_fm_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-k-way-fm-faraj20-max-iterations"));
+            }
+
+            // initialize Multi-Try FM refinement faraj20 configuration
+            if (use_default || is_set("--refinement-multi-try-fm-faraj20-max-iterations")) {
+                multi_try_fm_refinement_faraj20_configuration.max_iteration = std::stoi(get("--refinement-multi-try-fm-faraj20-max-iterations"));
+            }
 
             // actually enable the configurations
-            do_refinement_label_propagation_faraj20 = get("--refinement-lable-propagation-faraj20-enable") == "1";
-            do_refinement_quotient_graph_faraj20    = get("--refinement-quotient-graph-faraj20-enable") == "1";
-            do_refinement_k_way_fm_faraj20          = get("--refinement-k-way-fm-faraj20-enable") == "1";
+            if (use_default || is_set("--refinement-lable-propagation-faraj20-enable")) {
+                do_refinement_label_propagation_faraj20 = get("--refinement-lable-propagation-faraj20-enable") == "1";
+            }
+            if (use_default || is_set("--refinement-quotient-graph-faraj20-enable")) {
+                do_refinement_quotient_graph_faraj20 = get("--refinement-quotient-graph-faraj20-enable") == "1";
+            }
+            if (use_default || is_set("--refinement-k-way-fm-faraj20-enable")) {
+                do_refinement_k_way_fm_faraj20 = get("--refinement-k-way-fm-faraj20-enable") == "1";
+            }
+            if (use_default || is_set("--refinement-multi-try-fm-faraj20-enable")) {
+                do_refinement_multi_try_fm_faraj20 = get("--refinement-multi-try-fm-faraj20-enable") == "1";
+            }
+            if (use_default || is_set("--refinement-hierarchy-aware-cycles-enable")) {
+                do_refinement_hierarchy_aware_cycles_enable = get("--refinement-hierarchy-aware-cycles-enable") == "1";
+            }
         }
 
         AlgorithmConfiguration(int argc, char* argv[]) {
@@ -311,10 +360,90 @@ namespace HeiProMap {
             set_imbalance();
             set_seed();
 
+            set_coarsening_algorithm(true);
+            set_partitioning_algorithm(true);
+            set_rebalancing_algorithm(true);
+            enable_refinement_algorithms(true);
+
+            // set FARAJ20 config
+            if (get("--config") == "Faraj20-fastest") {
+                set_Faraj20_fastest();
+            } else if (get("--config") == "Faraj20-fast") {
+                set_Faraj20_fast();
+            } else if (get("--config") == "Faraj20-eco") {
+                set_Faraj20_eco();
+            } else if (get("--config") == "Faraj20-strong") {
+                set_Faraj20_strong();
+            }
+
             set_coarsening_algorithm();
             set_partitioning_algorithm();
             set_rebalancing_algorithm();
             enable_refinement_algorithms();
+        }
+
+        void set_Faraj20_fastest() {
+            // set GPA matching algorithm
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // set Multisection partitioning
+            partitioning_algorithm_string = "kaffpa-multisection";
+            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+
+            // disable all refinements
+            do_refinement_label_propagation_faraj20 = false;
+            do_refinement_quotient_graph_faraj20    = false;
+            do_refinement_k_way_fm_faraj20          = false;
+            do_refinement_multi_try_fm_faraj20      = false;
+        }
+
+        void set_Faraj20_fast() {
+            // set GPA matching algorithm
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // set Multisection partitioning
+            partitioning_algorithm_string = "kaffpa-multisection";
+            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+
+            // only enable label propagation
+            do_refinement_label_propagation_faraj20 = true;
+            do_refinement_quotient_graph_faraj20    = false;
+            do_refinement_k_way_fm_faraj20          = false;
+            do_refinement_multi_try_fm_faraj20      = false;
+        }
+
+        void set_Faraj20_eco() {
+            // set GPA matching algorithm
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // set Multisection partitioning
+            partitioning_algorithm_string = "kaffpa-multisection";
+            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+
+            // exclude Multi-Try FM
+            do_refinement_label_propagation_faraj20 = true;
+            do_refinement_quotient_graph_faraj20    = true;
+            do_refinement_k_way_fm_faraj20          = true;
+            do_refinement_multi_try_fm_faraj20      = false;
+        }
+
+        void set_Faraj20_strong() {
+            // set GPA matching algorithm
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // set Multisection partitioning
+            partitioning_algorithm_string = "kaffpa-multisection";
+            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+
+            // enable all
+            do_refinement_label_propagation_faraj20 = true;
+            do_refinement_quotient_graph_faraj20    = true;
+            do_refinement_k_way_fm_faraj20          = true;
+            do_refinement_multi_try_fm_faraj20      = false;
         }
 
         /**
@@ -326,9 +455,11 @@ namespace HeiProMap {
         std::string get(const std::string& var) {
             for (const auto& [large_key, small_key, description, default_val, input, is_set] : options) {
                 if (large_key == var || small_key == var) {
-                    if (input.empty()) {
+                    if (input.empty() && default_val.empty()) {
                         std::cout << "Command Line \"" << var << "\" not set!" << std::endl;
                         exit(EXIT_FAILURE);
+                    } else if (input.empty()) {
+                        return default_val;
                     }
                     return input;
                 }

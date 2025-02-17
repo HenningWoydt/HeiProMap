@@ -42,6 +42,8 @@
 namespace HeiProMap {
     struct KWayFMRefinementFaraj20Configuration {
         u64 max_iteration = 2; // how many iterations to run the algorithm at most
+        f64 alpha = 100000.0;
+        f64 beta = 1.0;
     };
 
     class KWayFMMove {
@@ -109,6 +111,12 @@ namespace HeiProMap {
 
         s64 get_max_qap_delta() const {
             return max_qap_delta;
+        }
+
+        void swap(KWayFMMoves& other) noexcept {
+            std::swap(m_u, other.m_u);
+            std::swap(max_qap_delta, other.max_qap_delta);
+            moves.swap(other.moves);
         }
 
         bool operator<(const KWayFMMoves& m) const {
@@ -247,7 +255,7 @@ namespace HeiProMap {
         }
 
         void swap(const size_t i, const size_t j) {
-            std::swap(heap[i], heap[j]);
+            heap[i].swap(heap[j]);
             indices[heap[i].get_u()] = i;
             indices[heap[j].get_u()] = j;
         }
@@ -319,8 +327,13 @@ namespace HeiProMap {
             u32 counter = 0;
             std::vector<u32> found_ids_mark(k, counter);
 
+            std::vector<KWayFMMove> moves;
+
+            config.beta = std::log(g.get_n());
+
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
                 auto sp = std::chrono::high_resolution_clock::now();
+
                 queue.clear();
                 mark += 1;
 
@@ -341,11 +354,6 @@ namespace HeiProMap {
                             found_ids_mark[v_id] = counter;
                             s64 qap_delta        = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                            if (qap_delta <= 0) {
-                                // at first skip negative gains
-                                continue;
-                            }
-
                             queue.push(u, u_id, v_id, qap_delta);
                             one_id_is_valid = true;
                         }
@@ -355,10 +363,14 @@ namespace HeiProMap {
                     }
                 }
 
-                std::vector<KWayFMMove> moves;
+                moves.clear();
                 size_t best_idx   = 0;
                 s64 curr_qap_gain = 0;
                 s64 max_qap_gain  = 0;
+
+                u64 steps_since_last_improvement = 0;
+                f64 qap_gain_mean = 0.0;
+                f64 qap_gain_var  = 1.0;
 
                 while (!queue.empty()) {
                     const KWayFMMove move     = queue.top();
@@ -386,7 +398,24 @@ namespace HeiProMap {
                     if (curr_qap_gain > max_qap_gain && !p_manager.is_overloaded()) {
                         best_idx     = moves.size();
                         max_qap_gain = curr_qap_gain;
+
+                        steps_since_last_improvement = 0;
+                        qap_gain_mean = 0.0;
+                        qap_gain_var  = 1.0;
                     }
+
+                    steps_since_last_improvement += 1;
+                    f64 new_qap_gain_mean = qap_gain_mean + ((f64) move.qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
+                    f64 new_qap_gain_var  = qap_gain_var + ((f64) move.qap_delta - qap_gain_mean) * ((f64) move.qap_delta - new_qap_gain_mean);
+
+                    qap_gain_mean = new_qap_gain_mean;
+                    qap_gain_var = new_qap_gain_var;
+
+                    if (steps_since_last_improvement > 3 && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > config.alpha * qap_gain_var + config.beta) {
+                        std::cout << "Stop on random walk: " << steps_since_last_improvement << " " << qap_gain_mean << " " << qap_gain_var << std::endl;
+                        break;
+                    }
+
 
                     // we have to push or update the neighbors that were not moved already
                     for (const auto& [neighbor, w] : g[vertex]) {
@@ -439,7 +468,7 @@ namespace HeiProMap {
                 }
 
                 auto ep = std::chrono::high_resolution_clock::now();
-                std::cout << "iteration: " << iteration << " " << best_idx << " " << max_qap_gain << " push ops: " << queue.push_operations << " max moves: " << moves.size() << " time: " << get_seconds(sp, ep) << std::endl;
+                std::cout << "iteration: " << iteration << " best_idx: " << best_idx << " new_gain: " << max_qap_gain << " push ops: " << queue.push_operations << " max moves: " << moves.size() << " time: " << get_seconds(sp, ep) << std::endl;
             }
         }
     };
