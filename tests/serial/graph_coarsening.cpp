@@ -44,7 +44,7 @@ namespace HeiProMap {
         av_manager.initialize(g.get_n());
 
         HeavyEdgeMatcher he_matcher;
-        he_matcher.initialize(g.get_n(), std::numeric_limits<weight_t>::max());
+        he_matcher.initialize(g.get_n(), g.get_m(), std::numeric_limits<weight_t>::max());
 
         std::vector<EdgeUV> matches;
         matches.reserve(av_manager.get_n_active() / 2);

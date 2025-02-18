@@ -49,7 +49,7 @@ namespace HeiProMap {
     public:
         GreedyEdgeMatcher() = default;
 
-        void initialize(const size_t n, const weight_t l_max) override {
+        void initialize(const vertex_t n, const vertex_t m, const weight_t t_l_max) override {
             mark = 0;
             used.resize(n, 0);
 

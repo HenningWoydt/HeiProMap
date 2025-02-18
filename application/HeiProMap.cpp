@@ -42,13 +42,16 @@ int main(const int argc, char* argv[]) {
         const auto sp = std::chrono::high_resolution_clock::now();
         {
             std::vector<std::pair<std::string, std::string>> input = {
-                    {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
-                    {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
-                    {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
+                    // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
+                    // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
+                    // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
+                    {"--graph", "../data/dimacs10_delaunay/delaunay_n21.graph"},
+                    {"--mapping", "../data/out/partition/delaunay_n21.txt"},
+                    {"--statistics", "../data/out/statistics/delaunay_n21.JSON"},
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "fast"},
+                    {"--config", "Faraj20-fastest"},
                     {"--seed", "0"},
 
                     // coarsening
@@ -61,26 +64,26 @@ int main(const int argc, char* argv[]) {
 
                     // Partitioning
                     //{"--partitioning-algorithm",                             "kaffpa-multisection"},
-                    {"--partitioning-algorithm", "multisection"},
+                    // {"--partitioning-algorithm", "multisection"},
 
-                    {"--partitioning-algorithm-multisection-mode", "fast"},
+                    // {"--partitioning-algorithm-multisection-mode", "fast"},
 
                     // Rebalancing
                     {"--rebalancing-algorithm", "simple"},
 
                     // Refinement
-                    {"--refinement-lable-propagation-faraj20-enable", "0"},
+                    // {"--refinement-lable-propagation-faraj20-enable", "0"},
 
-                    {"--refinement-quotient-graph-faraj20-enable", "0"},
-                    {"--refinement-quotient-graph-faraj20-max-iterations", "5"},
+                    // {"--refinement-quotient-graph-faraj20-enable", "0"},
+                    // {"--refinement-quotient-graph-faraj20-max-iterations", "5"},
 
-                    {"--refinement-k-way-fm-faraj20-enable", "0"},
-                    {"--refinement-k-way-fm-faraj20-max-iterations", "5"},
+                    // {"--refinement-k-way-fm-faraj20-enable", "0"},
+                    // {"--refinement-k-way-fm-faraj20-max-iterations", "5"},
 
-                    {"--refinement-multi-try-fm-faraj20-enable", "0"},
-                    {"--refinement-multi-try-fm-faraj20-max-iterations", "0"},
+                    // {"--refinement-multi-try-fm-faraj20-enable", "0"},
+                    // {"--refinement-multi-try-fm-faraj20-max-iterations", "0"},
 
-                    {"--refinement-hierarchy-aware-cycles-enable", "0"},
+                    // {"--refinement-hierarchy-aware-cycles-enable", "0"},
                 };
 
             std::vector<std::string> args = {"HeiProMap"};

@@ -128,6 +128,12 @@ namespace HeiProMap {
         bool operator>(const EdgeUVW& e) const {
             return w > e.w;
         }
+
+        bool operator==(const EdgeUVW& e) const {
+            bool a = u == e.u && v == e.v && w == e.w;
+            bool b = v == e.u && u == e.v && w == e.w;
+            return a || b;
+        }
     };
 
     class EdgeF64VW {

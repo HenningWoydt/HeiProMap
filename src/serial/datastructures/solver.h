@@ -94,29 +94,29 @@ namespace HeiProMap {
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
             // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs.back().get_weight() / (f64)ac.k));
+            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].get_weight() / (f64)ac.k));
 
             // manager
-            av_manager.initialize(graphs.back().get_n());
-            p_manager.initialize(graphs.back().get_n(), ac.k, lmax);
-            bv_manager.initialize(graphs.back().get_n(), ac.k);
+            av_manager.initialize(graphs[0].get_n());
+            p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
+            bv_manager.initialize(graphs[0].get_n(), ac.k);
             q_graph.initialize(ac.k);
-            HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), av_manager));
+            HEAVYASSERT(assert_state_pre_partitioning(graphs[0], av_manager));
 
             // distance
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ge_matcher.initialize(graphs.back().get_n(), lmax);
-            he_matcher.initialize(graphs.back().get_n(), lmax);
-            gpa_matcher.initialize(graphs.back().get_n(), lmax);
+            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), lmax);
+            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), lmax);
+            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), lmax);
 
             // refinement
-            lp_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
-            qg_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
-            k_way_refine_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
-            multi_try_fm_refinement_faraj20.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
-            hierarchy_aware_cycle_refinement.initialize(graphs.back().get_n(), ac.hierarchy, ac.distance, lmax);
+            lp_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
+            qg_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
+            k_way_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
+            multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
+            hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -283,11 +283,11 @@ namespace HeiProMap {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             if (ac.do_refinement_quotient_graph_faraj20) {
-                qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_k_way_fm_faraj20) {
-                k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_label_propagation_faraj20) {
@@ -295,11 +295,11 @@ namespace HeiProMap {
             }
 
             if (ac.do_refinement_multi_try_fm_faraj20) {
-                multi_try_fm_refinement_faraj20.refine(ac.multi_try_fm_refinement_faraj20_configuration,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                multi_try_fm_refinement_faraj20.refine(ac.multi_try_fm_refinement_faraj20_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_hierarchy_aware_cycles_enable) {
-                hierarchy_aware_cycle_refinement.refine(ac.hierarchy_aware_cycles_configuration,graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                hierarchy_aware_cycle_refinement.refine(ac.hierarchy_aware_cycles_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();
