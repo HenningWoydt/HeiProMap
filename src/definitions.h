@@ -126,7 +126,7 @@ namespace HeiProMap {
         }
 
         bool operator>(const EdgeUVW& e) const {
-            return w < e.w;
+            return w > e.w;
         }
     };
 

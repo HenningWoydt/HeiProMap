@@ -228,7 +228,7 @@ namespace HeiProMap {
                     edges.push_back({u, v, edge_rating});
                 }
             }
-            std::sort(edges.begin(), edges.end());
+            std::sort(edges.begin(), edges.end(), std::greater<EdgeUVW>());
 
             std::fill(is_endpoint.begin(), is_endpoint.end(), true);
             std::iota(path_id.begin(), path_id.end(), 0);
