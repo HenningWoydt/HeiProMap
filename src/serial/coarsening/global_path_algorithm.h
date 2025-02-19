@@ -581,8 +581,8 @@ namespace HeiProMap {
         void match(TSerialGraph& g,
                    TSerialActiveVertexManager& av_manager,
                    std::vector<EdgeUV>& matches) {
-            // new_matcher.match(g, av_manager, matches);
-            // return;
+            new_matcher.match(g, av_manager, matches);
+            return;
 
             edges.clear();
             for (vertex_t u : av_manager) {
@@ -595,7 +595,7 @@ namespace HeiProMap {
             }
             std::sort(edges.begin(), edges.end(), std::greater<EdgeUVW>());
 
-            std::cout << "no_duplicates " << no_duplicates(edges) << std::endl;
+            // std::cout << "no_duplicates " << no_duplicates(edges) << std::endl;
 
             std::fill(is_endpoint.begin(), is_endpoint.end(), 1);
             std::iota(path_id.begin(), path_id.end(), 0);
