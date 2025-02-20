@@ -31,6 +31,7 @@
 
 #include "test_utils.h"
 #include "../../src/serial/datastructures/graph_csr.h"
+#include "../../src/serial/datastructures/sorted_graph_csr.h"
 #include "../../src/serial/datastructures/simple_graph.h"
 
 namespace HeiProMap {
@@ -44,11 +45,17 @@ namespace HeiProMap {
         GraphCSR csr_g(graph_in);
         auto ep_csr_g = std::chrono::high_resolution_clock::now();
 
+        auto sp_sorted_csr_g = std::chrono::high_resolution_clock::now();
+        SortedGraphCSR sorted_csr_g(graph_in);
+        auto ep_sorted_csr_g = std::chrono::high_resolution_clock::now();
+
         double t_g = get_seconds(sp_g, ep_g);
         double t_csr_g = get_seconds(sp_csr_g, ep_csr_g);
-        std::cout << "initialization " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << std::endl;
+        double t_sorted_csr_g = get_seconds(sp_sorted_csr_g, ep_sorted_csr_g);
+        std::cout << "initialization " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_h = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g << std::endl;
 
         graphs_are_equal(simple_graph, csr_g);
+        graphs_are_equal(simple_graph, sorted_csr_g);
     }
 
     TEST(GraphInitialization, graph_csrgraph_PGPgiantcompo_graph) {
@@ -183,12 +190,12 @@ namespace HeiProMap {
 
     TEST(GraphInitialization, graph_csrgraph_del26_graph) {
         const std::string graph_in = "../data/mapping/del26.graph";
-        // compare_initialization(graph_in);
+        compare_initialization(graph_in);
     }
 
     TEST(GraphInitialization, graph_csrgraph_rgg_n26_graph) {
         const std::string graph_in = "../data/mapping/rgg_n26.graph";
-        // compare_initialization(graph_in);
+        compare_initialization(graph_in);
     }
 }
 

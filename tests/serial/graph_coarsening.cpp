@@ -33,12 +33,14 @@
 #include "../../src/serial/datastructures/active_vertex_manager.h"
 #include "../../src/serial/datastructures/graph_csr.h"
 #include "../../src/serial/datastructures/simple_graph.h"
+#include "../../src/serial/datastructures/sorted_graph_csr.h"
 
 namespace HeiProMap {
 
     void compare_coarsening(const std::string &graph_in){
         SimpleGraph g(graph_in);
         GraphCSR csr_g(graph_in);
+        SortedGraphCSR sorted_csr_g(graph_in);
 
         ActiveVertexManager av_manager;
         av_manager.initialize(g.get_n());
@@ -58,12 +60,19 @@ namespace HeiProMap {
         GraphCSR csr_g1(csr_g, matches); // coarse the graph
         auto csr_g_ep = std::chrono::high_resolution_clock::now();
 
+        auto sorted_csr_g_sp = std::chrono::high_resolution_clock::now();
+        SortedGraphCSR sorted_csr_g1(sorted_csr_g, matches); // coarse the graph
+        auto sorted_csr_g_ep = std::chrono::high_resolution_clock::now();
+
         double t_g = get_seconds(g_sp, g_ep);
         double t_csr_g = get_seconds(csr_g_sp, csr_g_ep);
-        std::cout << "coarsening " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << std::endl;
+        double t_sorted_csr_g = get_seconds(sorted_csr_g_sp, sorted_csr_g_ep);
+        std::cout << "coarsening " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_g = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g <<std::endl;
 
         graphs_are_equal(g, csr_g);
+        graphs_are_equal(g, sorted_csr_g);
         graphs_are_equal(g1, csr_g1);
+        graphs_are_equal(g1, sorted_csr_g1);
     }
 
     TEST(GraphCoarsening, graph_csrgraph_PGPgiantcompo_graph) {
@@ -198,11 +207,11 @@ namespace HeiProMap {
 
     TEST(GraphCoarsening, graph_csrgraph_del26_graph) {
         const std::string graph_in = "../data/mapping/del26.graph";
-        // compare_coarsening(graph_in);
+        compare_coarsening(graph_in);
     }
 
     TEST(GraphCoarsening, graph_csrgraph_rgg_n26_graph) {
         const std::string graph_in = "../data/mapping/rgg_n26.graph";
-        // compare_coarsening(graph_in);
+        compare_coarsening(graph_in);
     }
 }

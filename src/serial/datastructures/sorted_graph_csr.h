@@ -24,9 +24,10 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_GRAPH_CSR_H
-#define HEIPROMAP_GRAPH_CSR_H
+#ifndef HEIPROMAP_SORTED_GRAPH_CSR_H
+#define HEIPROMAP_SORTED_GRAPH_CSR_H
 
+#include <numeric>
 #include <fcntl.h>
 #include <iostream>
 #include <unistd.h>
@@ -42,7 +43,7 @@ namespace HeiProMap {
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
-    class GraphCSR final : public ISerialGraph {
+    class SortedGraphCSR final : public ISerialGraph {
         vertex_t n = 0;
         vertex_t m = 0;
 
@@ -55,7 +56,7 @@ namespace HeiProMap {
         size_t curr_m = 0;
 
     public:
-        explicit GraphCSR(const std::string& graph_in) {
+        explicit SortedGraphCSR(const std::string& graph_in) {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -162,6 +163,7 @@ namespace HeiProMap {
 
                     ++i;
                     neighborhoods[u + 1] = curr_m;
+                    // std::sort(&edges[u], &edges[u + 1]);
                     u += 1;
 
                     if (u + 32 >= n) {
@@ -191,6 +193,7 @@ namespace HeiProMap {
 
                     ++i;
                     neighborhoods[u + 1] = curr_m;
+                    // std::sort(&edges[u], &edges[u + 1]);
                     u += 1;
 
                     if (u == n) {
@@ -238,6 +241,7 @@ namespace HeiProMap {
 
                     ++i;
                     neighborhoods[u + 1] = curr_m;
+                    // std::sort(&edges[u], &edges[u + 1]);
                     u += 1;
 
                     if (u == n) {
@@ -251,7 +255,7 @@ namespace HeiProMap {
             close(fd);
         }
 
-        GraphCSR(const GraphCSR& g, const std::vector<EdgeUV>& matching) {
+        SortedGraphCSR(const SortedGraphCSR& g, const std::vector<EdgeUV>& matching) {
             n      = g.get_n();
             m      = 0;
             curr_m = 0;
@@ -268,6 +272,10 @@ namespace HeiProMap {
             std::vector<u8> vertex_state(n, NOT_MATCHED);
             std::vector<vertex_t> vertex_neighbor(n);
 
+            std::vector<u32> hit(n, 0);
+            u32 hit_marker = 0;
+            std::vector<size_t> hit_idx(n);
+
             // check the matching
             for (const auto& [u, v] : matching) {
                 vertex_state[u]    = FIRST_MATCHED;
@@ -280,6 +288,7 @@ namespace HeiProMap {
             }
 
             for (vertex_t u = 0; u < n; ++u) {
+                hit_marker += 1;
                 if (vertex_state[u] == NOT_MATCHED) {
                     // copy it to the next graph
                     v_weights[u] = g.get_weight(u);
@@ -289,23 +298,21 @@ namespace HeiProMap {
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
-                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
-                        edges[curr_m].v   = vv;
-                        edges[curr_m++].w = ww;
+                        vv                = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
-                        // if the edge is present, then add the weight, else expand it
-                        for (size_t j = neighborhoods[u]; j < curr_m - 1; ++j) {
-                            if (edges[j].v == vv) {
-                                edges[j].w += ww;
-                                curr_m -= 1;
-                                break;
-                            }
+                        if (hit[vv] == hit_marker) {
+                            edges[hit_idx[vv]].w += ww;
+                        } else {
+                            edges[curr_m].v   = vv;
+                            edges[curr_m++].w = ww;
+
+                            hit[vv] = hit_marker;
+                            hit_idx[vv] = curr_m - 1;
                         }
                     }
                 } else if (vertex_state[u] == FIRST_MATCHED) {
                     // the vertex gets all neighbors of v
                     vertex_t v = vertex_neighbor[u];
-
                     // v_weights[u] = g.get_weight(u) + g.get_weight(v);
                     for (size_t i = 0; i < g.size(u); ++i) {
                         vertex_t vv = g.neighbor(u, i);
@@ -316,18 +323,16 @@ namespace HeiProMap {
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
                         vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        weight_t ww       = g.get_weight(u, i);
 
-                        weight_t ww = g.get_weight(u, i);
-                        edges[curr_m].v   = vv;
-                        edges[curr_m++].w = ww;
+                        if (hit[vv] == hit_marker) {
+                            edges[hit_idx[vv]].w += ww;
+                        } else {
+                            edges[curr_m].v   = vv;
+                            edges[curr_m++].w = ww;
 
-                        // if the edge is present, then add the weight, else expand it
-                        for (size_t j = neighborhoods[u]; j < curr_m - 1; ++j) {
-                            if (edges[j].v == vv) {
-                                edges[j].w += ww;
-                                curr_m -= 1;
-                                break;
-                            }
+                            hit[vv] = hit_marker;
+                            hit_idx[vv] = curr_m - 1;
                         }
                     }
                     for (size_t i = 0; i < g.size(v); ++i) {
@@ -339,18 +344,16 @@ namespace HeiProMap {
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
                         vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        weight_t ww       = g.get_weight(v, i);
 
-                        weight_t ww = g.get_weight(v, i);
-                        edges[curr_m].v   = vv;
-                        edges[curr_m++].w = ww;
+                        if (hit[vv] == hit_marker) {
+                            edges[hit_idx[vv]].w += ww;
+                        } else {
+                            edges[curr_m].v   = vv;
+                            edges[curr_m++].w = ww;
 
-                        // if the edge is present, then add the weight, else expand it
-                        for (size_t j = neighborhoods[u]; j < curr_m - 1; ++j) {
-                            if (edges[j].v == vv) {
-                                edges[j].w += ww;
-                                curr_m -= 1;
-                                break;
-                            }
+                            hit[vv] = hit_marker;
+                            hit_idx[vv] = curr_m - 1;
                         }
                     }
                 }
@@ -417,4 +420,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_GRAPH_CSR_H
+#endif //HEIPROMAP_SORTED_GRAPH_CSR_H
