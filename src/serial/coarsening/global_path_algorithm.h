@@ -101,7 +101,7 @@ namespace HeiProMap {
 
         // for DP
         std::vector<f32> w;
-        std::vector<u32> m;
+        std::vector<s64> m;
         std::vector<u8> take;
         std::vector<EdgeUVW> dp_edges;
 
@@ -479,9 +479,9 @@ namespace HeiProMap {
                 }
             }
 
-            u32 idx             = m[dp_edges.size() - 1];
+            s64 idx             = m[dp_edges.size() - 1];
             f64 matching_weight = 0.0;
-            while (idx != 0-1) {
+            while (idx != -1) {
                 if (take[idx]) {
 
                     vertex_t uu = dp_edges[idx].u;
