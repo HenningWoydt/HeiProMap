@@ -247,15 +247,18 @@ namespace HeiProMap {
 
                 // fill in adj
                 adj_ptr[0] = 0;
-                adj_ptr[1] = 0;
                 for (new_u = 0; new_u < (vertex_t)n; ++new_u) {
+                    adj_ptr[new_u + 1] = adj_ptr[new_u];
                     vertex_t old_u = tt.get_o(new_u);
                     for (int i = 0; i < (int)g.size(old_u); ++i) {
                         ASSERT(adj_ptr[new_u] + i < m);
                         const vertex_t old_v = g.neighbor(old_u, i);
                         const int new_v      = (int)tt.get_n(old_v);
                         const int w          = (int)g.get_weight(old_u, i);
-                        add_edge((int)new_u, new_v, w);
+
+                        adj[adj_ptr[new_u + 1]]       = new_v;
+                        e_weights[adj_ptr[new_u + 1]] = w;
+                        adj_ptr[new_u + 1] += 1;
                     }
                 }
             }
@@ -277,20 +280,6 @@ namespace HeiProMap {
                 ASSERT(u >= 0 && u < n && weight >= 0);
                 v_weights[u] = weight;
                 total_v_weight += weight;
-            }
-
-            void add_edge(const int u, const int v, const int weight) {
-                ASSERT(u >= 0 && u < n && v >= 0 && weight >= 0);
-                ASSERT(last_u == u || last_u == u - 1);
-
-                adj[adj_ptr[u + 1]]       = v;
-                e_weights[adj_ptr[u + 1]] = weight;
-                adj_ptr[u + 1] += 1;
-
-                if (u + 2 < n + 1) {
-                    adj_ptr[u + 2] = adj_ptr[u + 1];
-                }
-                last_u = u;
             }
 
             ~KaFFPaGraph() {
