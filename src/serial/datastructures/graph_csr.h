@@ -274,9 +274,6 @@ namespace HeiProMap {
                 vertex_state[v]    = SECOND_MATCHED;
                 vertex_neighbor[u] = v;
                 vertex_neighbor[v] = u;
-
-                v_weights[v] = 0;
-                v_weights[u] = g.get_weight(u) + g.get_weight(v);
             }
 
             for (vertex_t u = 0; u < n; ++u) {
@@ -288,8 +285,7 @@ namespace HeiProMap {
                         weight_t ww = g.get_weight(u, i);
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
-                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        vv                = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 
@@ -306,18 +302,19 @@ namespace HeiProMap {
                     // the vertex gets all neighbors of v
                     vertex_t v = vertex_neighbor[u];
 
-                    // v_weights[u] = g.get_weight(u) + g.get_weight(v);
+                    v_weights[v] = 0;
+                    v_weights[u] = g.get_weight(u) + g.get_weight(v);
+
                     for (size_t i = 0; i < g.size(u); ++i) {
                         vertex_t vv = g.neighbor(u, i);
+                        weight_t ww = g.get_weight(u, i);
 
                         // do not add edge to matched vertex
                         if (vv == v) { continue; }
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
                         vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
-                        weight_t ww = g.get_weight(u, i);
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 
@@ -332,15 +329,14 @@ namespace HeiProMap {
                     }
                     for (size_t i = 0; i < g.size(v); ++i) {
                         vertex_t vv = g.neighbor(v, i);
+                        weight_t ww = g.get_weight(v, i);
 
                         // do not add edge to matched vertex
                         if (vv == u) { continue; }
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
                         vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
-                        weight_t ww = g.get_weight(v, i);
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 

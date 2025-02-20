@@ -271,6 +271,7 @@ namespace HeiProMap {
             constexpr u8 SECOND_MATCHED = 2;
             std::vector<u8> vertex_state(n, NOT_MATCHED);
             std::vector<vertex_t> vertex_neighbor(n);
+            std::iota(vertex_neighbor.begin(), vertex_neighbor.end(), 0);
 
             std::vector<u32> hit(n, 0);
             u32 hit_marker = 0;
@@ -288,6 +289,12 @@ namespace HeiProMap {
             }
 
             for (vertex_t u = 0; u < n; ++u) {
+                if (g.size(u) == 0) {
+                    v_weights[u] = g.get_weight(u);
+                    neighborhoods[u + 1] = curr_m;
+                    continue;
+                }
+
                 hit_marker += 1;
                 if (vertex_state[u] == NOT_MATCHED) {
                     // copy it to the next graph
@@ -298,7 +305,7 @@ namespace HeiProMap {
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
-                        vv                = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
                         if (hit[vv] == hit_marker) {
                             edges[hit_idx[vv]].w += ww;
@@ -306,14 +313,14 @@ namespace HeiProMap {
                             edges[curr_m].v   = vv;
                             edges[curr_m++].w = ww;
 
-                            hit[vv] = hit_marker;
+                            hit[vv]     = hit_marker;
                             hit_idx[vv] = curr_m - 1;
                         }
                     }
                 } else if (vertex_state[u] == FIRST_MATCHED) {
                     // the vertex gets all neighbors of v
                     vertex_t v = vertex_neighbor[u];
-                    // v_weights[u] = g.get_weight(u) + g.get_weight(v);
+
                     for (size_t i = 0; i < g.size(u); ++i) {
                         vertex_t vv = g.neighbor(u, i);
 
@@ -322,8 +329,8 @@ namespace HeiProMap {
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
-                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
-                        weight_t ww       = g.get_weight(u, i);
+                        vv          = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        weight_t ww = g.get_weight(u, i);
 
                         if (hit[vv] == hit_marker) {
                             edges[hit_idx[vv]].w += ww;
@@ -331,7 +338,7 @@ namespace HeiProMap {
                             edges[curr_m].v   = vv;
                             edges[curr_m++].w = ww;
 
-                            hit[vv] = hit_marker;
+                            hit[vv]     = hit_marker;
                             hit_idx[vv] = curr_m - 1;
                         }
                     }
@@ -343,8 +350,8 @@ namespace HeiProMap {
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         // if (vertex_state[vv] == SECOND_MATCHED) { vv = vertex_neighbor[vv]; }
-                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
-                        weight_t ww       = g.get_weight(v, i);
+                        vv          = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        weight_t ww = g.get_weight(v, i);
 
                         if (hit[vv] == hit_marker) {
                             edges[hit_idx[vv]].w += ww;
@@ -352,7 +359,7 @@ namespace HeiProMap {
                             edges[curr_m].v   = vv;
                             edges[curr_m++].w = ww;
 
-                            hit[vv] = hit_marker;
+                            hit[vv]     = hit_marker;
                             hit_idx[vv] = curr_m - 1;
                         }
                     }

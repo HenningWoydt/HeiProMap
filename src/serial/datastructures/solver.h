@@ -34,6 +34,7 @@
 #include "graph_csr.h"
 #include "partition_manager.h"
 #include "quotient_graph.h"
+#include "sorted_graph_csr.h"
 #include "statistic_collector.h"
 #include "../../definitions.h"
 #include "../../macros.h"
