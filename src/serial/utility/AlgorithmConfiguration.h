@@ -71,13 +71,13 @@ namespace HeiProMap {
 
     enum PARTITIONING_ALGS {
         PARTITIONING_ALG_UNDEFINED,
-        PARTITIONING_ALG_KAFFPA_MULTISECTION,
+        PARTITIONING_ALG_KAFFPA,
         PARTITIONING_ALG_MULTISECTION,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string& str) {
         if (str == "UNDEFINED") return PARTITIONING_ALG_UNDEFINED;
-        if (str == "kaffpa-multisection") return PARTITIONING_ALG_KAFFPA_MULTISECTION;
+        if (str == "kaffpa") return PARTITIONING_ALG_KAFFPA;
         if (str == "multisection") return PARTITIONING_ALG_MULTISECTION;
         return PARTITIONING_ALG_UNDEFINED;
     }
@@ -86,8 +86,8 @@ namespace HeiProMap {
         switch (alg) {
         case PARTITIONING_ALG_UNDEFINED:
             return "UNDEFINED";
-        case PARTITIONING_ALG_KAFFPA_MULTISECTION:
-            return "kaffpa-multisection";
+        case PARTITIONING_ALG_KAFFPA:
+            return "kaffpa";
         case PARTITIONING_ALG_MULTISECTION:
             return "multisection";
         default:
@@ -147,7 +147,11 @@ namespace HeiProMap {
                 {"--coarsening-algorithm-greedy-matching-no-overload", "", "Whether the greedy matching algorithm can match vertices, if it would lead to overload. 1 equals no overload possible, while 0 enables overloads.", "1", "", false},
 
                 /** Partitioning */
-                {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa-multisection, multisection}.", "multisection", "", false},
+                {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.", "multisection", "", false},
+
+                // Partitioning kaffpa
+                {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
+                {"--partitioning-algorithm-kaffpa-partitioning-method", "", "Which mode {bisection, multisection} to use.", "multisection", "", false},
 
                 // Partitioning multisection
                 {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -207,6 +211,7 @@ namespace HeiProMap {
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
         GlobalMultisectionConfiguration global_multisection_config;
+        KaffpaPartitionerConfiguration kaffpa_partitioner_config;
 
         // rebalance algorithm
         std::string rebalancing_algorithm_string;
@@ -275,6 +280,16 @@ namespace HeiProMap {
             if (use_default || is_set("--partitioning-algorithm-multisection-mode")) {
                 global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
                 global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            }
+
+            // initialize kaffpa partitioning config
+            if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-mode")) {
+                kaffpa_partitioner_config.mode_string = get("--partitioning-algorithm-kaffpa-partitioning-mode");
+                kaffpa_partitioner_config.mode        = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            }
+            if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-method")) {
+                kaffpa_partitioner_config.method_string = get("--partitioning-algorithm-kaffpa-partitioning-method");
+                kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
             }
 
             // actually set which algorithm to use
@@ -387,9 +402,19 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // set Multisection partitioning
-            partitioning_algorithm_string = "kaffpa-multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "fast";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
+
+            // set multisection
+            partitioning_algorithm_string          = "multisection";
+            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            global_multisection_config.mode_string = "fast";
+            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
 
             // disable all refinements
             do_refinement_label_propagation_faraj20 = false;
@@ -403,9 +428,19 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // set Multisection partitioning
-            partitioning_algorithm_string = "kaffpa-multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "fast";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
+
+            // set multisection
+            partitioning_algorithm_string          = "multisection";
+            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            global_multisection_config.mode_string = "fast";
+            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
 
             // only enable label propagation
             do_refinement_label_propagation_faraj20 = true;
@@ -419,9 +454,19 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // set Multisection partitioning
-            partitioning_algorithm_string = "kaffpa-multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "eco";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
+
+            // set multisection
+            partitioning_algorithm_string          = "multisection";
+            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            global_multisection_config.mode_string = "eco";
+            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
 
             // exclude Multi-Try FM
             do_refinement_label_propagation_faraj20 = true;
@@ -435,15 +480,25 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // set Multisection partitioning
-            partitioning_algorithm_string = "kaffpa-multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "strong";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
+
+            // set multisection
+            partitioning_algorithm_string          = "multisection";
+            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            global_multisection_config.mode_string = "strong";
+            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
 
             // enable all
             do_refinement_label_propagation_faraj20 = true;
             do_refinement_quotient_graph_faraj20    = true;
             do_refinement_k_way_fm_faraj20          = true;
-            do_refinement_multi_try_fm_faraj20      = false;
+            do_refinement_multi_try_fm_faraj20      = true;
         }
 
         /**

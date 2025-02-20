@@ -147,7 +147,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 32) {
+            while (av_manager.get_n_active() > ac.k * 64) {
                 matching(level);
                 coarsening(level);
 
@@ -177,9 +177,9 @@ namespace HeiProMap {
         void partition() {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA_MULTISECTION) {
+            if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
                 KaffpaPartitioner partitioner;
-                partitioner.partition(graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance);
+                partitioner.partition(ac.kaffpa_partitioner_config, ac.seed, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance);
             } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                 GlobalMultisectionPartitioner partitioner;
                 partitioner.partition(ac.global_multisection_config, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance);
