@@ -34,7 +34,7 @@ namespace HeiProMap {
     public:
         virtual ~ISerialMatcher() = default;
 
-        virtual void initialize(vertex_t n, vertex_t m, weight_t t_l_max) = 0;
+        virtual void initialize(vertex_t n, vertex_t m, partition_t k, weight_t t_l_max) = 0;
 
         template<typename TSerialGraph, typename TSerialActiveVertexManager>
         void match(TSerialGraph &g,

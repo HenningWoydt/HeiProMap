@@ -43,7 +43,7 @@ namespace HeiProMap {
     public:
         HeavyEdgeMatcher() = default;
 
-        void initialize(const vertex_t n, const vertex_t m, const weight_t t_l_max) override {
+        void initialize(const vertex_t n, const vertex_t m, const partition_t k, const weight_t t_l_max) override {
             mark = 0;
             used.resize(n, mark);
             this->l_max = l_max;

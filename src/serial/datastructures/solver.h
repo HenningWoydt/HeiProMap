@@ -107,9 +107,9 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), lmax);
-            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), lmax);
-            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), lmax);
+            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
+            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
+            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
 
             // refinement
             lp_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);

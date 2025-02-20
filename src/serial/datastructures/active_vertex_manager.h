@@ -35,14 +35,14 @@
 namespace HeiProMap {
     class ActiveVertexManager final : public ISerialActiveVertexManager {
         // active states
-        std::vector<bool> m_states;
+        std::vector<u8> m_states;
         std::vector<vertex_t> m_vertices;
         vertex_t m_n_active = 0;
 
     public:
         // initialize
         void initialize(const size_t n) override {
-            m_states.resize(n, true);
+            m_states.resize(n, 1);
             m_vertices.resize(n);
             std::iota(m_vertices.begin(), m_vertices.end(), 0);
             m_n_active = n;
@@ -53,7 +53,7 @@ namespace HeiProMap {
 
         void activate_vertex(const vertex_t u) override {
             if (!m_states[u]) {
-                m_states[u] = true;
+                m_states[u] = 1;
                 m_vertices.push_back(u);
                 m_n_active += 1;
             }
@@ -61,7 +61,7 @@ namespace HeiProMap {
 
         void disable_vertex(const vertex_t u) override {
             if (m_states[u]) {
-                m_states[u] = false;
+                m_states[u] = 0;
                 m_n_active -= 1;
             }
         }
@@ -100,13 +100,13 @@ namespace HeiProMap {
 
         class Iterator {
             std::vector<vertex_t>& m_vertices;
-            std::vector<bool>& m_states;
+            std::vector<u8>& m_states;
             size_t m_idx = 0;
 
         public:
             // Constructor
             Iterator(std::vector<vertex_t>& vertices,
-                     std::vector<bool>& states) : m_vertices(vertices), m_states(states) {
+                     std::vector<u8>& states) : m_vertices(vertices), m_states(states) {
                 // Skip disabled vertices during initialization
                 advance_to_next_valid();
             }

@@ -114,7 +114,7 @@ namespace HeiProMap {
     public:
         vertex_t u;
         vertex_t v;
-        f64 w;
+        f32 w;
 
     public:
         EdgeUVW() = default;
