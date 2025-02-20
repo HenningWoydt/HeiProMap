@@ -267,7 +267,7 @@ namespace HeiProMap {
 
                             // solve the cycle
                             auto sp_solve_paths = std::chrono::high_resolution_clock::now();
-                            solve_cycle(u, matches);
+                            solve_cycle(g, u, matches);
                             auto ep_solve_paths = std::chrono::high_resolution_clock::now();
                             f64 t               = get_seconds(sp_solve_paths, ep_solve_paths);
                             time_solve_paths += t;
@@ -323,7 +323,7 @@ namespace HeiProMap {
             // process all paths
             for (vertex_t u : av_manager) {
                 if (is_one_endpoint(m_neighbors[u], u)) {
-                    solve_path(u, matches);
+                    solve_path(g, u, matches);
                 }
             }
             auto ep_solve_paths = std::chrono::high_resolution_clock::now();
@@ -378,7 +378,10 @@ namespace HeiProMap {
 #endif
         }
 
-        f64 solve_path(const vertex_t u, std::vector<EdgeUV>& matches) {
+        template <typename TSerialGraph>
+        f64 solve_path(TSerialGraph& g,
+                       const vertex_t u,
+                       std::vector<EdgeUV>& matches) {
             // save the path into better format
             dp_edges.clear();
             dp_edges.reserve(path_length[path_id[u]]);
@@ -407,7 +410,15 @@ namespace HeiProMap {
 
             if (dp_edges.size() == 1) {
                 size_t idx = 0;
-                matches.emplace_back(dp_edges[idx].u, dp_edges[idx].v);
+
+                vertex_t uu = dp_edges[idx].u;
+                vertex_t vv = dp_edges[idx].v;
+                if (g.size(uu) < g.size(vv)) {
+                    matches.emplace_back(uu, vv);
+                } else {
+                    matches.emplace_back(vv, uu);
+                }
+
                 // destroy the endpoints
                 vertex_t v1        = dp_edges[0].u;
                 vertex_t v2        = dp_edges.back().v;
@@ -419,7 +430,15 @@ namespace HeiProMap {
             }
             if (dp_edges.size() == 2) {
                 size_t idx = dp_edges[0].w > dp_edges[1].w ? 0 : 1;
-                matches.emplace_back(dp_edges[idx].u, dp_edges[idx].v);
+
+                vertex_t uu = dp_edges[idx].u;
+                vertex_t vv = dp_edges[idx].v;
+                if (g.size(uu) < g.size(vv)) {
+                    matches.emplace_back(uu, vv);
+                } else {
+                    matches.emplace_back(vv, uu);
+                }
+
                 // destroy the endpoints
                 vertex_t v1        = dp_edges[0].u;
                 vertex_t v2        = dp_edges.back().v;
@@ -462,9 +481,17 @@ namespace HeiProMap {
 
             u32 idx             = m[dp_edges.size() - 1];
             f64 matching_weight = 0.0;
-            while (idx != -1) {
+            while (idx != 0-1) {
                 if (take[idx]) {
-                    matches.emplace_back(dp_edges[idx].u, dp_edges[idx].v);
+
+                    vertex_t uu = dp_edges[idx].u;
+                    vertex_t vv = dp_edges[idx].v;
+                    if (g.size(uu) < g.size(vv)) {
+                        matches.emplace_back(uu, vv);
+                    } else {
+                        matches.emplace_back(vv, uu);
+                    }
+
                     matching_weight += dp_edges[idx].w;
                 }
                 idx = m[idx];
@@ -480,7 +507,10 @@ namespace HeiProMap {
             return matching_weight;
         }
 
-        void solve_cycle(vertex_t u, std::vector<EdgeUV>& matches) {
+        template <typename TSerialGraph>
+        void solve_cycle(TSerialGraph& g,
+                         vertex_t u,
+                         std::vector<EdgeUV>& matches) {
             vertex_t left  = m_neighbors[u].n1;
             vertex_t right = m_neighbors[u].n2;
 
@@ -497,7 +527,7 @@ namespace HeiProMap {
             m_neighbors[u].n1 = u;
             if (m_neighbors[left].n1 == u) { m_neighbors[left].n1 = left; } else { m_neighbors[left].n2 = left; }
             path_length[path_id[u]] -= 1;
-            matching_weight1 = solve_path(u, dp_cycle_matches1);
+            matching_weight1 = solve_path(g, u, dp_cycle_matches1);
             path_length[path_id[u]] += 1;
             m_neighbors[u].n1    = left;
             m_neighbors[u].n2    = right;
@@ -507,7 +537,7 @@ namespace HeiProMap {
             m_neighbors[u].n1 = u;
             if (m_neighbors[right].n2 == u) { m_neighbors[right].n1 = right; } else { m_neighbors[right].n2 = right; }
             path_length[path_id[u]] -= 1;
-            matching_weight2 = solve_path(u, dp_cycle_matches2);
+            matching_weight2 = solve_path(g, u, dp_cycle_matches2);
             path_length[path_id[u]] += 1;
             m_neighbors[u].n1     = left;
             m_neighbors[u].n2     = right;
