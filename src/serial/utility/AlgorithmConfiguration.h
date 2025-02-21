@@ -36,6 +36,7 @@
 #include "../partitioning/global_multisection.h"
 #include "../refinement/hierarchy_aware_cycle_refinement.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
+#include "../refinement/label_propagation_refinement.h"
 #include "../refinement/multi_try_fm_refinement_Faraj20.h"
 
 namespace HeiProMap {
@@ -176,6 +177,10 @@ namespace HeiProMap {
                 {"--refinement-multi-try-fm-faraj20-enable", "", "Enables the Multi-Try FM refinement by Faraj20.", "0", "", false},
                 {"--refinement-multi-try-fm-faraj20-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "3", "", false},
 
+                // Refinement label propagation
+                {"--refinement-lable-propagation-enable", "", "Enables the label propagation refinement.", "0", "", false},
+                {"--refinement-lable-propagation-max-iterations", "", "For how many iterations to run label propagation refinement.", "25", "", false},
+
                 // Refinement Hierarchy Aware Cycles
                 {"--refinement-hierarchy-aware-cycles-enable", "", "Enables the hierarchy aware cycles refinement.", "0", "", false},
             };
@@ -232,6 +237,9 @@ namespace HeiProMap {
 
         bool do_refinement_multi_try_fm_faraj20 = false;
         MultiTryFmRefinementFaraj20Configuration multi_try_fm_refinement_faraj20_configuration;
+
+        bool do_refinement_label_propagation = false;
+        LabelPropagationConfiguration label_propagation_configuration;
 
         bool do_refinement_hierarchy_aware_cycles_enable = false;
         HierarchyAwareCyclesConfiguration hierarchy_aware_cycles_configuration;
@@ -310,8 +318,8 @@ namespace HeiProMap {
 
         void enable_refinement_algorithms(const bool use_default = false) {
             // initialize label propagation faraj20 configuration
-            if (use_default || is_set("--refinement-quotient-graph-faraj20-max-iterations")) {
-                quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
+            if (use_default || is_set("--refinement-lable-propagation-faraj20-max-iterations")) {
+                label_propagation_faraj20_configuration.max_iteration = std::stoi(get("--refinement-lable-propagation-faraj20-max-iterations"));
             }
 
             // initialize quotient graph faraj20 configuration
@@ -329,6 +337,12 @@ namespace HeiProMap {
                 multi_try_fm_refinement_faraj20_configuration.max_iteration = std::stoi(get("--refinement-multi-try-fm-faraj20-max-iterations"));
             }
 
+            // initialize label propagation faraj20 configuration
+            if (use_default || is_set("--refinement-lable-propagation-max-iterations")) {
+                label_propagation_configuration.max_iteration = std::stoi(get("--refinement-lable-propagation-max-iterations"));
+            }
+
+
             // actually enable the configurations
             if (use_default || is_set("--refinement-lable-propagation-faraj20-enable")) {
                 do_refinement_label_propagation_faraj20 = get("--refinement-lable-propagation-faraj20-enable") == "1";
@@ -341,6 +355,9 @@ namespace HeiProMap {
             }
             if (use_default || is_set("--refinement-multi-try-fm-faraj20-enable")) {
                 do_refinement_multi_try_fm_faraj20 = get("--refinement-multi-try-fm-faraj20-enable") == "1";
+            }
+            if (use_default || is_set("--refinement-lable-propagation-enable")) {
+                do_refinement_label_propagation = get("--refinement-lable-propagation-enable") == "1";
             }
             if (use_default || is_set("--refinement-hierarchy-aware-cycles-enable")) {
                 do_refinement_hierarchy_aware_cycles_enable = get("--refinement-hierarchy-aware-cycles-enable") == "1";
@@ -449,10 +466,12 @@ namespace HeiProMap {
 
             // only enable label propagation
             label_propagation_faraj20_configuration.max_iteration = 25;
-            do_refinement_label_propagation_faraj20 = true;
-            do_refinement_quotient_graph_faraj20    = false;
-            do_refinement_k_way_fm_faraj20          = false;
-            do_refinement_multi_try_fm_faraj20      = false;
+            do_refinement_label_propagation_faraj20               = false;
+            label_propagation_configuration.max_iteration         = 25;
+            do_refinement_label_propagation                       = true;
+            do_refinement_quotient_graph_faraj20                  = false;
+            do_refinement_k_way_fm_faraj20                        = false;
+            do_refinement_multi_try_fm_faraj20                    = false;
         }
 
         void set_Faraj20_eco() {
@@ -476,10 +495,10 @@ namespace HeiProMap {
 
             // exclude Multi-Try FM
             label_propagation_faraj20_configuration.max_iteration = 25;
-            do_refinement_label_propagation_faraj20 = true;
-            do_refinement_quotient_graph_faraj20    = true;
-            do_refinement_k_way_fm_faraj20          = true;
-            do_refinement_multi_try_fm_faraj20      = false;
+            do_refinement_label_propagation_faraj20               = true;
+            do_refinement_quotient_graph_faraj20                  = true;
+            do_refinement_k_way_fm_faraj20                        = true;
+            do_refinement_multi_try_fm_faraj20                    = false;
         }
 
         void set_Faraj20_strong() {
@@ -503,10 +522,10 @@ namespace HeiProMap {
 
             // enable all
             label_propagation_faraj20_configuration.max_iteration = 25;
-            do_refinement_label_propagation_faraj20 = true;
-            do_refinement_quotient_graph_faraj20    = true;
-            do_refinement_k_way_fm_faraj20          = true;
-            do_refinement_multi_try_fm_faraj20      = true;
+            do_refinement_label_propagation_faraj20               = true;
+            do_refinement_quotient_graph_faraj20                  = true;
+            do_refinement_k_way_fm_faraj20                        = true;
+            do_refinement_multi_try_fm_faraj20                    = true;
         }
 
         /**

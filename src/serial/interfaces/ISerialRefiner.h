@@ -34,10 +34,13 @@ namespace HeiProMap {
     public:
         virtual ~ISerialRefiner() = default;
         // initialization
-        virtual void initialize(vertex_t n,
-                                std::vector<partition_t>& t_hierarchy,
-                                std::vector<weight_t>& t_distance,
-                                weight_t t_lmax) = 0;
+        virtual void initialize(vertex_t t_n,
+                                vertex_t t_m,
+                                partition_t t_k,
+                                weight_t t_lmax,
+                                const std::vector<partition_t>& t_hierarchy,
+                                const std::vector<weight_t>& t_distance,
+                                u64 t_seed) = 0;
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
         void refine(TSerialGraph& g,

@@ -60,10 +60,13 @@ namespace HeiProMap {
      * If moves between the islands have been found, then try to distribute it onto the individual partzitions.
      */
     class HierarchyAwareCycleRefinement final : public ISerialRefiner {
-        std::vector<partition_t> hierarchy;
-        std::vector<weight_t> distance;
-        partition_t k = 0;
-        weight_t lmax = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        weight_t m_lmax = 0;
+        std::vector<partition_t> m_hierarchy;
+        std::vector<weight_t> m_distance;
+        u64 m_seed = 0;
 
         std::vector<s32> used;
         s32 mark = -1;
@@ -75,16 +78,22 @@ namespace HeiProMap {
     public:
         HierarchyAwareCycleRefinement() : gen(rd()), dis(0.0f, 1.0f) {}
 
-        void initialize(const vertex_t n,
-                        std::vector<partition_t>& t_hierarchy,
-                        std::vector<weight_t>& t_distance,
-                        const weight_t t_lmax) override {
-            hierarchy = t_hierarchy;
-            distance  = t_distance;
-            k         = prod<partition_t>(hierarchy);
-            lmax      = t_lmax;
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const weight_t t_lmax,
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        const u64 t_seed) override {
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
+            m_lmax = t_lmax;
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+            m_seed = t_seed;
 
-            used.resize(n, -1);
+            used.resize(t_n, -1);
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>

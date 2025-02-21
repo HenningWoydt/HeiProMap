@@ -76,6 +76,7 @@ namespace HeiProMap {
 
         // refinement
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
+        LabelPropagationRefinement lp_refine;
         QuotientGraphRefinementFaraj20 qg_refine_faraj20;
         KWayFMRefinementFaraj20 k_way_refine_faraj20;
         MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
@@ -113,11 +114,12 @@ namespace HeiProMap {
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
 
             // refinement
-            lp_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
-            qg_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
-            k_way_refine_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
-            multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
-            hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), ac.hierarchy, ac.distance, lmax);
+            lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -287,12 +289,16 @@ namespace HeiProMap {
                 qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
-            if (ac.do_refinement_k_way_fm_faraj20) {
-                k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
-            }
-
             if (ac.do_refinement_label_propagation_faraj20) {
                 lp_refine_faraj20.refine(ac.label_propagation_faraj20_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_label_propagation) {
+                lp_refine.refine(ac.label_propagation_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_k_way_fm_faraj20) {
+                k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_multi_try_fm_faraj20) {

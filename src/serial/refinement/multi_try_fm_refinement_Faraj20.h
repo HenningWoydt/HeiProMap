@@ -55,10 +55,13 @@ namespace HeiProMap {
      */
     class MultiTryFMRefinementFaraj20 final : public ISerialRefiner {
     private:
-        std::vector<partition_t> hierarchy;
-        std::vector<weight_t> distance;
-        partition_t k = 0;
-        weight_t lmax = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        weight_t m_lmax = 0;
+        std::vector<partition_t> m_hierarchy;
+        std::vector<weight_t> m_distance;
+        u64 m_seed = 0;
 
         std::vector<s32> used;
         s32 mark = -1;
@@ -72,18 +75,24 @@ namespace HeiProMap {
     public:
         MultiTryFMRefinementFaraj20() : gen(rd()), dis(0.0f, 1.0f) {}
 
-        void initialize(const vertex_t n,
-                        std::vector<partition_t>& t_hierarchy,
-                        std::vector<weight_t>& t_distance,
-                        const weight_t t_lmax) override {
-            hierarchy = t_hierarchy;
-            distance  = t_distance;
-            k         = prod<partition_t>(hierarchy);
-            lmax      = t_lmax;
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const weight_t t_lmax,
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        const u64 t_seed) override {
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
+            m_lmax = t_lmax;
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+            m_seed = t_seed;
 
-            used.resize(n, -1);
+            used.resize(t_n, -1);
 
-            queue = KWayFMPriorityQueue(n);
+            queue = KWayFMPriorityQueue(t_n);
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
@@ -101,7 +110,7 @@ namespace HeiProMap {
             static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
             static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
             u32 counter = 0;
-            std::vector<u32> found_ids_mark(k, counter);
+            std::vector<u32> found_ids_mark(m_k, counter);
 
             std::vector<KWayFMMove> moves;
 
@@ -143,7 +152,7 @@ namespace HeiProMap {
                         // const vertex_t v = g.neighbor(u, idx);
                         // const weight_t w = g.get_weight(u, idx);
                         partition_t v_id = p_manager[v];
-                        if (v_id != u_id && found_ids_mark[v_id] != counter && p_manager.get_bweight(v_id) + u_weight <= lmax) {
+                        if (v_id != u_id && found_ids_mark[v_id] != counter && p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
                             found_ids_mark[v_id] = counter;
                             s64 qap_delta        = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
@@ -201,7 +210,7 @@ namespace HeiProMap {
                         partition_t vertex_id  = p_manager[vertex];
                         partition_t move_id    = move.to_move_id;
 
-                        if (vertex_id != move.u_id || used[vertex] == mark || p_manager.get_bweight(move_id) + vertex_weight > lmax) {
+                        if (vertex_id != move.u_id || used[vertex] == mark || p_manager.get_bweight(move_id) + vertex_weight > m_lmax) {
                             // if vertex_id and old vertex_id don't match
                             // vertex was already used,
                             // moving would overload

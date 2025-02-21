@@ -24,26 +24,26 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H
-#define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H
+#ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
+#define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
 
 #include <random>
 
 #include "../../definitions.h"
+#include "../interfaces/ISerialActiveVertexManager.h"
+#include "../interfaces/ISerialBoundaryVertexManager.h"
+#include "../interfaces/ISerialDistanceOracle.h"
+#include "../interfaces/ISerialGraph.h"
+#include "../interfaces/ISerialPartitionManager.h"
+#include "../interfaces/ISerialQuotientGraph.h"
 #include "../interfaces/ISerialRefiner.h"
 
 namespace HeiProMap {
-    struct LabelPropagationFaraj20Configuration {
+    struct LabelPropagationConfiguration {
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
-    /**
-     * Executes label propagation refinement as described in
-     * > Marcelo Fonseca Faraj, Alexander van der Grinten, Henning Meyerhenke, Jesper Larsson Träff, and Christian Schulz.
-     * > High-quality Hierarchical Process Mapping.
-     * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
-     */
-    class LabelPropagationRefinementFaraj20 final : public ISerialRefiner {
+    class LabelPropagationRefinement final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
         partition_t m_k = 0;
@@ -52,17 +52,19 @@ namespace HeiProMap {
         std::vector<weight_t> m_distance;
         u64 m_seed = 0;
 
-        std::vector<u32> vertex_used;
-        u32 vertex_marker = 0;
-
         std::vector<u32> block_used;
         u32 block_marker = 0;
+
+        std::vector<vertex_t> vertices_this_round;
+        std::vector<vertex_t> vertices_next_round;
+        std::vector<u32> vertex_added;
+        u32 vertex_marker = 0;
 
         std::mt19937 gen;
         std::uniform_real_distribution<float> dis;
 
     public:
-        LabelPropagationRefinementFaraj20() = default;
+        LabelPropagationRefinement() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -79,15 +81,15 @@ namespace HeiProMap {
             m_distance  = t_distance;
             m_seed      = t_seed;
 
-            vertex_used.resize(t_n, vertex_marker);
             block_used.resize(t_k, block_marker);
+            vertex_added.resize(t_n, vertex_marker);
 
             gen.seed(m_seed);
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(LabelPropagationFaraj20Configuration& config,
+        void refine(LabelPropagationConfiguration& config,
                     TSerialGraph& g,
                     [[maybe_unused]] TSerialActiveVertexManager& av_manager,
                     TSerialBoundaryVertexManager& bv_manager,
@@ -101,17 +103,14 @@ namespace HeiProMap {
             static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
             static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
 
-            bool move_occurred = true;
-            for (u64 iteration = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
-                move_occurred = false;
+            vertices_this_round.clear();
+            for (vertex_t u : bv_manager) { vertices_this_round.push_back(u); }
 
-                std::vector<vertex_t> curr_boundary;
-                for (vertex_t u : bv_manager){ curr_boundary.push_back(u); }
-
+            for (u64 iteration = 0; iteration < config.max_iteration && !vertices_this_round.empty(); ++iteration) {
                 vertex_marker += 1;
-                for (vertex_t u : curr_boundary) {
+
+                for (vertex_t u : vertices_this_round) {
                     if (!is_boundary(g, p_manager, u)) { continue; }
-                    if (vertex_used[u] == vertex_marker) { continue; } // we already used u in this iteration
 
                     weight_t u_weight = g.get_weight(u);
                     partition_t u_id  = p_manager[u];
@@ -120,6 +119,7 @@ namespace HeiProMap {
                     partition_t best_u_id = u_id;
                     s64 best_qap_delta    = -1;
                     u32 counter           = 0;
+                    bool all_overloaded   = true;
 
                     block_marker += 1;
                     for (const auto& [v, w] : g[u]) {
@@ -128,21 +128,33 @@ namespace HeiProMap {
 
                         if (block_used[v_id] != block_marker) {
                             if (p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
-                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                all_overloaded = false;
+                                s64 qap_delta  = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                if (qap_delta < 0) {
+                                    block_used[v_id] = block_marker;
+                                    continue;
+                                }
 
                                 if (qap_delta > best_qap_delta) {
+                                    // straight better so chose this
                                     best_qap_delta = qap_delta;
                                     best_u_id      = v_id;
                                     counter        = 1;
-                                } else if (qap_delta == best_qap_delta && qap_delta != -1) {
-                                    counter += 1;
-                                    // choose with probability 1/counter as it ensures uniform distribution
-                                    if (dis(gen) < 1.0f / (f32)counter) {
+                                } else if (qap_delta == best_qap_delta) {
+                                    if (p_manager.get_bweight(v_id) < p_manager.get_bweight(best_u_id)) {
+                                        // same, but another partition has smaller weight
                                         best_u_id = v_id;
+                                        counter   = 1;
+                                    } else {
+                                        // same delta and same weight, so uniform choosing
+                                        counter += 1;
+                                        if (dis(gen) < 1.0f / (f32)counter) {
+                                            best_u_id = v_id;
+                                        }
                                     }
                                 }
+                                block_used[v_id] = block_marker;
                             }
-                            block_used[v_id] = block_marker;
                         }
                     }
 
@@ -152,14 +164,37 @@ namespace HeiProMap {
                             bv_manager.move(g, p_manager, u, u_id, best_u_id);
                             q_graph.move(g, p_manager, u, u_id, best_u_id);
                             p_manager.move(u, u_weight, u_id, best_u_id);
-                            vertex_used[u] = vertex_marker;
-                            move_occurred  = true;
+
+                            // u gets checked again
+                            if (vertex_added[u] != vertex_marker) {
+                                vertices_next_round.push_back(u);
+                                vertex_added[u] = vertex_marker;
+                            }
+
+                            // neighborhood of u also gets checked
+                            for (const auto& [v, w] : g[u]) {
+                                if (vertex_added[v] != vertex_marker) {
+                                    vertices_next_round.push_back(v);
+                                    vertex_added[v] = vertex_marker;
+                                }
+                            }
+                        }
+                    }
+
+                    if (all_overloaded) {
+                        // u gets checked again
+                        if (vertex_added[u] != vertex_marker) {
+                            vertices_next_round.push_back(u);
+                            vertex_added[u] = vertex_marker;
                         }
                     }
                 }
+                // swap in vertices of next round
+                std::swap(vertices_this_round, vertices_next_round);
+                vertices_next_round.clear();
             }
         }
     };
 }
 
-#endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H
+#endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H

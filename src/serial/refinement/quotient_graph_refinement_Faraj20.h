@@ -58,10 +58,13 @@ namespace HeiProMap {
      */
     class QuotientGraphRefinementFaraj20 final : public ISerialRefiner {
     private:
-        std::vector<partition_t> hierarchy;
-        std::vector<weight_t> distance;
-        partition_t k = 0;
-        weight_t lmax = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        weight_t m_lmax = 0;
+        std::vector<partition_t> m_hierarchy;
+        std::vector<weight_t> m_distance;
+        u64 m_seed = 0;
 
         // indexed max heaps
         IndexedMaxHeap<s64> boundary_vertices_u;
@@ -85,24 +88,30 @@ namespace HeiProMap {
     public:
         QuotientGraphRefinementFaraj20() : gen(rd()), dis(0.0f, 1.0f) {}
 
-        void initialize(const vertex_t n,
-                        std::vector<partition_t>& t_hierarchy,
-                        std::vector<weight_t>& t_distance,
-                        const weight_t t_lmax) override {
-            hierarchy = t_hierarchy;
-            distance  = t_distance;
-            k         = prod<partition_t>(hierarchy);
-            lmax      = t_lmax;
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const weight_t t_lmax,
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        const u64 t_seed) override {
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
+            m_lmax = t_lmax;
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+            m_seed = t_seed;
 
-            used.resize(n, -1);
+            used.resize(t_n, -1);
 
             // indexed max heaps
-            boundary_vertices_u = IndexedMaxHeap<s64>(n);
-            boundary_vertices_v = IndexedMaxHeap<s64>(n);
+            boundary_vertices_u = IndexedMaxHeap<s64>(t_n);
+            boundary_vertices_v = IndexedMaxHeap<s64>(t_n);
 
             // active block scheduling
-            active_this_round.resize(k);
-            active_next_round.resize(k);
+            active_this_round.resize(m_k);
+            active_next_round.resize(m_k);
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
@@ -130,8 +139,8 @@ namespace HeiProMap {
 
                 // determine all pairs in the quotient graph
                 std::vector<std::pair<partition_t, partition_t>> pairs;
-                for (partition_t u_id = 0; u_id < k; ++u_id) {
-                    for (partition_t v_id = u_id + 1; v_id < k; ++v_id) {
+                for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                    for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
                         if (!q_graph.has_edge(u_id, v_id) || (!active_this_round[u_id] && !active_this_round[v_id])) {
                             // no boundary between u_id and v_id
                             active_next_round[u_id] = 0;
@@ -191,9 +200,9 @@ namespace HeiProMap {
                             }
 
                             // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
-                            if (p_manager.get_bweight(u_id) > lmax && p_manager.get_bweight(u_id) > p_manager.get_bweight(v_id)) { choose_u = true; }
-                            if (p_manager.get_bweight(v_id) > lmax && p_manager.get_bweight(v_id) > p_manager.get_bweight(u_id)) { choose_u = false; }
-                            if (p_manager.get_bweight(v_id) > lmax && p_manager.get_bweight(u_id) && p_manager.get_bweight(v_id) == p_manager.get_bweight(u_id)) { choose_u = dis(gen) < 0.5; }
+                            if (p_manager.get_bweight(u_id) > m_lmax && p_manager.get_bweight(u_id) > p_manager.get_bweight(v_id)) { choose_u = true; }
+                            if (p_manager.get_bweight(v_id) > m_lmax && p_manager.get_bweight(v_id) > p_manager.get_bweight(u_id)) { choose_u = false; }
+                            if (p_manager.get_bweight(v_id) > m_lmax && p_manager.get_bweight(u_id) && p_manager.get_bweight(v_id) == p_manager.get_bweight(u_id)) { choose_u = dis(gen) < 0.5; }
                         }
 
                         // choose the priority queue
@@ -203,7 +212,7 @@ namespace HeiProMap {
                         partition_t move_id                    = u_id == vertex_id ? v_id : u_id;
                         weight_t vertex_weight                 = g.get_weight(vertex);
                         s64 qap_delta                          = boundary_vertices.top();
-                        bool overloads                         = p_manager.get_bweight(move_id) + vertex_weight > lmax;
+                        bool overloads                         = p_manager.get_bweight(move_id) + vertex_weight > m_lmax;
 
                         boundary_vertices.pop();
 
