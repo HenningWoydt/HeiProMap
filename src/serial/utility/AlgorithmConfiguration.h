@@ -172,11 +172,11 @@ namespace HeiProMap {
 
                 // Refinement Faraj20 k-Way FM
                 {"--refinement-k-way-fm-faraj20-enable", "", "Enables the K-Way FM refinement by Faraj20.", "0", "", false},
-                {"--refinement-k-way-fm-faraj20-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "3", "", false},
+                {"--refinement-k-way-fm-faraj20-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "1", "", false},
 
                 // Refinement Faraj20 Multi-Try FM
                 {"--refinement-multi-try-fm-faraj20-enable", "", "Enables the Multi-Try FM refinement by Faraj20.", "0", "", false},
-                {"--refinement-multi-try-fm-faraj20-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "3", "", false},
+                {"--refinement-multi-try-fm-faraj20-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "1", "", false},
 
                 // Refinement label propagation
                 {"--refinement-lable-propagation-enable", "", "Enables the label propagation refinement.", "0", "", false},

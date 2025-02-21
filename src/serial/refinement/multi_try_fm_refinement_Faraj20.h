@@ -41,7 +41,7 @@
 
 namespace HeiProMap {
     struct MultiTryFmRefinementFaraj20Configuration {
-        u64 max_iteration = 2;
+        u64 max_iteration = 1;
         f64 alpha         = 1000000.0;
         f64 beta          = 1.0;
     };

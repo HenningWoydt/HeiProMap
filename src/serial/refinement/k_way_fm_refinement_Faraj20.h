@@ -41,7 +41,7 @@
 
 namespace HeiProMap {
     struct KWayFMRefinementFaraj20Configuration {
-        u64 max_iteration = 2; // how many iterations to run the algorithm at most
+        u64 max_iteration = 1; // how many iterations to run the algorithm at most
         f64 alpha = 100000.0;
         f64 beta = 1.0;
     };
