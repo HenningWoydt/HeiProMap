@@ -470,9 +470,9 @@ namespace HeiProMap {
 
             // only enable label propagation
             label_propagation_faraj20_configuration.max_iteration = 25;
-            do_refinement_label_propagation_faraj20               = false;
+            do_refinement_label_propagation_faraj20               = true;
             label_propagation_configuration.max_iteration         = 25;
-            do_refinement_label_propagation                       = true;
+            do_refinement_label_propagation                       = false;
 
             do_refinement_quotient_graph_faraj20 = false;
             do_refinement_k_way_fm_faraj20       = false;
@@ -531,13 +531,14 @@ namespace HeiProMap {
 
             // enable all
             label_propagation_faraj20_configuration.max_iteration = 25;
-            do_refinement_label_propagation_faraj20               = true;
+            do_refinement_label_propagation_faraj20               = false;
 
             quotient_graph_refinement_faraj20_config.max_iteration         = 1;
             quotient_graph_refinement_faraj20_config.max_moves_without_max = 5000;
-            do_refinement_quotient_graph_faraj20                           = true;
+            do_refinement_quotient_graph_faraj20                           = false;
 
-            do_refinement_k_way_fm_faraj20     = true;
+            do_refinement_k_way_fm_faraj20     = false;
+
             do_refinement_multi_try_fm_faraj20 = true;
         }
 
