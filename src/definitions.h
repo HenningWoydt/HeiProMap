@@ -177,19 +177,37 @@ namespace HeiProMap {
     class Move {
     public:
         vertex_t u;
-        vertex_t p_id;
+        partition_t p_id;
         s64 qap_delta;
 
     public:
         Move() = default;
 
-        Move(const vertex_t t_u, const vertex_t p_id, const s64 qap_delta) : u(t_u), p_id(p_id), qap_delta(qap_delta) {}
+        Move(const vertex_t t_u, const partition_t p_id, const s64 qap_delta) : u(t_u), p_id(p_id), qap_delta(qap_delta) {}
 
         bool operator>(const Move& m) const {
             return qap_delta > m.qap_delta;
         }
 
         bool operator<(const Move& m) const {
+            return qap_delta < m.qap_delta;
+        }
+    };
+
+    class MoveQR {
+    public:
+        vertex_t u;
+        s64 qap_delta;
+
+        MoveQR() = default;
+
+        MoveQR(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
+
+        bool operator>(const MoveQR& m) const {
+            return qap_delta > m.qap_delta;
+        }
+
+        bool operator<(const MoveQR& m) const {
             return qap_delta < m.qap_delta;
         }
     };

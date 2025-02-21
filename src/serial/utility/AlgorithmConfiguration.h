@@ -167,7 +167,8 @@ namespace HeiProMap {
 
                 // Refinement Faraj20 quotient graph
                 {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph refinement by Faraj20.", "0", "", false},
-                {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run quotient graph refinement at most.", "3", "", false},
+                {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run quotient graph refinement by Faraj20 at most.", "1", "", false},
+                {"--refinement-quotient-graph-faraj20-max-moves-without-max", "", "After x moves without discovering a new maximum quotient graph refinement by Faraj20 will stop the fm call.", "5000", "", false},
 
                 // Refinement Faraj20 k-Way FM
                 {"--refinement-k-way-fm-faraj20-enable", "", "Enables the K-Way FM refinement by Faraj20.", "0", "", false},
@@ -326,6 +327,9 @@ namespace HeiProMap {
             if (use_default || is_set("--refinement-quotient-graph-faraj20-max-iterations")) {
                 quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
             }
+            if (use_default || is_set("--refinement-quotient-graph-faraj20-max-moves-without-max")) {
+                quotient_graph_refinement_faraj20_config.max_moves_without_max = std::stoi(get("--refinement-quotient-graph-faraj20-max-moves-without-max"));
+            }
 
             // initialize K-Way FM refinement faraj20 configuration
             if (use_default || is_set("--refinement-k-way-fm-faraj20-max-iterations")) {
@@ -469,9 +473,10 @@ namespace HeiProMap {
             do_refinement_label_propagation_faraj20               = false;
             label_propagation_configuration.max_iteration         = 25;
             do_refinement_label_propagation                       = true;
-            do_refinement_quotient_graph_faraj20                  = false;
-            do_refinement_k_way_fm_faraj20                        = false;
-            do_refinement_multi_try_fm_faraj20                    = false;
+
+            do_refinement_quotient_graph_faraj20 = false;
+            do_refinement_k_way_fm_faraj20       = false;
+            do_refinement_multi_try_fm_faraj20   = false;
         }
 
         void set_Faraj20_eco() {
@@ -496,9 +501,13 @@ namespace HeiProMap {
             // exclude Multi-Try FM
             label_propagation_faraj20_configuration.max_iteration = 25;
             do_refinement_label_propagation_faraj20               = true;
-            do_refinement_quotient_graph_faraj20                  = true;
-            do_refinement_k_way_fm_faraj20                        = true;
-            do_refinement_multi_try_fm_faraj20                    = false;
+
+            quotient_graph_refinement_faraj20_config.max_iteration         = 1;
+            quotient_graph_refinement_faraj20_config.max_moves_without_max = 5000;
+            do_refinement_quotient_graph_faraj20                           = true;
+
+            do_refinement_k_way_fm_faraj20     = true;
+            do_refinement_multi_try_fm_faraj20 = false;
         }
 
         void set_Faraj20_strong() {
@@ -523,9 +532,13 @@ namespace HeiProMap {
             // enable all
             label_propagation_faraj20_configuration.max_iteration = 25;
             do_refinement_label_propagation_faraj20               = true;
-            do_refinement_quotient_graph_faraj20                  = true;
-            do_refinement_k_way_fm_faraj20                        = true;
-            do_refinement_multi_try_fm_faraj20                    = true;
+
+            quotient_graph_refinement_faraj20_config.max_iteration         = 1;
+            quotient_graph_refinement_faraj20_config.max_moves_without_max = 5000;
+            do_refinement_quotient_graph_faraj20                           = true;
+
+            do_refinement_k_way_fm_faraj20     = true;
+            do_refinement_multi_try_fm_faraj20 = true;
         }
 
         /**
