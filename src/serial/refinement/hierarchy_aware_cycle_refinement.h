@@ -44,7 +44,7 @@ namespace HeiProMap {
         u64 max_iteration = 2; // how many iterations to run the algorithm at most
     };
 
-    partition_t get_island_id(partition_t u_id, const std::vector<std::vector<partition_t>> &island_ids) {
+    partition_t get_island_id(partition_t u_id, const std::vector<std::vector<partition_t>>& island_ids) {
         for (partition_t i = 0; i < island_ids.size(); ++i) {
             if (std::find(island_ids[i].begin(), island_ids[i].end(), u_id) != island_ids[i].end()) {
                 return i;
@@ -102,6 +102,7 @@ namespace HeiProMap {
             static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
             static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
 
+            /*
             size_t n_islands = hierarchy.back();
             size_t ids_per_island = k / n_islands;
             std::vector<std::vector<partition_t>> island_ids(n_islands, std::vector<partition_t>(ids_per_island));
@@ -140,7 +141,7 @@ namespace HeiProMap {
                 }
 
             }
-
+            */
         }
     };
 }

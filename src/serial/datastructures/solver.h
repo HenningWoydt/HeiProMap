@@ -292,7 +292,7 @@ namespace HeiProMap {
             }
 
             if (ac.do_refinement_label_propagation_faraj20) {
-                lp_refine_faraj20.refine(graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                lp_refine_faraj20.refine(ac.label_propagation_faraj20_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_multi_try_fm_faraj20) {

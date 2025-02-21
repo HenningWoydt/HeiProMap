@@ -41,19 +41,28 @@ namespace HeiProMap {
     };
 
     class GreedyEdgeMatcher final : public ISerialMatcher {
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        weight_t m_l_max = 0;
+
         u32 mark = 0;
         std::vector<u32> used;
-
-        weight_t l_max = 0;
 
     public:
         GreedyEdgeMatcher() = default;
 
-        void initialize(const vertex_t n, const vertex_t m, const partition_t k, const weight_t t_l_max) override {
+        void initialize(const vertex_t n,
+                        const vertex_t m,
+                        const partition_t k,
+                        const weight_t t_l_max) override {
+            m_n = n;
+            m_m = m;
+            m_k = k;
+            m_l_max = t_l_max;
+
             mark = 0;
             used.resize(n, 0);
-
-            this->l_max = l_max;
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager>
@@ -88,7 +97,7 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > l_max) {
+                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > m_l_max) {
                         continue;
                     }
 
@@ -118,7 +127,7 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > l_max) {
+                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > m_l_max) {
                         continue;
                     }
 
