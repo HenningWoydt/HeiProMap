@@ -440,7 +440,7 @@ namespace HeiProMap {
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
-            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
+            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // disable all refinements
             do_refinement_label_propagation_faraj20 = false;
@@ -466,7 +466,7 @@ namespace HeiProMap {
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
-            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
+            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // only enable label propagation
             label_propagation_faraj20_configuration.max_iteration = 25;
@@ -496,7 +496,7 @@ namespace HeiProMap {
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "eco";
-            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
+            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // exclude Multi-Try FM
             label_propagation_faraj20_configuration.max_iteration = 25;
@@ -527,7 +527,7 @@ namespace HeiProMap {
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "strong";
-            global_multisection_config.mode        = string_to_global_multisection_mode(kaffpa_partitioner_config.mode_string);
+            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable all
             label_propagation_faraj20_configuration.max_iteration = 25;
