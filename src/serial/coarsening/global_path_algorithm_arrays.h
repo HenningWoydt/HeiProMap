@@ -330,7 +330,7 @@ namespace HeiProMap {
         }
 
         template<typename TSerialGraph>
-        f64 solve_path(TSerialGraph &g,
+        f32 solve_path(TSerialGraph &g,
                        const vertex_t u,
                        std::vector<EdgeUV> &matches) {
             // save the path into better format
@@ -431,7 +431,7 @@ namespace HeiProMap {
             }
 
             s64 idx             = dp_m[dp_edges.size() - 1];
-            f64 matching_weight = 0.0;
+            f32 matching_weight = 0.0;
             while (idx != -1) {
                 if (dp_take[idx]) {
 
@@ -470,8 +470,8 @@ namespace HeiProMap {
             vertex_t right_left  = m_neighbors[right].n1;
             vertex_t right_right = m_neighbors[right].n2;
 
-            f64 matching_weight1 = 0.0;
-            f64 matching_weight2 = 0.0;
+            f32 matching_weight1 = 0.0;
+            f32 matching_weight2 = 0.0;
             dp_cycle_matches1.clear();
             dp_cycle_matches2.clear();
 
