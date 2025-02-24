@@ -216,6 +216,7 @@ namespace HeiProMap {
 
         GreedyEdgeMatcherConfiguration greedy_edge_matcher_config;
         HeavyEdgeMatcherConfiguration heavy_edge_matcher_config;
+        GlobalPathAlgorithmConfiguration global_path_algorithm_config;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;

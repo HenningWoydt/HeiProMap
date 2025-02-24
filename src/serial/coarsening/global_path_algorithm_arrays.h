@@ -24,83 +24,41 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_GLOBAL_PATH_ALGORITHM_H
-#define HEIPROMAP_GLOBAL_PATH_ALGORITHM_H
+#ifndef HEIPROMAP_GLOBAL_PATH_ALGORITHM_ARRAYS_H
+#define HEIPROMAP_GLOBAL_PATH_ALGORITHM_ARRAYS_H
 
 #include <algorithm>
 #include <iomanip>
 #include <numeric>
 #include <queue>
 #include <vector>
+#include <chrono>
 
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../interfaces/ISerialMatcher.h"
+#include "global_path_algorithm.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
-    struct Neighbors {
-        vertex_t n1;
-        vertex_t n2;
-        f32      w1;
-        f32      w2;
-    };
-
-    inline bool is_endpoint_fast(const Neighbors &n, const vertex_t u) {
-        return n.n2 == u;
-    }
-
-    inline bool is_endpoint(const Neighbors &n, const vertex_t u) {
-        return is_endpoint_fast(n, u);
-        bool b = n.n1 == u || n.n2 == u;
-        ASSERT(b == is_endpoint_fast(n, u));
-        return b;
-    }
-
-    inline bool is_one_endpoint_fast(const Neighbors &n, const vertex_t u) {
-        return n.n1 != u && n.n2 == u;
-    }
-
-    inline bool is_one_endpoint(const Neighbors &n, const vertex_t u) {
-        return is_one_endpoint_fast(n, u);
-        bool b = (n.n1 == u && n.n2 != u) || (n.n1 != u && n.n2 == u);
-        ASSERT(b == is_one_endpoint_fast(n, u));
-        return b;
-    }
-
-    inline bool is_unmatched_fast(const Neighbors &n, const vertex_t u) {
-        return n.n1 == u;
-    }
-
-    inline bool is_unmatched(const Neighbors &n, const vertex_t u) {
-        return is_unmatched_fast(n, u);
-        bool b = n.n1 == u && n.n2 == u;
-        ASSERT(b == is_unmatched_fast(n, u));
-        return b;
-    }
-
-    struct GlobalPathAlgorithmConfiguration{
-        bool a = false;
-    };
-
     /**
      * Computes a matching based on the Global Path Algorithm from
      * > Jens Maue and Peter Sanders.
      * > Engineering Algorithms for Approximate Weighted Matching.
      * > Experimental Algorithms, 6th International Workshop, WEA 2007, Rome, Italy, June 6-8, 2007, Proceedings.
      */
-    class GlobalPathAlgorithmMatcher final : public ISerialMatcher {
+    class GlobalPathAlgorithmArraysMatcher final : public ISerialMatcher {
         vertex_t    m_n     = 0;
         vertex_t    m_m     = 0;
         partition_t m_k     = 0;
         weight_t    m_l_max = 0;
 
-        std::vector<Neighbors> m_neighbors;
-        std::vector<u32>       path_id;
-        std::vector<u32>       path_length;
+        Neighbors *m_neighbors = nullptr;
+        u32       *path_id     = nullptr;
+        u32       *path_length = nullptr;
 
-        std::vector<EdgeUVW> edges_greater_1;
-        std::vector<EdgeUVW> edges_equal_1;
-        std::vector<EdgeUVW> edges_smaller_1;
+        EdgeUVW *edges     = nullptr;
+        size_t  edges_size = 0;
 
         // for DP
         std::vector<f32>     dp_w;
@@ -122,21 +80,30 @@ namespace HeiProMap {
         u64 global_edges_combine_paths  = 0;
 
     public:
-        GlobalPathAlgorithmMatcher() = default;
+        GlobalPathAlgorithmArraysMatcher() = default;
+
+        ~GlobalPathAlgorithmArraysMatcher() override {
+            free(m_neighbors);
+            free(path_id);
+            free(path_length);
+
+            free(edges);
+        }
 
         void initialize(const vertex_t t_n, const vertex_t t_m, const partition_t t_k, const weight_t t_l_max) override {
+            vertex_t t_n_64 = round_up_64(t_n);
+            vertex_t t_m_64 = round_up_64(t_m);
+
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
             m_l_max = t_l_max;
 
-            m_neighbors.resize(m_n);
-            path_id.resize(m_n);
-            path_length.resize(m_n);
+            m_neighbors = (Neighbors *) aligned_alloc(64, t_n_64 * sizeof(Neighbors));
+            path_id     = (u32 *) aligned_alloc(64, t_n_64 * sizeof(u32));
+            path_length = (u32 *) aligned_alloc(64, t_n_64 * sizeof(u32));
 
-            edges_greater_1.reserve(m_m);
-            edges_equal_1.reserve(m_m);
-            edges_smaller_1.reserve(m_m);
+            edges = (EdgeUVW *) aligned_alloc(64, t_m_64 * sizeof(EdgeUVW));
         }
 
         template<typename TSerialGraph, typename TSerialActiveVertexManager>
@@ -144,7 +111,7 @@ namespace HeiProMap {
                    TSerialGraph &g,
                    TSerialActiveVertexManager &av_manager,
                    std::vector<EdgeUV> &matches) {
-            for (vertex_t u = 0; u < m_neighbors.size(); ++u) {
+            for (vertex_t u = 0; u < m_n; ++u) {
                 m_neighbors[u].n1 = u;
                 m_neighbors[u].n2 = u;
             }
@@ -161,9 +128,7 @@ namespace HeiProMap {
 
             auto sp_compute_ratings = std::chrono::high_resolution_clock::now();
 
-            edges_greater_1.clear();
-            edges_equal_1.clear();
-            edges_smaller_1.clear();
+            edges_size = 0;
 
             for (vertex_t u: av_manager) {
                 weight_t u_w = g.get_weight(u);
@@ -180,151 +145,129 @@ namespace HeiProMap {
 
                     if (edge_rating == 0.0) { continue; }
 
-                    if (edge_rating > 1.0) {
-                        edges_greater_1.emplace_back(u, v, edge_rating);
-                    } else if (edge_rating == 1.0) {
-                        edges_equal_1.emplace_back(u, v, edge_rating);
-                    } else {
-                        edges_smaller_1.emplace_back(u, v, edge_rating);
-                    }
-
+                    edges[edges_size] = {u, v, edge_rating};
+                    edges_size += 1;
                 }
             }
             auto ep_compute_ratings = std::chrono::high_resolution_clock::now();
             time_compute_ratings += get_seconds(sp_compute_ratings, ep_compute_ratings);
 
-            auto                              sp_build_paths    = std::chrono::high_resolution_clock::now();
-            std::vector<std::vector<EdgeUVW>> buckets           = {edges_greater_1, edges_equal_1, edges_smaller_1};
-            std::vector<bool>                 all_ratings_equal = {false, true, false};
+            auto sp_sorting = std::chrono::high_resolution_clock::now();
+            std::sort(edges, edges + edges_size, std::greater<>());
+            auto ep_sorting = std::chrono::high_resolution_clock::now();
+            time_sorting += get_seconds(sp_sorting, ep_sorting);
 
-            for (size_t j = 0; j < buckets.size(); ++j) {
-                std::vector<EdgeUVW> &edge_list    = buckets[j];
-                bool                 equal_ratings = all_ratings_equal[j];
+            auto sp_build_paths = std::chrono::high_resolution_clock::now();
+            for (size_t i = 0; i < edges_size; ++i) {
+                auto &[u, v, w] = edges[i];
 
-                auto sp_sorting = std::chrono::high_resolution_clock::now();
-                // filter out all edges that cannot be used anymore, before sorting the bucket
-                if (!equal_ratings) {
-                    auto is_not_endpoint = [&](const EdgeUVW &edge) {
-                        return !is_endpoint(m_neighbors[edge.u], edge.u) || !is_endpoint(m_neighbors[edge.v], edge.v);
-                    };
-
-                    edge_list.erase(std::remove_if(edge_list.begin(), edge_list.end(), is_not_endpoint), edge_list.end());
-                    std::sort(edge_list.begin(), edge_list.end(), std::greater<>());
+                if (!is_endpoint(m_neighbors[u], u) || !is_endpoint(m_neighbors[v], v)) {
+                    // u is not an endpoint
+                    edges_skipped++;
+                    continue;
                 }
-                auto ep_sorting = std::chrono::high_resolution_clock::now();
-                f64  t_sort          = get_seconds(sp_sorting, ep_sorting);
-                time_sorting += t_sort;
-                time_build_paths -= t_sort;
 
+                bool u_unmatched = is_unmatched(m_neighbors[u], u);
+                bool v_unmatched = is_unmatched(m_neighbors[v], v);
+                u32  u_id        = path_id[u];
+                u32  v_id        = path_id[v];
 
-                for (const auto &[u, v, w]: edge_list) {
-                    if (!is_endpoint(m_neighbors[u], u) || !is_endpoint(m_neighbors[v], v)) {
-                        // u is not an endpoint
-                        edges_skipped++;
-                        continue;
-                    }
-
-                    bool u_unmatched = is_unmatched(m_neighbors[u], u);
-                    bool v_unmatched = is_unmatched(m_neighbors[v], v);
-                    u32  u_id        = path_id[u];
-                    u32  v_id        = path_id[v];
-
-                    if (u_unmatched && v_unmatched) {
-                        m_neighbors[u].n1 = v;
-                        m_neighbors[u].w1 = w;
-                        m_neighbors[v].n1 = u;
-                        m_neighbors[v].w1 = w;
-                        path_id[u]     = u;
-                        path_id[v]     = u;
-                        path_length[u] = 1;
-                        edges_new_paths++;
-                        continue;
-                    }
-                    if (u_unmatched && !v_unmatched) {
-                        m_neighbors[u].n1 = v;
-                        m_neighbors[u].w1 = w;
-                        m_neighbors[v].n2 = u;
-                        m_neighbors[v].w2 = w;
-                        path_id[u] = v_id;
-                        path_length[v_id] += 1;
-                        edges_enlarge_path++;
-                        continue;
-                    }
-                    if (!u_unmatched && v_unmatched) {
-                        m_neighbors[u].n2 = v;
-                        m_neighbors[u].w2 = w;
-                        m_neighbors[v].n1 = u;
-                        m_neighbors[v].w1 = w;
-                        path_id[v] = u_id;
-                        path_length[u_id] += 1;
-                        edges_enlarge_path++;
-                        continue;
-                    }
-
-                    // cycle
-                    if (u_id == v_id) {
-                        if (path_length[u_id] & 1) {
-                            // same path and odd length size, close the cycle
-                            path_length[u_id] += 1; // increase path length
-
-                            // for u set v as a neighbor
-                            m_neighbors[u].n2 = v;
-                            m_neighbors[u].w2 = w;
-
-                            // for v set u as a neighbor
-                            m_neighbors[v].n2 = u;
-                            m_neighbors[v].w2 = w;
-
-                            // solve the cycle
-                            auto sp_solve_paths = std::chrono::high_resolution_clock::now();
-                            solve_cycle(g, u, matches);
-                            auto ep_solve_paths = std::chrono::high_resolution_clock::now();
-                            f64  t_solve        = get_seconds(sp_solve_paths, ep_solve_paths);
-                            time_solve_paths += t_solve;
-                            time_build_paths -= t_solve;
-                            edges_form_cycle++;
-                        }
-                        continue;
-                    }
-
-                    // two paths
-
-                    // both u and v connect larger paths
-
-                    // for u set v as a neighbor
-                    m_neighbors[u].n2 = v;
-                    m_neighbors[u].w2 = w;
-
-                    // for v set u as a neighbor
+                if (u_unmatched && v_unmatched) {
+                    m_neighbors[u].n1 = v;
+                    m_neighbors[u].w1 = w;
+                    m_neighbors[v].n1 = u;
+                    m_neighbors[v].w1 = w;
+                    path_id[u]     = u;
+                    path_id[v]     = u;
+                    path_length[u] = 1;
+                    edges_new_paths++;
+                    continue;
+                }
+                if (u_unmatched && !v_unmatched) {
+                    m_neighbors[u].n1 = v;
+                    m_neighbors[u].w1 = w;
                     m_neighbors[v].n2 = u;
                     m_neighbors[v].w2 = w;
-
-                    vertex_t last_vertex;
-                    vertex_t curr_vertex;
-                    u32      id1;
-                    u32      id2;
-                    if (path_length[u_id] <= path_length[v_id]) {
-                        last_vertex = v;
-                        curr_vertex = u;
-                        id1         = v_id;
-                        id2         = u_id;
-                    } else {
-                        last_vertex = u;
-                        curr_vertex = v;
-                        id1         = u_id;
-                        id2         = v_id;
-                    }
-
-                    path_length[id1] += 1 + path_length[id2];
-                    while (m_neighbors[curr_vertex].n1 != curr_vertex && m_neighbors[curr_vertex].n2 != curr_vertex) {
-                        vertex_t temp_last_vertex = last_vertex;
-                        last_vertex = curr_vertex;
-                        curr_vertex = m_neighbors[curr_vertex].n1 == temp_last_vertex ? m_neighbors[curr_vertex].n2 : m_neighbors[curr_vertex].n1;
-                    }
-                    path_id[curr_vertex] = id1;
-
-                    edges_combine_paths++;
+                    path_id[u] = v_id;
+                    path_length[v_id] += 1;
+                    edges_enlarge_path++;
+                    continue;
                 }
+                if (!u_unmatched && v_unmatched) {
+                    m_neighbors[u].n2 = v;
+                    m_neighbors[u].w2 = w;
+                    m_neighbors[v].n1 = u;
+                    m_neighbors[v].w1 = w;
+                    path_id[v] = u_id;
+                    path_length[u_id] += 1;
+                    edges_enlarge_path++;
+                    continue;
+                }
+
+                // cycle
+                if (u_id == v_id) {
+                    if (path_length[u_id] & 1) {
+                        // same path and odd length size, close the cycle
+                        path_length[u_id] += 1; // increase path length
+
+                        // for u set v as a neighbor
+                        m_neighbors[u].n2 = v;
+                        m_neighbors[u].w2 = w;
+
+                        // for v set u as a neighbor
+                        m_neighbors[v].n2 = u;
+                        m_neighbors[v].w2 = w;
+
+                        // solve the cycle
+                        auto sp_solve_paths = std::chrono::high_resolution_clock::now();
+                        solve_cycle(g, u, matches);
+                        auto ep_solve_paths = std::chrono::high_resolution_clock::now();
+                        f64  t_solve        = get_seconds(sp_solve_paths, ep_solve_paths);
+                        time_solve_paths += t_solve;
+                        time_build_paths -= t_solve;
+                        edges_form_cycle++;
+                    }
+                    continue;
+                }
+
+                // two paths
+
+                // both u and v connect larger paths
+
+                // for u set v as a neighbor
+                m_neighbors[u].n2 = v;
+                m_neighbors[u].w2 = w;
+
+                // for v set u as a neighbor
+                m_neighbors[v].n2 = u;
+                m_neighbors[v].w2 = w;
+
+                vertex_t last_vertex;
+                vertex_t curr_vertex;
+                u32      id1;
+                u32      id2;
+                if (path_length[u_id] <= path_length[v_id]) {
+                    last_vertex = v;
+                    curr_vertex = u;
+                    id1         = v_id;
+                    id2         = u_id;
+                } else {
+                    last_vertex = u;
+                    curr_vertex = v;
+                    id1         = u_id;
+                    id2         = v_id;
+                }
+
+                path_length[id1] += 1 + path_length[id2];
+                while (m_neighbors[curr_vertex].n1 != curr_vertex && m_neighbors[curr_vertex].n2 != curr_vertex) {
+                    vertex_t temp_last_vertex = last_vertex;
+                    last_vertex = curr_vertex;
+                    curr_vertex = m_neighbors[curr_vertex].n1 == temp_last_vertex ? m_neighbors[curr_vertex].n2 : m_neighbors[curr_vertex].n1;
+                }
+                path_id[curr_vertex] = id1;
+
+                edges_combine_paths++;
+
             }
             auto ep_build_paths = std::chrono::high_resolution_clock::now();
             time_build_paths += get_seconds(sp_build_paths, ep_build_paths);
@@ -565,4 +508,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_GLOBAL_PATH_ALGORITHM_H
+#endif //HEIPROMAP_GLOBAL_PATH_ALGORITHM_ARRAYS_H
