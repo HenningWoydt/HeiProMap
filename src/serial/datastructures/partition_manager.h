@@ -32,27 +32,30 @@
 
 namespace HeiProMap {
     class PartitionManager final : public ISerialPartitionManager {
-        vertex_t m_n    = 0;
-        partition_t m_k = 0;
-        weight_t lmax   = 0;
+        vertex_t    m_n  = 0;
+        partition_t m_k  = 0;
+        weight_t    lmax = 0;
 
-        std::vector<partition_t> partition;
-        std::vector<weight_t> bweights;
+        partition_t *partition = nullptr;
+        weight_t    *bweights  = nullptr;
 
     public:
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t t_lmax) override {
-            m_n = t_n;
-            m_k = t_k;
+            vertex_t t_n_64 = round_up_64(t_n);
+            vertex_t t_k_64 = round_up_64(t_k);
+
+            m_n  = t_n;
+            m_k  = t_k;
             lmax = t_lmax;
 
-            partition.resize(m_n);
-            bweights.resize(m_k, 0);
+            partition = (partition_t *) aligned_alloc(64, t_n_64 * sizeof(partition_t));
+            bweights  = (weight_t *) aligned_alloc(64, t_k_64 * sizeof(weight_t));
         }
 
         // read
-        const partition_t& operator[](const vertex_t u) const override { return partition[u]; }
+        const partition_t &operator[](const vertex_t u) const override { return partition[u]; }
 
         // write
         void set(const vertex_t u, const weight_t w, const partition_t id) override {
@@ -67,20 +70,18 @@ namespace HeiProMap {
         }
 
         weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
-        std::vector<weight_t> get_bweights() const override { return bweights; }
+
         void uncontract(const vertex_t u, const vertex_t v) override { partition[v] = partition[u]; }
 
-        void uncontract(const std::vector<EdgeUV>& matches) override {
-            for (const auto [u, v] : matches) {
+        void uncontract(const std::vector<EdgeUV> &matches) override {
+            for (const auto [u, v]: matches) {
                 partition[v] = partition[u];
             }
         }
 
         bool is_overloaded() override {
-            for (const weight_t w : bweights) {
-                if (w > lmax) {
-                    return true;
-                }
+            for (size_t i = 0; i < m_k; ++i) {
+                if (bweights[i] > lmax) { return true; }
             }
             return false;
         }

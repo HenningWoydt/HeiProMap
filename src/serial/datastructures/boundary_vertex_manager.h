@@ -109,12 +109,6 @@ namespace HeiProMap {
             return SubBoundaryVertexManager(m_boundaries[u], m_n_boundary_edges);
         }
 
-        /*
-        SubBoundaryVertexManager& operator[](const vertex_t u) const {
-            return SubBoundaryVertexManager(m_boundaries[u], m_n_boundary_edges);
-        }
-        */
-
         vertex_t get_n_boundary() const override { return m_n_boundary; }
         bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
 
@@ -185,29 +179,28 @@ namespace HeiProMap {
                         [[maybe_unused]] TSerialGraph& old_g, // the smaller not contracted graph
                         [[maybe_unused]] TSerialActiveVertexManager& av_manager,
                         TSerialPartitionManager& p_manager) {
-            // get current boundary vertices
-            std::vector<vertex_t> curr_boundary;
-            for (vertex_t u : *this) {
-                curr_boundary.emplace_back(u);
-                m_n_boundary_edges[u] = 0;
-            }
-
-            // remove all
-            for (auto& vec : m_boundaries) { vec.clear(); }
+            for(vertex_t u : *this){ m_n_boundary_edges[u] = 0; }
+            for(auto &vec : m_boundaries){ vec.clear(); }
             m_n_boundary = 0;
 
-            // add all the second-matched vertices
-            for (auto& [u, v] : matches) { curr_boundary.emplace_back(v); }
+            for(vertex_t u : av_manager){
+                size_t n_different = 0;
+                partition_t u_id = p_manager[u];
 
-            // check all active vertices
-            for (vertex_t u : curr_boundary) {
                 for (size_t i = 0; i < new_g.size(u); ++i) {
                     const vertex_t v = new_g.neighbor(u, i);
-                    if (p_manager[u] != p_manager[v]) {
-                        add(u, p_manager[u]);
-                    }
+                    partition_t v_id = p_manager[v];
+
+                    n_different += u_id != v_id;
+                }
+
+                if(n_different > 0){
+                    m_n_boundary_edges[u] = n_different;
+                    m_boundaries[u_id].push_back(u);
+                    m_n_boundary += 1;
                 }
             }
+
         }
 
         class Iterator {

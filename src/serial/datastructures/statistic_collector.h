@@ -72,7 +72,7 @@ namespace HeiProMap {
 #endif
 
         // partition
-        f64 totaL_partition_time = 0.0;
+        f64 total_partition_time = 0.0;
 #if STATISTICCOLLECTOR
         u64 partition_end_qap              = 0;
         weight_t partition_end_max_pweight = 0.0;
@@ -100,7 +100,7 @@ namespace HeiProMap {
 
 
         void finalize() {
-            total_time = total_graph_io_time + total_io_time + total_matching_time + total_coarsening_time + totaL_partition_time + total_uncoarsening_time + total_refinement_time;
+            total_time = total_graph_io_time + total_io_time + total_matching_time + total_coarsening_time + total_partition_time + total_uncoarsening_time + total_refinement_time;
         }
 
         void set_io(const f64 graph_time, const f64 time) {
@@ -166,7 +166,7 @@ namespace HeiProMap {
 #endif
         }
 
-        void set_partition_time(const f64 time) { totaL_partition_time = time; }
+        void set_partition_time(const f64 time) { total_partition_time = time; }
 
         void set_partition_stats(const u64 end_objective, const std::vector<weight_t>& pweights, const weight_t lmax) {
 #if STATISTICCOLLECTOR
@@ -199,7 +199,7 @@ namespace HeiProMap {
             s += to_JSON_MACRO(total_io_time);
             s += to_JSON_MACRO(total_matching_time);
             s += to_JSON_MACRO(total_coarsening_time);
-            s += to_JSON_MACRO(totaL_partition_time);
+            s += to_JSON_MACRO(total_partition_time);
             s += to_JSON_MACRO(total_uncoarsening_time);
             s += to_JSON_MACRO(total_refinement_time);
 #if STATISTICCOLLECTOR

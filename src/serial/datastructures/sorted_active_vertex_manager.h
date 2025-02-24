@@ -40,12 +40,17 @@ namespace HeiProMap {
         size_t   m_vertices_size = 0;
         vertex_t m_n_active      = 0;
 
+        vertex_t            *m_vertices_temp = nullptr;
+        std::vector<size_t> temp_points;
+
     public:
         SortedActiveVertexManager() = default;
 
         ~SortedActiveVertexManager() override {
             free(m_states);
             free(m_vertices);
+
+            free(m_vertices_temp);
         }
 
         // initialize
@@ -60,6 +65,9 @@ namespace HeiProMap {
             std::iota(m_vertices, m_vertices + t_n, 0);
 
             m_n_active = t_n;
+
+            m_vertices_temp = (vertex_t *) aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            temp_points.push_back(t_n);
         }
 
         // active vertex manipulation
@@ -72,31 +80,37 @@ namespace HeiProMap {
         bool get_state(const vertex_t u) const override { return m_states[u]; }
 
         void contract(const std::vector<EdgeUV> &matches) override {
+            size_t temp_idx = 0;
             m_n_active -= matches.size();
-            for (const auto [u, v]: matches) {
-                m_states[v] = 0;
-            }
+            for (const auto [u, v]: matches) { m_states[v] = 0; }
 
-            size_t write_idx = 0;
-            for (size_t read_idx = 0; read_idx < m_vertices_size; ++read_idx) {
+            size_t      write_idx = 0;
+            for (size_t read_idx  = 0; read_idx < m_vertices_size; ++read_idx) {
                 if (!is_disabled(m_vertices[read_idx])) {
                     m_vertices[write_idx] = m_vertices[read_idx];
                     ++write_idx;
+                } else {
+                    m_vertices_temp[temp_idx] = m_vertices[read_idx];
+                    ++temp_idx;
                 }
             }
             m_vertices_size = write_idx;
+
+            std::copy(m_vertices_temp, m_vertices_temp + temp_idx, m_vertices + write_idx);
+            temp_points.push_back(write_idx);
         }
 
         void uncontract(const std::vector<EdgeUV> &matches) override {
             m_n_active += matches.size();
-            size_t old_size = m_vertices_size;
+            m_vertices_size = temp_points[temp_points.size() - 2];
             for (const auto [u, v]: matches) {
-                m_states[v]                 = 1;
-                m_vertices[m_vertices_size] = v;
-                m_vertices_size++;
+                m_states[v] = 1;
+                // m_vertices[m_vertices_size] = v;
+                // m_vertices_size++;
             }
-            std::sort(m_vertices+old_size, m_vertices + m_vertices_size); // sort new half
-            std::inplace_merge(m_vertices, m_vertices + old_size, m_vertices + m_vertices_size); // merge
+            // std::sort(m_vertices + old_size, m_vertices + m_vertices_size); // sort new half
+            std::inplace_merge(m_vertices, m_vertices + temp_points[temp_points.size() - 1], m_vertices + temp_points[temp_points.size() - 2]); // merge
+            temp_points.pop_back();
         }
 
         class Iterator {
