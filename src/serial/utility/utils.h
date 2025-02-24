@@ -341,6 +341,8 @@ namespace HeiProMap {
 
     void str_to_ints(const std::string &str,
                      std::vector<u64> &ints);
+
+    size_t round_up_64(std::size_t x);
 }
 
 #endif //HEIPROMAP_UTILS_H

@@ -35,8 +35,8 @@ namespace HeiProMap {
         virtual ~ISerialActiveVertexManager() = default;
         virtual void initialize(size_t n) = 0;
         virtual vertex_t get_n_active() const = 0;
-        virtual void activate_vertex(vertex_t u) = 0;
-        virtual void disable_vertex(vertex_t u) = 0;
+        // virtual void activate_vertex(vertex_t u) = 0;
+        // virtual void disable_vertex(vertex_t u) = 0;
         virtual bool is_active(vertex_t u) const = 0;
         virtual bool is_disabled(vertex_t u) const = 0;
         virtual bool get_state(vertex_t u) const = 0;

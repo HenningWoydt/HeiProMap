@@ -37,7 +37,6 @@
 namespace HeiProMap {
     struct GreedyEdgeMatcherConfiguration {
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
-        bool no_overload                  = false; // Matching an edge, should not create a vertex with a weight greater l_max.
     };
 
     class GreedyEdgeMatcher final : public ISerialMatcher {
@@ -45,6 +44,8 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
         weight_t m_l_max = 0;
+
+        std::vector<EdgeUVW> edges;
 
         u32 mark = 0;
         std::vector<u32> used;
@@ -61,6 +62,8 @@ namespace HeiProMap {
             m_k = k;
             m_l_max = t_l_max;
 
+            edges.reserve(m_m);
+
             mark = 0;
             used.resize(n, 0);
         }
@@ -73,8 +76,7 @@ namespace HeiProMap {
             mark += 1;
             matches.clear();
 
-            std::vector<EdgeUVW> edges;
-            edges.reserve(g.get_m());
+            edges.clear();
 
             // first handle pendant vertices
             if (config.match_pendant_vertices_first) {
@@ -97,7 +99,7 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > m_l_max) {
+                    if (g.get_weight(u) + g.get_weight(v) > m_l_max) {
                         continue;
                     }
 
@@ -117,22 +119,25 @@ namespace HeiProMap {
             // handle all other vertices
             for (vertex_t u : av_manager) {
                 ASSERT(av_manager.is_active(u));
+                weight_t u_w = g.get_weight(u);
 
                 if (used[u] == mark) {
                     continue;
                 }
 
                 for (const auto& [v, w] : g[u]) {
+                    weight_t v_w = g.get_weight(v);
+
                     if (used[v] == mark) {
                         continue;
                     }
 
-                    if (config.no_overload && g.get_weight(u) + g.get_weight(v) > m_l_max) {
+                    if (g.get_weight(u) + g.get_weight(v) > m_l_max) {
                         continue;
                     }
 
-                    const f64 rating = (f64)w / (f64)(g.size(u) * g.size(v));
-                    edges.emplace_back(u, v, rating);
+                    const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
+                    edges.emplace_back(u, v, edge_rating);
                 }
             }
             std::sort(edges.begin(), edges.end(), std::greater<>());

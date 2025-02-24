@@ -34,85 +34,96 @@
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    class HeavyEdgeMatcher final : public ISerialMatcher {
-        vertex_t m_n     = 0;
-        vertex_t m_m     = 0;
-        partition_t m_k  = 0;
-        weight_t m_l_max = 0;
+    struct HeavyEdgeMatcherConfiguration {
+        bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
+    };
 
-        u32 mark = 0;
+    class HeavyEdgeMatcher final : public ISerialMatcher {
+        vertex_t    m_n     = 0;
+        vertex_t    m_m     = 0;
+        partition_t m_k     = 0;
+        weight_t    m_l_max = 0;
+
+        u32              mark = 0;
         std::vector<u32> used;
 
     public:
         HeavyEdgeMatcher() = default;
 
-        void initialize(const vertex_t n,
-                        const vertex_t m,
-                        const partition_t k,
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
                         const weight_t t_l_max) override {
-            m_n     = n;
-            m_m     = m;
-            m_k     = k;
+            m_n     = t_n;
+            m_m     = t_m;
+            m_k     = t_k;
             m_l_max = t_l_max;
 
             mark = 0;
-            used.resize(n, mark);
+            used.resize(m_n, mark);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(TSerialGraph& g,
-                   TSerialActiveVertexManager& av_manager,
-                   std::vector<EdgeUV>& matches) {
+        template<typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(HeavyEdgeMatcherConfiguration &config,
+                   TSerialGraph &g,
+                   TSerialActiveVertexManager &av_manager,
+                   std::vector<EdgeUV> &matches) {
             mark += 1;
             matches.clear();
 
-            // first check vertices with degree 1
-            for (vertex_t u : av_manager) {
-                ASSERT(av_manager.is_active(u));
+            if (config.match_pendant_vertices_first) {
+                // first check vertices with degree 1
+                for (vertex_t u: av_manager) {
+                    ASSERT(av_manager.is_active(u));
 
-                if (used[u] != mark && g.size(u) == 1) {
+                    if (used[u] == mark) { continue; }
+                    if (g.size(u) != 1) { continue; }
+
                     vertex_t v = g.neighbor(u, 0);
 
-                    if (used[v] != mark && g.get_weight(u) + g.get_weight(v) <= m_l_max) {
-                        used[u] = mark;
-                        used[v] = mark;
+                    if (used[v] == mark) { continue; }
 
-                        matches.emplace_back(v, u); // pull u into v
-                    }
+                    weight_t u_w = g.get_weight(u);
+                    weight_t v_w = g.get_weight(v);
+
+                    if (u_w + v_w > m_l_max) { continue; }
+
+                    matches.emplace_back(v, u); // pull u into v
                 }
             }
 
             // check all other vertices
-            for (vertex_t u : av_manager) {
+            for (vertex_t u: av_manager) {
                 ASSERT(av_manager.is_active(u));
 
-                if (used[u] != mark) {
-                    size_t best_idx;
-                    weight_t max_weight = 0;
+                if (used[u] == mark) { continue; }
 
-                    for (size_t i = 0; i < g.size(u); ++i) {
-                        vertex_t v  = g.neighbor(u, i);
-                        weight_t ew = g.get_weight(u, i);
-                        ASSERT(u != v);
-                        ASSERT(av_manager.is_active(v));
-                        if (used[v] != mark && g.get_weight(u) + g.get_weight(v) <= m_l_max) {
-                            if (ew > max_weight) {
-                                best_idx   = i;
-                                max_weight = ew;
-                            }
-                        }
+                weight_t u_w        = g.get_weight(u);
+                vertex_t best_v     = u;
+                weight_t max_weight = 0;
+
+                for (auto const &[v, w]: g[u]) {
+
+                    if (used[v] == mark) { continue; }
+
+                    weight_t v_w = g.get_weight(v);
+
+                    if (u_w + v_w > m_l_max) { continue; }
+
+                    if (w > max_weight) {
+                        best_v     = v;
+                        max_weight = w;
                     }
+                }
 
-                    if (max_weight != 0) {
-                        vertex_t v = g.neighbor(u, best_idx);
-                        used[u]    = mark;
-                        used[v]    = mark;
+                if (best_v != u) {
+                    used[u]      = mark;
+                    used[best_v] = mark;
 
-                        if (g.size(u) > g.size(v)) {
-                            matches.emplace_back(u, v);
-                        } else {
-                            matches.emplace_back(v, u);
-                        }
+                    if (g.size(u) > g.size(best_v)) {
+                        matches.emplace_back(u, best_v);
+                    } else {
+                        matches.emplace_back(best_v, u);
                     }
                 }
             }

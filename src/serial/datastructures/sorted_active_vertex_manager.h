@@ -24,28 +24,42 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ACTIVE_VERTEX_MANAGER_H
-#define HEIPROMAP_ACTIVE_VERTEX_MANAGER_H
+#ifndef HEIPROMAP_SORTED_ACTIVE_VERTEX_MANAGER_H
+#define HEIPROMAP_SORTED_ACTIVE_VERTEX_MANAGER_H
 
 #include <numeric>
+#include <algorithm>
 
 #include "../../definitions.h"
 #include "../interfaces/ISerialActiveVertexManager.h"
 
 namespace HeiProMap {
-    class ActiveVertexManager final : public ISerialActiveVertexManager {
-        // active states
-        std::vector<u8>       m_states;
-        std::vector<vertex_t> m_vertices;
-        vertex_t              m_n_active = 0;
+    class SortedActiveVertexManager final : public ISerialActiveVertexManager {
+        u8       *m_states       = nullptr;
+        vertex_t *m_vertices     = nullptr;
+        size_t   m_vertices_size = 0;
+        vertex_t m_n_active      = 0;
 
     public:
+        SortedActiveVertexManager() = default;
+
+        ~SortedActiveVertexManager() override {
+            free(m_states);
+            free(m_vertices);
+        }
+
         // initialize
-        void initialize(const size_t n) override {
-            m_states.resize(n, 1);
-            m_vertices.resize(n);
-            std::iota(m_vertices.begin(), m_vertices.end(), 0);
-            m_n_active = n;
+        void initialize(const size_t t_n) override {
+            size_t t_n_64 = round_up_64(t_n);
+
+            m_states = (u8 *) aligned_alloc(64, t_n_64 * sizeof(u8));
+            std::fill(m_states, m_states + t_n, (u8) 1);
+
+            m_vertices      = (vertex_t *) aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            m_vertices_size = t_n;
+            std::iota(m_vertices, m_vertices + t_n, 0);
+
+            m_n_active = t_n;
         }
 
         // active vertex manipulation
@@ -62,28 +76,36 @@ namespace HeiProMap {
             for (const auto [u, v]: matches) {
                 m_states[v] = 0;
             }
+
+            size_t write_idx = 0;
+            for (size_t read_idx = 0; read_idx < m_vertices_size; ++read_idx) {
+                if (!is_disabled(m_vertices[read_idx])) {
+                    m_vertices[write_idx] = m_vertices[read_idx];
+                    ++write_idx;
+                }
+            }
+            m_vertices_size = write_idx;
         }
 
         void uncontract(const std::vector<EdgeUV> &matches) override {
             m_n_active += matches.size();
+            size_t old_size = m_vertices_size;
             for (const auto [u, v]: matches) {
-                m_states[v] = 1;
-                m_vertices.push_back(v);
+                m_states[v]                 = 1;
+                m_vertices[m_vertices_size] = v;
+                m_vertices_size++;
             }
+            std::sort(m_vertices+old_size, m_vertices + m_vertices_size); // sort new half
+            std::inplace_merge(m_vertices, m_vertices + old_size, m_vertices + m_vertices_size); // merge
         }
 
         class Iterator {
-            std::vector<vertex_t> &m_vertices;
-            std::vector<u8>       &m_states;
-            size_t                m_idx = 0;
+            vertex_t *m_vertices = nullptr;
+            size_t   m_idx;
 
         public:
             // Constructor
-            Iterator(std::vector<vertex_t> &vertices,
-                     std::vector<u8> &states) : m_vertices(vertices), m_states(states) {
-                // Skip disabled vertices during initialization
-                advance_to_next_valid();
-            }
+            explicit Iterator(vertex_t *vertices, size_t idx) : m_vertices(vertices), m_idx(idx) {}
 
             // Dereference operator
             vertex_t operator*() const {
@@ -92,38 +114,17 @@ namespace HeiProMap {
 
             // Pre-increment operator
             Iterator &operator++() {
-                // Remove the current inactive vertex from the vector
-                if (!m_states[m_vertices[m_idx]]) {
-                    m_vertices[m_idx] = m_vertices.back();
-                    m_vertices.pop_back();
-                } else {
-                    ++m_idx;
-                }
-
-                // Advance to the next valid vertex
-                advance_to_next_valid();
+                ++m_idx;
                 return *this;
             }
 
-            bool operator!=(const Iterator &other) const {
-                return m_idx != other.m_vertices.size();
-            }
-
-        private:
-            // Helper to advance the iterator to the next active vertex
-            void advance_to_next_valid() const {
-                while (m_idx < m_vertices.size() && !m_states[m_vertices[m_idx]]) {
-                    // Pop inactive vertices out of the container
-                    m_vertices[m_idx] = m_vertices.back();
-                    m_vertices.pop_back();
-                }
-            }
+            bool operator!=(const Iterator &other) const { return m_idx != other.m_idx; }
         };
 
-        Iterator begin() { return {m_vertices, m_states}; }
+        Iterator begin() { return Iterator(m_vertices, 0); }
 
-        Iterator end() { return {m_vertices, m_states}; }
+        Iterator end() { return Iterator(m_vertices, m_vertices_size); }
     };
 }
 
-#endif //HEIPROMAP_ACTIVE_VERTEX_MANAGER_H
+#endif //HEIPROMAP_SORTED_ACTIVE_VERTEX_MANAGER_H

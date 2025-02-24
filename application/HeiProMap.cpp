@@ -45,9 +45,9 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
                     // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
                     // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
-                    {"--graph", "../data/dimacs10_delaunay/delaunay_n21.graph"},
-                    {"--mapping", "../data/out/partition/delaunay_n21.txt"},
-                    {"--statistics", "../data/out/statistics/delaunay_n21.JSON"},
+                    {"--graph", "../data/dimacs10_delaunay/delaunay_n20.graph"},
+                    {"--mapping", "../data/out/partition/delaunay_n20.txt"},
+                    {"--statistics", "../data/out/statistics/delaunay_n20.JSON"},
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"},
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
@@ -58,15 +58,18 @@ int main(const int argc, char* argv[]) {
                     {"--seed", "0"},
 
                     // coarsening
+                    // {"--coarsening-algorithm", "heavy-matching"},
                     // {"--coarsening-algorithm", "greedy-matching"},
                     {"--coarsening-algorithm", "global-paths"},
 
                     // coarsening - greedy configuration
                     {"--coarsening-algorithm-greedy-matching-pendant-first", "0"},
-                    {"--coarsening-algorithm-greedy-matching-no-overload", "1"},
+
+                    // coarsening - greedy configuration
+                    {"--coarsening-algorithm-heavy-matching-pendant-first", "0"},
 
                     // Partitioning
-                    //{"--partitioning-algorithm",                             "kaffpa-multisection"},
+                    //{"--partitioning-algorithm", "kaffpa-multisection"},
                     // {"--partitioning-algorithm", "multisection"},
 
                     // {"--partitioning-algorithm-multisection-mode", "fast"},

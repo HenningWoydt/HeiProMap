@@ -145,7 +145,10 @@ namespace HeiProMap {
 
                 // Coarsening greedy matching
                 {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
-                {"--coarsening-algorithm-greedy-matching-no-overload", "", "Whether the greedy matching algorithm can match vertices, if it would lead to overload. 1 equals no overload possible, while 0 enables overloads.", "1", "", false},
+
+                // Coarsening heavy matching
+                {"--coarsening-algorithm-heavy-matching-pendant-first", "", "Whether the heavy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
+
 
                 /** Partitioning */
                 {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.", "multisection", "", false},
@@ -212,6 +215,7 @@ namespace HeiProMap {
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
 
         GreedyEdgeMatcherConfiguration greedy_edge_matcher_config;
+        HeavyEdgeMatcherConfiguration heavy_edge_matcher_config;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;
@@ -275,8 +279,10 @@ namespace HeiProMap {
             if (use_default || is_set("--coarsening-algorithm-greedy-matching-pendant-first")) {
                 greedy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
             }
-            if (use_default || is_set("--coarsening-algorithm-greedy-matching-no-overload")) {
-                greedy_edge_matcher_config.no_overload = get("--coarsening-algorithm-greedy-matching-no-overload") == "1";
+
+            // initialize heavy matching config
+            if (use_default || is_set("--coarsening-algorithm-heavy-matching-pendant-first")) {
+                heavy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-heavy-matching-pendant-first") == "1";
             }
 
             // actually set which algorithm to use

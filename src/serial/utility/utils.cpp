@@ -129,7 +129,7 @@ namespace HeiProMap {
     }
 
     f64 get_seconds(std::chrono::high_resolution_clock::time_point sp, std::chrono::high_resolution_clock::time_point ep) {
-        return (f64)std::chrono::duration_cast<std::chrono::nanoseconds>(ep - sp).count() / 1e9;;
+        return (f64)std::chrono::duration_cast<std::chrono::nanoseconds>(ep - sp).count() / 1e9;
     }
 
     std::string to_string(const std::vector<EdgeVW>& vec) {
@@ -292,5 +292,9 @@ namespace HeiProMap {
         ints[idx] = curr_number;
         idx += curr_number != 0;
         ints.resize(idx);
+    }
+
+    size_t round_up_64(std::size_t x) {
+        return (x + 63) & ~static_cast<std::size_t>(63);
     }
 }

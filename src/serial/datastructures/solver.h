@@ -50,6 +50,7 @@
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
+#include "sorted_active_vertex_manager.h"
 
 namespace HeiProMap {
     /**
@@ -59,7 +60,8 @@ namespace HeiProMap {
         AlgorithmConfiguration ac;
 
         std::vector<GraphCSR> graphs;
-        ActiveVertexManager av_manager;
+        // ActiveVertexManager av_manager;
+        SortedActiveVertexManager av_manager;
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
         QuotientGraph q_graph;
@@ -232,7 +234,7 @@ namespace HeiProMap {
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 ge_matcher.match(ac.greedy_edge_matcher_config, graphs.back(), av_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(graphs.back(), av_manager, matches.back());
+                he_matcher.match(ac.heavy_edge_matcher_config, graphs.back(), av_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(graphs.back(), av_manager, matches.back());
             } else {
