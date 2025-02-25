@@ -35,6 +35,7 @@
 #include <sys/stat.h>
 
 #include "../../definitions.h"
+#include "../../macros.h"
 #include "../interfaces/ISerialGraph.h"
 #include "../utility/utils.h"
 
@@ -49,13 +50,13 @@ namespace HeiProMap {
         weight_t m_vertex_weights = 0;
         weight_t m_edge_weights   = 0;
 
-        weight_t* m_v_weights   = nullptr;
-        size_t* m_neighborhoods = nullptr;
-        EdgeVW* m_edges         = nullptr;
-        size_t m_curr_m         = 0;
+        weight_t *m_v_weights     = nullptr;
+        size_t   *m_neighborhoods = nullptr;
+        EdgeVW   *m_edges         = nullptr;
+        size_t   m_curr_m         = 0;
 
     public:
-        explicit GraphCSRArrays(const std::string& graph_in) {
+        explicit GraphCSRArrays(const std::string &graph_in) {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -73,7 +74,7 @@ namespace HeiProMap {
             size_t file_size = fileInfo.st_size;
 
             // Memory-map the file
-            char* file_arr = static_cast<char*>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
+            char *file_arr = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
             if (file_arr == MAP_FAILED) {
                 std::cerr << "File " << graph_in << " Could not map the file!" << std::endl;
                 close(fd);
@@ -132,18 +133,18 @@ namespace HeiProMap {
             move_while(file_arr, i, ' ', file_size);
             ++i; // now on the next line
 
-            vertex_t m_n_64    = round_up_64(m_n + 1);
-            vertex_t m_m_64    = round_up_64(m_m + 1);
-            m_neighborhoods    = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            vertex_t m_n_64 = round_up_64(m_n + 1);
+            vertex_t m_m_64 = round_up_64(m_m + 1);
+            m_neighborhoods = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
             m_neighborhoods[0] = 0;
-            m_edges            = (EdgeVW*)aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
+            m_edges = (EdgeVW *) aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
 
             vertex_t u = 0;
             if (fmt_1 == '0' && fmt_2 == '0') {
-                m_v_weights = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+                m_v_weights = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
                 std::fill_n(m_v_weights, m_n_64, 1);
 
-                m_vertex_weights = (weight_t)m_n;
+                m_vertex_weights = (weight_t) m_n;
                 while (true) {
                     if (file_arr[i] == '%') {
                         // this line is a comment, ignore it
@@ -202,7 +203,7 @@ namespace HeiProMap {
                     }
                 }
             } else {
-                m_v_weights = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+                m_v_weights = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
                 std::fill_n(m_v_weights, m_n_64, 0);
 
                 while (true) {
@@ -257,115 +258,121 @@ namespace HeiProMap {
             close(fd);
         }
 
-        GraphCSRArrays(const GraphCSRArrays& g, const std::vector<EdgeUV>& matching) {
+        GraphCSRArrays(const GraphCSRArrays &g,
+                       const EdgeUV* matches,
+                       size_t &matches_size) {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
             vertex_t m_n_64 = round_up_64(g.get_n() + 1);
             vertex_t m_m_64 = round_up_64(g.get_m() + 1);
 
-            m_n                = g.get_n();
-            m_m                = 0;
-            m_curr_m           = 0;
-            m_v_weights        = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
-            m_neighborhoods    = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
-            m_neighborhoods[0] = 0;
-            m_edges            = (EdgeVW*)aligned_alloc(64, m_m_64 * sizeof(size_t));
-            m_vertex_weights   = g.m_vertex_weights;
+            m_n      = g.get_n();
+            m_m      = 0;
+            m_curr_m = 0;
+
+            m_vertex_weights = g.m_vertex_weights;
+            m_v_weights      = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            std::copy(g.m_v_weights, g.m_v_weights + m_n_64, m_v_weights);
+
+            m_neighborhoods = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_edges         = (EdgeVW *) aligned_alloc(64, m_m_64 * sizeof(size_t));
 
             // define the state of each vertex
             constexpr u8 NOT_MATCHED    = 0;
             constexpr u8 FIRST_MATCHED  = 1;
             constexpr u8 SECOND_MATCHED = 2;
-            std::vector<u8> vertex_state(m_n, NOT_MATCHED);
-            std::vector<vertex_t> vertex_neighbor(m_n);
+
+            u8 *vertex_state = (u8 *) aligned_alloc(64, m_n_64 * sizeof(u8));
+            std::fill_n(vertex_state, m_n_64, NOT_MATCHED);
+
+            vertex_t *vertex_neighbor = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
 
             // check the matching
-            for (const auto& [u, v] : matching) {
+            for(size_t i = 0; i < matches_size; ++i){
+                const auto [u, v] = matches[i];
+
                 vertex_state[u]    = FIRST_MATCHED;
                 vertex_state[v]    = SECOND_MATCHED;
                 vertex_neighbor[u] = v;
                 vertex_neighbor[v] = u;
+
+                m_v_weights[v] = 0;
+                m_v_weights[u] = g.get_weight(u) + g.get_weight(v);
             }
 
+            m_neighborhoods[0] = 0;
             for (vertex_t u = 0; u < m_n; ++u) {
                 if (vertex_state[u] == NOT_MATCHED) {
                     // copy it to the next graph
-                    m_v_weights[u] = g.get_weight(u);
-                    for (size_t i = 0; i < g.size(u); ++i) {
-                        vertex_t vv = g.neighbor(u, i);
-                        weight_t ww = g.get_weight(u, i);
-
+                    for (auto [vv, ww]: g[u]) {
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        vv                    = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
-                        m_edges[m_curr_m].v   = vv;
-                        m_edges[m_curr_m++].w = ww;
+                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
                         // if the edge is present, then add the weight, else expand it
-                        for (size_t j = m_neighborhoods[u]; j < m_curr_m - 1; ++j) {
-                            if (m_edges[j].v == vv) {
-                                m_edges[j].w += ww;
-                                m_curr_m -= 1;
-                                break;
-                            }
+                        bool        found = false;
+                        for (size_t j     = m_neighborhoods[u]; j < m_curr_m; ++j) {
+                            bool same = m_edges[j].v == vv;
+                            m_edges[j].w += same * ww;
+                            found |= same;
                         }
+
+                        m_edges[m_curr_m].v = vv;
+                        m_edges[m_curr_m].w = ww;
+                        m_curr_m += !found;
                     }
                 } else if (vertex_state[u] == FIRST_MATCHED) {
-                    // the vertex gets all neighbors of v
+                    // the vertex gets all neighbors of u and v
                     vertex_t v = vertex_neighbor[u];
 
-                    m_v_weights[v] = 0;
-                    m_v_weights[u] = g.get_weight(u) + g.get_weight(v);
-
-                    for (size_t i = 0; i < g.size(u); ++i) {
-                        vertex_t vv = g.neighbor(u, i);
-                        weight_t ww = g.get_weight(u, i);
-
+                    for (auto [vv, ww]: g[u]) {
                         // do not add edge to matched vertex
                         if (vv == v) { continue; }
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
-                        m_edges[m_curr_m].v   = vv;
-                        m_edges[m_curr_m++].w = ww;
-
                         // if the edge is present, then add the weight, else expand it
-                        for (size_t j = m_neighborhoods[u]; j < m_curr_m - 1; ++j) {
-                            if (m_edges[j].v == vv) {
-                                m_edges[j].w += ww;
-                                m_curr_m -= 1;
-                                break;
-                            }
+                        bool        found = false;
+                        for (size_t j     = m_neighborhoods[u]; j < m_curr_m; ++j) {
+                            bool same = m_edges[j].v == vv;
+                            m_edges[j].w += same * ww;
+                            found |= same;
                         }
-                    }
-                    for (size_t i = 0; i < g.size(v); ++i) {
-                        vertex_t vv = g.neighbor(v, i);
-                        weight_t ww = g.get_weight(v, i);
 
+                        m_edges[m_curr_m].v = vv;
+                        m_edges[m_curr_m].w = ww;
+                        m_curr_m += !found;
+                    }
+                    for (auto [vv, ww]: g[v]) {
                         // do not add edge to matched vertex
                         if (vv == u) { continue; }
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
                         vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
 
-                        m_edges[m_curr_m].v   = vv;
-                        m_edges[m_curr_m++].w = ww;
-
                         // if the edge is present, then add the weight, else expand it
-                        for (size_t j = m_neighborhoods[u]; j < m_curr_m - 1; ++j) {
-                            if (m_edges[j].v == vv) {
-                                m_edges[j].w += ww;
-                                m_curr_m -= 1;
-                                break;
-                            }
+                        bool        found = false;
+                        for (size_t j     = m_neighborhoods[u]; j < m_curr_m; ++j) {
+                            bool same = m_edges[j].v == vv;
+                            m_edges[j].w += same * ww;
+                            found |= same;
                         }
+
+                        m_edges[m_curr_m].v = vv;
+                        m_edges[m_curr_m].w = ww;
+                        m_curr_m += !found;
                     }
                 }
                 m_neighborhoods[u + 1] = m_curr_m;
             }
             m_m = m_curr_m;
+
+            free(vertex_state);
+            free(vertex_neighbor);
         }
 
         // Move constructor
-        GraphCSRArrays(GraphCSRArrays&& other) noexcept {
+        GraphCSRArrays(GraphCSRArrays &&other) noexcept {
             m_n = other.m_n;
             m_m = other.m_m;
 
@@ -383,8 +390,9 @@ namespace HeiProMap {
         }
 
         // Optionally disable copying.
-        GraphCSRArrays(const GraphCSRArrays&)            = delete;
-        GraphCSRArrays& operator=(const GraphCSRArrays&) = delete;
+        GraphCSRArrays(const GraphCSRArrays &) = delete;
+
+        GraphCSRArrays &operator=(const GraphCSRArrays &) = delete;
 
         ~GraphCSRArrays() override {
             free(m_v_weights);
@@ -393,11 +401,17 @@ namespace HeiProMap {
         }
 
         vertex_t get_n() const override { return m_n; }
+
         vertex_t get_m() const override { return m_m; }
+
         weight_t get_weight() const override { return m_vertex_weights; }
+
         weight_t get_weight(const vertex_t u) const override { return m_v_weights[u]; }
+
         size_t size(const vertex_t u) const override { return m_neighborhoods[u + 1] - m_neighborhoods[u]; }
+
         vertex_t neighbor(const vertex_t u, const size_t idx) const override { return m_edges[m_neighborhoods[u] + idx].v; }
+
         weight_t get_weight(const vertex_t u, const size_t idx) const override { return m_edges[m_neighborhoods[u] + idx].w; }
 
         // edge manipulation
@@ -411,23 +425,28 @@ namespace HeiProMap {
         }
 
         class NeighborhoodIterator {
-            vertex_t m_u;
-            size_t* m_neighborhoods;
-            EdgeVW* m_edges;
+            vertex_t     m_u;
+            const size_t *m_neighborhoods;
+            const EdgeVW *m_edges;
 
         public:
             NeighborhoodIterator(vertex_t u,
-                                 size_t* neighborhoods,
-                                 EdgeVW* edges) : m_u(u), m_neighborhoods(neighborhoods), m_edges(edges) {}
+                                 size_t *neighborhoods,
+                                 EdgeVW *edges) {
+
+                m_u             = u;
+                m_neighborhoods = ASSUME_ALIGNED(size_t *, neighborhoods, 64);
+                m_edges         = ASSUME_ALIGNED(EdgeVW*, edges, 64);
+            }
 
             class Iterator {
-                EdgeVW* m_edges;
-                size_t m_idx;
+                const EdgeVW *m_edges;
+                size_t       m_idx;
 
             public:
                 // Constructor
-                Iterator(EdgeVW* edges, size_t idx) {
-                    m_edges = edges;
+                Iterator(const EdgeVW *edges, size_t idx) {
+                    m_edges = ASSUME_ALIGNED(EdgeVW*, edges, 64);
                     m_idx   = idx;
                 }
 
@@ -437,21 +456,22 @@ namespace HeiProMap {
                 }
 
                 // Pre-increment operator
-                Iterator& operator++() {
+                Iterator &operator++() {
                     m_idx++;
                     return *this;
                 }
 
-                bool operator!=(const Iterator& other) const {
+                bool operator!=(const Iterator &other) const {
                     return m_idx != other.m_idx;
                 }
             };
 
             Iterator begin() const { return {m_edges, m_neighborhoods[m_u]}; }
+
             Iterator end() const { return {m_edges, m_neighborhoods[m_u + 1]}; }
         };
 
-        NeighborhoodIterator operator[](const vertex_t u) {
+        NeighborhoodIterator operator[](const vertex_t u) const {
             return {u, m_neighborhoods, m_edges};
         }
     };

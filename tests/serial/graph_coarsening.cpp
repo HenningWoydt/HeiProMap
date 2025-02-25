@@ -51,24 +51,25 @@ namespace HeiProMap {
         HeavyEdgeMatcher he_matcher;
         he_matcher.initialize(g.get_n(), g.get_m(), 0, std::numeric_limits<weight_t>::max());
 
-        std::vector<EdgeUV> matches;
-        matches.reserve(av_manager.get_n_active() / 2);
-        he_matcher.match(heavy_edge_matcher_configuration, g, av_manager, matches);
+        size_t n_64 = round_up_64(g.get_n() / 2);
+        EdgeUV* matches = (EdgeUV*) aligned_alloc(64, n_64 * sizeof(EdgeUV));
+        size_t matches_size = 0;
+        he_matcher.match(heavy_edge_matcher_configuration, g, av_manager, matches, matches_size);
 
         auto sp_g = std::chrono::high_resolution_clock::now();
-        SimpleGraph g1(g, matches); // coarse the graph
+        SimpleGraph g1(g, matches, matches_size); // coarse the graph
         auto ep_g = std::chrono::high_resolution_clock::now();
 
         auto sp_csr_g = std::chrono::high_resolution_clock::now();
-        GraphCSR csr_g1(csr_g, matches); // coarse the graph
+        GraphCSR csr_g1(csr_g, matches, matches_size); // coarse the graph
         auto ep_csr_g = std::chrono::high_resolution_clock::now();
 
         auto sp_sorted_csr_g = std::chrono::high_resolution_clock::now();
-        SortedGraphCSR sorted_csr_g1(sorted_csr_g, matches); // coarse the graph
+        SortedGraphCSR sorted_csr_g1(sorted_csr_g, matches, matches_size); // coarse the graph
         auto ep_sorted_csr_g = std::chrono::high_resolution_clock::now();
 
         auto sp_csr_arrays_g = std::chrono::high_resolution_clock::now();
-        GraphCSRArrays csr_arrays_g1(csr_arrays_g, matches); // coarse the graph
+        GraphCSRArrays csr_arrays_g1(csr_arrays_g, matches, matches_size); // coarse the graph
         auto ep_csr_arrays_g = std::chrono::high_resolution_clock::now();
 
         double t_g = get_seconds(sp_g, ep_g);

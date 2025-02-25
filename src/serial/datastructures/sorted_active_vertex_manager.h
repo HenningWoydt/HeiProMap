@@ -79,10 +79,12 @@ namespace HeiProMap {
 
         bool get_state(const vertex_t u) const override { return m_states[u]; }
 
-        void contract(const std::vector<EdgeUV> &matches) override {
+        void contract(const EdgeUV *matches, size_t &matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
             size_t temp_idx = 0;
-            m_n_active -= matches.size();
-            for (const auto [u, v]: matches) { m_states[v] = 0; }
+            m_n_active -= matches_size;
+            for (size_t i = 0; i < matches_size; ++i) { m_states[matches[i].v] = 0; }
 
             size_t      write_idx = 0;
             for (size_t read_idx  = 0; read_idx < m_vertices_size; ++read_idx) {
@@ -100,15 +102,12 @@ namespace HeiProMap {
             temp_points.push_back(write_idx);
         }
 
-        void uncontract(const std::vector<EdgeUV> &matches) override {
-            m_n_active += matches.size();
+        void uncontract(const EdgeUV *matches, size_t &matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
+            m_n_active += matches_size;
             m_vertices_size = temp_points[temp_points.size() - 2];
-            for (const auto [u, v]: matches) {
-                m_states[v] = 1;
-                // m_vertices[m_vertices_size] = v;
-                // m_vertices_size++;
-            }
-            // std::sort(m_vertices + old_size, m_vertices + m_vertices_size); // sort new half
+            for (size_t i   = 0; i < matches_size; ++i) { m_states[matches[i].v] = 1; }
             std::inplace_merge(m_vertices, m_vertices + temp_points[temp_points.size() - 1], m_vertices + temp_points[temp_points.size() - 2]); // merge
             temp_points.pop_back();
         }
@@ -119,7 +118,10 @@ namespace HeiProMap {
 
         public:
             // Constructor
-            explicit Iterator(vertex_t *vertices, size_t idx) : m_vertices(vertices), m_idx(idx) {}
+            explicit Iterator(vertex_t *vertices, size_t idx) {
+                m_vertices = ASSUME_ALIGNED(vertex_t *, vertices, 64);
+                m_idx      = idx;
+            }
 
             // Dereference operator
             vertex_t operator*() const {
@@ -128,7 +130,7 @@ namespace HeiProMap {
 
             // Pre-increment operator
             Iterator &operator++() {
-                ++m_idx;
+                m_idx++;
                 return *this;
             }
 

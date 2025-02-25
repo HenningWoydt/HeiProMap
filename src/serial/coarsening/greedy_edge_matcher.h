@@ -40,14 +40,14 @@ namespace HeiProMap {
     };
 
     class GreedyEdgeMatcher final : public ISerialMatcher {
-        vertex_t m_n = 0;
-        vertex_t m_m = 0;
-        partition_t m_k = 0;
-        weight_t m_l_max = 0;
+        vertex_t    m_n     = 0;
+        vertex_t    m_m     = 0;
+        partition_t m_k     = 0;
+        weight_t    m_l_max = 0;
 
         std::vector<EdgeUVW> edges;
 
-        u32 mark = 0;
+        u32              mark = 0;
         std::vector<u32> used;
 
     public:
@@ -57,9 +57,9 @@ namespace HeiProMap {
                         const vertex_t m,
                         const partition_t k,
                         const weight_t t_l_max) override {
-            m_n = n;
-            m_m = m;
-            m_k = k;
+            m_n     = n;
+            m_m     = m;
+            m_k     = k;
             m_l_max = t_l_max;
 
             edges.reserve(m_m);
@@ -68,33 +68,35 @@ namespace HeiProMap {
             used.resize(n, 0);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(GreedyEdgeMatcherConfiguration& config,
-                   TSerialGraph& g,
-                   TSerialActiveVertexManager& av_manager,
-                   std::vector<EdgeUV>& matches) {
-            mark += 1;
-            matches.clear();
+        template<typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(GreedyEdgeMatcherConfiguration &config,
+                   TSerialGraph &g,
+                   TSerialActiveVertexManager &av_manager,
+                   EdgeUV *matches,
+                   size_t &matches_size) {
+            matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+            matches_size = 0;
 
+            mark += 1;
             edges.clear();
 
             // first handle pendant vertices
             if (config.match_pendant_vertices_first) {
-                for (vertex_t u : av_manager) {
+                for (vertex_t u: av_manager) {
                     ASSERT(av_manager.is_active(u));
 
                     if (g.size(u) != 1) {
                         continue;
                     }
 
-                    const vertex_t v  = g.neighbor(u, 0);
-                    const weight_t ew = g.get_weight(u, 0);
-                    const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
+                    const vertex_t v      = g.neighbor(u, 0);
+                    const weight_t ew     = g.get_weight(u, 0);
+                    const f64      rating = (f64) ew / (f64) (g.size(u) * g.size(v));
                     edges.emplace_back(u, v, rating);
                 }
                 std::sort(edges.begin(), edges.end(), std::greater<>());
 
-                for (const auto& [u, v, w] : edges) {
+                for (const auto &[u, v, w]: edges) {
                     if (used[u] == mark || used[v] == mark) {
                         continue;
                     }
@@ -108,16 +110,16 @@ namespace HeiProMap {
                         used[u] = mark;
                         used[v] = mark;
                         if (g.size(u) > g.size(v)) {
-                            matches.emplace_back(u, v);
+                            matches[matches_size++] = {u, v};
                         } else {
-                            matches.emplace_back(v, u);
+                            matches[matches_size++] = {v, u};
                         }
                     }
                 }
             }
 
             // handle all other vertices
-            for (vertex_t u : av_manager) {
+            for (vertex_t u: av_manager) {
                 ASSERT(av_manager.is_active(u));
                 weight_t u_w = g.get_weight(u);
 
@@ -125,7 +127,7 @@ namespace HeiProMap {
                     continue;
                 }
 
-                for (const auto& [v, w] : g[u]) {
+                for (const auto &[v, w]: g[u]) {
                     weight_t v_w = g.get_weight(v);
 
                     if (used[v] == mark) {
@@ -142,21 +144,22 @@ namespace HeiProMap {
             }
             std::sort(edges.begin(), edges.end(), std::greater<>());
 
-            for (const auto& [u, v, w] : edges) {
+            for (const auto &[u, v, w]: edges) {
                 if (used[u] != mark && used[v] != mark) {
                     // use this edge
                     used[u] = mark;
                     used[v] = mark;
                     if (g.size(u) > g.size(v)) {
-                        matches.emplace_back(u, v);
+                        matches[matches_size++] = {u, v};
                     } else {
-                        matches.emplace_back(v, u);
+                        matches[matches_size++] = {v, u};
                     }
                 }
             }
 
 #if ASSERT_ENABLED
-            for (const auto& [u, v] : matches) {
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto &[u, v] = matches[i];
                 ASSERT(u != v);
                 ASSERT(av_manager.is_active(u));
                 ASSERT(av_manager.is_active(v));
@@ -165,7 +168,8 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (auto& [u, v] : matches) {
+            for (size_t     i = 0; i < matches_size; ++i) {
+                const auto &[u, v] = matches[i];
                 hit[u] += 1;
                 hit[v] += 1;
 

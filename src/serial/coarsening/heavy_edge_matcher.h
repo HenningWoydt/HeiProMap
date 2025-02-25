@@ -67,9 +67,12 @@ namespace HeiProMap {
         void match(HeavyEdgeMatcherConfiguration &config,
                    TSerialGraph &g,
                    TSerialActiveVertexManager &av_manager,
-                   std::vector<EdgeUV> &matches) {
+                   EdgeUV *matches,
+                   size_t &matches_size) {
+            matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+            matches_size = 0;
+
             mark += 1;
-            matches.clear();
 
             if (config.match_pendant_vertices_first) {
                 // first check vertices with degree 1
@@ -88,7 +91,7 @@ namespace HeiProMap {
 
                     if (u_w + v_w > m_l_max) { continue; }
 
-                    matches.emplace_back(v, u); // pull u into v
+                    matches[matches_size++] = {v, u}; // pull u into v
                 }
             }
 
@@ -121,31 +124,33 @@ namespace HeiProMap {
                     used[best_v] = mark;
 
                     if (g.size(u) > g.size(best_v)) {
-                        matches.emplace_back(u, best_v);
+                        matches[matches_size++] = {u, best_v};
                     } else {
-                        matches.emplace_back(best_v, u);
+                        matches[matches_size++] = {best_v, u};
                     }
                 }
             }
 
 #if ASSERT_ENABLED
-            for (const EdgeUV& e : matches) {
-                ASSERT(e.u != e.v);
-                ASSERT(av_manager.is_active(e.u));
-                ASSERT(av_manager.is_active(e.v));
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto &[u, v] = matches[i];
+                ASSERT(u != v);
+                ASSERT(av_manager.is_active(u));
+                ASSERT(av_manager.is_active(v));
             }
 #endif
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (const auto& e : matches) {
-                hit[e.u] += 1;
-                hit[e.v] += 1;
+            for (size_t     i = 0; i < matches_size; ++i) {
+                const auto &[u, v] = matches[i];
+                hit[u] += 1;
+                hit[v] += 1;
 
-                if (hit[e.u] == 2) {
+                if (hit[u] == 2) {
                     ASSERT(false);
                 }
-                if (hit[e.v] == 2) {
+                if (hit[v] == 2) {
                     ASSERT(false);
                 }
             }

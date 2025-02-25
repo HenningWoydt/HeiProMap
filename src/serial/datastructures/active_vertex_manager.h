@@ -57,16 +57,19 @@ namespace HeiProMap {
 
         bool get_state(const vertex_t u) const override { return m_states[u]; }
 
-        void contract(const std::vector<EdgeUV> &matches) override {
-            m_n_active -= matches.size();
-            for (const auto [u, v]: matches) {
-                m_states[v] = 0;
-            }
+        void contract(const EdgeUV *matches, size_t &matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
+            m_n_active -= matches_size;
+            for (size_t i = 0; i < matches_size; ++i) { m_states[matches[i].v] = 0; }
         }
 
-        void uncontract(const std::vector<EdgeUV> &matches) override {
-            m_n_active += matches.size();
-            for (const auto [u, v]: matches) {
+        void uncontract(const EdgeUV *matches, size_t &matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
+            m_n_active += matches_size;
+            for (size_t i = 0; i < matches_size; ++i) {
+                vertex_t v = matches[i].v;
                 m_states[v] = 1;
                 m_vertices.push_back(v);
             }

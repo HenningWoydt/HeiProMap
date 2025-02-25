@@ -76,7 +76,8 @@ namespace HeiProMap {
         weight_t lmax = 0;
 
         // matching
-        std::vector<std::vector<EdgeUV>> matches;
+        std::vector<EdgeUV *>            matches;
+        std::vector<size_t>              matches_size;
         GreedyEdgeMatcher                ge_matcher;
         HeavyEdgeMatcher                 he_matcher;
         // GlobalPathAlgorithmMatcher gpa_matcher;
@@ -122,12 +123,12 @@ namespace HeiProMap {
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
 
             // refinement
-            lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            // lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            // lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            // qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            // k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            // multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            // hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
@@ -137,9 +138,9 @@ namespace HeiProMap {
             internal_solve();
 
 #if STATISTICCOLLECTOR
-            weight_t qap = get_qap(graphs.back(), av_manager, p_manager, d_oracle);
+            weight_t              qap = get_qap(graphs.back(), av_manager, p_manager, d_oracle);
             std::vector<weight_t> pweights;
-            for (partition_t id = 0; id < ac.k; ++id) { pweights.push_back(p_manager.get_bweight(id)); }
+            for (partition_t      id  = 0; id < ac.k; ++id) { pweights.push_back(p_manager.get_bweight(id)); }
             stat_collect.set_final(qap, pweights, lmax);
 #endif
             stat_collect.finalize();
@@ -229,15 +230,17 @@ namespace HeiProMap {
         void matching(const s32 level) {
             const auto sp_match = std::chrono::high_resolution_clock::now();
 
-            matches.emplace_back();
-            matches.back().reserve(av_manager.get_n_active() / 2);
+            size_t t_n_64 = round_up_64(av_manager.get_n_active() / 2);
+            EdgeUV *matches_arr = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
+            matches.push_back(matches_arr);
+            matches_size.push_back(0);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(ac.greedy_edge_matcher_config, graphs.back(), av_manager, matches.back());
+                ge_matcher.match(ac.greedy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(ac.heavy_edge_matcher_config, graphs.back(), av_manager, matches.back());
+                he_matcher.match(ac.heavy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(ac.global_path_algorithm_config, graphs.back(), av_manager, matches.back());
+                gpa_matcher.match(ac.global_path_algorithm_config, graphs.back(), av_manager, matches.back(), matches_size.back());
             } else {
                 std::cout << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -247,15 +250,15 @@ namespace HeiProMap {
             stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);
 
 #if STATISTICCOLLECTOR
-            stat_collect.set_matching_stats(level, matches.back().size());
+            stat_collect.set_matching_stats(level, matches_size.back());
 #endif
         }
 
         void coarsening(const s32 level) {
             const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
-            graphs.emplace_back(graphs.back(), matches.back()); // coarse the graph
-            av_manager.contract(matches.back());
+            graphs.emplace_back(graphs.back(), matches.back(), matches_size.back()); // coarse the graph
+            av_manager.contract(matches.back(), matches_size.back());
 
             const auto ep_coarse = std::chrono::high_resolution_clock::now();
             stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);
@@ -269,12 +272,14 @@ namespace HeiProMap {
         void uncoarsening(const s32 level) {
             const auto sp_uncoarse = std::chrono::high_resolution_clock::now();
 
-            p_manager.uncontract(matches.back());
-            av_manager.uncontract(matches.back());
-            bv_manager.uncontract(matches.back(), graphs[graphs.size() - 2], graphs[graphs.size() - 1], av_manager, p_manager);
+            p_manager.uncontract(matches.back(), matches_size.back());
+            av_manager.uncontract(matches.back(), matches_size.back());
+            bv_manager.uncontract(matches.back(), matches_size.back(), graphs[graphs.size() - 2], graphs[graphs.size() - 1], av_manager, p_manager);
             graphs.pop_back(); // this is doing uncontraction
 
+            free(matches.back());
             matches.pop_back(); // throw away the matching, not needed anymore
+            matches_size.pop_back();
 
             const auto ep_uncoarse = std::chrono::high_resolution_clock::now();
             stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);

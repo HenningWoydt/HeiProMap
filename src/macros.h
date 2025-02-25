@@ -53,6 +53,36 @@ namespace HeiProMap {
 #else
 #define HEAVYASSERT(condition) ((void)0)
 #endif
+
+#ifndef COLLECT_METRICS
+#define COLLECT_METRICS false
+#endif
+
+#if (COLLECT_METRICS)
+#define TIME_POINT(x) auto x = std::chrono::high_resolution_clock::now()
+#define INCREASE_COUNTER(x) x += 1
+#else
+#define TIME_POINT(x) ((void)0)
+#define INCREASE_COUNTER(x) ((void)0)
+#endif
+
+
+#ifdef __GNUC__  // (GCC or Clang)
+#define ASSUME_ALIGNED(dtype, ptr, alignment) (dtype) __builtin_assume_aligned((ptr), (alignment))
+#elif defined(_MSC_VER)  // MSVC
+    #include <intrin.h>
+  // MSVC does not have a direct equivalent to __builtin_assume_aligned,
+  // but we can at least use __assume to tell the compiler something
+  // about the pointer. This is not exactly the same, though.
+  inline void* ASSUME_ALIGNED(void* ptr, size_t /*alignment*/) {
+      __assume(ptr != nullptr);
+      return ptr;
+  }
+#else
+  // Fallback: do nothing
+  #define ASSUME_ALIGNED(dtype, ptr, alignment) (ptr)
+#endif
+
 }
 
 #endif //HEIPROMAP_MACROS_H

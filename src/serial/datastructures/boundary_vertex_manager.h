@@ -174,11 +174,14 @@ namespace HeiProMap {
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-        void uncontract(std::vector<EdgeUV>& matches,
+        void uncontract(const EdgeUV* matches,
+                        size_t &matches_size,
                         TSerialGraph& new_g, // the larger uncontracted graph
                         [[maybe_unused]] TSerialGraph& old_g, // the smaller not contracted graph
                         [[maybe_unused]] TSerialActiveVertexManager& av_manager,
                         TSerialPartitionManager& p_manager) {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
             for(vertex_t u : *this){ m_n_boundary_edges[u] = 0; }
             for(auto &vec : m_boundaries){ vec.clear(); }
             m_n_boundary = 0;

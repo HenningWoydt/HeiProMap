@@ -78,12 +78,10 @@ namespace HeiProMap {
             return weights;
         }
 
-        void uncontract(const vertex_t u, const vertex_t v) override { partition[v] = partition[u]; }
+        void uncontract(const EdgeUV* matches, size_t &matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
-        void uncontract(const std::vector<EdgeUV> &matches) override {
-            for (const auto [u, v]: matches) {
-                partition[v] = partition[u];
-            }
+            for(size_t i = 0; i < matches_size; ++i){ partition[matches[i].v] = partition[matches[i].u]; }
         }
 
         bool is_overloaded() override {

@@ -47,23 +47,23 @@ namespace HeiProMap {
         weight_t vertex_weights = 0;
         weight_t edge_weights   = 0;
 
-        std::vector<weight_t> v_weights;
+        std::vector<weight_t>            v_weights;
         std::vector<std::vector<EdgeVW>> adj;
-        size_t curr_m = 0;
+        size_t                           curr_m = 0;
 
     public:
-        explicit SimpleGraph(const std::string& graph_in) {
+        explicit SimpleGraph(const std::string &graph_in) {
             if (!file_exists(graph_in)) {
                 std::cerr << "File " << graph_in << " does not exist!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 
             std::ifstream file(graph_in);
-            std::string line(64, ' ');
+            std::string   line(64, ' ');
             if (file.is_open()) {
-                bool has_v_weights = false;
-                bool has_e_weights = false;
-                u64 expected_edges = 0;
+                bool has_v_weights  = false;
+                bool has_e_weights  = false;
+                u64  expected_edges = 0;
 
                 // read in header
                 while (std::getline(file, line)) {
@@ -75,13 +75,13 @@ namespace HeiProMap {
 
                     // read in header
                     std::vector<std::string> header = split(line, ' ');
-                    n                               = std::stoi(header[0]);
-                    m                               = 0;
-                    expected_edges                  = std::stoi(header[1]) * 2;
+                    n              = std::stoi(header[0]);
+                    m              = 0;
+                    expected_edges = std::stoi(header[1]) * 2;
 
                     // allocate space
                     v_weights.resize(n, 1);
-                    vertex_weights = (weight_t)n;
+                    vertex_weights = (weight_t) n;
                     adj.resize(n);
 
                     // read in header
@@ -89,14 +89,14 @@ namespace HeiProMap {
                     if (header.size() == 3 && header[2].size() == 3) {
                         fmt = header[2];
                     }
-                    has_v_weights = fmt[1] == '1';
-                    has_e_weights = fmt[2] == '1';
+                    has_v_weights   = fmt[1] == '1';
+                    has_e_weights   = fmt[2] == '1';
 
                     break;
                 }
 
                 // read in edges
-                vertex_t u = 0;
+                vertex_t         u = 0;
                 std::vector<u64> ints;
 
                 while (std::getline(file, line)) {
@@ -108,18 +108,18 @@ namespace HeiProMap {
 
                     // check if vertex weights
                     if (has_v_weights) {
-                        weight_t w     = (weight_t)ints[i++];
+                        weight_t w = (weight_t) ints[i++];
                         vertex_weights = vertex_weights - v_weights[u] + w;
-                        v_weights[u]   = w;
+                        v_weights[u] = w;
                     }
 
                     while (i < ints.size()) {
-                        vertex_t v = (vertex_t)ints[i++] - 1;
+                        vertex_t v = (vertex_t) ints[i++] - 1;
 
                         weight_t w = 1;
 
                         // check if edge weights
-                        if (has_e_weights) { w = (weight_t)ints[i++]; }
+                        if (has_e_weights) { w = (weight_t) ints[i++]; }
 
                         adj[u].emplace_back(v, w);
                         m += 1;
@@ -141,25 +141,31 @@ namespace HeiProMap {
         void set_vertex_weight(const vertex_t u, const weight_t weight = 1) {
             ASSERT(u < n);
             vertex_weights = vertex_weights - v_weights[u] + weight;
-            v_weights[u]   = weight;
+            v_weights[u] = weight;
         }
 
-        SimpleGraph(const SimpleGraph& g, const std::vector<EdgeUV>& matching) {
-            n      = g.get_n();
-            m      = 0;
+        SimpleGraph(const SimpleGraph &g,
+                    EdgeUV *matches,
+                    size_t &matches_size) {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
+            n = g.get_n();
+            m = 0;
             v_weights.resize(n);
             adj.resize(n + 1);
             vertex_weights = g.vertex_weights;
 
             // define the state of each vertex
-            constexpr u8 NOT_MATCHED    = 0;
-            constexpr u8 FIRST_MATCHED  = 1;
-            constexpr u8 SECOND_MATCHED = 2;
-            std::vector<u8> vertex_state(n, NOT_MATCHED);
+            constexpr u8          NOT_MATCHED    = 0;
+            constexpr u8          FIRST_MATCHED  = 1;
+            constexpr u8          SECOND_MATCHED = 2;
+            std::vector<u8>       vertex_state(n, NOT_MATCHED);
             std::vector<vertex_t> vertex_neighbor(n);
 
             // check the matching
-            for (const auto& [u, v] : matching) {
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto [u, v] = matches[i];
+
                 vertex_state[u]    = FIRST_MATCHED;
                 vertex_state[v]    = SECOND_MATCHED;
                 vertex_neighbor[u] = v;
@@ -182,7 +188,7 @@ namespace HeiProMap {
 
                         // if exists, add weight, otherwise append
                         bool found = false;
-                        for (auto& e : adj[u]) {
+                        for (auto &e: adj[u]) {
                             if (e.v == vv) {
                                 found = true;
                                 e.w += ww;
@@ -207,7 +213,7 @@ namespace HeiProMap {
 
                         // if exists, add weight, otherwise append
                         bool found = false;
-                        for (auto& e : adj[u]) {
+                        for (auto &e: adj[u]) {
                             if (e.v == vv) {
                                 found = true;
                                 e.w += ww;
@@ -227,7 +233,7 @@ namespace HeiProMap {
 
                         // if exists, add weight, otherwise append
                         bool found = false;
-                        for (auto& e : adj[u]) {
+                        for (auto &e: adj[u]) {
                             if (e.v == vv) {
                                 found = true;
                                 e.w += ww;
@@ -244,16 +250,22 @@ namespace HeiProMap {
         }
 
         vertex_t get_n() const override { return n; }
+
         vertex_t get_m() const override { return m; }
+
         weight_t get_weight() const override { return vertex_weights; }
+
         weight_t get_weight(const vertex_t u) const override { return v_weights[u]; }
+
         size_t size(const vertex_t u) const override { return adj[u].size(); }
+
         vertex_t neighbor(const vertex_t u, const size_t idx) const override { return adj[u][idx].v; }
+
         weight_t get_weight(const vertex_t u, const size_t idx) const override { return adj[u][idx].w; }
 
         // edge manipulation
         bool edge_exists(const vertex_t u, const vertex_t v) const override {
-            for (auto e : adj[u]) {
+            for (auto e: adj[u]) {
                 if (e.v == v) {
                     return true;
                 }
@@ -268,26 +280,27 @@ namespace HeiProMap {
             explicit NeighborhoodIterator(std::vector<EdgeVW> &t_edges) : edges(t_edges) {}
 
             class Iterator {
-                std::vector<EdgeVW>& edges;
+                std::vector<EdgeVW> &edges;
                 size_t idx;
 
             public:
                 // Constructor
-                Iterator(std::vector<EdgeVW>& edges, size_t idx) : edges(edges), idx(idx) {}
+                Iterator(std::vector<EdgeVW> &edges, size_t idx) : edges(edges), idx(idx) {}
 
                 // Dereference operator
                 EdgeVW operator*() const { return edges[idx]; }
 
                 // Pre-increment operator
-                Iterator& operator++() {
+                Iterator &operator++() {
                     idx++;
                     return *this;
                 }
 
-                bool operator!=(const Iterator& other) const { return idx != other.idx; }
+                bool operator!=(const Iterator &other) const { return idx != other.idx; }
             };
 
             Iterator begin() const { return {edges, 0}; }
+
             Iterator end() const { return {edges, edges.size()}; }
         };
 

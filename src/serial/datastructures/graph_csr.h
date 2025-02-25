@@ -35,6 +35,7 @@
 #include <sys/stat.h>
 
 #include "../../definitions.h"
+#include "../../macros.h"
 #include "../interfaces/ISerialGraph.h"
 #include "../utility/utils.h"
 
@@ -50,12 +51,12 @@ namespace HeiProMap {
         weight_t edge_weights   = 0;
 
         std::vector<weight_t> v_weights;
-        std::vector<size_t> neighborhoods;
-        std::vector<EdgeVW> edges;
-        size_t curr_m = 0;
+        std::vector<size_t>   neighborhoods;
+        std::vector<EdgeVW>   edges;
+        size_t                curr_m = 0;
 
     public:
-        explicit GraphCSR(const std::string& graph_in) {
+        explicit GraphCSR(const std::string &graph_in) {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -73,7 +74,7 @@ namespace HeiProMap {
             size_t file_size = fileInfo.st_size;
 
             // Memory-map the file
-            char* file_arr = static_cast<char*>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
+            char *file_arr = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
             if (file_arr == MAP_FAILED) {
                 std::cerr << "File " << graph_in << " Could not map the file!" << std::endl;
                 close(fd);
@@ -139,7 +140,7 @@ namespace HeiProMap {
             vertex_t u = 0;
             if (fmt_1 == '0' && fmt_2 == '0') {
                 v_weights.resize(n, 1);
-                vertex_weights = (weight_t)n;
+                vertex_weights = (weight_t) n;
                 while (true) {
                     if (file_arr[i] == '%') {
                         // this line is a comment, ignore it
@@ -251,7 +252,11 @@ namespace HeiProMap {
             close(fd);
         }
 
-        GraphCSR(const GraphCSR& g, const std::vector<EdgeUV>& matching) {
+        GraphCSR(const GraphCSR &g,
+                 EdgeUV *matches,
+                 size_t &matches_size) {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
             n      = g.get_n();
             m      = 0;
             curr_m = 0;
@@ -262,14 +267,16 @@ namespace HeiProMap {
             vertex_weights = g.vertex_weights;
 
             // define the state of each vertex
-            constexpr u8 NOT_MATCHED    = 0;
-            constexpr u8 FIRST_MATCHED  = 1;
-            constexpr u8 SECOND_MATCHED = 2;
-            std::vector<u8> vertex_state(n, NOT_MATCHED);
+            constexpr u8          NOT_MATCHED    = 0;
+            constexpr u8          FIRST_MATCHED  = 1;
+            constexpr u8          SECOND_MATCHED = 2;
+            std::vector<u8>       vertex_state(n, NOT_MATCHED);
             std::vector<vertex_t> vertex_neighbor(n);
 
-            // check the matching
-            for (const auto& [u, v] : matching) {
+            // check the
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto [u, v] = matches[i];
+
                 vertex_state[u]    = FIRST_MATCHED;
                 vertex_state[v]    = SECOND_MATCHED;
                 vertex_neighbor[u] = v;
@@ -285,7 +292,7 @@ namespace HeiProMap {
                         weight_t ww = g.get_weight(u, i);
 
                         // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        vv                = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
                         edges[curr_m].v   = vv;
                         edges[curr_m++].w = ww;
 
@@ -356,11 +363,17 @@ namespace HeiProMap {
         }
 
         vertex_t get_n() const override { return n; }
+
         vertex_t get_m() const override { return m; }
+
         weight_t get_weight() const override { return vertex_weights; }
+
         weight_t get_weight(const vertex_t u) const override { return v_weights[u]; }
+
         size_t size(const vertex_t u) const override { return neighborhoods[u + 1] - neighborhoods[u]; }
+
         vertex_t neighbor(const vertex_t u, const size_t idx) const override { return edges[neighborhoods[u] + idx].v; }
+
         weight_t get_weight(const vertex_t u, const size_t idx) const override { return edges[neighborhoods[u] + idx].w; }
 
         // edge manipulation
@@ -375,35 +388,36 @@ namespace HeiProMap {
 
         class NeighborhoodIterator {
             vertex_t u;
-            std::vector<size_t>& neighborhoods;
-            std::vector<EdgeVW>& edges;
+            std::vector<size_t> &neighborhoods;
+            std::vector<EdgeVW> &edges;
 
         public:
             NeighborhoodIterator(vertex_t u,
-                                 std::vector<size_t>& neighborhoods,
-                                 std::vector<EdgeVW>& edges) : u(u), neighborhoods(neighborhoods), edges(edges) {}
+                                 std::vector<size_t> &neighborhoods,
+                                 std::vector<EdgeVW> &edges) : u(u), neighborhoods(neighborhoods), edges(edges) {}
 
             class Iterator {
-                std::vector<EdgeVW>& edges;
+                std::vector<EdgeVW> &edges;
                 size_t idx;
 
             public:
                 // Constructor
-                Iterator(std::vector<EdgeVW>& edges, size_t idx) : edges(edges), idx(idx) {}
+                Iterator(std::vector<EdgeVW> &edges, size_t idx) : edges(edges), idx(idx) {}
 
                 // Dereference operator
                 EdgeVW operator*() const { return edges[idx]; }
 
                 // Pre-increment operator
-                Iterator& operator++() {
+                Iterator &operator++() {
                     idx++;
                     return *this;
                 }
 
-                bool operator!=(const Iterator& other) const { return idx != other.idx; }
+                bool operator!=(const Iterator &other) const { return idx != other.idx; }
             };
 
             Iterator begin() const { return {edges, neighborhoods[u]}; }
+
             Iterator end() const { return {edges, neighborhoods[u + 1]}; }
         };
 

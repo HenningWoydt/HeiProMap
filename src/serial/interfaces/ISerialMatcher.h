@@ -39,7 +39,8 @@ namespace HeiProMap {
         template<typename TSerialGraph, typename TSerialActiveVertexManager>
         void match(TSerialGraph &g,
                    TSerialActiveVertexManager &av_manager,
-                   std::vector<EdgeUV> &matches) {}
+                   EdgeUV* matches,
+                   size_t &matches_size) {}
     };
 }
 
