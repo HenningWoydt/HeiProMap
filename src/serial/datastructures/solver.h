@@ -123,12 +123,12 @@ namespace HeiProMap {
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
 
             // refinement
-            // lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            // lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            // qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            // k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            // multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
-            // hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
