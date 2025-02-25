@@ -32,6 +32,7 @@
 #include "../../src/serial/coarsening/heavy_edge_matcher.h"
 #include "../../src/serial/datastructures/active_vertex_manager.h"
 #include "../../src/serial/datastructures/graph_csr.h"
+#include "../../src/serial/datastructures/graph_csr_arrays.h"
 #include "../../src/serial/datastructures/simple_graph.h"
 #include "../../src/serial/datastructures/sorted_graph_csr.h"
 
@@ -41,6 +42,7 @@ namespace HeiProMap {
         SimpleGraph g(graph_in);
         GraphCSR csr_g(graph_in);
         SortedGraphCSR sorted_csr_g(graph_in);
+        GraphCSRArrays csr_arrays_g(graph_in);
 
         ActiveVertexManager av_manager;
         av_manager.initialize(g.get_n());
@@ -53,27 +55,34 @@ namespace HeiProMap {
         matches.reserve(av_manager.get_n_active() / 2);
         he_matcher.match(heavy_edge_matcher_configuration, g, av_manager, matches);
 
-        auto g_sp = std::chrono::high_resolution_clock::now();
+        auto sp_g = std::chrono::high_resolution_clock::now();
         SimpleGraph g1(g, matches); // coarse the graph
-        auto g_ep = std::chrono::high_resolution_clock::now();
+        auto ep_g = std::chrono::high_resolution_clock::now();
 
-        auto csr_g_sp = std::chrono::high_resolution_clock::now();
+        auto sp_csr_g = std::chrono::high_resolution_clock::now();
         GraphCSR csr_g1(csr_g, matches); // coarse the graph
-        auto csr_g_ep = std::chrono::high_resolution_clock::now();
+        auto ep_csr_g = std::chrono::high_resolution_clock::now();
 
-        auto sorted_csr_g_sp = std::chrono::high_resolution_clock::now();
+        auto sp_sorted_csr_g = std::chrono::high_resolution_clock::now();
         SortedGraphCSR sorted_csr_g1(sorted_csr_g, matches); // coarse the graph
-        auto sorted_csr_g_ep = std::chrono::high_resolution_clock::now();
+        auto ep_sorted_csr_g = std::chrono::high_resolution_clock::now();
 
-        double t_g = get_seconds(g_sp, g_ep);
-        double t_csr_g = get_seconds(csr_g_sp, csr_g_ep);
-        double t_sorted_csr_g = get_seconds(sorted_csr_g_sp, sorted_csr_g_ep);
-        std::cout << "coarsening " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_g = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g <<std::endl;
+        auto sp_csr_arrays_g = std::chrono::high_resolution_clock::now();
+        GraphCSRArrays csr_arrays_g1(csr_arrays_g, matches); // coarse the graph
+        auto ep_csr_arrays_g = std::chrono::high_resolution_clock::now();
+
+        double t_g = get_seconds(sp_g, ep_g);
+        double t_csr_g = get_seconds(sp_csr_g, ep_csr_g);
+        double t_sorted_csr_g = get_seconds(sp_sorted_csr_g, ep_sorted_csr_g);
+        double t_csr_arrays_g = get_seconds(sp_csr_arrays_g, ep_csr_arrays_g);
+        std::cout << "coarsening " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_g = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g << " csr_arrays_g = " << t_csr_arrays_g << " speedup = " << t_g / t_csr_arrays_g << std::endl;
 
         graphs_are_equal(g, csr_g);
         graphs_are_equal(g, sorted_csr_g);
+        graphs_are_equal(g, csr_arrays_g);
         graphs_are_equal(g1, csr_g1);
         graphs_are_equal(g1, sorted_csr_g1);
+        graphs_are_equal(g1, csr_arrays_g1);
     }
 
     TEST(GraphCoarsening, graph_csrgraph_PGPgiantcompo_graph) {

@@ -31,8 +31,9 @@
 
 #include "test_utils.h"
 #include "../../src/serial/datastructures/graph_csr.h"
-#include "../../src/serial/datastructures/sorted_graph_csr.h"
+#include "../../src/serial/datastructures/graph_csr_arrays.h"
 #include "../../src/serial/datastructures/simple_graph.h"
+#include "../../src/serial/datastructures/sorted_graph_csr.h"
 
 namespace HeiProMap {
 
@@ -49,13 +50,19 @@ namespace HeiProMap {
         SortedGraphCSR sorted_csr_g(graph_in);
         auto ep_sorted_csr_g = std::chrono::high_resolution_clock::now();
 
+        auto sp_csr_arrays_g = std::chrono::high_resolution_clock::now();
+        GraphCSRArrays csr_arrays_g(graph_in);
+        auto ep_csr_arrays_g = std::chrono::high_resolution_clock::now();
+
         double t_g = get_seconds(sp_g, ep_g);
         double t_csr_g = get_seconds(sp_csr_g, ep_csr_g);
         double t_sorted_csr_g = get_seconds(sp_sorted_csr_g, ep_sorted_csr_g);
-        std::cout << "initialization " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_h = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g << std::endl;
+        double t_csr_arrays_g = get_seconds(sp_csr_arrays_g, ep_csr_arrays_g);
+        std::cout << "initialization " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_g = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g << " csr_arrays_g = " << t_csr_arrays_g << " speedup = " << t_g / t_csr_arrays_g << std::endl;
 
         graphs_are_equal(simple_graph, csr_g);
         graphs_are_equal(simple_graph, sorted_csr_g);
+        graphs_are_equal(simple_graph, csr_arrays_g);
     }
 
     TEST(GraphInitialization, graph_csrgraph_PGPgiantcompo_graph) {

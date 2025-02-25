@@ -32,13 +32,16 @@
 #include "active_vertex_manager.h"
 #include "boundary_vertex_manager.h"
 #include "graph_csr.h"
+#include "graph_csr_arrays.h"
 #include "partition_manager.h"
 #include "quotient_graph.h"
+#include "sorted_active_vertex_manager.h"
 #include "sorted_graph_csr.h"
 #include "statistic_collector.h"
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/global_path_algorithm_arrays.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
@@ -50,8 +53,6 @@
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
-#include "sorted_active_vertex_manager.h"
-#include "../coarsening/global_path_algorithm_arrays.h"
 
 namespace HeiProMap {
     /**
@@ -60,7 +61,10 @@ namespace HeiProMap {
     class Solver {
         AlgorithmConfiguration ac;
 
-        std::vector<GraphCSR>     graphs;
+        // std::vector<GraphCSR>     graphs;
+
+        std::vector<GraphCSRArrays>     graphs;
+
         // ActiveVertexManager av_manager;
         SortedActiveVertexManager av_manager;
         PartitionManager          p_manager;
