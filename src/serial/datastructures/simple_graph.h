@@ -260,6 +260,40 @@ namespace HeiProMap {
             }
             return false;
         }
+
+        class NeighborhoodIterator {
+            std::vector<EdgeVW> &edges;
+
+        public:
+            explicit NeighborhoodIterator(std::vector<EdgeVW> &t_edges) : edges(t_edges) {}
+
+            class Iterator {
+                std::vector<EdgeVW>& edges;
+                size_t idx;
+
+            public:
+                // Constructor
+                Iterator(std::vector<EdgeVW>& edges, size_t idx) : edges(edges), idx(idx) {}
+
+                // Dereference operator
+                EdgeVW operator*() const { return edges[idx]; }
+
+                // Pre-increment operator
+                Iterator& operator++() {
+                    idx++;
+                    return *this;
+                }
+
+                bool operator!=(const Iterator& other) const { return idx != other.idx; }
+            };
+
+            Iterator begin() const { return {edges, 0}; }
+            Iterator end() const { return {edges, edges.size()}; }
+        };
+
+        NeighborhoodIterator operator[](const vertex_t u) {
+            return NeighborhoodIterator(adj[u]);
+        }
     };
 }
 

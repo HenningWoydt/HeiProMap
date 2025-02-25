@@ -45,12 +45,13 @@ namespace HeiProMap {
         ActiveVertexManager av_manager;
         av_manager.initialize(g.get_n());
 
+        HeavyEdgeMatcherConfiguration heavy_edge_matcher_configuration;
         HeavyEdgeMatcher he_matcher;
         he_matcher.initialize(g.get_n(), g.get_m(), 0, std::numeric_limits<weight_t>::max());
 
         std::vector<EdgeUV> matches;
         matches.reserve(av_manager.get_n_active() / 2);
-        he_matcher.match(g, av_manager, matches);
+        he_matcher.match(heavy_edge_matcher_configuration, g, av_manager, matches);
 
         auto g_sp = std::chrono::high_resolution_clock::now();
         SimpleGraph g1(g, matches); // coarse the graph
