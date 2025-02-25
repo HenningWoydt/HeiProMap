@@ -54,7 +54,7 @@ int main(const int argc, char* argv[]) {
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "Faraj20-fastest"},
+                    {"--config", "Faraj20-fast"},
                     {"--seed", "0"},
 
                     // coarsening

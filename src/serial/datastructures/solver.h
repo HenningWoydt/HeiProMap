@@ -31,6 +31,7 @@
 
 #include "active_vertex_manager.h"
 #include "boundary_vertex_manager.h"
+#include "boundary_vertex_manger_arrays.h"
 #include "graph_csr.h"
 #include "graph_csr_arrays.h"
 #include "partition_manager.h"
@@ -68,7 +69,8 @@ namespace HeiProMap {
         // ActiveVertexManager av_manager;
         SortedActiveVertexManager av_manager;
         PartitionManager          p_manager;
-        BoundaryVertexManager     bv_manager;
+        // BoundaryVertexManager     bv_manager;
+        BoundaryVertexManagerArrays bv_manager;
         QuotientGraph             q_graph;
         DistanceOracle            d_oracle;
 

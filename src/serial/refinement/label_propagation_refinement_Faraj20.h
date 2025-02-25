@@ -52,10 +52,10 @@ namespace HeiProMap {
         std::vector<weight_t> m_distance;
         u64 m_seed = 0;
 
-        std::vector<u32> vertex_used;
+        u32* vertex_used = nullptr;
         u32 vertex_marker = 0;
 
-        std::vector<u32> block_used;
+        u32* block_used = nullptr;
         u32 block_marker = 0;
 
         std::mt19937 gen;
@@ -63,6 +63,11 @@ namespace HeiProMap {
 
     public:
         LabelPropagationRefinementFaraj20() = default;
+
+        ~LabelPropagationRefinementFaraj20() override {
+            free(vertex_used);
+            free(block_used);
+        }
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -79,8 +84,12 @@ namespace HeiProMap {
             m_distance  = t_distance;
             m_seed      = t_seed;
 
-            vertex_used.resize(t_n, vertex_marker);
-            block_used.resize(t_k, block_marker);
+            vertex_t m_n_64 = round_up_64(m_n);
+            vertex_used = (u32*) aligned_alloc(64, m_n_64 * sizeof(u32));
+            std::fill_n(vertex_used, m_n_64, vertex_marker);
+
+            block_used = (u32*) aligned_alloc(64, m_n_64 * sizeof(u32));
+            std::fill_n(vertex_used, m_n_64, vertex_marker);
 
             gen.seed(m_seed);
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
@@ -105,11 +114,8 @@ namespace HeiProMap {
             for (u64 iteration = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
                 move_occurred = false;
 
-                std::vector<vertex_t> curr_boundary;
-                for (vertex_t u : bv_manager){ curr_boundary.push_back(u); }
-
                 vertex_marker += 1;
-                for (vertex_t u : curr_boundary) {
+                for (vertex_t u : bv_manager) {
                     if (!is_boundary(g, p_manager, u)) { continue; }
                     if (vertex_used[u] == vertex_marker) { continue; } // we already used u in this iteration
 
