@@ -63,7 +63,7 @@ namespace HeiProMap {
 
         // std::vector<GraphCSR>     graphs;
 
-        std::vector<GraphCSRArrays>     graphs;
+        std::vector<GraphCSRArrays> graphs;
 
         // ActiveVertexManager av_manager;
         SortedActiveVertexManager av_manager;
@@ -162,12 +162,7 @@ namespace HeiProMap {
                 matching(level);
                 coarsening(level);
 
-                weight_t      max_w = 0;
-                for (vertex_t u: av_manager) {
-                    max_w = std::max(max_w, graphs.back().get_weight(u));
-                }
-
-                std::cout << level << " " << av_manager.get_n_active() << " " << graphs.back().get_m() << " heavy vertex " << max_w << std::endl;
+                std::cout << level << " " << av_manager.get_n_active() << " " << graphs.back().get_m() << std::endl;
 
                 level += 1;
             }

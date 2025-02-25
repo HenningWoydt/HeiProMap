@@ -70,6 +70,13 @@ namespace HeiProMap {
         }
 
         weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
+        std::vector<weight_t> get_bweights() const override {
+            std::vector<weight_t> weights(m_k);
+            for(size_t i = 0; i < m_k; ++i){
+                weights[i] = bweights[i];
+            }
+            return weights;
+        }
 
         void uncontract(const vertex_t u, const vertex_t v) override { partition[v] = partition[u]; }
 
