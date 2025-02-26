@@ -294,9 +294,8 @@ namespace HeiProMap {
             TIME_POINT(sp_solve_paths);
             // process all paths
             for (vertex_t u: av_manager) {
-                u32 length = path_length[path_id[u]];
-                if (is_one_endpoint(m_neighbors[u], u) && length > 0) {
-                    solve_path(g, u, length, matches, matches_size);
+                if (is_one_endpoint(m_neighbors[u], u) && path_length[path_id[u]] > 0) {
+                    solve_path(g, u, path_length[path_id[u]], matches, matches_size);
                     path_length[path_id[u]] = 0;
                 }
             }
