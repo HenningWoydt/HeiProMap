@@ -184,9 +184,12 @@ namespace HeiProMap {
                 for (size_t j = 0; j < pairs_size; ++j) {
                     auto [u_id, v_id] = pairs[j];
 
+                    size_t max_n_swaps = 0;
+
                     // add all boundary vertices with gain
                     boundary_vertices_u.clear();
                     for (vertex_t u : bv_manager[u_id]) {
+                        max_n_swaps += 1;
                         for (const auto [v, w] : g[u]) {
                             if (p_manager[v] == v_id) {
                                 // u is connected to block v_id
@@ -199,6 +202,7 @@ namespace HeiProMap {
 
                     boundary_vertices_v.clear();
                     for (vertex_t v : bv_manager[v_id]) {
+                        max_n_swaps += 1;
                         for (const auto [u, w] : g[v]) {
                             if (p_manager[u] == u_id) {
                                 // v is connected to block u_id
@@ -217,16 +221,18 @@ namespace HeiProMap {
                     curr_qap_gain                = 0;
                     max_qap_gain                 = 0;
                     u32 moves_since_last_maximum = 0;
-                    while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
+                    size_t curr_n_swaps          = 0;
+                    while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && curr_n_swaps < 2*max_n_swaps) {
+                        curr_n_swaps += 1;
 
                         // remove vertex from u if it is not boundary
-                        if (!boundary_vertices_u.empty() && !is_boundary(g, p_manager, boundary_vertices_u.top_key())) {
+                        if (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) {
                             boundary_vertices_u.pop();
                             continue;
                         }
 
                         // remove vertex from v if it is not boundary
-                        if (!boundary_vertices_v.empty() && !is_boundary(g, p_manager, boundary_vertices_v.top_key())) {
+                        if (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) {
                             boundary_vertices_v.pop();
                             continue;
                         }
@@ -257,14 +263,24 @@ namespace HeiProMap {
                         }
 
                         // choose the priority queue
-                        IndexedMaxHeap<s64>& boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
-                        vertex_t vertex                        = boundary_vertices.top_key();
-                        partition_t vertex_id                  = p_manager[vertex];
-                        partition_t move_id                    = choose_u ? v_id : u_id;
-                        weight_t vertex_weight                 = g.get_weight(vertex);
-                        s64 qap_delta                          = boundary_vertices.top();
-
-                        boundary_vertices.pop();
+                        vertex_t vertex;
+                        partition_t vertex_id;
+                        partition_t move_id;
+                        s64 qap_delta;
+                        if (choose_u) {
+                            vertex    = boundary_vertices_u.top_key();
+                            vertex_id = u_id;
+                            move_id   = v_id;
+                            qap_delta = boundary_vertices_u.top();
+                            boundary_vertices_u.pop();
+                        } else {
+                            vertex    = boundary_vertices_v.top_key();
+                            vertex_id = v_id;
+                            move_id   = u_id;
+                            qap_delta = boundary_vertices_v.top();
+                            boundary_vertices_v.pop();
+                        }
+                        weight_t vertex_weight = g.get_weight(vertex);
 
                         // move the vertex
                         moves[moves_size++] = vertex;
@@ -285,12 +301,15 @@ namespace HeiProMap {
 
                         // we have to push or update the neighbors that were not moved already
                         for (const auto [neighbor, w] : g[vertex]) {
-                            partition_t neighbor_id = p_manager[neighbor];
-                            if (vertex_used[neighbor] == vertex_mark || !(neighbor_id == u_id || neighbor_id == v_id) || !is_boundary(g, p_manager, vertex)) {
-                                continue;
-                            }
+                            if (vertex_used[neighbor] == vertex_mark) { continue; }
 
-                            partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
+                            partition_t neighbor_id = p_manager[neighbor];
+
+                            if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
+
+                            partition_t new_id      = neighbor_id == vertex_id ? move_id : vertex_id;
+
+                            if (!is_connected_to(g, p_manager, neighbor, new_id)) { continue; }
 
                             s64 new_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, new_id, p_manager, d_oracle);
 

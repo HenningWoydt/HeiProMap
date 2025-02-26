@@ -49,6 +49,20 @@ namespace HeiProMap {
         }
         return false;
     }
+
+    template <typename TSerialGraph, typename TSerialPartitionManager>
+    bool is_connected_to(TSerialGraph& g, TSerialPartitionManager& p_manager, vertex_t u, partition_t id) {
+        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
+        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
+
+        for (const auto [v, w] : g[u]) {
+            partition_t v_id = p_manager[v];
+            if (id == v_id) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 #endif //HEIPROMAP_FUNCTIONS_H
