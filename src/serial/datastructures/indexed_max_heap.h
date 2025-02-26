@@ -67,7 +67,7 @@ namespace HeiProMap {
         IndexedMaxHeapEntry<T>* m_heap = nullptr;
         size_t* m_indices              = nullptr; // Mapping of keys to heap indices
 
-        u64 m_iteration          = 1;
+        u64 m_iteration          = 0;
         u64* m_iteration_counter = nullptr;
 
     public:
@@ -75,16 +75,19 @@ namespace HeiProMap {
 
         ~IndexedMaxHeap() {
             free(m_heap);
+            free(m_indices);
+            free(m_iteration_counter);
         }
 
         void initialize(const size_t t_n) {
-            size_t m_n_64 = round_up_64(m_n);
+            size_t m_n_64 = round_up_64(t_n);
 
             m_n         = t_n;
             m_heap_size = 0;
             m_heap      = (IndexedMaxHeapEntry<T>*)aligned_alloc(64, m_n_64 * sizeof(IndexedMaxHeapEntry<T>));
             m_indices   = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
 
+            m_iteration          = 0;
             m_iteration_counter = (u64*)aligned_alloc(64, m_n_64 * sizeof(u64));
             std::fill_n(m_iteration_counter, m_n_64, 0);
         }
@@ -93,7 +96,8 @@ namespace HeiProMap {
             ASSERT(!entry_exists(key));
             m_indices[key]           = m_heap_size;
             m_iteration_counter[key] = m_iteration;
-            m_heap[m_heap_size++]    = {key, t};
+            m_heap[m_heap_size]      = {key, t};
+            m_heap_size += 1;
             bubble_up(m_heap_size - 1);
         }
 
