@@ -196,7 +196,6 @@ namespace HeiProMap {
             m_vertex_idx[u] = m_boundaries[id].size() - 1;
         }
 
-
         template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
         void uncontract(const EdgeUV *matches,
                         size_t &matches_size,
