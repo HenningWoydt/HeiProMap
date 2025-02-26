@@ -100,6 +100,7 @@ namespace HeiProMap {
 
             vertex_t m_n_64 = round_up_64(m_n);
             m_n_boundary_edges = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            std::fill_n(m_n_boundary_edges, m_n_64, 0);
 
             m_boundaries.resize(m_k);
             m_vertex_idx = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
@@ -128,13 +129,14 @@ namespace HeiProMap {
 
         template<typename TSerialGraph, typename TSerialPartitionManager>
         void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
-            ASSERT(new_id < m_k);
-            ASSERT(new_id != old_id);
+            bool u_was_boundary = is_boundary(u);
 
             // remove u from its old id
-            remove(u, old_id);
+            if (u_was_boundary) {
+                remove(u, old_id);
+            }
 
-            // check how many connections u still has an if the neighbor are still boundary
+            // check how many connections u still has and if the neighbor are still boundary
             for (const auto [v, w]: g[u]) {
                 partition_t v_id = p_manager[v];
 
@@ -163,8 +165,10 @@ namespace HeiProMap {
                 }
                 // else, v and u are in different blocks and still connected, nothing changes
             }
-            if (m_n_boundary_edges[u] > 0) { emplace(u, new_id); }
-            if (m_n_boundary_edges[u] == 0) { remove_from_complete(u); }
+
+            if (m_n_boundary_edges[u] > 0) { emplace(u, new_id); } // emplace u into the sub-boundary
+            if (u_was_boundary && m_n_boundary_edges[u] == 0) { remove_from_complete(u); } // if u has no more edges remove it from the complete-boundary
+            if (!u_was_boundary && m_n_boundary_edges[u] > 0) { emplace_in_complete(u); }
         }
 
         void remove_from_complete(vertex_t u) {
