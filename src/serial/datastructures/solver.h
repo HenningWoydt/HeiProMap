@@ -69,8 +69,8 @@ namespace HeiProMap {
         // ActiveVertexManager av_manager;
         SortedActiveVertexManager av_manager;
         PartitionManager          p_manager;
-        BoundaryVertexManager     bv_manager;
-        // BoundaryVertexManagerArrays bv_manager;
+        // BoundaryVertexManager     bv_manager;
+        BoundaryVertexManagerArrays bv_manager;
         QuotientGraph             q_graph;
         DistanceOracle            d_oracle;
 
