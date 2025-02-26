@@ -52,10 +52,10 @@ namespace HeiProMap {
         std::vector<weight_t> m_distance;
         u64 m_seed = 0;
 
-        u32* vertex_used = nullptr;
+        u32* vertex_used  = nullptr;
         u32 vertex_marker = 0;
 
-        u32* block_used = nullptr;
+        u32* block_used  = nullptr;
         u32 block_marker = 0;
 
         std::mt19937 gen;
@@ -85,11 +85,12 @@ namespace HeiProMap {
             m_seed      = t_seed;
 
             vertex_t m_n_64 = round_up_64(m_n);
-            vertex_used = (u32*) aligned_alloc(64, m_n_64 * sizeof(u32));
+            vertex_used     = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(vertex_used, m_n_64, vertex_marker);
 
-            block_used = (u32*) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(vertex_used, m_n_64, vertex_marker);
+            partition_t m_k_64 = round_up_64(m_k);
+            block_used         = (u32*)aligned_alloc(64, m_k_64 * sizeof(u32));
+            std::fill_n(block_used, m_k_64, block_marker);
 
             gen.seed(m_seed);
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
@@ -114,37 +115,44 @@ namespace HeiProMap {
             for (u64 iteration = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
                 move_occurred = false;
 
+                std::vector<vertex_t> curr_boundary;
+                for (vertex_t u : bv_manager) { curr_boundary.push_back(u); }
+                std::shuffle(curr_boundary.begin(), curr_boundary.end(), gen);
+
                 vertex_marker += 1;
-                for (vertex_t u : bv_manager) {
-                    if (!is_boundary(g, p_manager, u)) { continue; }
-                    if (vertex_used[u] == vertex_marker) { continue; } // we already used u in this iteration
+                for (vertex_t u : curr_boundary) {
+                    if (vertex_used[u] == vertex_marker) { continue; }
+                    if (!bv_manager.is_boundary(u)) { continue; }
 
                     weight_t u_weight = g.get_weight(u);
                     partition_t u_id  = p_manager[u];
 
                     // make the move that reduces qap the most
-                    partition_t best_u_id = u_id;
-                    s64 best_qap_delta    = -1;
-                    u32 counter           = 0;
+                    partition_t best_id     = u_id;
+                    weight_t best_id_weight = 0;
+                    s64 best_qap_delta      = -1;
+                    f32 counter             = 0;
 
                     block_marker += 1;
-                    for (const auto& [v, w] : g[u]) {
-                        partition_t v_id = p_manager[v];
-                        if (v_id == u_id || v_id == best_u_id) { continue; }
+                    block_used[u_id] = block_marker;
+                    for (const auto [v, w] : g[u]) {
+                        partition_t v_id     = p_manager[v];
+                        weight_t v_id_weight = p_manager.get_bweight(v_id);
 
                         if (block_used[v_id] != block_marker) {
-                            if (p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
+                            if (v_id_weight + u_weight <= m_lmax) {
                                 s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                                if (qap_delta > best_qap_delta) {
+                                if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && v_id_weight < best_id_weight)) {
+                                    best_id        = v_id;
+                                    best_id_weight = v_id_weight;
                                     best_qap_delta = qap_delta;
-                                    best_u_id      = v_id;
-                                    counter        = 1;
+                                    counter        = 1.0;
                                 } else if (qap_delta == best_qap_delta && qap_delta != -1) {
-                                    counter += 1;
+                                    counter += 1.0;
                                     // choose with probability 1/counter as it ensures uniform distribution
-                                    if (dis(gen) < 1.0f / (f32)counter) {
-                                        best_u_id = v_id;
+                                    if (dis(gen) < 1.0f / counter) {
+                                        best_id = v_id;
                                     }
                                 }
                             }
@@ -152,16 +160,16 @@ namespace HeiProMap {
                         }
                     }
 
-                    if (best_u_id != u_id) {
+                    if (best_id != u_id) {
                         // choose if positive, if 0-gain choose 50% of the time
                         if (best_qap_delta > 0 || dis(gen) < 0.5) {
-                            bv_manager.move(g, p_manager, u, u_id, best_u_id);
-                            q_graph.move(g, p_manager, u, u_id, best_u_id);
-                            p_manager.move(u, u_weight, u_id, best_u_id);
-                            vertex_used[u] = vertex_marker;
-                            move_occurred  = true;
+                            bv_manager.move(g, p_manager, u, u_id, best_id);
+                            q_graph.move(g, p_manager, u, u_id, best_id);
+                            p_manager.move(u, u_weight, u_id, best_id);
+                            move_occurred = true;
                         }
                     }
+                    vertex_used[u] = vertex_marker;
                 }
             }
         }

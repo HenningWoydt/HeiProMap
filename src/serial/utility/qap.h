@@ -143,7 +143,7 @@ namespace HeiProMap {
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
 
         s64 qap_delta = 0;
-        for (const auto& [v, w] : g[u]) {
+        for (const auto [v, w] : g[u]) {
             partition_t v_id = p_manager[v];
 
             weight_t old_d, new_d;
