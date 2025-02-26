@@ -38,18 +38,25 @@ namespace HeiProMap {
         std::vector<weight_t> m_distance;
         partition_t m_k = 0;
 
-        std::vector<weight_t> m_mtx;
-        std::vector<partition_t> m_h_mtx;
+        weight_t* m_mtx = nullptr;
+        partition_t* m_h_mtx = nullptr;
 
     public:
+        DistanceOracle() = default;
+        ~DistanceOracle() override {
+            free(m_mtx);
+            free(m_h_mtx);
+        }
+
         void initialize(std::vector<partition_t>& t_hierarchy,
                         std::vector<weight_t>& t_distance) override {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
             m_k         = prod<partition_t>(m_hierarchy);
 
-            m_mtx.resize(m_k * m_k);
-            m_h_mtx.resize(m_k * m_k);
+            size_t m_k_m_k_64 = round_up_64(m_k * m_k);
+            m_mtx = (weight_t*) aligned_alloc(64, m_k_m_k_64 * sizeof(weight_t));
+            m_h_mtx = (partition_t*) aligned_alloc(64, m_k_m_k_64 * sizeof(partition_t));
 
             std::vector<std::vector<partition_t>> locs(m_k, std::vector<partition_t>(m_hierarchy.size()));
             for (partition_t id = 0; id < m_k; ++id) {
@@ -75,7 +82,8 @@ namespace HeiProMap {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
             ASSERT(u_id * m_k + v_id < m_k * m_k);
-            return m_mtx[u_id * m_k + v_id];
+            weight_t* m_mtx_copy = ASSUME_ALIGNED(weight_t*, m_mtx, 64);
+            return m_mtx_copy[u_id * m_k + v_id];
         }
 
         void get(partition_t u_id, partition_t v_id1, partition_t v_id2, weight_t &w1, weight_t &w2) const {
@@ -84,15 +92,17 @@ namespace HeiProMap {
             ASSERT(v_id2 < m_k);
             ASSERT(u_id * m_k + v_id1 < m_k * m_k);
             ASSERT(u_id * m_k + v_id2 < m_k * m_k);
-            w1 = m_mtx[u_id * m_k + v_id1];
-            w2 = m_mtx[u_id * m_k + v_id2];
+            weight_t* m_mtx_copy = ASSUME_ALIGNED(weight_t*, m_mtx, 64);
+            w1 = m_mtx_copy[u_id * m_k + v_id1];
+            w2 = m_mtx_copy[u_id * m_k + v_id2];
         }
 
         partition_t get_h(partition_t u_id, partition_t v_id) const {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
             ASSERT(u_id * m_k + v_id < m_k * m_k);
-            return m_h_mtx[u_id * m_k + v_id];
+            partition_t* m_h_mtx_copy = ASSUME_ALIGNED(partition_t*, m_h_mtx, 64);
+            return m_h_mtx_copy[u_id * m_k + v_id];
         }
 
     private:
