@@ -52,6 +52,7 @@ namespace HeiProMap {
 
             partition = (partition_t *) aligned_alloc(64, t_n_64 * sizeof(partition_t));
             bweights  = (weight_t *) aligned_alloc(64, t_k_64 * sizeof(weight_t));
+            std::fill_n(bweights, t_k_64, 0);
         }
 
         // read

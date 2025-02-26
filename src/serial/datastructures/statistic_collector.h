@@ -28,7 +28,7 @@
 #define HEIPROMAP_STATISTIC_COLLECTOR_H
 
 #ifndef STATISTICCOLLECTOR
-#define STATISTICCOLLECTOR true
+#define STATISTICCOLLECTOR false
 #endif
 
 #include "../utility/JSON_utils.h"
