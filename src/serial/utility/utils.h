@@ -224,6 +224,16 @@ namespace HeiProMap {
     }
 
     template<typename T>
+    bool exists(T* const &arr, const size_t size, const T &x) {
+        for (size_t i = 0; i < size; ++i) {
+            if (arr[i] == x) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    template<typename T>
     void print(const std::vector<T> &vec) {
         std::cout << "[";
         for (size_t i = 0; i < vec.size(); ++i) {
@@ -343,6 +353,28 @@ namespace HeiProMap {
                      std::vector<u64> &ints);
 
     size_t round_up_64(std::size_t x);
+
+    template<typename T>
+    std::vector<T> diff(const std::vector<T> &vec1, const std::vector<T> &vec2) {
+        // Make local copies so we can sort them.
+        std::vector<T> sorted1 = vec1;
+        std::vector<T> sorted2 = vec2;
+
+        std::sort(sorted1.begin(), sorted1.end());
+        std::sort(sorted2.begin(), sorted2.end());
+
+        std::vector<T> difference;
+
+        // Compute the symmetric difference: elements in sorted1 or sorted2 but not in both.
+        std::set_symmetric_difference(
+            sorted1.begin(), sorted1.end(),
+            sorted2.begin(), sorted2.end(),
+            std::back_inserter(difference)
+        );
+
+        return difference;
+    }
+
 }
 
 #endif //HEIPROMAP_UTILS_H
