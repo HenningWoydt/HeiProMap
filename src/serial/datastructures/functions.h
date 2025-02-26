@@ -41,7 +41,7 @@ namespace HeiProMap {
 
         partition_t u_id = p_manager[u];
 
-        for (const auto& [v, w] : g[u]) {
+        for (const auto [v, w] : g[u]) {
             partition_t v_id = p_manager[v];
             if (u_id != v_id) {
                 return true;

@@ -509,11 +509,11 @@ namespace HeiProMap {
             label_propagation_faraj20_configuration.max_iteration = 25;
             do_refinement_label_propagation_faraj20               = true;
 
-            quotient_graph_refinement_faraj20_config.max_iteration         = 1;
-            quotient_graph_refinement_faraj20_config.max_moves_without_max = 5000;
+            quotient_graph_refinement_faraj20_config.max_iteration         = std::numeric_limits<u64>::max();
+            quotient_graph_refinement_faraj20_config.max_moves_without_max = std::numeric_limits<u64>::max();
             do_refinement_quotient_graph_faraj20                           = true;
 
-            do_refinement_k_way_fm_faraj20     = true;
+            do_refinement_k_way_fm_faraj20     = false;
             do_refinement_multi_try_fm_faraj20 = false;
         }
 

@@ -27,8 +27,6 @@
 #ifndef HEIPROMAP_INDEXED_MAX_HEAP_H
 #define HEIPROMAP_INDEXED_MAX_HEAP_H
 
-#include <vector>
-
 #include "../../definitions.h"
 #include "../../macros.h"
 

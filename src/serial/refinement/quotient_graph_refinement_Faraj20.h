@@ -218,6 +218,20 @@ namespace HeiProMap {
                     max_qap_gain                 = 0;
                     u32 moves_since_last_maximum = 0;
                     while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
+
+                        // remove vertex from u if it is not boundary
+                        if (!boundary_vertices_u.empty() && !is_boundary(g, p_manager, boundary_vertices_u.top_key())) {
+                            boundary_vertices_u.pop();
+                            continue;
+                        }
+
+                        // remove vertex from v if it is not boundary
+                        if (!boundary_vertices_v.empty() && !is_boundary(g, p_manager, boundary_vertices_v.top_key())) {
+                            boundary_vertices_v.pop();
+                            continue;
+                        }
+
+
                         // determine from which block to choose
                         bool choose_u = true;
                         // 1. if one block is empty, then choose the other one
@@ -252,12 +266,6 @@ namespace HeiProMap {
 
                         boundary_vertices.pop();
 
-                        // if the vertex is not boundary anymore, then do not move
-                        if (!is_boundary(g, p_manager, vertex)) { continue; }
-
-                        // break search if too many moves without improvement
-                        if (moves_since_last_maximum > config.max_moves_without_max) { break; }
-
                         // move the vertex
                         moves[moves_size++] = vertex;
                         curr_qap_gain += qap_delta;
@@ -271,6 +279,9 @@ namespace HeiProMap {
 
                         // make move in structures
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+
+                        // break search if too many moves without improvement
+                        if (moves_since_last_maximum > config.max_moves_without_max) { break; }
 
                         // we have to push or update the neighbors that were not moved already
                         for (const auto [neighbor, w] : g[vertex]) {
