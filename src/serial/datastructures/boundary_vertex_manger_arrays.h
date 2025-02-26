@@ -208,8 +208,8 @@ namespace HeiProMap {
 
             // compute all from scratch
             std::fill_n(m_n_boundary_edges, m_n, 0);
-            std::fill_n(m_vertex_idx, m_n, 0);
             for (auto &vec: m_boundaries) { vec.clear(); }
+            m_complete_boundary_size = 0;
             m_n_boundary = 0;
 
             for (vertex_t u: av_manager) {
