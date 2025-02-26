@@ -347,8 +347,8 @@ namespace HeiProMap {
 
             config.beta = std::log(av_manager.get_n_active());
 
-            std::cout << "alpha = " << config.alpha << std::endl;
-            std::cout << "beta  = " << config.beta << std::endl;
+            // std::cout << "alpha = " << config.alpha << std::endl;
+            // std::cout << "beta  = " << config.beta << std::endl;
 
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
                 auto sp = std::chrono::high_resolution_clock::now();
@@ -364,10 +364,7 @@ namespace HeiProMap {
                     // find all connected partitions to u
                     block_marker += 1;
                     bool one_id_is_valid = false;
-                    for (const auto& [v, w] : g[u]) {
-                        // for (size_t idx = 0; idx < g.size(u); ++idx) {
-                        // const vertex_t v = g.neighbor(u, idx);
-                        // const weight_t w = g.get_weight(u, idx);
+                    for (const auto [v, w] : g[u]) {
                         partition_t v_id = p_manager[v];
                         if (v_id != u_id && block_used[v_id] != block_marker && p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
                             s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
@@ -431,17 +428,16 @@ namespace HeiProMap {
                     qap_gain_mean = new_qap_gain_mean;
                     qap_gain_var  = new_qap_gain_var;
 
+                    /*
                     if (steps_since_last_improvement > 3 && (f64)steps_since_last_improvement * qap_gain_mean * qap_gain_mean > config.alpha * qap_gain_var + config.beta) {
                         std::cout << "Stop on random walk: " << steps_since_last_improvement << " " << qap_gain_mean << " " << qap_gain_var << std::endl;
                         break;
                     }
+                    */
 
 
                     // we have to push or update the neighbors that were not moved already
-                    for (const auto& [neighbor, w] : g[vertex]) {
-                        // for (size_t idx = 0; idx < g.size(vertex); ++idx) {
-                        // const vertex_t neighbor = g.neighbor(vertex, idx);
-                        // const weight_t w = g.get_weight(vertex, idx);
+                    for (const auto [neighbor, w] : g[vertex]) {
                         if (vertex_used[neighbor] == vertex_mark || !is_boundary(g, p_manager, vertex)) {
                             continue;
                         }
