@@ -262,7 +262,7 @@ namespace HeiProMap {
 
                 // allocate enough space
                 v_weights = (int *) aligned_alloc(64, n_64 * sizeof(int));
-                adj_ptr   = (int *) aligned_alloc(64, (n_64 + 1) * sizeof(int));
+                adj_ptr   = (int *) aligned_alloc(64, n_64 * sizeof(int));
                 adj       = (int *) aligned_alloc(64, m_64 * sizeof(int));
                 e_weights = (int *) aligned_alloc(64, m_64 * sizeof(int));
 
@@ -299,7 +299,7 @@ namespace HeiProMap {
 
                 // allocate enough space
                 v_weights = (int *) aligned_alloc(64, n_64 * sizeof(int));
-                adj_ptr   = (int *) aligned_alloc(64, (n_64 + 1) * sizeof(int));
+                adj_ptr   = (int *) aligned_alloc(64, n_64 * sizeof(int));
                 adj       = (int *) aligned_alloc(64, m_64 * sizeof(int));
                 e_weights = (int *) aligned_alloc(64, m_64 * sizeof(int));
 
