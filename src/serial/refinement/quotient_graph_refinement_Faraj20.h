@@ -221,30 +221,22 @@ namespace HeiProMap {
                     curr_qap_gain                = 0;
                     max_qap_gain                 = 0;
                     u32 moves_since_last_maximum = 0;
-                    size_t curr_n_swaps          = 0;
-                    while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && curr_n_swaps < 2*max_n_swaps) {
-                        curr_n_swaps += 1;
 
+                    while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < 2 * max_n_swaps) {
                         // remove vertex from u if it is not boundary
-                        if (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) {
-                            boundary_vertices_u.pop();
-                            continue;
-                        }
+                        while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
 
                         // remove vertex from v if it is not boundary
-                        if (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) {
-                            boundary_vertices_v.pop();
-                            continue;
-                        }
+                        while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
 
+                        // if no more vertices, then break
+                        if (boundary_vertices_u.empty() && boundary_vertices_v.empty()) { break; }
 
                         // determine from which block to choose
                         bool choose_u = true;
                         // 1. if one block is empty, then choose the other one
                         if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
-                            if (boundary_vertices_u.empty()) {
-                                choose_u = false;
-                            }
+                            choose_u = boundary_vertices_v.empty();
                         } else {
                             // 2. choose the block with greater gain and randomly if even
                             if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
@@ -267,17 +259,20 @@ namespace HeiProMap {
                         partition_t vertex_id;
                         partition_t move_id;
                         s64 qap_delta;
+                        weight_t partition_weight;
                         if (choose_u) {
-                            vertex    = boundary_vertices_u.top_key();
-                            vertex_id = u_id;
-                            move_id   = v_id;
-                            qap_delta = boundary_vertices_u.top();
+                            vertex           = boundary_vertices_u.top_key();
+                            vertex_id        = u_id;
+                            move_id          = v_id;
+                            qap_delta        = boundary_vertices_u.top();
+                            partition_weight = p_manager.get_bweight(v_id);
                             boundary_vertices_u.pop();
                         } else {
-                            vertex    = boundary_vertices_v.top_key();
-                            vertex_id = v_id;
-                            move_id   = u_id;
-                            qap_delta = boundary_vertices_v.top();
+                            vertex           = boundary_vertices_v.top_key();
+                            vertex_id        = v_id;
+                            move_id          = u_id;
+                            qap_delta        = boundary_vertices_v.top();
+                            partition_weight = p_manager.get_bweight(u_id);
                             boundary_vertices_v.pop();
                         }
                         weight_t vertex_weight = g.get_weight(vertex);
@@ -286,7 +281,7 @@ namespace HeiProMap {
                         moves[moves_size++] = vertex;
                         curr_qap_gain += qap_delta;
                         moves_since_last_maximum += 1;
-                        if (curr_qap_gain > max_qap_gain) {
+                        if (curr_qap_gain > max_qap_gain && partition_weight + vertex_weight <= m_lmax) {
                             best_idx                 = moves_size;
                             max_qap_gain             = curr_qap_gain;
                             moves_since_last_maximum = 0;
@@ -307,11 +302,12 @@ namespace HeiProMap {
 
                             if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
 
-                            partition_t new_id      = neighbor_id == vertex_id ? move_id : vertex_id;
+                            partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
-                            if (!is_connected_to(g, p_manager, neighbor, new_id)) { continue; }
+                            bool is_connected_to_neighbor_id, is_connected_to_new_id;
+                            s64 new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_neighbor_id, is_connected_to_new_id, p_manager, d_oracle);
 
-                            s64 new_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, new_id, p_manager, d_oracle);
+                            if (!is_connected_to_new_id) { continue; }
 
                             if (neighbor_id == u_id) {
                                 boundary_vertices_u.push_update(neighbor, new_qap_delta);
