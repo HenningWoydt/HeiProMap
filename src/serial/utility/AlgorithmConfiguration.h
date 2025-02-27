@@ -578,10 +578,13 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // disable all refinements
+            do_refinement_label_propagation_faraj20 = false;
+            do_refinement_quotient_graph_faraj20    = false;
+            do_refinement_k_way_fm_faraj20          = false;
+            do_refinement_multi_try_fm_faraj20      = false;
+
             do_refinement_label_propagation    = false;
             do_refinement_quotient_graph       = false;
-            do_refinement_k_way_fm_faraj20     = false;
-            do_refinement_multi_try_fm_faraj20 = false;
         }
 
         void set_fast() {
@@ -596,8 +599,13 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // only enable label propagation
+            do_refinement_label_propagation_faraj20 = false;
+            do_refinement_quotient_graph_faraj20    = false;
+            do_refinement_k_way_fm_faraj20          = false;
+            do_refinement_multi_try_fm_faraj20      = false;
+
+            do_refinement_label_propagation    = true;
             label_propagation_configuration.max_iteration = 25;
-            do_refinement_label_propagation = true;
 
             do_refinement_quotient_graph       = false;
             do_refinement_k_way_fm_faraj20     = false;
@@ -616,19 +624,17 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // exclude Multi-Try FM
-            label_propagation_configuration.max_iteration = 25;
+            do_refinement_label_propagation_faraj20 = false;
+            do_refinement_quotient_graph_faraj20    = false;
+            do_refinement_k_way_fm_faraj20          = false;
+            do_refinement_multi_try_fm_faraj20      = false;
+
             do_refinement_label_propagation = true;
+            label_propagation_configuration.max_iteration = 25;
 
+            do_refinement_quotient_graph = true;
             quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
             quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
-            do_refinement_quotient_graph = true;
-
-            quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
-            quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
-            do_refinement_quotient_graph = true;
-
-            do_refinement_k_way_fm_faraj20     = true;
-            do_refinement_multi_try_fm_faraj20 = false;
         }
 
         void set_strong() {
@@ -643,19 +649,17 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable all
-            label_propagation_configuration.max_iteration = 25;
+            do_refinement_label_propagation_faraj20 = false;
+            do_refinement_quotient_graph_faraj20    = false;
+            do_refinement_k_way_fm_faraj20          = false;
+            do_refinement_multi_try_fm_faraj20      = false;
+
             do_refinement_label_propagation = true;
+            label_propagation_configuration.max_iteration = 25;
 
+            do_refinement_quotient_graph = true;
             quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
             quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
-            do_refinement_quotient_graph = true;
-
-            quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
-            quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
-            do_refinement_quotient_graph = true;
-
-            do_refinement_k_way_fm_faraj20     = true;
-            do_refinement_multi_try_fm_faraj20 = false;
         }
 
         /**
