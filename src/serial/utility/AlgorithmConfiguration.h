@@ -38,6 +38,7 @@
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/multi_try_fm_refinement_Faraj20.h"
+#include "../refinement/quotient_graph_refinement.h"
 
 namespace HeiProMap {
     enum COARSENING_ALGS {
@@ -246,6 +247,9 @@ namespace HeiProMap {
 
         bool do_refinement_label_propagation = false;
         LabelPropagationConfiguration label_propagation_configuration;
+
+        bool do_refinement_quotient_graph = false;
+        QuotientGraphRefinementConfiguration quotient_graph_refinement_config;
 
         bool do_refinement_hierarchy_aware_cycles_enable = false;
         HierarchyAwareCyclesConfiguration hierarchy_aware_cycles_configuration;
@@ -513,7 +517,11 @@ namespace HeiProMap {
             quotient_graph_refinement_faraj20_config.max_moves_without_max = std::numeric_limits<u64>::max();
             do_refinement_quotient_graph_faraj20                           = true;
 
-            do_refinement_k_way_fm_faraj20     = false;
+            quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
+            quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
+            do_refinement_quotient_graph                           = false;
+
+            do_refinement_k_way_fm_faraj20     = true;
             do_refinement_multi_try_fm_faraj20 = false;
         }
 

@@ -67,12 +67,12 @@ namespace HeiProMap {
         std::vector<GraphCSRArrays> graphs;
 
         // ActiveVertexManager av_manager;
-        SortedActiveVertexManager av_manager;
-        PartitionManager          p_manager;
+        SortedActiveVertexManager   av_manager;
+        PartitionManager            p_manager;
         // BoundaryVertexManager     bv_manager;
         BoundaryVertexManagerArrays bv_manager;
-        QuotientGraph             q_graph;
-        DistanceOracle            d_oracle;
+        QuotientGraph               q_graph;
+        DistanceOracle              d_oracle;
 
         // balance
         weight_t lmax = 0;
@@ -89,6 +89,7 @@ namespace HeiProMap {
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
         LabelPropagationRefinement        lp_refine;
         QuotientGraphRefinementFaraj20    qg_refine_faraj20;
+        QuotientGraphRefinement           qg_refine;
         KWayFMRefinementFaraj20           k_way_refine_faraj20;
         MultiTryFMRefinementFaraj20       multi_try_fm_refinement_faraj20;
         HierarchyAwareCycleRefinement     hierarchy_aware_cycle_refinement;
@@ -128,6 +129,7 @@ namespace HeiProMap {
             lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            qg_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
@@ -232,7 +234,7 @@ namespace HeiProMap {
         void matching(const s32 level) {
             const auto sp_match = std::chrono::high_resolution_clock::now();
 
-            size_t t_n_64 = round_up_64(av_manager.get_n_active() / 2);
+            size_t t_n_64       = round_up_64(av_manager.get_n_active() / 2);
             EdgeUV *matches_arr = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
             matches.push_back(matches_arr);
             matches_size.push_back(0);
@@ -297,6 +299,10 @@ namespace HeiProMap {
 
             if (ac.do_refinement_quotient_graph_faraj20) {
                 qg_refine_faraj20.refine(ac.quotient_graph_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_quotient_graph) {
+                qg_refine.refine(ac.quotient_graph_refinement_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_label_propagation_faraj20) {

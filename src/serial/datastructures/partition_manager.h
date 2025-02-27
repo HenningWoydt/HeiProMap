@@ -38,6 +38,7 @@ namespace HeiProMap {
 
         partition_t *partition = nullptr;
         weight_t    *bweights  = nullptr;
+        size_t      *n_nodes   = nullptr;
 
     public:
         void initialize(const vertex_t t_n,
@@ -52,7 +53,9 @@ namespace HeiProMap {
 
             partition = (partition_t *) aligned_alloc(64, t_n_64 * sizeof(partition_t));
             bweights  = (weight_t *) aligned_alloc(64, t_k_64 * sizeof(weight_t));
+            n_nodes   = (size_t *) aligned_alloc(64, t_k_64 * sizeof(size_t));
             std::fill_n(bweights, t_k_64, 0);
+            std::fill_n(n_nodes, t_k_64, 0);
         }
 
         // read
@@ -62,27 +65,35 @@ namespace HeiProMap {
         void set(const vertex_t u, const weight_t w, const partition_t id) override {
             bweights[id] += w;
             partition[u] = id;
+            n_nodes[id] += 1;
         }
 
         void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) override {
             bweights[old_id] -= w;
             bweights[new_id] += w;
             partition[u] = new_id;
+            n_nodes[old_id] -= 1;
+            n_nodes[new_id] += 1;
         }
 
         weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
+        vertex_t get_n_nodes(const partition_t id) const { return n_nodes[id]; }
+
         std::vector<weight_t> get_bweights() const override {
             std::vector<weight_t> weights(m_k);
-            for(size_t i = 0; i < m_k; ++i){
+            for (size_t           i = 0; i < m_k; ++i) {
                 weights[i] = bweights[i];
             }
             return weights;
         }
 
-        void uncontract(const EdgeUV* matches, size_t &matches_size) override {
+        void uncontract(const EdgeUV *matches, size_t &matches_size) override {
             matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
-            for(size_t i = 0; i < matches_size; ++i){ partition[matches[i].v] = partition[matches[i].u]; }
+            for (size_t i = 0; i < matches_size; ++i) {
+                partition[matches[i].v] = partition[matches[i].u];
+                n_nodes[partition[matches[i].u]] += 1;
+            }
         }
 
         bool is_overloaded() override {

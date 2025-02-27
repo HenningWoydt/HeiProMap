@@ -111,6 +111,7 @@ namespace HeiProMap {
         }
 
         vertex_t get_n_boundary() const override { return m_n_boundary; }
+        vertex_t get_n_boundary(const partition_t id) {return  m_boundaries[id].size(); }
 
         bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
 
