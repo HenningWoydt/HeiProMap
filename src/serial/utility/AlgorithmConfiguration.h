@@ -278,7 +278,7 @@ namespace HeiProMap {
         bool                              do_refinement_hierarchy_aware_cycles_enable = false;
         HierarchyAwareCyclesConfiguration hierarchy_aware_cycles_config;
 
-        bool                                   do_refinement_two_vertices_label_propagation_enable = false;
+        bool                                   do_refinement_two_vertex_label_propagation_enable = false;
         TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config;
 
         AlgorithmConfiguration() = default;
@@ -732,13 +732,17 @@ namespace HeiProMap {
             do_refinement_label_propagation = true;
             label_propagation_config.max_iteration = 25;
 
+            // enable two vertex label propagation
+            do_refinement_two_vertex_label_propagation_enable = true;
+            two_vertex_label_propagation_config.max_iteration = 25;
+
             // enable quotient graph refinement
-            do_refinement_quotient_graph = true;
+            do_refinement_quotient_graph = false;
             quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
             quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
 
             // enable k-way fm
-            do_refinement_k_way_fm = true;
+            do_refinement_k_way_fm = false;
         }
 
         void set_strong() {
@@ -801,8 +805,8 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable experimental refinement
-            do_refinement_hierarchy_aware_cycles_enable         = true;
-            do_refinement_two_vertices_label_propagation_enable = true;
+            do_refinement_hierarchy_aware_cycles_enable         = false;
+            do_refinement_two_vertex_label_propagation_enable = true;
         }
 
         /**

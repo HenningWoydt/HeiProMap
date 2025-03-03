@@ -32,11 +32,11 @@
 #include "../datastructures/distance_oracle.h"
 
 namespace HeiProMap {
-    template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    weight_t get_qap(TSerialGraph &g,
-                     TSerialActiveVertexManager &av_manager,
-                     TSerialPartitionManager &p_manager,
-                     TSerialDistanceOracle &d_oracle) {
+    template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    weight_t get_qap(TSerialGraph& g,
+                     TSerialActiveVertexManager& av_manager,
+                     TSerialPartitionManager& p_manager,
+                     TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TActiveVertexManager must inherit from IActiveVertexManager");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
@@ -44,16 +44,16 @@ namespace HeiProMap {
 
         weight_t qap = 0;
 
-        for (vertex_t u: av_manager) {
+        for (vertex_t u : av_manager) {
             ASSERT(av_manager.is_active(u));
 
             partition_t u_id = p_manager[u];
 
             for (size_t i = 0; i < g.size(u); ++i) {
-                vertex_t    v    = g.neighbor(u, i);
-                weight_t    ew   = g.get_weight(u, i);
+                vertex_t v       = g.neighbor(u, i);
+                weight_t ew      = g.get_weight(u, i);
                 partition_t v_id = p_manager[v];
-                weight_t    d    = d_oracle.get(u_id, v_id);
+                weight_t d       = d_oracle.get(u_id, v_id);
                 qap += (d * ew);
             }
         }
@@ -61,89 +61,66 @@ namespace HeiProMap {
         return qap;
     }
 
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    weight_t get_u_qap(TSerialGraph &g,
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    weight_t get_u_qap(TSerialGraph& g,
                        vertex_t u,
-                       TSerialPartitionManager &p_manager,
-                       TSerialDistanceOracle &d_oracle) {
+                       TSerialPartitionManager& p_manager,
+                       TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
 
-        weight_t    qap  = 0;
+        weight_t qap     = 0;
         partition_t u_id = p_manager[u];
 
         for (size_t i = 0; i < g.size(u); ++i) {
-            vertex_t    v    = g.neighbor(u, i);
-            weight_t    ew   = g.get_weight(u, i);
+            vertex_t v       = g.neighbor(u, i);
+            weight_t ew      = g.get_weight(u, i);
             partition_t v_id = p_manager[v];
-            weight_t    d    = d_oracle.get(u_id, v_id);
+            weight_t d       = d_oracle.get(u_id, v_id);
             qap += (d * ew);
         }
 
         return qap;
     }
 
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    weight_t get_u_qap(TSerialGraph &g,
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    weight_t get_u_qap(TSerialGraph& g,
                        vertex_t u,
                        partition_t id,
-                       TSerialPartitionManager &p_manager,
-                       TSerialDistanceOracle &d_oracle) {
+                       TSerialPartitionManager& p_manager,
+                       TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
 
-        weight_t    qap = 0;
-        for (size_t i   = 0; i < g.size(u); ++i) {
-            vertex_t    v    = g.neighbor(u, i);
-            weight_t    ew   = g.get_weight(u, i);
+        weight_t qap = 0;
+        for (size_t i = 0; i < g.size(u); ++i) {
+            vertex_t v       = g.neighbor(u, i);
+            weight_t ew      = g.get_weight(u, i);
             partition_t v_id = p_manager[v];
-            weight_t    d    = d_oracle.get(id, v_id);
+            weight_t d       = d_oracle.get(id, v_id);
             qap += (d * ew);
         }
 
         return qap;
     }
 
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    s64 get_u_qap_delta_by_idx(TSerialGraph &g,
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    s64 get_u_qap_delta_by_idx(TSerialGraph& g,
                                vertex_t u,
                                partition_t old_id,
                                partition_t new_id,
-                               TSerialPartitionManager &p_manager,
-                               TSerialDistanceOracle &d_oracle) {
-        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
-        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
-        static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
-
-        s64         qap_delta = 0;
-        for (size_t i         = 0; i < g.size(u); ++i) {
-            vertex_t    v    = g.neighbor(u, i);
-            weight_t    w    = g.get_weight(u, i);
-            partition_t v_id = p_manager[v];
-
-            weight_t old_d, new_d;
-            d_oracle.get(v_id, old_id, new_id, old_d, new_d);
-            qap_delta += (old_d - new_d) * w;
-        }
-
-        return qap_delta;
-    }
-
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    s64 get_u_qap_delta(TSerialGraph &g,
-                        vertex_t u,
-                        partition_t old_id,
-                        partition_t new_id,
-                        TSerialPartitionManager &p_manager,
-                        TSerialDistanceOracle &d_oracle) {
+                               TSerialPartitionManager& p_manager,
+                               TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
 
         s64 qap_delta = 0;
-        for (const auto [v, w]: g[u]) {
+        for (size_t i = 0; i < g.size(u); ++i) {
+            vertex_t v       = g.neighbor(u, i);
+            weight_t w       = g.get_weight(u, i);
             partition_t v_id = p_manager[v];
 
             weight_t old_d, new_d;
@@ -154,16 +131,39 @@ namespace HeiProMap {
         return qap_delta;
     }
 
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    s64 get_qap_delta(TSerialGraph &g,
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    s64 get_u_qap_delta(TSerialGraph& g,
+                        vertex_t u,
+                        partition_t old_id,
+                        partition_t new_id,
+                        TSerialPartitionManager& p_manager,
+                        TSerialDistanceOracle& d_oracle) {
+        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
+        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
+        static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
+
+        s64 qap_delta = 0;
+        for (const auto [v, w] : g[u]) {
+            partition_t v_id = p_manager[v];
+
+            weight_t old_d, new_d;
+            d_oracle.get(v_id, old_id, new_id, old_d, new_d);
+            qap_delta += (old_d - new_d) * w;
+        }
+
+        return qap_delta;
+    }
+
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    s64 get_qap_delta(TSerialGraph& g,
                       vertex_t u,
                       partition_t u_old_id,
                       partition_t u_new_id,
                       vertex_t v,
                       partition_t v_old_id,
                       partition_t v_new_id,
-                      TSerialPartitionManager &p_manager,
-                      TSerialDistanceOracle &d_oracle) {
+                      TSerialPartitionManager& p_manager,
+                      TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
@@ -171,51 +171,43 @@ namespace HeiProMap {
         s64 qap_delta = 0;
 
         // process u
-        for(const auto[neighbor, w] : g[u]){
-            if(neighbor != v) {
+        for (const auto [neighbor, w] : g[u]) {
+            if (neighbor != v) {
                 partition_t neighbor_id = p_manager[neighbor];
 
-                weight_t old_d, new_d;
-                d_oracle.get(neighbor_id, u_old_id, u_new_id, old_d, new_d);
+                weight_t old_d = d_oracle.get(neighbor_id, u_old_id);
+                weight_t new_d = d_oracle.get(neighbor_id, u_new_id);
                 qap_delta += (old_d - new_d) * w;
-            } else{
-                partition_t neighbor_id = v_new_id;
-
-                weight_t old_d, new_d;
-                d_oracle.get(neighbor_id, u_old_id, u_new_id, old_d, new_d);
+            } else {
+                weight_t old_d = d_oracle.get(v_old_id, u_old_id);
+                weight_t new_d = d_oracle.get(v_new_id, u_new_id);
                 qap_delta += (old_d - new_d) * w;
             }
         }
 
         // process v
-        for(const auto[neighbor, w] : g[v]){
-            if(neighbor != u) {
-                partition_t neighbor_id = p_manager[neighbor];
+        for (const auto [neighbor, w] : g[v]) {
+            if (neighbor == u) { continue; }
 
-                weight_t old_d, new_d;
-                d_oracle.get(neighbor_id, v_old_id, v_new_id, old_d, new_d);
-                qap_delta += (old_d - new_d) * w;
-            } else{
-                partition_t neighbor_id = u_new_id;
+            partition_t neighbor_id = p_manager[neighbor];
 
-                weight_t old_d, new_d;
-                d_oracle.get(neighbor_id, v_old_id, v_new_id, old_d, new_d);
-                qap_delta += (old_d - new_d) * w;
-            }
+            weight_t old_d = d_oracle.get(neighbor_id, v_old_id);
+            weight_t new_d = d_oracle.get(neighbor_id, v_new_id);
+            qap_delta += (old_d - new_d) * w;
         }
 
         return qap_delta;
     }
 
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    s64 get_u_qap_delta_and_is_boundary(TSerialGraph &g,
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    s64 get_u_qap_delta_and_is_boundary(TSerialGraph& g,
                                         vertex_t u,
                                         partition_t old_id,
                                         partition_t new_id,
-                                        bool &is_boundary_old_id,
-                                        bool &is_boundary_new_id,
-                                        TSerialPartitionManager &p_manager,
-                                        TSerialDistanceOracle &d_oracle) {
+                                        bool& is_boundary_old_id,
+                                        bool& is_boundary_new_id,
+                                        TSerialPartitionManager& p_manager,
+                                        TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
@@ -224,7 +216,7 @@ namespace HeiProMap {
         is_boundary_new_id = false;
 
         s64 qap_delta = 0;
-        for (const auto [v, w]: g[u]) {
+        for (const auto [v, w] : g[u]) {
             partition_t v_id = p_manager[v];
 
             is_boundary_old_id |= (v_id != old_id);
@@ -238,15 +230,15 @@ namespace HeiProMap {
         return qap_delta;
     }
 
-    template<typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-    s64 get_u_qap_delta_and_is_connected_to(TSerialGraph &g,
+    template <typename TSerialGraph, typename TSerialPartitionManager, typename TSerialDistanceOracle>
+    s64 get_u_qap_delta_and_is_connected_to(TSerialGraph& g,
                                             vertex_t u,
                                             partition_t old_id,
                                             partition_t new_id,
-                                            bool &is_connected_to_old_id,
-                                            bool &is_connected_to_new_id,
-                                            TSerialPartitionManager &p_manager,
-                                            TSerialDistanceOracle &d_oracle) {
+                                            bool& is_connected_to_old_id,
+                                            bool& is_connected_to_new_id,
+                                            TSerialPartitionManager& p_manager,
+                                            TSerialDistanceOracle& d_oracle) {
         static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TGraph must inherit from IGraph");
         static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TPartitionManager must inherit from IPartitionManager");
         static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TDistanceOracle must inherit from IDistanceOracle");
@@ -255,7 +247,7 @@ namespace HeiProMap {
         is_connected_to_new_id = false;
 
         s64 qap_delta = 0;
-        for (const auto [v, w]: g[u]) {
+        for (const auto [v, w] : g[u]) {
             partition_t v_id = p_manager[v];
 
             is_connected_to_old_id |= (v_id == old_id);

@@ -320,7 +320,7 @@ namespace HeiProMap {
                 lp_refine.refine(ac.label_propagation_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
-            if(ac.do_refinement_two_vertices_label_propagation_enable) {
+            if(ac.do_refinement_two_vertex_label_propagation_enable) {
                 two_vertex_lp_refine.refine(ac.two_vertex_label_propagation_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
