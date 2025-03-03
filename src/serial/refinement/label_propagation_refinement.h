@@ -67,7 +67,7 @@ namespace HeiProMap {
     public:
         LabelPropagationRefinement() = default;
 
-        ~LabelPropagationRefinement() {
+        ~LabelPropagationRefinement() override {
             free(vertex_used);
             free(block_used);
             free(curr_boundary);
@@ -120,6 +120,7 @@ namespace HeiProMap {
 
             bool     move_occurred = true;
             for (u64 iteration     = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
+                auto sp = std::chrono::high_resolution_clock::now();
                 move_occurred = false;
 
                 curr_boundary_size = 0;
@@ -182,6 +183,9 @@ namespace HeiProMap {
                     }
                     vertex_used[u] = vertex_marker;
                 }
+                auto ep = std::chrono::high_resolution_clock::now();
+                f64 seconds = get_seconds(sp, ep);
+                std::cout << "Label Propagation: Iteration " << iteration << " took " << seconds << " seconds!" << std::endl;
             }
         }
     };

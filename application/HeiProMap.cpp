@@ -45,16 +45,16 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
                     // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
                     // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
-                    {"--graph", "../data/dimacs10_delaunay/delaunay_n20.graph"},
-                    {"--mapping", "../data/out/partition/delaunay_n20.txt"},
-                    {"--statistics", "../data/out/statistics/delaunay_n20.JSON"},
+                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"},
+                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"},
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "fast"},
+                    {"--config", "eco"},
                     {"--seed", "0"},
 
                     // coarsening
@@ -77,18 +77,41 @@ int main(const int argc, char* argv[]) {
                     // Rebalancing
                     {"--rebalancing-algorithm", "simple"},
 
-                    // Refinement
+                    // Refinement Label Propagation Faraj20
                     // {"--refinement-lable-propagation-faraj20-enable", "0"},
+                    // {"--refinement-lable-propagation-faraj20-max-iterations", "25"},
 
+                    // Refinement Quotient graph Faraj20
                     // {"--refinement-quotient-graph-faraj20-enable", "0"},
-                    // {"--refinement-quotient-graph-faraj20-max-iterations", "5"},
+                    //{"--refinement-quotient-graph-faraj20-max-iterations", "1"},
+                    //{"--refinement-quotient-graph-faraj20-max-moves-without-max", "500"},
 
+                    // Refinement k-way FM Faraj20
                     // {"--refinement-k-way-fm-faraj20-enable", "0"},
-                    // {"--refinement-k-way-fm-faraj20-max-iterations", "5"},
+                    //{"--refinement-k-way-fm-faraj20-max-iterations", "1"},
 
+                    // Refinement Multi-Try FM Faraj20
                     // {"--refinement-multi-try-fm-faraj20-enable", "0"},
-                    // {"--refinement-multi-try-fm-faraj20-max-iterations", "0"},
+                    // {"--refinement-multi-try-fm-faraj20-max-iterations", "1"},
 
+                    // Refinement Label Propagation
+                    // {"--refinement-lable-propagation-enable", "0"},
+                    // {"--refinement-lable-propagation-max-iterations", "25"},
+
+                    // Refinement Quotient graph
+                    // {"--refinement-quotient-graph-enable", "0"},
+                    //{"--refinement-quotient-graph-max-iterations", "1"},
+                    //{"--refinement-quotient-graph-max-moves-without-max", "500"},
+
+                    // Refinement k-way FM
+                    // {"--refinement-k-way-fm-enable", "0"},
+                    //{"--refinement-k-way-fm-max-iterations", "1"},
+
+                    // Refinement Multi-Try FM
+                    // {"--refinement-multi-try-fm-enable", "0"},
+                    // {"--refinement-multi-try-fm-max-iterations", "1"},
+
+                    // Refinement Hierarchy aware cycles
                     // {"--refinement-hierarchy-aware-cycles-enable", "0"},
                 };
 

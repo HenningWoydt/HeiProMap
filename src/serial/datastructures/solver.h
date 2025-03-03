@@ -67,38 +67,40 @@ namespace HeiProMap {
         std::vector<GraphCSRArrays> graphs;
 
         // ActiveVertexManager av_manager;
-        SortedActiveVertexManager   av_manager;
-        PartitionManager            p_manager;
+        SortedActiveVertexManager av_manager;
+        PartitionManager p_manager;
         // BoundaryVertexManager     bv_manager;
         BoundaryVertexManagerArrays bv_manager;
-        QuotientGraph               q_graph;
-        DistanceOracle              d_oracle;
+        QuotientGraph q_graph;
+        DistanceOracle d_oracle;
 
         // balance
         weight_t lmax = 0;
 
         // matching
-        std::vector<EdgeUV *>            matches;
-        std::vector<size_t>              matches_size;
-        GreedyEdgeMatcher                ge_matcher;
-        HeavyEdgeMatcher                 he_matcher;
+        std::vector<EdgeUV*> matches;
+        std::vector<size_t> matches_size;
+        GreedyEdgeMatcher ge_matcher;
+        HeavyEdgeMatcher he_matcher;
         // GlobalPathAlgorithmMatcher gpa_matcher;
         GlobalPathAlgorithmArraysMatcher gpa_matcher;
 
         // refinement
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
-        LabelPropagationRefinement        lp_refine;
-        QuotientGraphRefinementFaraj20    qg_refine_faraj20;
-        QuotientGraphRefinement           qg_refine;
-        KWayFMRefinementFaraj20           k_way_refine_faraj20;
-        MultiTryFMRefinementFaraj20       multi_try_fm_refinement_faraj20;
-        HierarchyAwareCycleRefinement     hierarchy_aware_cycle_refinement;
+        LabelPropagationRefinement lp_refine;
+        QuotientGraphRefinementFaraj20 qg_refine_faraj20;
+        QuotientGraphRefinement qg_refine;
+        KWayFMRefinementFaraj20 k_way_refine_faraj20;
+        KWayFMRefinement k_way_refine;
+        MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
+        MultiTryFMRefinement multi_try_fm_refinement;
+        HierarchyAwareCycleRefinement hierarchy_aware_cycle_refinement;
 
         // statistics
         StatisticCollector stat_collect;
 
     public:
-        explicit Solver(const AlgorithmConfiguration &t_ac) {
+        explicit Solver(const AlgorithmConfiguration& t_ac) {
             ac = t_ac;
 
             const auto sp_graph_io = std::chrono::high_resolution_clock::now();
@@ -108,7 +110,7 @@ namespace HeiProMap {
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
             // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].get_weight() / (f64) ac.k));
+            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].get_weight() / (f64)ac.k));
 
             // manager
             av_manager.initialize(graphs[0].get_n());
@@ -131,7 +133,9 @@ namespace HeiProMap {
             qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             qg_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            k_way_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            multi_try_fm_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
@@ -142,9 +146,9 @@ namespace HeiProMap {
             internal_solve();
 
 #if STATISTICCOLLECTOR
-            weight_t              qap = get_qap(graphs.back(), av_manager, p_manager, d_oracle);
+            weight_t qap = get_qap(graphs.back(), av_manager, p_manager, d_oracle);
             std::vector<weight_t> pweights;
-            for (partition_t      id  = 0; id < ac.k; ++id) { pweights.push_back(p_manager.get_bweight(id)); }
+            for (partition_t id = 0; id < ac.k; ++id) { pweights.push_back(p_manager.get_bweight(id)); }
             stat_collect.set_final(qap, pweights, lmax);
 #endif
             stat_collect.finalize();
@@ -152,7 +156,7 @@ namespace HeiProMap {
             std::cout << stat_collect.to_JSON() << std::endl;
 
             std::vector<partition_t> p(graphs.back().get_n());
-            for (vertex_t            u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
+            for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
 
             write_partition(p, ac.mapping_out);
 
@@ -208,10 +212,10 @@ namespace HeiProMap {
             }
 
             // initialize boundary vertices and quotient graph
-            for (const vertex_t u: av_manager) {
+            for (const vertex_t u : av_manager) {
                 for (size_t i = 0; i < graphs.back().size(u); ++i) {
-                    const vertex_t    v    = graphs.back().neighbor(u, i);
-                    const weight_t    w    = graphs.back().get_weight(u, i);
+                    const vertex_t v       = graphs.back().neighbor(u, i);
+                    const weight_t w       = graphs.back().get_weight(u, i);
                     const partition_t u_id = p_manager[u];
                     const partition_t v_id = p_manager[v];
 
@@ -235,7 +239,7 @@ namespace HeiProMap {
             const auto sp_match = std::chrono::high_resolution_clock::now();
 
             size_t t_n_64       = round_up_64(av_manager.get_n_active() / 2);
-            EdgeUV *matches_arr = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
+            EdgeUV* matches_arr = (EdgeUV*)aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
             matches.push_back(matches_arr);
             matches_size.push_back(0);
 
@@ -317,8 +321,16 @@ namespace HeiProMap {
                 k_way_refine_faraj20.refine(ac.k_way_fm_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
+            if (ac.do_refinement_k_way_fm) {
+                k_way_refine.refine(ac.k_way_fm_refinement_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
             if (ac.do_refinement_multi_try_fm_faraj20) {
                 multi_try_fm_refinement_faraj20.refine(ac.multi_try_fm_refinement_faraj20_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if (ac.do_refinement_multi_try_fm) {
+                multi_try_fm_refinement.refine(ac.multi_try_fm_refinement_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_hierarchy_aware_cycles_enable) {
