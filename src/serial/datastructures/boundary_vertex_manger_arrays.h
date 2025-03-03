@@ -34,18 +34,19 @@
 
 namespace HeiProMap {
     class BoundaryVertexManagerArrays final : public ISerialBoundaryVertexManager {
-        vertex_t    m_n = 0;
+        vertex_t m_n    = 0;
         partition_t m_k = 0;
 
         vertex_t m_n_boundary        = 0;
-        vertex_t *m_n_boundary_edges = nullptr;
+        vertex_t* m_n_boundary_edges = nullptr;
 
-        std::vector<std::vector<vertex_t>> m_boundaries;
-        size_t                             *m_vertex_idx = nullptr;
+        vertex_t** m_boundaries   = nullptr;
+        size_t* m_boundaries_size = nullptr;
+        size_t* m_vertex_idx      = nullptr;
 
-        vertex_t *m_complete_boundary            = nullptr;
-        size_t   *m_complete_boundary_vertex_idx = nullptr;
-        size_t   m_complete_boundary_size        = 0;
+        vertex_t* m_complete_boundary          = nullptr;
+        size_t* m_complete_boundary_vertex_idx = nullptr;
+        size_t m_complete_boundary_size        = 0;
 
     public:
         ~BoundaryVertexManagerArrays() override {
@@ -53,44 +54,52 @@ namespace HeiProMap {
             free(m_vertex_idx);
             free(m_complete_boundary);
             free(m_complete_boundary_vertex_idx);
+            for (partition_t i = 0; i < m_k; ++i) {
+                free(m_boundaries[i]);
+            }
+            free(m_boundaries);
+            free(m_boundaries_size);
         }
 
         class SubBoundaryVertexManager {
-            std::vector<vertex_t> &m_sub_boundaries;
+            vertex_t* m_sub_boundaries;
+            size_t& m_sub_boundaries_size;
 
         public:
-            explicit SubBoundaryVertexManager(std::vector<vertex_t> &t_sub_boundaries) : m_sub_boundaries(t_sub_boundaries) {}
+            explicit SubBoundaryVertexManager(vertex_t* t_sub_boundaries, size_t& t_sub_boundaries_size) : m_sub_boundaries_size(t_sub_boundaries_size) {
+                m_sub_boundaries = ASSUME_ALIGNED(vertex_t*, t_sub_boundaries, 64);
+            }
 
             class SubIterator {
-                std::vector<vertex_t> &m_sub_boundaries;
-                size_t                m_idx;
+                vertex_t* m_sub_boundaries;
+                size_t m_idx;
 
             public:
                 // Constructor
-                SubIterator(std::vector<vertex_t> &t_sub_boundaries,
-                            size_t t_idx) : m_sub_boundaries(t_sub_boundaries) {
-                    m_idx = t_idx;
+                SubIterator(vertex_t* t_sub_boundaries, size_t t_idx) {
+                    m_sub_boundaries = ASSUME_ALIGNED(vertex_t*, t_sub_boundaries, 64);
+                    m_idx            = t_idx;
                 }
 
                 // Dereference operator
                 vertex_t operator*() const { return m_sub_boundaries[m_idx]; }
 
                 // Pre-increment operator
-                SubIterator &operator++() {
+                SubIterator& operator++() {
                     m_idx++;
                     return *this;
                 }
 
-                bool operator!=(const SubIterator &other) const { return m_idx != other.m_idx; }
+                bool operator!=(const SubIterator& other) const { return m_idx != other.m_idx; }
             };
 
             SubIterator begin() const { return {m_sub_boundaries, 0}; }
 
-            SubIterator end() const { return {m_sub_boundaries, m_sub_boundaries.size()}; }
+            SubIterator end() const { return {m_sub_boundaries, m_sub_boundaries_size}; }
         };
 
         SubBoundaryVertexManager operator[](const vertex_t u) {
-            return SubBoundaryVertexManager(m_boundaries[u]);
+            return SubBoundaryVertexManager(m_boundaries[u], m_boundaries_size[u]);
         }
 
         void initialize(const vertex_t t_n,
@@ -98,28 +107,35 @@ namespace HeiProMap {
             m_n = t_n;
             m_k = t_k;
 
-            vertex_t m_n_64 = round_up_64(m_n);
-            m_n_boundary_edges = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            vertex_t m_n_64    = round_up_64(m_n);
+            m_n_boundary_edges = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             std::fill_n(m_n_boundary_edges, m_n_64, 0);
 
-            m_boundaries.resize(m_k);
-            m_vertex_idx = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
+            vertex_t m_k_64 = round_up_64(m_k);
+            m_boundaries    = (vertex_t**)aligned_alloc(64, m_k_64 * sizeof(vertex_t*));
+            std::fill_n(m_boundaries, m_k_64, nullptr);
+            for (partition_t i = 0; i < m_k; i++) {
+                m_boundaries[i] = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            }
+            m_boundaries_size = (size_t*)aligned_alloc(64, m_k_64 * sizeof(size_t));
+            std::fill_n(m_boundaries_size, m_k_64, 0);
+            m_vertex_idx = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
 
-            m_complete_boundary            = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
-            m_complete_boundary_vertex_idx = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_complete_boundary            = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            m_complete_boundary_vertex_idx = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
             m_complete_boundary_size       = 0;
         }
 
         vertex_t get_n_boundary() const override { return m_n_boundary; }
-        vertex_t get_n_boundary(const partition_t id) {return  m_boundaries[id].size(); }
+        vertex_t get_n_boundary(const partition_t id) { return m_boundaries_size[id]; }
 
         bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
 
         void add(const vertex_t u, const partition_t id) override {
             if (m_n_boundary_edges[u] == 0) {
                 m_n_boundary += 1;
-                m_boundaries[id].emplace_back(u);
-                m_vertex_idx[u] = m_boundaries.size() - 1;
+                m_boundaries[id][m_boundaries_size[id]++] = u;
+                m_vertex_idx[u]                           = m_boundaries_size[id] - 1;
 
                 m_complete_boundary[m_complete_boundary_size] = u;
                 m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
@@ -128,8 +144,8 @@ namespace HeiProMap {
             m_n_boundary_edges[u] += 1;
         }
 
-        template<typename TSerialGraph, typename TSerialPartitionManager>
-        void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
+        template <typename TSerialGraph, typename TSerialPartitionManager>
+        void move(TSerialGraph& g, TSerialPartitionManager& p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
             bool u_was_boundary = is_boundary(u);
 
             // remove u from its old id
@@ -138,7 +154,7 @@ namespace HeiProMap {
             }
 
             // check how many connections u still has and if the neighbor are still boundary
-            for (const auto [v, w]: g[u]) {
+            for (const auto [v, w] : g[u]) {
                 partition_t v_id = p_manager[v];
 
                 if (v_id == new_id) {
@@ -188,49 +204,48 @@ namespace HeiProMap {
         }
 
         void remove(vertex_t u, partition_t id) {
-            vertex_t last_vertex = m_boundaries[id].back();
-            m_boundaries[id].pop_back();
-            size_t u_idx = m_vertex_idx[u];
+            vertex_t last_vertex = m_boundaries[id][--m_boundaries_size[id]];
+            size_t u_idx         = m_vertex_idx[u];
 
             m_boundaries[id][u_idx]   = last_vertex;
             m_vertex_idx[last_vertex] = u_idx;
         }
 
         void emplace(vertex_t u, partition_t id) {
-            m_boundaries[id].emplace_back(u);
-            m_vertex_idx[u] = m_boundaries[id].size() - 1;
+            m_boundaries[id][m_boundaries_size[id]++] = u;
+            m_vertex_idx[u]                           = m_boundaries_size[id] - 1;
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-        void uncontract(const EdgeUV *matches,
-                        size_t &matches_size,
-                        TSerialGraph &new_g, // the larger uncontracted graph
-                        [[maybe_unused]] TSerialGraph &old_g, // the smaller not contracted graph
-                        [[maybe_unused]] TSerialActiveVertexManager &av_manager,
-                        TSerialPartitionManager &p_manager) {
+        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
+        void uncontract(const EdgeUV* matches,
+                        size_t& matches_size,
+                        TSerialGraph& new_g, // the larger uncontracted graph
+                        [[maybe_unused]] TSerialGraph& old_g, // the smaller not contracted graph
+                        [[maybe_unused]] TSerialActiveVertexManager& av_manager,
+                        TSerialPartitionManager& p_manager) {
             matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
             // compute all from scratch
             std::fill_n(m_n_boundary_edges, m_n, 0);
-            for (auto &vec: m_boundaries) { vec.clear(); }
+            std::fill_n(m_boundaries_size, m_k, 0);
             m_complete_boundary_size = 0;
-            m_n_boundary = 0;
+            m_n_boundary             = 0;
 
-            for (vertex_t u: av_manager) {
-                size_t      n_different = 0;
-                partition_t u_id        = p_manager[u];
+            for (vertex_t u : av_manager) {
+                size_t n_different = 0;
+                partition_t u_id   = p_manager[u];
 
                 for (size_t i = 0; i < new_g.size(u); ++i) {
-                    const vertex_t v    = new_g.neighbor(u, i);
-                    partition_t    v_id = p_manager[v];
+                    const vertex_t v = new_g.neighbor(u, i);
+                    partition_t v_id = p_manager[v];
 
                     n_different += u_id != v_id;
                 }
 
                 if (n_different > 0) {
-                    m_n_boundary_edges[u] = n_different;
-                    m_boundaries[u_id].push_back(u);
-                    m_vertex_idx[u] = m_boundaries[u_id].size() - 1;
+                    m_n_boundary_edges[u]                         = n_different;
+                    m_boundaries[u_id][m_boundaries_size[u_id]++] = u;
+                    m_vertex_idx[u]                               = m_boundaries_size[u_id] - 1;
 
                     m_complete_boundary[m_complete_boundary_size] = u;
                     m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
@@ -242,15 +257,15 @@ namespace HeiProMap {
         }
 
         class Iterator {
-            vertex_t *m_complete_boundary;
-            size_t   &m_complete_boundary_size;
-            size_t   m_idx;
+            vertex_t* m_complete_boundary;
+            size_t& m_complete_boundary_size;
+            size_t m_idx;
 
         public:
             // Constructor
 
-            Iterator(vertex_t *t_complete_boundary,
-                     size_t &t_complete_boundary_size) : m_complete_boundary_size(t_complete_boundary_size) {
+            Iterator(vertex_t* t_complete_boundary,
+                     size_t& t_complete_boundary_size) : m_complete_boundary_size(t_complete_boundary_size) {
                 m_complete_boundary = ASSUME_ALIGNED(vertex_t*, t_complete_boundary, 64);
                 m_idx               = 0;
             }
@@ -259,12 +274,12 @@ namespace HeiProMap {
             vertex_t operator*() const { return m_complete_boundary[m_idx]; }
 
             // Pre-increment operator
-            Iterator &operator++() {
+            Iterator& operator++() {
                 m_idx++;
                 return *this;
             }
 
-            bool operator!=(const Iterator &other) const { return m_idx != other.m_complete_boundary_size; }
+            bool operator!=(const Iterator& other) const { return m_idx != other.m_complete_boundary_size; }
         };
 
         Iterator begin() { return {m_complete_boundary, m_complete_boundary_size}; }
