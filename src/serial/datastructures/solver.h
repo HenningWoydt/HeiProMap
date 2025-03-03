@@ -54,6 +54,7 @@
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
+#include "../refinement/two_vertex_label_propagation_refinement.h"
 
 namespace HeiProMap {
     /**
@@ -88,6 +89,7 @@ namespace HeiProMap {
         // refinement
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
         LabelPropagationRefinement lp_refine;
+        TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
         QuotientGraphRefinementFaraj20 qg_refine_faraj20;
         QuotientGraphRefinement qg_refine;
         KWayFMRefinementFaraj20 k_way_refine_faraj20;
@@ -130,6 +132,7 @@ namespace HeiProMap {
             // refinement
             lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
+            two_vertex_lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             qg_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
             k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
@@ -310,11 +313,15 @@ namespace HeiProMap {
             }
 
             if (ac.do_refinement_label_propagation_faraj20) {
-                lp_refine_faraj20.refine(ac.label_propagation_faraj20_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                lp_refine_faraj20.refine(ac.label_propagation_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_label_propagation) {
-                lp_refine.refine(ac.label_propagation_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                lp_refine.refine(ac.label_propagation_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+            }
+
+            if(ac.do_refinement_two_vertices_label_propagation_enable) {
+                two_vertex_lp_refine.refine(ac.two_vertex_label_propagation_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_k_way_fm_faraj20) {
@@ -326,15 +333,15 @@ namespace HeiProMap {
             }
 
             if (ac.do_refinement_multi_try_fm_faraj20) {
-                multi_try_fm_refinement_faraj20.refine(ac.multi_try_fm_refinement_faraj20_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                multi_try_fm_refinement_faraj20.refine(ac.multi_try_fm_refinement_faraj20_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_multi_try_fm) {
-                multi_try_fm_refinement.refine(ac.multi_try_fm_refinement_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                multi_try_fm_refinement.refine(ac.multi_try_fm_refinement_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             if (ac.do_refinement_hierarchy_aware_cycles_enable) {
-                hierarchy_aware_cycle_refinement.refine(ac.hierarchy_aware_cycles_configuration, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
+                hierarchy_aware_cycle_refinement.refine(ac.hierarchy_aware_cycles_config, graphs.back(), av_manager, bv_manager, p_manager, d_oracle, q_graph);
             }
 
             const auto ep_refinement = std::chrono::high_resolution_clock::now();

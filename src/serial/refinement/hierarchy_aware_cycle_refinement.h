@@ -128,9 +128,6 @@ namespace HeiProMap {
                 }
             }
 
-            print(islands_weight);
-            std::cout << "island_lmax: " << island_lmax << std::endl;
-
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
                 std::vector<Move> unavailable_moves;
 
@@ -192,7 +189,7 @@ namespace HeiProMap {
                 }
                 auto ep = std::chrono::high_resolution_clock::now();
                 f64 seconds = get_seconds(sp, ep);
-                std::cout << unavailable_moves.size() << " moves unavailable, but would improve by " << total_qap_delta << " in " << seconds << " seconds!" << std::endl;
+                std::cout << "Hierarchy Aware Cycles: " << unavailable_moves.size() << " moves unavailable, but would improve by " << total_qap_delta << " in " << seconds << " seconds!" << std::endl;
             }
         }
     };

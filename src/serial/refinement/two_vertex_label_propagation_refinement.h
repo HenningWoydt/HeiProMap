@@ -24,12 +24,15 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
-#define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
+#ifndef HEIPROMAP_TWO_VERTEX_LABEL_PROPAGATION_REFINEMENT_H
+#define HEIPROMAP_TWO_VERTEX_LABEL_PROPAGATION_REFINEMENT_H
 
 #include <random>
+#include <iostream>
 
 #include "../../definitions.h"
+#include "../../macros.h"
+#include "../utility/utils.h"
 #include "../interfaces/ISerialActiveVertexManager.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialDistanceOracle.h"
@@ -39,11 +42,11 @@
 #include "../interfaces/ISerialRefiner.h"
 
 namespace HeiProMap {
-    struct LabelPropagationConfiguration {
+    struct TwoVertexLabelPropagationConfiguration {
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
-    class LabelPropagationRefinement final : public ISerialRefiner {
+    class TwoVertexLabelPropagationRefinement final : public ISerialRefiner {
         vertex_t                 m_n    = 0;
         vertex_t                 m_m    = 0;
         partition_t              m_k    = 0;
@@ -65,9 +68,9 @@ namespace HeiProMap {
         std::uniform_real_distribution<float> dis;
 
     public:
-        LabelPropagationRefinement() = default;
+        TwoVertexLabelPropagationRefinement() = default;
 
-        ~LabelPropagationRefinement() override {
+        ~TwoVertexLabelPropagationRefinement() override {
             free(vertex_used);
             free(block_used);
             free(curr_boundary);
@@ -104,7 +107,7 @@ namespace HeiProMap {
         }
 
         template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(LabelPropagationConfiguration &config,
+        void refine(TwoVertexLabelPropagationConfiguration &config,
                     TSerialGraph &g,
                     [[maybe_unused]] TSerialActiveVertexManager &av_manager,
                     TSerialBoundaryVertexManager &bv_manager,
@@ -120,15 +123,15 @@ namespace HeiProMap {
 
             bool     move_occurred = true;
             for (u64 iteration     = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
-                auto sp = std::chrono::high_resolution_clock::now();
+                auto sp                 = std::chrono::high_resolution_clock::now();
+                u64  max_possible_moves = 0;
+                s64  max_possible_gain  = 0;
+
                 move_occurred = false;
 
                 curr_boundary_size = 0;
                 for (vertex_t u: bv_manager) { curr_boundary[curr_boundary_size++] = u; }
                 std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, gen);
-
-                // std::sort(curr_boundary, curr_boundary + curr_boundary_size, [&](vertex_t u, vertex_t v) { return g.size(u) > g.size(v); });
-                // std::sort(curr_boundary, curr_boundary + curr_boundary_size, [&](vertex_t u, vertex_t v) { return g.get_weight(u) > g.get_weight(v); });
 
                 vertex_marker += 1;
                 for (size_t i = 0; i < curr_boundary_size; ++i) {
@@ -139,56 +142,97 @@ namespace HeiProMap {
                     weight_t    u_weight = g.get_weight(u);
                     partition_t u_id     = p_manager[u];
 
-                    // make the move that reduces qap the most
-                    partition_t best_id        = u_id;
-                    weight_t    best_id_weight = 0;
-                    s64         best_qap_delta = -1;
-                    f32         counter        = 0;
-
+                    // get all connected partitions to u
+                    std::vector<partition_t> u_move_ids;
                     block_marker += 1;
                     block_used[u_id] = block_marker;
                     for (const auto [v, w]: g[u]) {
-                        partition_t v_id        = p_manager[v];
-                        weight_t    v_id_weight = p_manager.get_bweight(v_id);
-
+                        partition_t v_id = p_manager[v];
                         if (block_used[v_id] != block_marker) {
-                            if (v_id_weight + u_weight <= m_lmax) {
-                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-
-                                if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && v_id_weight < best_id_weight)) {
-                                    best_id        = v_id;
-                                    best_id_weight = v_id_weight;
-                                    best_qap_delta = qap_delta;
-                                    counter        = 1.0;
-                                } else if (qap_delta == best_qap_delta && qap_delta != -1) {
-                                    counter += 1.0;
-                                    // choose with probability 1/counter as it ensures uniform distribution
-                                    if (dis(gen) < 1.0f / counter) {
-                                        best_id = v_id;
-                                    }
-                                }
-                            }
+                            u_move_ids.push_back(v_id);
                             block_used[v_id] = block_marker;
                         }
                     }
 
-                    if (best_id != u_id) {
-                        // choose if positive, if 0-gain choose 50% of the time
-                        if (best_qap_delta > 0 || dis(gen) < 0.5) {
-                            bv_manager.move(g, p_manager, u, u_id, best_id);
-                            q_graph.move(g, p_manager, u, u_id, best_id);
-                            p_manager.move(u, u_weight, u_id, best_id);
-                            move_occurred = true;
+                    partition_t best_u_move_id = u_id;
+                    vertex_t    best_v;
+                    partition_t best_v_id;
+                    weight_t    best_v_weight;
+                    partition_t best_v_move_id;
+                    s64         best_qap_delta = -1;
+
+                    // get all connected partitions to v
+                    for (const auto [v, w]: g[u]) {
+                        if (vertex_used[v] == vertex_marker) { continue; }
+                        if (!bv_manager.is_boundary(v)) { continue; }
+
+                        weight_t    v_weight = p_manager[v];
+                        partition_t v_id     = p_manager[v];
+
+                        std::vector<partition_t> v_move_ids;
+
+                        block_marker += 1;
+                        block_used[v_id] = block_marker;
+                        for (const auto [vv, ww]: g[v]) {
+                            partition_t vv_id        = p_manager[vv];
+                            weight_t    vv_id_weight = p_manager.get_bweight(vv_id);
+
+                            if (block_used[vv_id] != block_marker) {
+                                v_move_ids.push_back(vv_id);
+                                block_used[vv_id] = block_marker;
+                            }
+                        }
+
+                        // check if moving u to u_ids and v to v_ids simultaneously would improve the score
+                        for (partition_t u_move_id: u_move_ids) {
+                            for (partition_t v_move_id: v_move_ids) {
+                                weight_t u_move_id_weight = p_manager.get_bweight(u_move_id);
+                                weight_t v_move_id_weight = p_manager.get_bweight(v_move_id);
+
+                                if (u_move_id == v_id && u_move_id_weight + u_weight - v_weight > m_lmax) { continue; }
+                                if (u_move_id != v_id && u_move_id_weight + u_weight > m_lmax) { continue; }
+                                if (v_move_id == u_id && v_move_id_weight + v_weight - u_weight > m_lmax) { continue; }
+                                if (v_move_id != u_id && v_move_id_weight + v_weight > m_lmax) { continue; }
+
+                                // no overloading is happening, now compute the qap_delta
+                                s64 qap_delta = get_qap_delta(g, u, u_id, u_move_id, v, v_id, v_move_id, p_manager, d_oracle);
+
+                                if (qap_delta > best_qap_delta) {
+                                    best_u_move_id = u_move_id;
+                                    best_v         = v;
+                                    best_v_id      = v_id;
+                                    best_v_weight  = v_weight;
+                                    best_v_move_id = v_move_id;
+                                    best_qap_delta = qap_delta;
+                                }
+                            }
                         }
                     }
-                    vertex_used[u] = vertex_marker;
+
+                    if (best_qap_delta != -1) {
+                        max_possible_moves += 1;
+                        max_possible_gain += best_qap_delta;
+
+                        vertex_used[u] = 1;
+                        bv_manager.move(g, p_manager, u, u_id, best_u_move_id);
+                        q_graph.move(g, p_manager, u, u_id, best_u_move_id);
+                        p_manager.move(u, u_weight, u_id, best_u_move_id);
+
+                        vertex_used[best_v] = 1;
+                        bv_manager.move(g, p_manager, best_v, best_v_id, best_v_move_id);
+                        q_graph.move(g, p_manager, best_v, best_v_id, best_v_move_id);
+                        p_manager.move(best_v, best_v_weight, best_v_id, best_v_move_id);
+
+                        move_occurred = true;
+                    }
                 }
-                auto ep = std::chrono::high_resolution_clock::now();
-                f64 seconds = get_seconds(sp, ep);
-                // std::cout << "Label Propagation: Iteration " << iteration << " took " << seconds << " seconds!" << std::endl;
+                auto ep      = std::chrono::high_resolution_clock::now();
+                f64  seconds = get_seconds(sp, ep);
+                std::cout << "Two Vertex Label Propagation - Iteration " << iteration << ": " << max_possible_moves << " possible moves with " << max_possible_gain << " max gain in " << seconds << " seconds!" << std::endl;
+
             }
         }
     };
 }
 
-#endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
+#endif //HEIPROMAP_TWO_VERTEX_LABEL_PROPAGATION_REFINEMENT_H
