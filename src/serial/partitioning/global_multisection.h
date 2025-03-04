@@ -133,7 +133,7 @@ namespace HeiProMap {
                 int kaffpa_edge_cut = 0;
                 int mode            = 0;
                 if (config.mode == GLOBAL_MULTISECTION_STRONG) {
-                    mode = STRONG;
+                    mode = ECO;
                 } else if (config.mode == GLOBAL_MULTISECTION_ECO) {
                     mode = ECO;
                 } else if (config.mode == GLOBAL_MULTISECTION_FAST) {
