@@ -348,7 +348,7 @@ namespace HeiProMap {
 
             std::vector<KWayFMMove> moves;
 
-            config.beta = std::log(av_manager.get_n_active());
+            config.beta = std::log(g.get_n());
 
             // std::cout << "alpha = " << config.alpha << std::endl;
             // std::cout << "beta  = " << config.beta << std::endl;
@@ -391,9 +391,9 @@ namespace HeiProMap {
                 s64    curr_qap_gain = 0;
                 s64    max_qap_gain  = 0;
 
-                // u64 steps_since_last_improvement = 0;
-                // f64 qap_gain_mean                = 0.0;
-                // f64 qap_gain_var                 = 1.0;
+                u64 steps_since_last_improvement = 0;
+                f64 qap_gain_mean                = 0.0;
+                f64 qap_gain_var                 = 1.0;
 
                 while (!prio_queue.empty()) {
                     const KWayFMMove move = prio_queue.top();
@@ -418,28 +418,26 @@ namespace HeiProMap {
                         best_idx     = moves.size();
                         max_qap_gain = curr_qap_gain;
 
-                        // steps_since_last_improvement = 0;
-                        // qap_gain_mean                = 0.0;
-                        // qap_gain_var                 = 1.0;
+                        steps_since_last_improvement = 0;
+                        qap_gain_mean                = 0.0;
+                        qap_gain_var                 = 1.0;
                     }
 
                     // make move in structures
                     p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                     vertex_used[vertex] = vertex_mark;
 
-                    // steps_since_last_improvement += 1;
-                    // f64 new_qap_gain_mean = qap_gain_mean + ((f64) move.qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
-                    // f64 new_qap_gain_var  = (qap_gain_var + ((f64) move.qap_delta - qap_gain_mean) * ((f64) move.qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
+                    steps_since_last_improvement += 1;
+                    f64 new_qap_gain_mean = qap_gain_mean + ((f64) move.qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
+                    f64 new_qap_gain_var  = (qap_gain_var + ((f64) move.qap_delta - qap_gain_mean) * ((f64) move.qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
 
-                    // qap_gain_mean = new_qap_gain_mean;
-                    // qap_gain_var  = new_qap_gain_var;
+                    qap_gain_mean = new_qap_gain_mean;
+                    qap_gain_var  = new_qap_gain_var;
 
-                    /*
                     if (steps_since_last_improvement > 3 && (f64)steps_since_last_improvement * qap_gain_mean * qap_gain_mean > config.alpha * qap_gain_var + config.beta) {
                         std::cout << "Stop on random walk: " << steps_since_last_improvement << " " << qap_gain_mean << " " << qap_gain_var << std::endl;
                         break;
                     }
-                    */
 
 
                     // we have to push or update the neighbors that were not moved already
