@@ -434,7 +434,7 @@ namespace HeiProMap {
                     qap_gain_mean = new_qap_gain_mean;
                     qap_gain_var  = new_qap_gain_var;
 
-                    if (steps_since_last_improvement > 3 && (f64)steps_since_last_improvement * qap_gain_mean * qap_gain_mean > config.alpha * qap_gain_var + config.beta) {
+                    if (steps_since_last_improvement > 3 && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > config.alpha * qap_gain_var + config.beta) {
                         // std::cout << "Stop on random walk: " << steps_since_last_improvement << " " << qap_gain_mean << " " << qap_gain_var << std::endl;
                         break;
                     }

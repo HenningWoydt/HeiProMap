@@ -183,8 +183,8 @@ namespace HeiProMap {
                     }
                     vertex_used[u] = vertex_marker;
                 }
-                auto ep = std::chrono::high_resolution_clock::now();
-                f64 seconds = get_seconds(sp, ep);
+                auto ep      = std::chrono::high_resolution_clock::now();
+                f64  seconds = get_seconds(sp, ep);
                 // std::cout << "Label Propagation: Iteration " << iteration << " took " << seconds << " seconds!" << std::endl;
             }
         }

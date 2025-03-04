@@ -44,7 +44,7 @@ namespace HeiProMap {
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
     };
 
-    inline partition_t get_island_id(partition_t u_id, const std::vector<std::vector<partition_t>>& island_ids) {
+    inline partition_t get_island_id(partition_t u_id, const std::vector<std::vector<partition_t>> &island_ids) {
         for (partition_t i = 0; i < island_ids.size(); ++i) {
             if (std::find(island_ids[i].begin(), island_ids[i].end(), u_id) != island_ids[i].end()) {
                 return i;
@@ -60,19 +60,19 @@ namespace HeiProMap {
      * If moves between the islands have been found, then try to distribute it onto the individual partitions.
      */
     class HierarchyAwareCycleRefinement final : public ISerialRefiner {
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n    = 0;
+        vertex_t                 m_m    = 0;
+        partition_t              m_k    = 0;
+        weight_t                 m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        u64 m_seed = 0;
+        std::vector<weight_t>    m_distance;
+        u64                      m_seed = 0;
 
         std::vector<s32> used;
-        s32 mark = -1;
+        s32              mark = -1;
 
-        std::random_device rd;
-        std::mt19937 gen;
+        std::random_device                    rd;
+        std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
 
     public:
@@ -82,8 +82,8 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
                         const u64 t_seed) override {
             m_n         = t_n;
             m_m         = t_m;
@@ -96,14 +96,14 @@ namespace HeiProMap {
             used.resize(t_n, -1);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine([[maybe_unused]] HierarchyAwareCyclesConfiguration& config,
-                    [[maybe_unused]] TSerialGraph& g,
-                    [[maybe_unused]] TSerialActiveVertexManager& av_manager,
-                    [[maybe_unused]] TSerialBoundaryVertexManager& bv_manager,
-                    [[maybe_unused]] TSerialPartitionManager& p_manager,
-                    [[maybe_unused]] TSerialDistanceOracle& d_oracle,
-                    [[maybe_unused]] TSerialQuotientGraph& q_graph) {
+        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
+        void refine([[maybe_unused]] HierarchyAwareCyclesConfiguration &config,
+                    [[maybe_unused]] TSerialGraph &g,
+                    [[maybe_unused]] TSerialActiveVertexManager &av_manager,
+                    [[maybe_unused]] TSerialBoundaryVertexManager &bv_manager,
+                    [[maybe_unused]] TSerialPartitionManager &p_manager,
+                    [[maybe_unused]] TSerialDistanceOracle &d_oracle,
+                    [[maybe_unused]] TSerialQuotientGraph &q_graph) {
             static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
             static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
             static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
@@ -113,14 +113,14 @@ namespace HeiProMap {
 
             auto sp = std::chrono::high_resolution_clock::now();
 
-            size_t n_islands      = m_hierarchy.back();
-            size_t ids_per_island = m_k / n_islands;
+            size_t                                n_islands      = m_hierarchy.back();
+            size_t                                ids_per_island = m_k / n_islands;
             std::vector<std::vector<partition_t>> island_ids(n_islands, std::vector<partition_t>(ids_per_island));
-            std::vector<weight_t> islands_weight(n_islands, 0.0);
-            weight_t island_lmax = (weight_t)ids_per_island * m_lmax;
+            std::vector<weight_t>                 islands_weight(n_islands, 0.0);
+            weight_t                              island_lmax    = (weight_t) ids_per_island * m_lmax;
 
-            size_t id = 0;
-            for (size_t i = 0; i < n_islands; i++) {
+            size_t      id = 0;
+            for (size_t i  = 0; i < n_islands; i++) {
                 for (size_t j = 0; j < ids_per_island; j++) {
                     island_ids[i][j] = id;
                     islands_weight[i] += p_manager.get_bweight(id);
@@ -132,19 +132,19 @@ namespace HeiProMap {
                 std::vector<Move> unavailable_moves;
 
                 // insert all boundary vertices
-                for (vertex_t u : bv_manager) {
+                for (vertex_t u: bv_manager) {
                     partition_t u_id = p_manager[u];
 
                     // make the move that reduces qap the most
-                    partition_t best_id     = u_id;
-                    weight_t best_id_weight = 0;
-                    s64 best_qap_delta      = 0;
-                    f32 counter             = 0;
+                    partition_t best_id        = u_id;
+                    weight_t    best_id_weight = 0;
+                    s64         best_qap_delta = 0;
+                    f32         counter        = 0;
 
                     // find all connected partitions to u
-                    for (const auto [v, w] : g[u]) {
-                        partition_t v_id     = p_manager[v];
-                        weight_t v_id_weight = p_manager.get_bweight(v_id);
+                    for (const auto [v, w]: g[u]) {
+                        partition_t v_id        = p_manager[v];
+                        weight_t    v_id_weight = p_manager.get_bweight(v_id);
 
                         if (u_id == v_id) { continue; }
 
@@ -184,11 +184,11 @@ namespace HeiProMap {
                 }
 
                 s64 total_qap_delta = 0;
-                for (const auto& move : unavailable_moves) {
+                for (const auto &move: unavailable_moves) {
                     total_qap_delta += move.qap_delta;
                 }
-                auto ep = std::chrono::high_resolution_clock::now();
-                f64 seconds = get_seconds(sp, ep);
+                auto ep      = std::chrono::high_resolution_clock::now();
+                f64  seconds = get_seconds(sp, ep);
                 std::cout << "Hierarchy Aware Cycles: " << unavailable_moves.size() << " moves unavailable, but would improve by " << total_qap_delta << " in " << seconds << " seconds!" << std::endl;
             }
         }

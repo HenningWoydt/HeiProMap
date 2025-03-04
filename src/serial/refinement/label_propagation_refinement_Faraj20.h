@@ -44,21 +44,21 @@ namespace HeiProMap {
      * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      */
     class LabelPropagationRefinementFaraj20 final : public ISerialRefiner {
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n    = 0;
+        vertex_t                 m_m    = 0;
+        partition_t              m_k    = 0;
+        weight_t                 m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        u64 m_seed = 0;
+        std::vector<weight_t>    m_distance;
+        u64                      m_seed = 0;
 
-        u32* vertex_used  = nullptr;
+        u32 *vertex_used = nullptr;
         u32 vertex_marker = 0;
 
-        u32* block_used  = nullptr;
+        u32 *block_used = nullptr;
         u32 block_marker = 0;
 
-        std::mt19937 gen;
+        std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
 
     public:
@@ -73,8 +73,8 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
                         const u64 t_seed) override {
             m_n         = t_n;
             m_m         = t_m;
@@ -85,25 +85,25 @@ namespace HeiProMap {
             m_seed      = t_seed;
 
             vertex_t m_n_64 = round_up_64(m_n);
-            vertex_used     = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
+            vertex_used = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(vertex_used, m_n_64, vertex_marker);
 
             partition_t m_k_64 = round_up_64(m_k);
-            block_used         = (u32*)aligned_alloc(64, m_k_64 * sizeof(u32));
+            block_used = (u32 *) aligned_alloc(64, m_k_64 * sizeof(u32));
             std::fill_n(block_used, m_k_64, block_marker);
 
             gen.seed(m_seed);
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(LabelPropagationFaraj20Configuration& config,
-                    TSerialGraph& g,
-                    [[maybe_unused]] TSerialActiveVertexManager& av_manager,
-                    TSerialBoundaryVertexManager& bv_manager,
-                    TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle,
-                    TSerialQuotientGraph& q_graph) {
+        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
+        void refine(LabelPropagationFaraj20Configuration &config,
+                    TSerialGraph &g,
+                    [[maybe_unused]] TSerialActiveVertexManager &av_manager,
+                    TSerialBoundaryVertexManager &bv_manager,
+                    TSerialPartitionManager &p_manager,
+                    TSerialDistanceOracle &d_oracle,
+                    TSerialQuotientGraph &q_graph) {
             static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
             static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
             static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
@@ -111,33 +111,33 @@ namespace HeiProMap {
             static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
             static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
 
-            bool move_occurred = true;
-            for (u64 iteration = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
+            bool     move_occurred = true;
+            for (u64 iteration     = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
                 move_occurred = false;
 
                 std::vector<vertex_t> curr_boundary;
-                for (vertex_t u : bv_manager) { curr_boundary.push_back(u); }
+                for (vertex_t         u: bv_manager) { curr_boundary.push_back(u); }
                 std::shuffle(curr_boundary.begin(), curr_boundary.end(), gen);
 
                 vertex_marker += 1;
-                for (vertex_t u : curr_boundary) {
+                for (vertex_t u: curr_boundary) {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t u_weight = g.get_weight(u);
-                    partition_t u_id  = p_manager[u];
+                    weight_t    u_weight = g.get_weight(u);
+                    partition_t u_id     = p_manager[u];
 
                     // make the move that reduces qap the most
-                    partition_t best_id     = u_id;
-                    weight_t best_id_weight = 0;
-                    s64 best_qap_delta      = -1;
-                    f32 counter             = 0;
+                    partition_t best_id        = u_id;
+                    weight_t    best_id_weight = 0;
+                    s64         best_qap_delta = -1;
+                    f32         counter        = 0;
 
                     block_marker += 1;
                     block_used[u_id] = block_marker;
-                    for (const auto [v, w] : g[u]) {
-                        partition_t v_id     = p_manager[v];
-                        weight_t v_id_weight = p_manager.get_bweight(v_id);
+                    for (const auto [v, w]: g[u]) {
+                        partition_t v_id        = p_manager[v];
+                        weight_t    v_id_weight = p_manager.get_bweight(v_id);
 
                         if (block_used[v_id] != block_marker) {
                             if (v_id_weight + u_weight <= m_lmax) {

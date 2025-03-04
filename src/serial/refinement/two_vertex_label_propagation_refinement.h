@@ -47,30 +47,30 @@ namespace HeiProMap {
     };
 
     class TwoVertexLabelPropagationRefinement final : public ISerialRefiner {
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n    = 0;
+        vertex_t                 m_m    = 0;
+        partition_t              m_k    = 0;
+        weight_t                 m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        u64 m_seed = 0;
+        std::vector<weight_t>    m_distance;
+        u64                      m_seed = 0;
 
-        u32* vertex_used  = nullptr;
+        u32 *vertex_used = nullptr;
         u32 vertex_marker = 0;
 
-        u32* block_used  = nullptr;
+        u32 *block_used = nullptr;
         u32 block_marker = 0;
 
-        vertex_t* curr_boundary   = nullptr;
+        vertex_t *curr_boundary = nullptr;
         size_t curr_boundary_size = 0;
 
-        partition_t* u_move_ids = nullptr;
-        size_t u_move_ids_size  = 0;
+        partition_t *u_move_ids = nullptr;
+        size_t u_move_ids_size = 0;
 
-        partition_t* v_move_ids = nullptr;
-        size_t v_move_ids_size  = 0;
+        partition_t *v_move_ids = nullptr;
+        size_t v_move_ids_size = 0;
 
-        std::mt19937 gen;
+        std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
 
     public:
@@ -88,8 +88,8 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
                         const u64 t_seed) override {
             m_n         = t_n;
             m_m         = t_m;
@@ -99,22 +99,22 @@ namespace HeiProMap {
             m_distance  = t_distance;
             m_seed      = t_seed;
 
-            vertex_t m_n_64    = round_up_64(m_n);
+            vertex_t    m_n_64 = round_up_64(m_n);
             partition_t m_k_64 = round_up_64(m_k);
 
-            vertex_used = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
+            vertex_used = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(vertex_used, m_n_64, vertex_marker);
 
-            block_used = (u32*)aligned_alloc(64, m_k_64 * sizeof(u32));
+            block_used = (u32 *) aligned_alloc(64, m_k_64 * sizeof(u32));
             std::fill_n(block_used, m_k_64, block_marker);
 
-            curr_boundary      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            curr_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             curr_boundary_size = 0;
 
-            u_move_ids      = (vertex_t*)aligned_alloc(64, m_k_64 * sizeof(vertex_t));
+            u_move_ids      = (vertex_t *) aligned_alloc(64, m_k_64 * sizeof(vertex_t));
             u_move_ids_size = 0;
 
-            v_move_ids      = (vertex_t*)aligned_alloc(64, m_k_64 * sizeof(vertex_t));
+            v_move_ids      = (vertex_t *) aligned_alloc(64, m_k_64 * sizeof(vertex_t));
             v_move_ids_size = 0;
 
 
@@ -122,14 +122,14 @@ namespace HeiProMap {
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(TwoVertexLabelPropagationConfiguration& config,
-                    TSerialGraph& g,
-                    [[maybe_unused]] TSerialActiveVertexManager& av_manager,
-                    TSerialBoundaryVertexManager& bv_manager,
-                    TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle,
-                    TSerialQuotientGraph& q_graph) {
+        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
+        void refine(TwoVertexLabelPropagationConfiguration &config,
+                    TSerialGraph &g,
+                    [[maybe_unused]] TSerialActiveVertexManager &av_manager,
+                    TSerialBoundaryVertexManager &bv_manager,
+                    TSerialPartitionManager &p_manager,
+                    TSerialDistanceOracle &d_oracle,
+                    TSerialQuotientGraph &q_graph) {
             static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
             static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
             static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
@@ -137,16 +137,16 @@ namespace HeiProMap {
             static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
             static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
 
-            bool move_occurred = true;
-            for (u64 iteration = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
-                auto sp                = std::chrono::high_resolution_clock::now();
-                u64 max_possible_moves = 0;
-                s64 max_possible_gain  = 0;
+            bool     move_occurred = true;
+            for (u64 iteration     = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
+                auto sp                 = std::chrono::high_resolution_clock::now();
+                u64  max_possible_moves = 0;
+                s64  max_possible_gain  = 0;
 
                 move_occurred = false;
 
                 curr_boundary_size = 0;
-                for (vertex_t u : bv_manager) { curr_boundary[curr_boundary_size++] = u; }
+                for (vertex_t u: bv_manager) { curr_boundary[curr_boundary_size++] = u; }
                 std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, gen);
 
                 vertex_marker += 1;
@@ -155,14 +155,14 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t u_weight = g.get_weight(u);
-                    partition_t u_id  = p_manager[u];
+                    weight_t    u_weight = g.get_weight(u);
+                    partition_t u_id     = p_manager[u];
 
                     // get all connected partitions to u
                     block_marker += 1;
                     block_used[u_id] = block_marker;
                     u_move_ids_size = 0;
-                    for (const auto [neighbor, neighbor_w] : g[u]) {
+                    for (const auto [neighbor, neighbor_w]: g[u]) {
                         partition_t neighbor_id = p_manager[neighbor];
                         if (block_used[neighbor_id] != block_marker) {
                             u_move_ids[u_move_ids_size++] = neighbor_id;
@@ -171,24 +171,24 @@ namespace HeiProMap {
                     }
 
                     partition_t best_u_move_id;
-                    vertex_t best_v;
+                    vertex_t    best_v;
                     partition_t best_v_id;
-                    weight_t best_v_weight;
+                    weight_t    best_v_weight;
                     partition_t best_v_move_id;
-                    s64 best_qap_delta = -1;
+                    s64         best_qap_delta = -1;
 
                     // get all connected partitions to v
-                    for (const auto [v, w] : g[u]) {
+                    for (const auto [v, w]: g[u]) {
                         if (vertex_used[v] == vertex_marker) { continue; }
                         if (!bv_manager.is_boundary(v)) { continue; }
 
-                        weight_t v_weight = g.get_weight(v);
-                        partition_t v_id  = p_manager[v];
+                        weight_t    v_weight = g.get_weight(v);
+                        partition_t v_id     = p_manager[v];
 
                         block_marker += 1;
                         block_used[v_id] = block_marker;
                         v_move_ids_size = 0;
-                        for (const auto [neighbor, neighbor_w] : g[v]) {
+                        for (const auto [neighbor, neighbor_w]: g[v]) {
                             partition_t neighbor_id = p_manager[neighbor];
 
                             if (block_used[neighbor_id] != block_marker) {
@@ -240,11 +240,11 @@ namespace HeiProMap {
 
                         vertex_used[u]      = 1;
                         vertex_used[best_v] = 1;
-                        move_occurred       = true;
+                        move_occurred = true;
                     }
                 }
-                auto ep     = std::chrono::high_resolution_clock::now();
-                f64 seconds = get_seconds(sp, ep);
+                auto ep      = std::chrono::high_resolution_clock::now();
+                f64  seconds = get_seconds(sp, ep);
                 // std::cout << "Two Vertex Label Propagation - Iteration " << iteration << ": " << max_possible_moves << " possible moves with " << max_possible_gain << " max gain in " << seconds << " seconds!" << std::endl;
             }
         }

@@ -78,21 +78,21 @@ namespace HeiProMap {
         IndexedMaxHeap<s64> boundary_vertices_v;
 
         // store change
-        vertex_t *moves = nullptr;
-        size_t moves_size    = 0;
-        s64    curr_qap_gain = 0;
-        s64    max_qap_gain  = 0;
-        size_t best_idx      = 0;
+        vertex_t *moves        = nullptr;
+        size_t   moves_size    = 0;
+        s64      curr_qap_gain = 0;
+        s64      max_qap_gain  = 0;
+        size_t   best_idx      = 0;
 
         // active block scheduling
-        u8   *active_this_round = nullptr;
-        u8   *active_next_round = nullptr;
-        Pair *pairs             = nullptr;
-        size_t pairs_size = 0;
+        u8     *active_this_round = nullptr;
+        u8     *active_next_round = nullptr;
+        Pair   *pairs             = nullptr;
+        size_t pairs_size         = 0;
 
         // store which vertices have been moved
         u32 *vertex_used = nullptr;
-        u32 vertex_mark = 0;
+        u32 vertex_mark  = 0;
 
         std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
