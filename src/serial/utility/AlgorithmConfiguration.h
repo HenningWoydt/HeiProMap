@@ -515,15 +515,8 @@ namespace HeiProMap {
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
             kaffpa_partitioner_config.mode_string   = "fast";
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // set multisection
-            // TODO: kaffpa has an error in multisection, so fall back to this
-            partitioning_algorithm_string          = "multisection";
-            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // disable all own refinements
             do_refinement_label_propagation = false;
@@ -548,15 +541,8 @@ namespace HeiProMap {
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
             kaffpa_partitioner_config.mode_string   = "fast";
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // set multisection
-            // TODO: kaffpa has an error in multisection, so fall back to this
-            partitioning_algorithm_string          = "multisection";
-            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // disable all own refinements
             do_refinement_label_propagation = false;
@@ -583,15 +569,8 @@ namespace HeiProMap {
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
             kaffpa_partitioner_config.mode_string   = "eco";
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // set multisection
-            // TODO: kaffpa has an error in multisection, so fall back to this
-            partitioning_algorithm_string          = "multisection";
-            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "eco";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // disable all own refinements
             do_refinement_label_propagation = false;
@@ -625,15 +604,8 @@ namespace HeiProMap {
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
             kaffpa_partitioner_config.mode_string   = "strong";
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "multisection";
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // set multisection
-            // TODO: kaffpa has an error in multisection, so fall back to this
-            partitioning_algorithm_string          = "multisection";
-            partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "strong";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // disable all own refinements
             do_refinement_label_propagation = false;
