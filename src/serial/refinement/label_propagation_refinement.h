@@ -52,14 +52,11 @@ namespace HeiProMap {
         std::vector<weight_t>    m_distance;
         u64                      m_seed = 0;
 
-        u32 *vertex_used  = nullptr;
+        u32 *vertex_used = nullptr;
         u32 vertex_marker = 0;
 
-        u32 *block_used  = nullptr;
+        u32 *block_used = nullptr;
         u32 block_marker = 0;
-
-        vertex_t *curr_boundary     = nullptr;
-        size_t   curr_boundary_size = 0;
 
         std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
@@ -70,7 +67,6 @@ namespace HeiProMap {
         ~LabelPropagationRefinement() override {
             free(vertex_used);
             free(block_used);
-            free(curr_boundary);
         }
 
         void initialize(const vertex_t t_n,
@@ -96,9 +92,6 @@ namespace HeiProMap {
             block_used = (u32 *) aligned_alloc(64, m_k_64 * sizeof(u32));
             std::fill_n(block_used, m_k_64, block_marker);
 
-            curr_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
-            curr_boundary_size = 0;
-
             gen.seed(m_seed);
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
@@ -120,19 +113,14 @@ namespace HeiProMap {
 
             bool     move_occurred = true;
             for (u64 iteration     = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
-                auto sp = std::chrono::high_resolution_clock::now();
                 move_occurred = false;
 
-                curr_boundary_size = 0;
-                for (vertex_t u: bv_manager) { curr_boundary[curr_boundary_size++] = u; }
-                std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, gen);
-
-                // std::sort(curr_boundary, curr_boundary + curr_boundary_size, [&](vertex_t u, vertex_t v) { return g.size(u) > g.size(v); });
-                // std::sort(curr_boundary, curr_boundary + curr_boundary_size, [&](vertex_t u, vertex_t v) { return g.get_weight(u) > g.get_weight(v); });
+                std::vector<vertex_t> curr_boundary;
+                for (vertex_t         u: bv_manager) { curr_boundary.push_back(u); }
+                std::shuffle(curr_boundary.begin(), curr_boundary.end(), gen);
 
                 vertex_marker += 1;
-                for (size_t i = 0; i < curr_boundary_size; ++i) {
-                    vertex_t u = curr_boundary[i];
+                for (vertex_t u: curr_boundary) {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
@@ -183,9 +171,6 @@ namespace HeiProMap {
                     }
                     vertex_used[u] = vertex_marker;
                 }
-                auto ep      = std::chrono::high_resolution_clock::now();
-                f64  seconds = get_seconds(sp, ep);
-                // std::cout << "Label Propagation: Iteration " << iteration << " took " << seconds << " seconds!" << std::endl;
             }
         }
     };
