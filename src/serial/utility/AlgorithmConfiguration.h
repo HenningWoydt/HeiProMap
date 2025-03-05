@@ -729,14 +729,12 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // set kaffpa multisection partitioning
-            /*
             partitioning_algorithm_string           = "kaffpa";
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
             kaffpa_partitioner_config.mode_string   = "strong";
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-            */
 
             // disable all Faraj20 refinements
             do_refinement_label_propagation_faraj20 = false;
@@ -751,7 +749,7 @@ namespace HeiProMap {
             // enable quotient graph refinement
             do_refinement_quotient_graph                           = true;
             quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
-            quotient_graph_refinement_config.max_moves_without_max = std::numeric_limits<u64>::max();
+            quotient_graph_refinement_config.max_moves_without_max = 10;
 
             // enable k-way fm
             do_refinement_k_way_fm = true;
