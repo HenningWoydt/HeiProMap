@@ -24,12 +24,15 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_K_WAY_FM_REFINEMENT_H
-#define HEIPROMAP_K_WAY_FM_REFINEMENT_H
+#ifndef HEIPROMAP_K_WAY_FM_REFINEMENT_BOOST_H
+#define HEIPROMAP_K_WAY_FM_REFINEMENT_BOOST_H
 
 #include <queue>
 #include <random>
 
+#include <boost/heap/priority_queue.hpp>
+
+#include "k_way_fm_refinement.h"
 #include "k_way_fm_refinement_Faraj20.h"
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
@@ -41,13 +44,7 @@
 #include "../utility/utils.h"
 
 namespace HeiProMap {
-    struct KWayFMRefinementConfiguration {
-        u64 max_iteration = 1; // how many iterations to run the algorithm at most
-        f64 alpha         = 10000000.0;
-        f64 beta          = 1.0;
-    };
-
-    class KWayFMRefinement final : public ISerialRefiner {
+    class KWayFMRefinementBoost final : public ISerialRefiner {
     private:
         vertex_t                 m_n    = 0;
         vertex_t                 m_m    = 0;
@@ -63,16 +60,11 @@ namespace HeiProMap {
         std::vector<u32> block_used;
         u32              block_marker = 0;
 
-        // indexed max heaps
-        // KWayFMPriorityQueue queue;
-
-        std::priority_queue<KWayFMMove> prio_queue;
-
         std::mt19937                          gen;
         std::uniform_real_distribution<float> dis;
 
     public:
-        KWayFMRefinement() = default;
+        KWayFMRefinementBoost() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -91,8 +83,6 @@ namespace HeiProMap {
 
             vertex_used.resize(t_n, 0);
             block_used.resize(t_n, 0);
-
-            // queue = KWayFMPriorityQueue(t_n);
 
             gen.seed(m_seed);
             dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
@@ -123,11 +113,8 @@ namespace HeiProMap {
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
                 auto sp    = std::chrono::high_resolution_clock::now();
 
-                // queue.clear();
                 vertex_mark += 1;
-                prio_queue = std::priority_queue<KWayFMMove>();
-
-                // boost::heap::priority_queue<KWayFMMove> boost_prio_queue;
+                boost::heap::priority_queue<KWayFMMove> boost_prio_queue;
 
                 // insert all boundary vertices
                 for (vertex_t u: bv_manager) {
@@ -136,7 +123,6 @@ namespace HeiProMap {
 
                     // find all connected partitions to u
                     block_marker += 1;
-                    bool one_id_is_valid = false;
                     for (const auto [v, w]: g[u]) {
                         partition_t v_id = p_manager[v];
                         if (v_id == u_id) { continue; }
@@ -144,15 +130,9 @@ namespace HeiProMap {
                         if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
 
                         s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                        // queue.push(u, u_id, v_id, qap_delta);
-                        prio_queue.emplace(u, u_id, v_id, qap_delta);
-                        // boost_prio_queue.emplace(u, u_id, v_id, qap_delta);
-                        one_id_is_valid = true;
+                        boost_prio_queue.emplace(u, u_id, v_id, qap_delta);
 
                         block_used[v_id] = block_marker;
-                    }
-                    if (one_id_is_valid) {
-                        // queue.sort(u);
                     }
                 }
 
@@ -165,9 +145,9 @@ namespace HeiProMap {
                 f64 qap_gain_mean                = 0.0;
                 f64 qap_gain_var                 = 1.0;
 
-                while (!prio_queue.empty()) {
-                    const KWayFMMove move = prio_queue.top();
-                    prio_queue.pop();
+                while (!boost_prio_queue.empty()) {
+                    const KWayFMMove move = boost_prio_queue.top();
+                    boost_prio_queue.pop();
 
                     vertex_t vertex = move.u;
                     if (vertex_used[vertex] == vertex_mark) { continue; }
@@ -206,7 +186,7 @@ namespace HeiProMap {
 
                     if (steps_since_last_improvement > 3 && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > config.alpha * qap_gain_var + config.beta) {
                         // std::cout << "Stop on random walk: " << steps_since_last_improvement << " " << qap_gain_mean << " " << qap_gain_var << std::endl;
-                        break;
+                        // break;
                     }
 
 
@@ -219,7 +199,6 @@ namespace HeiProMap {
                         weight_t    neighbor_weight = g.get_weight(neighbor);
 
                         block_marker += 1;
-                        bool one_id_is_valid = false;
                         for (const auto [v, w]: g[neighbor]) {
                             partition_t v_id = p_manager[v];
                             if (v_id == neighbor_id) { continue; }
@@ -227,14 +206,8 @@ namespace HeiProMap {
                             if (p_manager.get_bweight(v_id) + neighbor_weight > m_lmax) { continue; }
 
                             s64 qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
-                            // queue.push(neighbor, neighbor_id, v_id, qap_delta);
-                            prio_queue.emplace(neighbor, neighbor_id, v_id, qap_delta);
-                            // boost_prio_queue.emplace(neighbor, neighbor_id, v_id, qap_delta);
-                            one_id_is_valid = true;
+                            boost_prio_queue.emplace(neighbor, neighbor_id, v_id, qap_delta);
                             block_used[v_id] = block_marker;
-                        }
-                        if (one_id_is_valid) {
-                            // queue.sort(neighbor);
                         }
                     }
                 }
@@ -262,10 +235,10 @@ namespace HeiProMap {
                 }
 
                 auto ep = std::chrono::high_resolution_clock::now();
-                // std::cout << "iteration: " << iteration << " best_idx: " << best_idx << " new_gain: " << max_qap_gain << " max moves: " << moves.size() << " time: " << get_seconds(sp, ep) << std::endl;
+                std::cout << "iteration: " << iteration << " best_idx: " << best_idx << " new_gain: " << max_qap_gain << " max moves: " << moves.size() << " time: " << get_seconds(sp, ep) << std::endl;
             }
         }
     };
 }
 
-#endif //HEIPROMAP_K_WAY_FM_REFINEMENT_H
+#endif //HEIPROMAP_K_WAY_FM_REFINEMENT_BOOST_H

@@ -48,13 +48,15 @@
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../rebalance/simple_rebalancer.h"
+#include "../refinement/k_way_fm_refinement_boost.h"
 #include "../refinement/label_propagation_refinement_Faraj20.h"
+#include "../refinement/multi_try_fm_refinement_boost.h"
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
+#include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../utility/AlgorithmConfiguration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/utils.h"
-#include "../refinement/two_vertex_label_propagation_refinement.h"
 
 namespace HeiProMap {
     /**
@@ -94,8 +96,10 @@ namespace HeiProMap {
         QuotientGraphRefinement qg_refine;
         KWayFMRefinementFaraj20 k_way_refine_faraj20;
         KWayFMRefinement k_way_refine;
+        // KWayFMRefinementBoost k_way_refine;
         MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
         MultiTryFMRefinement multi_try_fm_refinement;
+        // MultiTryFMRefinementBoost multi_try_fm_refinement;
         HierarchyAwareCycleRefinement hierarchy_aware_cycle_refinement;
 
         // statistics
@@ -170,7 +174,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 4) {
+            while (av_manager.get_n_active() > ac.k * 16) {
                 matching(level);
                 coarsening(level);
 

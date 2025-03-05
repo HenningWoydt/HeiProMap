@@ -28,17 +28,19 @@
 #define HEIPROMAP_GLOBAL_PATH_ALGORITHM_ARRAYS_H
 
 #include <algorithm>
+#include <chrono>
 #include <iomanip>
 #include <numeric>
 #include <queue>
-#include <vector>
-#include <chrono>
 #include <random>
+#include <vector>
 
+#include <boost/sort/sort.hpp>
+
+#include "global_path_algorithm.h"
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../interfaces/ISerialMatcher.h"
-#include "global_path_algorithm.h"
 #include "../utility/utils.h"
 
 namespace HeiProMap {
@@ -201,7 +203,10 @@ namespace HeiProMap {
 
             TIME_POINT(sp_sorting);
             if (max_rating != min_rating) {
-                std::sort(edges, edges + edges_size, std::greater<>());
+                boost::sort::pdqsort(edges, edges + edges_size, std::greater<>());
+                // boost::sort::spinsort(edges, edges + edges_size, std::greater<>()); // requires enabled exceptions
+                // boost::sort::flat_stable_sort(edges, edges + edges_size, std::greater<>()); // requires enabled exceptions
+                // std::sort(edges, edges + edges_size, std::greater<>());
             }
             TIME_POINT(ep_sorting);
 

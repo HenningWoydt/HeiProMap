@@ -728,6 +728,16 @@ namespace HeiProMap {
             global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
+            // set kaffpa multisection partitioning
+            /*
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "strong";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
+            */
+
             // disable all Faraj20 refinements
             do_refinement_label_propagation_faraj20 = false;
             do_refinement_quotient_graph_faraj20    = false;
