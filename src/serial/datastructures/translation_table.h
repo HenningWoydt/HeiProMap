@@ -33,9 +33,11 @@
 #include "../../macros.h"
 
 namespace HeiProMap {
+    template<typename T>
     class TranslationTable {
-        std::unordered_map<u64, u64> m_translation_o_to_n;
-        std::unordered_map<u64, u64> m_translation_n_to_o;
+    private:
+        T* m_translation_o_to_n = nullptr;
+        T* m_translation_n_to_o = nullptr;
 
     public:
         /**
@@ -43,13 +45,9 @@ namespace HeiProMap {
          */
         TranslationTable() = default;
 
-        /**
-         * Initializes the translation table with the Identity mapping.
-         */
-        explicit TranslationTable(u64 n) {
-            for (u64 u = 0; u < n; ++u) {
-                add(u, u);
-            }
+        ~TranslationTable() {
+            free(m_translation_o_to_n);
+            free(m_translation_n_to_o);
         }
 
         /**
@@ -58,12 +56,20 @@ namespace HeiProMap {
          * @param o Old value.
          * @param n New value.
          */
-        void add(u64 o, u64 n) {
-            ASSERT(m_translation_o_to_n.find(o) == m_translation_o_to_n.end());
-            ASSERT(m_translation_n_to_o.find(n) == m_translation_n_to_o.end());
-
+        void add(const T o, const T n) {
             m_translation_o_to_n[o] = n;
+
             m_translation_n_to_o[n] = o;
+        }
+
+        void reserve(size_t n_space, size_t o_space){
+            free(m_translation_n_to_o);
+            free(m_translation_o_to_n);
+
+            size_t n_space_64 = round_up_64(n_space + 1);
+            size_t o_space_64 = round_up_64(o_space + 1);
+            m_translation_n_to_o = (T*) aligned_alloc(64, n_space_64 * sizeof(T));
+            m_translation_o_to_n = (T*) aligned_alloc(64, o_space_64 * sizeof(T));
         }
 
         /**
@@ -71,10 +77,8 @@ namespace HeiProMap {
          *
          * @param o Old value
          */
-        u64 get_n(u64 o) const {
-            ASSERT(m_translation_o_to_n.find(o) != m_translation_o_to_n.end());
-
-            return m_translation_o_to_n.at(o);
+        T get_n(const T o) const {
+            return m_translation_o_to_n[o];
         }
 
         /**
@@ -82,34 +86,8 @@ namespace HeiProMap {
          *
          * @param n New value.
          */
-        u64 get_o(u64 n) const {
-            ASSERT(m_translation_n_to_o.find(n) != m_translation_n_to_o.end());
-
-            return m_translation_n_to_o.at(n);
-        }
-
-        /**
-         * Removes all entries.
-         */
-        void clear() {
-            m_translation_o_to_n.clear();
-            m_translation_n_to_o.clear();
-        }
-
-        void merge(TranslationTable& tt) {
-            m_translation_n_to_o.merge(tt.m_translation_n_to_o);
-            m_translation_o_to_n.merge(tt.m_translation_o_to_n);
-        }
-
-        void print() {
-            std::cout << "Old to New" << std::endl;
-            for (const auto& [key, value] : m_translation_o_to_n) {
-                std::cout << key << " : " << value << std::endl;
-            }
-            std::cout << "New to old" << std::endl;
-            for (const auto& [key, value] : m_translation_n_to_o) {
-                std::cout << key << " : " << value << std::endl;
-            }
+        T get_o(const T n) const {
+            return m_translation_n_to_o[n];
         }
     };
 }

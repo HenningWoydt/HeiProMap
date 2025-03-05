@@ -113,7 +113,8 @@ namespace HeiProMap {
             int m = 0;
 
             // build translation table
-            TranslationTable tt;
+            TranslationTable<int> tt;
+            tt.reserve(av_manager.get_n_active(), g.get_n());
             vertex_t translate = 0;
             for (vertex_t u : av_manager) {
                 ASSERT(av_manager.is_active(u));
@@ -173,11 +174,11 @@ namespace HeiProMap {
             }
 
             if (config.mode == KAFFPA_PARTITIONER_MODE_FAST) {
-                kaffpa_partition_mode = KAFFPA_FAST;
+                kaffpa_partition_mode = FAST;
             } else if (config.mode == KAFFPA_PARTITIONER_MODE_ECO) {
-                kaffpa_partition_mode = KAFFPA_ECO;
+                kaffpa_partition_mode = ECO;
             } else if (config.mode == KAFFPA_PARTITIONER_MODE_STRONG) {
-                kaffpa_partition_mode = KAFFPA_STRONG;
+                kaffpa_partition_mode = STRONG;
             } else {
                 std::cout << "KaFFPa Partitioning mode " << kaffpa_partitioner_mode_to_string(config.mode) << " with id " << config.mode << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -187,6 +188,9 @@ namespace HeiProMap {
             int* kaffpa_partition = (int*)malloc(n * sizeof(int));
 
             int kaffpa_edgecut, kaffpa_qap;
+
+            // std::string file_path = "error.graph";
+            // write_graph(n, m/2, v_weights, adj_ptr, e_weights, adj, file_path);
 
             // execute kaffpa
             process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int)hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, (int) seed, &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
@@ -203,6 +207,19 @@ namespace HeiProMap {
             free(kaffpa_hierarchy);
             free(kaffpa_distance);
             free(kaffpa_partition);
+        }
+
+        void write_graph(int n, int m, int* vwgt, int* xadj, int* adjwgt, int*adjncy, std::string &file_path){
+            std::ofstream file(file_path);
+
+            file << n << " " << m << " 011" << std::endl;
+            for(int i = 0; i < n; ++i){
+                file << vwgt[i] << " ";
+                for(int j = xadj[i]; j < xadj[i+1]; ++j){
+                    file << adjncy[j]+1 << " " << adjwgt[j] << " ";
+                }
+                file << std::endl;
+            }
         }
     };
 }
