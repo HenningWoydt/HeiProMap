@@ -53,7 +53,8 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const weight_t t_l_max) override {
+                        const weight_t t_l_max,
+                        const u64 t_seed) override {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;

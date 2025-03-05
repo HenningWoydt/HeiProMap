@@ -125,9 +125,9 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
-            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
-            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax);
+            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.seed);
+            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.seed);
+            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.seed);
 
             // refinement
             lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, ac.seed);
@@ -170,16 +170,21 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 32) {
+            while (av_manager.get_n_active() > ac.k * 64) {
                 matching(level);
                 coarsening(level);
 
                 std::cout << level << " " << av_manager.get_n_active() << " " << graphs.back().get_m() << std::endl;
 
                 level += 1;
+
+                if(matches_size.back() == 0){
+                    break;
+                }
             }
 
             partition();
+            print(p_manager.get_bweights());
 
             std::cout << "After partition is overloaded: " << p_manager.is_overloaded() << std::endl;
 
@@ -200,7 +205,7 @@ namespace HeiProMap {
                 partitioner.partition(ac.kaffpa_partitioner_config, ac.seed, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance);
             } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                 GlobalMultisectionPartitioner partitioner;
-                partitioner.partition(ac.global_multisection_config, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance);
+                partitioner.partition(ac.global_multisection_config, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance, ac.seed);
             } else {
                 std::cout << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);

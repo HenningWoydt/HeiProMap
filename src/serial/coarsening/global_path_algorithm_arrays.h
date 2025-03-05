@@ -33,6 +33,7 @@
 #include <queue>
 #include <vector>
 #include <chrono>
+#include <random>
 
 #include "../../definitions.h"
 #include "../../macros.h"
@@ -69,6 +70,9 @@ namespace HeiProMap {
         EdgeUV *dp_cycle_matches1 = nullptr;
         EdgeUV *dp_cycle_matches2 = nullptr;
 
+        std::mt19937                          gen;
+        std::uniform_real_distribution<float> dis;
+
 #if COLLECT_METRICS
         f64 global_time_compute_ratings = 0.0;
         f64 global_time_sorting         = 0.0;
@@ -101,7 +105,11 @@ namespace HeiProMap {
             free(dp_cycle_matches2);
         }
 
-        void initialize(const vertex_t t_n, const vertex_t t_m, const partition_t t_k, const weight_t t_l_max) override {
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const weight_t t_l_max,
+                        const u64 t_seed) override {
             vertex_t t_n_64 = round_up_64(t_n);
             vertex_t t_m_64 = round_up_64(t_m);
 
@@ -123,6 +131,9 @@ namespace HeiProMap {
 
             dp_cycle_matches1 = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
             dp_cycle_matches2 = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
+
+            gen.seed(t_seed);
+            dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
 
         template<typename TSerialGraph, typename TSerialActiveVertexManager>
@@ -155,20 +166,21 @@ namespace HeiProMap {
             }
 
             edges_size = 0;
-            f32 max_rating = -std::numeric_limits<f32>::max();
-            f32 min_rating = std::numeric_limits<f32>::max();
+            f32           max_rating = -std::numeric_limits<f32>::max();
+            f32           min_rating = std::numeric_limits<f32>::max();
             for (vertex_t u: av_manager) {
                 weight_t u_w = g.get_weight(u);
 
                 for (const auto [v, w]: g[u]) {
-                    if(u > v) { continue; }
+                    if (u > v) { continue; }
                     weight_t v_w = g.get_weight(v);
 
-                    if(u_w + v_w > m_l_max) { continue; }
+                    if (u_w + v_w > m_l_max) { continue; }
 
-                    // f32 edge_rating = (((f64) w) * ((f64) w)) / (g.get_weight(u) * g.get_weight(v));
-                    // f32 edge_rating = ((f64) w) / (g.size(u) * g.size(v));
+                    // f32 edge_rating = (((f32) w) * ((f32) w)) / (u_w * v_w);
+                    // f32 edge_rating = ((f32) w) / (g.size(u) * g.size(v));
                     f32 edge_rating = (f32) w / (f32) (u_w * v_w);
+                    // f32 edge_rating = (f32) w;
                     max_rating = std::max(max_rating, edge_rating);
                     min_rating = std::min(min_rating, edge_rating);
 
@@ -178,7 +190,7 @@ namespace HeiProMap {
             TIME_POINT(ep_compute_ratings);
 
             TIME_POINT(sp_sorting);
-            if(max_rating != min_rating) {
+            if (max_rating != min_rating) {
                 std::sort(edges, edges + edges_size, std::greater<>());
             }
             TIME_POINT(ep_sorting);
@@ -210,8 +222,8 @@ namespace HeiProMap {
                     continue;
                 }
 
-                u32  u_id        = path_id[u];
-                u32  v_id        = path_id[v];
+                u32 u_id = path_id[u];
+                u32 v_id = path_id[v];
 
                 if (u_unmatched || v_unmatched) {
                     if (v_unmatched) {
@@ -231,7 +243,7 @@ namespace HeiProMap {
 
                 // cycle
                 if (u_id == v_id) {
-                    if (path_length[u_id] & 1) {
+                    if (path_length[u_id] % 2 == 1) {
                         // same path and odd length size, close the cycle
                         path_length[u_id] += 1; // increase path length
 
