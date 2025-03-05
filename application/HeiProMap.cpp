@@ -35,8 +35,6 @@
 
 using namespace HeiProMap;
 
-// TODO: KaFFPa never allows a node v to participate in a contraction if the weight of v exceeds 1.5n / 20k
-
 int main(const int argc, char* argv[]) {
     if (argc == 1) {
         const auto sp = std::chrono::high_resolution_clock::now();
@@ -45,16 +43,22 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
                     // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
                     // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
-                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"},
-                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"},
+                    // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph", "../data/training/598a.graph"},
+                    // {"--mapping", "../data/out/partition/598a.txt"},
+                    // {"--statistics", "../data/out/statistics/598a.JSON"},
+                    {"--graph", "../data/training/G3_circuit.graph"},
+                    {"--mapping", "../data/out/partition/G3_circuit.txt"},
+                    {"--statistics", "../data/out/statistics/G3_circuit.JSON"},
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"},
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "experimental"},
+                    {"--config", "fastest"},
                     {"--seed", "0"},
 
                     // coarsening
