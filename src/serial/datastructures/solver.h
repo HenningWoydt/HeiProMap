@@ -170,7 +170,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 64) {
+            while (av_manager.get_n_active() > ac.k * 4) {
                 matching(level);
                 coarsening(level);
 
