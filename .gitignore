@@ -9,6 +9,7 @@ build/
 .vscode/
 
 data/
+!data/test
 
 extern/KaHIP/
 
