@@ -49,7 +49,7 @@ namespace HeiProMap {
 
         HeavyEdgeMatcherConfiguration heavy_edge_matcher_configuration;
         HeavyEdgeMatcher he_matcher;
-        he_matcher.initialize(g.get_n(), g.get_m(), 0, std::numeric_limits<weight_t>::max());
+        he_matcher.initialize(g.get_n(), g.get_m(), 0, std::numeric_limits<weight_t>::max(), 0);
 
         size_t n_64 = round_up_64(g.get_n() / 2);
         EdgeUV* matches = (EdgeUV*) aligned_alloc(64, n_64 * sizeof(EdgeUV));

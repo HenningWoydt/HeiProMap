@@ -170,7 +170,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 64) {
+            while (av_manager.get_n_active() > ac.k * 2048) {
                 matching(level);
                 coarsening(level);
 
@@ -184,7 +184,7 @@ namespace HeiProMap {
             }
 
             partition();
-            print(p_manager.get_bweights());
+            // print(p_manager.get_bweights());
 
             std::cout << "After partition is overloaded: " << p_manager.is_overloaded() << std::endl;
 

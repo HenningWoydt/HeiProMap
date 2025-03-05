@@ -36,6 +36,7 @@
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../interfaces/ISerialMatcher.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
     struct Neighbors {
