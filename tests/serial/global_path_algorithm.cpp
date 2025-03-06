@@ -39,6 +39,66 @@
 #include "../../src/serial/datastructures/sorted_graph_csr.h"
 
 namespace HeiProMap {
+    std::vector<EdgeUV> read_solution(std::string &solution) {
+        std::vector<EdgeUV> edges;
+        std::ifstream ifs(solution);
+
+        int u, v;
+        // Read two integers per line until we reach the end of the file.
+        while (ifs >> u >> v) {
+            edges.emplace_back(u, v);
+        }
+
+        return edges;
+    }
+
+    void compare(std::string &graph_in, std::string &solution) {
+        std::cout << graph_in << " " << solution << std::endl;
+
+        // calculate solution
+        GraphCSRArrays g(graph_in);
+
+        ActiveVertexManager av_manager;
+        av_manager.initialize(g.get_n());
+
+        GlobalPathAlgorithmArraysMatcher gpa_matcher;
+        GlobalPathAlgorithmConfiguration gpa_config;
+        gpa_matcher.initialize(g.get_n(), g.get_m(), 2, std::numeric_limits<weight_t>::max(), 0);
+
+        size_t n_64 = round_up_64(g.get_n() / 2);
+        EdgeUV* matches = (EdgeUV*) aligned_alloc(64, n_64 * sizeof(EdgeUV));
+        size_t matches_size = 0;
+        gpa_matcher.match(gpa_config, g, av_manager, matches, matches_size);
+
+        // read in solution
+        std::vector<EdgeUV> solution_edges = read_solution(solution);
+
+        // matchings must have the same weight, but not necessarily the same edges
+        weight_t own_weight = 0;
+        for (size_t i = 0; i < matches_size; i++) {
+            std::cout << matches[i].u << " A " << matches[i].v << std::endl;
+            for (auto [v, w] : g[matches[i].u]) {
+                if (v == matches[i].v) {
+                    own_weight += w;
+                    break;
+                }
+            }
+        }
+
+        weight_t solution_weight = 0;
+        for (size_t i = 0; i < solution_edges.size(); i++) {
+            std::cout << solution_edges[i].u << " B " << solution_edges[i].v << std::endl;
+            for (auto [v, w] : g[solution_edges[i].u]) {
+                if (v == solution_edges[i].v) {
+                    solution_weight += w;
+                    break;
+                }
+            }
+        }
+
+        EXPECT_EQ(own_weight, solution_weight);
+    }
+
     TEST(GlobalPathAlgorithm, chain_10_graph) {
         const std::string graph_in = "../data/test/chain_10.graph";
 
@@ -87,5 +147,18 @@ namespace HeiProMap {
         EXPECT_TRUE(found_e1 || found_e2);
 
         free(matches);
+    }
+
+    TEST(GlobalPathAlgorithm, gpa_graphs) {
+        int n_min = 5;
+        int n_max = 5;
+        int reps = 12;
+        for (int n = n_min; n <= n_max; n++) {
+            for (int rep = 11; rep < reps; rep++) {
+                std::string graph_in = "../test_data/gpa_graphs/" + std::to_string(rep) + "_" + std::to_string(n) + ".graph";
+                std::string solution = "../test_data/gpa_solutions/matching_" + std::to_string(rep) + "_" + std::to_string(n) + ".edges";
+                compare(graph_in, solution);
+            }
+        }
     }
 }
