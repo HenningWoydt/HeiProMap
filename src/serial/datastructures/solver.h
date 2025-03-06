@@ -52,6 +52,8 @@
 #include "../refinement/label_propagation_refinement_Faraj20.h"
 #include "../refinement/multi_try_fm_refinement_boost.h"
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
+#include "../refinement/quotient_graph_refinement_boost.h"
+#include "../refinement/quotient_graph_refinement_simple_pq.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../utility/AlgorithmConfiguration.h"
 #include "../utility/assert_state.h"
@@ -94,6 +96,8 @@ namespace HeiProMap {
         TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
         QuotientGraphRefinementFaraj20 qg_refine_faraj20;
         QuotientGraphRefinement qg_refine;
+        // QuotientGraphRefinementSimplePQ qg_refine;
+        // QuotientGraphRefinementBoost qg_refine;
         KWayFMRefinementFaraj20 k_way_refine_faraj20;
         KWayFMRefinement k_way_refine;
         // KWayFMRefinementBoost k_way_refine;
