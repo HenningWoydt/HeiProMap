@@ -40,11 +40,12 @@ namespace HeiProMap {
                                 weight_t t_l_max,
                                 u64 t_seed) = 0;
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(TSerialGraph &g,
-                   TSerialActiveVertexManager &av_manager,
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(size_t level,
+                   TSerialGraph& g,
+                   TSerialActiveVertexManager& av_manager,
                    EdgeUV* matches,
-                   size_t &matches_size) {}
+                   size_t& matches_size) {}
     };
 }
 

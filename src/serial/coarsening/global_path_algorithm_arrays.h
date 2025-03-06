@@ -139,11 +139,18 @@ namespace HeiProMap {
         }
 
         template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(GlobalPathAlgorithmConfiguration& config,
+        void match(size_t level,
+                   GlobalPathAlgorithmConfiguration& config,
                    TSerialGraph& g,
                    TSerialActiveVertexManager& av_manager,
                    EdgeUV* matches,
                    size_t& matches_size) {
+            if (level < config.random_level) {
+                // use a random matching
+                random_matching(g, av_manager, matches, matches_size);
+                return;
+            }
+
             matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
             matches_size = 0;
 
@@ -186,12 +193,12 @@ namespace HeiProMap {
 
                     // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
                     // edge_rating = (f32) w / (f32) (u_w * v_w);
-                    edge_rating = (f32) w / (f32) (u_w * v_w);
-                    // edge_rating = ((f32)(w * w)) / ((f32)(u_w * v_w));
+                    // edge_rating = (f32) w / (f32) (u_w * v_w);
+                    edge_rating = ((f32)(w * w)) / ((f32)(u_w * v_w));
                     // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
                     // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
                     // edge_rating = (f32) w / (f32) (u_w * v_w * u_w * v_w);
-                    // edge_rating = (f32) w;
+                    // edge_rating = (f32)w;
 
                     max_rating = std::max(max_rating, edge_rating);
                     min_rating = std::min(min_rating, edge_rating);
@@ -204,8 +211,8 @@ namespace HeiProMap {
             TIME_POINT(sp_sorting);
             if (max_rating != min_rating) {
                 // boost::sort::pdqsort(edges, edges + edges_size, std::greater<>());
-                // boost::sort::spinsort(edges, edges + edges_size, std::greater<>()); // requires enabled exceptions
-                // boost::sort::flat_stable_sort(edges, edges + edges_size, std::greater<>()); // requires enabled exceptions
+                // boost::sort::spinsort(edges, edges + edges_size, std::greater<>());
+                // boost::sort::flat_stable_sort(edges, edges + edges_size, std::greater<>());
                 std::sort(edges, edges + edges_size, std::greater<>());
             }
             TIME_POINT(ep_sorting);
@@ -366,7 +373,7 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+                const auto& [u, v] = matches[i];
                 ASSERT(u != v);
                 ASSERT(av_manager.is_active(u));
                 ASSERT(av_manager.is_active(v));
@@ -375,17 +382,13 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (size_t     i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto& [u, v] = matches[i];
                 hit[u] += 1;
                 hit[v] += 1;
 
-                if (hit[u] == 2) {
-                    ASSERT(false);
-                }
-                if (hit[v] == 2) {
-                    ASSERT(false);
-                }
+                ASSERT(hit[u] == 1);
+                ASSERT(hit[v] == 1);
             }
 #endif
         }
@@ -608,6 +611,35 @@ namespace HeiProMap {
 
             for (size_t i = 0; i < dp_cycle_matches_size; ++i) {
                 matches[matches_size++] = dp_cycle_matches[i];
+            }
+        }
+
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
+        void random_matching(TSerialGraph& g,
+                             TSerialActiveVertexManager& av_manager,
+                             EdgeUV* matches,
+                             size_t& matches_size) {
+            matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+            matches_size = 0;
+
+            std::vector<u8> is_matched(g.get_n(), 0);
+
+            for (vertex_t u : av_manager) {
+                if (is_matched[u]) { continue; }
+                weight_t u_w = g.get_weight(u);
+
+                for (auto[v, w] : g[u]) {
+                    if (is_matched[v]) { continue; }
+                    weight_t v_w = g.get_weight(v);
+
+                    if (u_w + v_w > m_l_max) { continue; }
+
+                    is_matched[u] = 1;
+                    is_matched[v] = 1;
+
+                    matches[matches_size++] = {u, v};
+                    break;
+                }
             }
         }
     };

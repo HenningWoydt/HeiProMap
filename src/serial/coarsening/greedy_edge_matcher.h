@@ -40,14 +40,14 @@ namespace HeiProMap {
     };
 
     class GreedyEdgeMatcher final : public ISerialMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
-        weight_t    m_l_max = 0;
+        vertex_t m_n     = 0;
+        vertex_t m_m     = 0;
+        partition_t m_k  = 0;
+        weight_t m_l_max = 0;
 
         std::vector<EdgeUVW> edges;
 
-        u32              mark = 0;
+        u32 mark = 0;
         std::vector<u32> used;
 
     public:
@@ -69,12 +69,13 @@ namespace HeiProMap {
             used.resize(n, 0);
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(GreedyEdgeMatcherConfiguration &config,
-                   TSerialGraph &g,
-                   TSerialActiveVertexManager &av_manager,
-                   EdgeUV *matches,
-                   size_t &matches_size) {
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(size_t level,
+                   GreedyEdgeMatcherConfiguration& config,
+                   TSerialGraph& g,
+                   TSerialActiveVertexManager& av_manager,
+                   EdgeUV* matches,
+                   size_t& matches_size) {
             matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
             matches_size = 0;
 
@@ -83,21 +84,21 @@ namespace HeiProMap {
 
             // first handle pendant vertices
             if (config.match_pendant_vertices_first) {
-                for (vertex_t u: av_manager) {
+                for (vertex_t u : av_manager) {
                     ASSERT(av_manager.is_active(u));
 
                     if (g.size(u) != 1) {
                         continue;
                     }
 
-                    const vertex_t v      = g.neighbor(u, 0);
-                    const weight_t ew     = g.get_weight(u, 0);
-                    const f64      rating = (f64) ew / (f64) (g.size(u) * g.size(v));
+                    const vertex_t v  = g.neighbor(u, 0);
+                    const weight_t ew = g.get_weight(u, 0);
+                    const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
                     edges.emplace_back(u, v, rating);
                 }
                 std::sort(edges.begin(), edges.end(), std::greater<>());
 
-                for (const auto &[u, v, w]: edges) {
+                for (const auto& [u, v, w] : edges) {
                     if (used[u] == mark || used[v] == mark) {
                         continue;
                     }
@@ -120,7 +121,7 @@ namespace HeiProMap {
             }
 
             // handle all other vertices
-            for (vertex_t u: av_manager) {
+            for (vertex_t u : av_manager) {
                 ASSERT(av_manager.is_active(u));
                 weight_t u_w = g.get_weight(u);
 
@@ -128,7 +129,7 @@ namespace HeiProMap {
                     continue;
                 }
 
-                for (const auto &[v, w]: g[u]) {
+                for (const auto& [v, w] : g[u]) {
                     weight_t v_w = g.get_weight(v);
 
                     if (used[v] == mark) {
@@ -139,13 +140,13 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
+                    const f32 edge_rating = (f32)w / (f32)(u_w * v_w);
                     edges.emplace_back(u, v, edge_rating);
                 }
             }
             std::sort(edges.begin(), edges.end(), std::greater<>());
 
-            for (const auto &[u, v, w]: edges) {
+            for (const auto& [u, v, w] : edges) {
                 if (used[u] != mark && used[v] != mark) {
                     // use this edge
                     used[u] = mark;
@@ -160,7 +161,7 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+                const auto& [u, v] = matches[i];
                 ASSERT(u != v);
                 ASSERT(av_manager.is_active(u));
                 ASSERT(av_manager.is_active(v));
@@ -169,8 +170,8 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (size_t     i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto& [u, v] = matches[i];
                 hit[u] += 1;
                 hit[v] += 1;
 

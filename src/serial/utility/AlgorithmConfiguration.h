@@ -145,7 +145,10 @@ namespace HeiProMap {
                 {"--seed", "", "Seed for diversifying results.", "", "", false},
 
                 /** Coarsening */
-                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, global-paths}.", "global-paths", "", false},
+                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, global-paths}.", "random-or-global-paths", "", false},
+
+                // Coarsening global-path
+                {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if random-or-global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
 
                 // Coarsening greedy matching
                 {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
@@ -315,6 +318,11 @@ namespace HeiProMap {
             // initialize heavy matching config
             if (use_default || is_set("--coarsening-algorithm-heavy-matching-pendant-first")) {
                 heavy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-heavy-matching-pendant-first") == "1";
+            }
+
+            // initialize global-paths config
+            if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
+                global_path_algorithm_config.random_level = std::stoi(get("--coarsening-algorithm-global-paths-random-level"));
             }
 
             // actually set which algorithm to use
@@ -510,6 +518,9 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
+
             // set kaffpa multisection partitioning
             partitioning_algorithm_string           = "kaffpa";
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
@@ -535,6 +546,9 @@ namespace HeiProMap {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
 
             // set kaffpa multisection partitioning
             partitioning_algorithm_string           = "kaffpa";
@@ -563,6 +577,9 @@ namespace HeiProMap {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
 
             // set kaffpa multisection partitioning
             partitioning_algorithm_string           = "kaffpa";
@@ -599,6 +616,9 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
+
             // set kaffpa multisection partitioning
             partitioning_algorithm_string           = "kaffpa";
             partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
@@ -634,11 +654,22 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
+
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "fast";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // disable all Faraj20 refinements
             do_refinement_label_propagation_faraj20 = false;
@@ -658,11 +689,22 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
+
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "fast";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // disable all Faraj20 refinements
             do_refinement_label_propagation_faraj20 = false;
@@ -685,11 +727,22 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
+
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "eco";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "eco";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // disable all Faraj20 refinements
             do_refinement_label_propagation_faraj20 = false;
@@ -722,11 +775,22 @@ namespace HeiProMap {
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
+
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+
+            // set kaffpa multisection partitioning
+            partitioning_algorithm_string           = "kaffpa";
+            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            kaffpa_partitioner_config.mode_string   = "strong";
+            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
+            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // set kaffpa multisection partitioning
             partitioning_algorithm_string           = "kaffpa";
@@ -762,6 +826,9 @@ namespace HeiProMap {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 4;
 
             // set multisection
             partitioning_algorithm_string          = "multisection";

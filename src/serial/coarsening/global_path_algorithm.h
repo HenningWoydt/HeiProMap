@@ -42,45 +42,45 @@ namespace HeiProMap {
     struct Neighbors {
         vertex_t n1;
         vertex_t n2;
-        f32      w1;
-        f32      w2;
+        f32 w1;
+        f32 w2;
     };
 
-    inline bool is_endpoint_fast(const Neighbors &n, const vertex_t u) {
+    inline bool is_endpoint_fast(const Neighbors& n, const vertex_t u) {
         return n.n2 == u;
     }
 
-    inline bool is_endpoint(const Neighbors &n, const vertex_t u) {
+    inline bool is_endpoint(const Neighbors& n, const vertex_t u) {
         return is_endpoint_fast(n, u);
         bool b = n.n1 == u || n.n2 == u;
         ASSERT(b == is_endpoint_fast(n, u));
         return b;
     }
 
-    inline bool is_one_endpoint_fast(const Neighbors &n, const vertex_t u) {
+    inline bool is_one_endpoint_fast(const Neighbors& n, const vertex_t u) {
         return n.n1 != u && n.n2 == u;
     }
 
-    inline bool is_one_endpoint(const Neighbors &n, const vertex_t u) {
+    inline bool is_one_endpoint(const Neighbors& n, const vertex_t u) {
         return is_one_endpoint_fast(n, u);
         bool b = (n.n1 == u && n.n2 != u) || (n.n1 != u && n.n2 == u);
         ASSERT(b == is_one_endpoint_fast(n, u));
         return b;
     }
 
-    inline bool is_unmatched_fast(const Neighbors &n, const vertex_t u) {
+    inline bool is_unmatched_fast(const Neighbors& n, const vertex_t u) {
         return n.n1 == u;
     }
 
-    inline bool is_unmatched(const Neighbors &n, const vertex_t u) {
+    inline bool is_unmatched(const Neighbors& n, const vertex_t u) {
         return is_unmatched_fast(n, u);
         bool b = n.n1 == u && n.n2 == u;
         ASSERT(b == is_unmatched_fast(n, u));
         return b;
     }
 
-    struct GlobalPathAlgorithmConfiguration{
-        bool a = false;
+    struct GlobalPathAlgorithmConfiguration {
+        size_t random_level = 4;
     };
 
     /**
@@ -90,23 +90,23 @@ namespace HeiProMap {
      * > Experimental Algorithms, 6th International Workshop, WEA 2007, Rome, Italy, June 6-8, 2007, Proceedings.
      */
     class GlobalPathAlgorithmMatcher final : public ISerialMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
-        weight_t    m_l_max = 0;
+        vertex_t m_n     = 0;
+        vertex_t m_m     = 0;
+        partition_t m_k  = 0;
+        weight_t m_l_max = 0;
 
         std::vector<Neighbors> m_neighbors;
-        std::vector<u32>       path_id;
-        std::vector<u32>       path_length;
+        std::vector<u32> path_id;
+        std::vector<u32> path_length;
 
         std::vector<EdgeUVW> edges_greater_1;
         std::vector<EdgeUVW> edges_equal_1;
         std::vector<EdgeUVW> edges_smaller_1;
 
         // for DP
-        std::vector<f32>     dp_w;
-        std::vector<s64>     dp_m;
-        std::vector<u8>      dp_take;
+        std::vector<f32> dp_w;
+        std::vector<s64> dp_m;
+        std::vector<u8> dp_take;
         std::vector<EdgeUVW> dp_edges;
 
         std::vector<EdgeUV> dp_cycle_matches1;
@@ -140,11 +140,12 @@ namespace HeiProMap {
             edges_smaller_1.reserve(m_m);
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(GlobalPathAlgorithmConfiguration &config,
-                   TSerialGraph &g,
-                   TSerialActiveVertexManager &av_manager,
-                   std::vector<EdgeUV> &matches) {
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(size_t level,
+                   GlobalPathAlgorithmConfiguration& config,
+                   TSerialGraph& g,
+                   TSerialActiveVertexManager& av_manager,
+                   std::vector<EdgeUV>& matches) {
             for (vertex_t u = 0; u < m_neighbors.size(); ++u) {
                 m_neighbors[u].n1 = u;
                 m_neighbors[u].n2 = u;
@@ -166,10 +167,10 @@ namespace HeiProMap {
             edges_equal_1.clear();
             edges_smaller_1.clear();
 
-            for (vertex_t u: av_manager) {
+            for (vertex_t u : av_manager) {
                 weight_t u_w = g.get_weight(u);
 
-                for (const auto &[v, w]: g[u]) {
+                for (const auto& [v, w] : g[u]) {
                     weight_t v_w = g.get_weight(v);
 
                     if (u_w + v_w > m_l_max) { continue; }
@@ -177,7 +178,7 @@ namespace HeiProMap {
 
                     // f32 edge_rating = (((f64) w) * ((f64) w)) / (g.get_weight(u) * g.get_weight(v));
                     // f32 edge_rating = ((f64) w) / (g.size(u) * g.size(v));
-                    f32 edge_rating = (f32) w / (f32) (u_w * v_w);
+                    f32 edge_rating = (f32)w / (f32)(u_w * v_w);
 
                     if (edge_rating == 0.0) { continue; }
 
@@ -188,24 +189,23 @@ namespace HeiProMap {
                     } else {
                         edges_smaller_1.emplace_back(u, v, edge_rating);
                     }
-
                 }
             }
             auto ep_compute_ratings = std::chrono::high_resolution_clock::now();
             time_compute_ratings += get_seconds(sp_compute_ratings, ep_compute_ratings);
 
-            auto                              sp_build_paths    = std::chrono::high_resolution_clock::now();
-            std::vector<std::vector<EdgeUVW>> buckets           = {edges_greater_1, edges_equal_1, edges_smaller_1};
-            std::vector<bool>                 all_ratings_equal = {false, true, false};
+            auto sp_build_paths                       = std::chrono::high_resolution_clock::now();
+            std::vector<std::vector<EdgeUVW>> buckets = {edges_greater_1, edges_equal_1, edges_smaller_1};
+            std::vector<bool> all_ratings_equal       = {false, true, false};
 
             for (size_t j = 0; j < buckets.size(); ++j) {
-                std::vector<EdgeUVW> &edge_list    = buckets[j];
-                bool                 equal_ratings = all_ratings_equal[j];
+                std::vector<EdgeUVW>& edge_list = buckets[j];
+                bool equal_ratings              = all_ratings_equal[j];
 
                 auto sp_sorting = std::chrono::high_resolution_clock::now();
                 // filter out all edges that cannot be used anymore, before sorting the bucket
                 if (!equal_ratings) {
-                    auto is_not_endpoint = [&](const EdgeUVW &edge) {
+                    auto is_not_endpoint = [&](const EdgeUVW& edge) {
                         return !is_endpoint(m_neighbors[edge.u], edge.u) || !is_endpoint(m_neighbors[edge.v], edge.v);
                     };
 
@@ -213,12 +213,12 @@ namespace HeiProMap {
                     std::sort(edge_list.begin(), edge_list.end(), std::greater<>());
                 }
                 auto ep_sorting = std::chrono::high_resolution_clock::now();
-                f64  t_sort          = get_seconds(sp_sorting, ep_sorting);
+                f64 t_sort      = get_seconds(sp_sorting, ep_sorting);
                 time_sorting += t_sort;
                 time_build_paths -= t_sort;
 
 
-                for (const auto &[u, v, w]: edge_list) {
+                for (const auto& [u, v, w] : edge_list) {
                     if (!is_endpoint(m_neighbors[u], u) || !is_endpoint(m_neighbors[v], v)) {
                         // u is not an endpoint
                         edges_skipped++;
@@ -227,17 +227,17 @@ namespace HeiProMap {
 
                     bool u_unmatched = is_unmatched(m_neighbors[u], u);
                     bool v_unmatched = is_unmatched(m_neighbors[v], v);
-                    u32  u_id        = path_id[u];
-                    u32  v_id        = path_id[v];
+                    u32 u_id         = path_id[u];
+                    u32 v_id         = path_id[v];
 
                     if (u_unmatched && v_unmatched) {
                         m_neighbors[u].n1 = v;
                         m_neighbors[u].w1 = w;
                         m_neighbors[v].n1 = u;
                         m_neighbors[v].w1 = w;
-                        path_id[u]     = u;
-                        path_id[v]     = u;
-                        path_length[u] = 1;
+                        path_id[u]        = u;
+                        path_id[v]        = u;
+                        path_length[u]    = 1;
                         edges_new_paths++;
                         continue;
                     }
@@ -246,7 +246,7 @@ namespace HeiProMap {
                         m_neighbors[u].w1 = w;
                         m_neighbors[v].n2 = u;
                         m_neighbors[v].w2 = w;
-                        path_id[u] = v_id;
+                        path_id[u]        = v_id;
                         path_length[v_id] += 1;
                         edges_enlarge_path++;
                         continue;
@@ -256,7 +256,7 @@ namespace HeiProMap {
                         m_neighbors[u].w2 = w;
                         m_neighbors[v].n1 = u;
                         m_neighbors[v].w1 = w;
-                        path_id[v] = u_id;
+                        path_id[v]        = u_id;
                         path_length[u_id] += 1;
                         edges_enlarge_path++;
                         continue;
@@ -280,7 +280,7 @@ namespace HeiProMap {
                             auto sp_solve_paths = std::chrono::high_resolution_clock::now();
                             solve_cycle(g, u, matches);
                             auto ep_solve_paths = std::chrono::high_resolution_clock::now();
-                            f64  t_solve        = get_seconds(sp_solve_paths, ep_solve_paths);
+                            f64 t_solve         = get_seconds(sp_solve_paths, ep_solve_paths);
                             time_solve_paths += t_solve;
                             time_build_paths -= t_solve;
                             edges_form_cycle++;
@@ -302,8 +302,8 @@ namespace HeiProMap {
 
                     vertex_t last_vertex;
                     vertex_t curr_vertex;
-                    u32      id1;
-                    u32      id2;
+                    u32 id1;
+                    u32 id2;
                     if (path_length[u_id] <= path_length[v_id]) {
                         last_vertex = v;
                         curr_vertex = u;
@@ -319,8 +319,8 @@ namespace HeiProMap {
                     path_length[id1] += 1 + path_length[id2];
                     while (m_neighbors[curr_vertex].n1 != curr_vertex && m_neighbors[curr_vertex].n2 != curr_vertex) {
                         vertex_t temp_last_vertex = last_vertex;
-                        last_vertex = curr_vertex;
-                        curr_vertex = m_neighbors[curr_vertex].n1 == temp_last_vertex ? m_neighbors[curr_vertex].n2 : m_neighbors[curr_vertex].n1;
+                        last_vertex               = curr_vertex;
+                        curr_vertex               = m_neighbors[curr_vertex].n1 == temp_last_vertex ? m_neighbors[curr_vertex].n2 : m_neighbors[curr_vertex].n1;
                     }
                     path_id[curr_vertex] = id1;
 
@@ -330,14 +330,14 @@ namespace HeiProMap {
             auto ep_build_paths = std::chrono::high_resolution_clock::now();
             time_build_paths += get_seconds(sp_build_paths, ep_build_paths);
 
-            auto          sp_solve_paths = std::chrono::high_resolution_clock::now();
+            auto sp_solve_paths = std::chrono::high_resolution_clock::now();
             // process all paths
-            for (vertex_t u: av_manager) {
+            for (vertex_t u : av_manager) {
                 if (is_one_endpoint(m_neighbors[u], u)) {
                     solve_path(g, u, matches);
                 }
             }
-            auto          ep_solve_paths = std::chrono::high_resolution_clock::now();
+            auto ep_solve_paths = std::chrono::high_resolution_clock::now();
             time_solve_paths += get_seconds(sp_solve_paths, ep_solve_paths);
 
             global_time_compute_ratings += time_compute_ratings;
@@ -361,11 +361,11 @@ namespace HeiProMap {
             global_edges_combine_paths += edges_combine_paths;
             u64 global_total_edges = global_edges_skipped + global_edges_form_cycle + global_edges_new_paths + global_edges_enlarge_path + global_edges_combine_paths;
             u64 local_total_edges  = edges_skipped + edges_form_cycle + edges_new_paths + edges_enlarge_path + edges_combine_paths;
-            std::cout << "edges skipped       : " << edges_skipped << "\t - " << (f64) edges_skipped / (f64) local_total_edges << " -- global edges skipped       : " << global_edges_skipped << " - " << (f64) global_edges_skipped / (f64) global_total_edges << std::endl;
-            std::cout << "edges form cycle    : " << edges_form_cycle << "\t - " << (f64) edges_form_cycle / (f64) local_total_edges << " -- global edges form cycle    : " << global_edges_form_cycle << " - " << (f64) global_edges_form_cycle / (f64) global_total_edges << std::endl;
-            std::cout << "edges new paths     : " << edges_new_paths << "\t - " << (f64) edges_new_paths / (f64) local_total_edges << " -- global edges new paths     : " << global_edges_new_paths << " - " << (f64) global_edges_new_paths / (f64) global_total_edges << std::endl;
-            std::cout << "edges enlarge path  : " << edges_enlarge_path << "\t - " << (f64) edges_enlarge_path / (f64) local_total_edges << " -- global edges enlarge path  : " << global_edges_enlarge_path << " - " << (f64) global_edges_enlarge_path / (f64) global_total_edges << std::endl;
-            std::cout << "edges combine paths : " << edges_combine_paths << "\t - " << (f64) edges_combine_paths / (f64) local_total_edges << " -- global edges combine paths : " << global_edges_combine_paths << " - " << (f64) global_edges_combine_paths / (f64) global_total_edges << std::endl;
+            std::cout << "edges skipped       : " << edges_skipped << "\t - " << (f64)edges_skipped / (f64)local_total_edges << " -- global edges skipped       : " << global_edges_skipped << " - " << (f64)global_edges_skipped / (f64)global_total_edges << std::endl;
+            std::cout << "edges form cycle    : " << edges_form_cycle << "\t - " << (f64)edges_form_cycle / (f64)local_total_edges << " -- global edges form cycle    : " << global_edges_form_cycle << " - " << (f64)global_edges_form_cycle / (f64)global_total_edges << std::endl;
+            std::cout << "edges new paths     : " << edges_new_paths << "\t - " << (f64)edges_new_paths / (f64)local_total_edges << " -- global edges new paths     : " << global_edges_new_paths << " - " << (f64)global_edges_new_paths / (f64)global_total_edges << std::endl;
+            std::cout << "edges enlarge path  : " << edges_enlarge_path << "\t - " << (f64)edges_enlarge_path / (f64)local_total_edges << " -- global edges enlarge path  : " << global_edges_enlarge_path << " - " << (f64)global_edges_enlarge_path / (f64)global_total_edges << std::endl;
+            std::cout << "edges combine paths : " << edges_combine_paths << "\t - " << (f64)edges_combine_paths / (f64)local_total_edges << " -- global edges combine paths : " << global_edges_combine_paths << " - " << (f64)global_edges_combine_paths / (f64)global_total_edges << std::endl;
 
 #if ASSERT_ENABLED
             for (const EdgeUV& e : matches) {
@@ -387,10 +387,10 @@ namespace HeiProMap {
 #endif
         }
 
-        template<typename TSerialGraph>
-        f64 solve_path(TSerialGraph &g,
+        template <typename TSerialGraph>
+        f64 solve_path(TSerialGraph& g,
                        const vertex_t u,
-                       std::vector<EdgeUV> &matches) {
+                       std::vector<EdgeUV>& matches) {
             // save the path into better format
             dp_edges.clear();
             dp_edges.reserve(path_length[path_id[u]]);
@@ -429,8 +429,8 @@ namespace HeiProMap {
                 }
 
                 // destroy the endpoints
-                vertex_t v1 = dp_edges[0].u;
-                vertex_t v2 = dp_edges.back().v;
+                vertex_t v1        = dp_edges[0].u;
+                vertex_t v2        = dp_edges.back().v;
                 m_neighbors[v1].n1 = -1;
                 m_neighbors[v1].n2 = -1;
                 m_neighbors[v2].n1 = -1;
@@ -449,8 +449,8 @@ namespace HeiProMap {
                 }
 
                 // destroy the endpoints
-                vertex_t v1 = dp_edges[0].u;
-                vertex_t v2 = dp_edges.back().v;
+                vertex_t v1        = dp_edges[0].u;
+                vertex_t v2        = dp_edges.back().v;
                 m_neighbors[v1].n1 = -1;
                 m_neighbors[v1].n2 = -1;
                 m_neighbors[v2].n1 = -1;
@@ -476,7 +476,7 @@ namespace HeiProMap {
                 dp_take[1] = 0;
             }
 
-            for (s64 i = 2; i < (s64) dp_edges.size(); ++i) {
+            for (s64 i = 2; i < (s64)dp_edges.size(); ++i) {
                 if (dp_edges[i].w + dp_w[i - 2] > dp_w[i - 1]) {
                     dp_w[i]    = dp_edges[i].w + dp_w[i - 2];
                     dp_m[i]    = i - 2;
@@ -492,7 +492,6 @@ namespace HeiProMap {
             f64 matching_weight = 0.0;
             while (idx != -1) {
                 if (dp_take[idx]) {
-
                     vertex_t uu = dp_edges[idx].u;
                     vertex_t vv = dp_edges[idx].v;
                     if (g.size(uu) < g.size(vv)) {
@@ -507,8 +506,8 @@ namespace HeiProMap {
             }
 
             // destroy the endpoints
-            vertex_t v1 = dp_edges[0].u;
-            vertex_t v2 = dp_edges.back().v;
+            vertex_t v1        = dp_edges[0].u;
+            vertex_t v2        = dp_edges.back().v;
             m_neighbors[v1].n1 = -1;
             m_neighbors[v1].n2 = -1;
             m_neighbors[v2].n1 = -1;
@@ -516,10 +515,10 @@ namespace HeiProMap {
             return matching_weight;
         }
 
-        template<typename TSerialGraph>
-        void solve_cycle(TSerialGraph &g,
+        template <typename TSerialGraph>
+        void solve_cycle(TSerialGraph& g,
                          vertex_t u,
-                         std::vector<EdgeUV> &matches) {
+                         std::vector<EdgeUV>& matches) {
             vertex_t left  = m_neighbors[u].n1;
             vertex_t right = m_neighbors[u].n2;
 
@@ -554,11 +553,11 @@ namespace HeiProMap {
             m_neighbors[right].n2 = right_right;
 
             if (matching_weight1 >= matching_weight2) {
-                for (auto &e: dp_cycle_matches1) {
+                for (auto& e : dp_cycle_matches1) {
                     matches.emplace_back(e);
                 }
             } else {
-                for (auto &e: dp_cycle_matches2) {
+                for (auto& e : dp_cycle_matches2) {
                     matches.emplace_back(e);
                 }
             }

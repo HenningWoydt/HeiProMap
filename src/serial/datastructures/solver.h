@@ -178,7 +178,7 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (av_manager.get_n_active() > ac.k * 16) {
+            while (av_manager.get_n_active() > ac.k * 64) {
                 matching(level);
                 coarsening(level);
 
@@ -260,11 +260,11 @@ namespace HeiProMap {
             matches_size.push_back(0);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(ac.greedy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
+                ge_matcher.match(level, ac.greedy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(ac.heavy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
+                he_matcher.match(level, ac.heavy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(ac.global_path_algorithm_config, graphs.back(), av_manager, matches.back(), matches_size.back());
+                gpa_matcher.match(level, ac.global_path_algorithm_config, graphs.back(), av_manager, matches.back(), matches_size.back());
             } else {
                 std::cout << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);

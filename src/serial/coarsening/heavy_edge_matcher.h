@@ -39,12 +39,12 @@ namespace HeiProMap {
     };
 
     class HeavyEdgeMatcher final : public ISerialMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
-        weight_t    m_l_max = 0;
+        vertex_t m_n     = 0;
+        vertex_t m_m     = 0;
+        partition_t m_k  = 0;
+        weight_t m_l_max = 0;
 
-        u32              mark = 0;
+        u32 mark = 0;
         std::vector<u32> used;
 
     public:
@@ -64,12 +64,13 @@ namespace HeiProMap {
             used.resize(m_n, mark);
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(HeavyEdgeMatcherConfiguration &config,
-                   TSerialGraph &g,
-                   TSerialActiveVertexManager &av_manager,
-                   EdgeUV *matches,
-                   size_t &matches_size) {
+        template <typename TSerialGraph, typename TSerialActiveVertexManager>
+        void match(size_t level,
+                   HeavyEdgeMatcherConfiguration& config,
+                   TSerialGraph& g,
+                   TSerialActiveVertexManager& av_manager,
+                   EdgeUV* matches,
+                   size_t& matches_size) {
             matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
             matches_size = 0;
 
@@ -77,7 +78,7 @@ namespace HeiProMap {
 
             if (config.match_pendant_vertices_first) {
                 // first check vertices with degree 1
-                for (vertex_t u: av_manager) {
+                for (vertex_t u : av_manager) {
                     ASSERT(av_manager.is_active(u));
 
                     if (used[u] == mark) { continue; }
@@ -97,7 +98,7 @@ namespace HeiProMap {
             }
 
             // check all other vertices
-            for (vertex_t u: av_manager) {
+            for (vertex_t u : av_manager) {
                 ASSERT(av_manager.is_active(u));
 
                 if (used[u] == mark) { continue; }
@@ -106,8 +107,7 @@ namespace HeiProMap {
                 vertex_t best_v     = u;
                 weight_t max_weight = 0;
 
-                for (auto const &[v, w]: g[u]) {
-
+                for (auto const& [v, w] : g[u]) {
                     if (used[v] == mark) { continue; }
 
                     weight_t v_w = g.get_weight(v);
@@ -134,7 +134,7 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+                const auto& [u, v] = matches[i];
                 ASSERT(u != v);
                 ASSERT(av_manager.is_active(u));
                 ASSERT(av_manager.is_active(v));
@@ -143,8 +143,8 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (size_t     i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto& [u, v] = matches[i];
                 hit[u] += 1;
                 hit[v] += 1;
 
