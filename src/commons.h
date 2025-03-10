@@ -24,38 +24,20 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_IPARALLELPARTITIONMANAGER_H
-#define HEIPROMAP_IPARALLELPARTITIONMANAGER_H
+#ifndef HEIPROMAP_COMMONS_H
+#define HEIPROMAP_COMMONS_H
 
 #include <string>
-#include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
-
-#include "../../definitions.h"
-#include "../../macros.h"
-#include "../../serial/utility/utils.h"
-
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
 
 namespace HeiProMap {
-
-    class IParallelPartitionManager {
-    public:
-        virtual ~IParallelPartitionManager() = default;
-        virtual void initialize(vertex_t n, partition_t k, weight_t t_lmax) = 0;
-        virtual const partition_t& operator[](vertex_t u) const = 0;
-        virtual void set(vertex_t u, weight_t w, partition_t id) = 0;
-        virtual void move(vertex_t u, weight_t w, partition_t old_id, partition_t new_id) = 0;
-        virtual weight_t get_bweight(partition_t id) const = 0;
-        virtual std::vector<weight_t> get_bweights() const = 0;
-        virtual void uncontract(const EdgeUV* matches, size_t &matches_size) = 0;
-        virtual bool is_overloaded() = 0;
+    struct CommandLineOption {
+        std::string large_key;
+        std::string small_key;
+        std::string description;
+        std::string default_val;
+        std::string input;
+        bool        is_set;
     };
-
 }
 
-#endif //HEIPROMAP_IPARALLELPARTITIONMANAGER_H
+#endif //HEIPROMAP_COMMONS_H

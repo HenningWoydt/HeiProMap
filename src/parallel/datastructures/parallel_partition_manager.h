@@ -31,92 +31,91 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
-#include "../../serial/utility/utils.h"
-#include "../../serial/utility/qap.h"
-#include "../../interfaces/IPartitionManager.h"
-#include "../interfaces/IParallelActiveVertexManager.h"
 #include "../interfaces/IParallelPartitionManager.h"
 
 namespace HeiProMap {
 
-    template<typename TParallelGraph, typename TParallelActiveVertexManager>
-    class ParallelPartitionManager : public IParallelPartitionManager<TParallelGraph, TParallelActiveVertexManager> {
+    class ParallelPartitionManager : public IParallelPartitionManager {
     private:
-        TParallelGraph *m_p_g = nullptr;
-        TParallelActiveVertexManager *m_p_av_manager = nullptr;
-        partition_t m_k = 0;
+        vertex_t    m_n  = 0;
+        partition_t m_k  = 0;
+        weight_t    lmax = 0;
 
-        u64 m_n_threads = 1;
-
-        // actual partition
-        std::vector<partition_t> partition;
-
-        // partition weights
-        std::atomic<weight_t> *m_p_bweights = nullptr;
+        partition_t *partition = nullptr;
+        weight_t    *bweights  = nullptr;
+        size_t      *n_nodes   = nullptr;
 
     public:
+        ParallelPartitionManager() = default;
 
-        ~ParallelPartitionManager() { free(m_p_bweights); }
+        ~ParallelPartitionManager() override {
+            free(partition);
+            free(bweights);
+            free(n_nodes);
+        }
 
-        void initialize(TParallelGraph *t_p_g,
-                        TParallelActiveVertexManager *t_p_av_manager,
-                        partition_t t_k,
-                        u64 t_n_threads) final {
-            ASSERT(t_p_g != nullptr);
-            ASSERT(t_p_av_manager != nullptr);
+        void initialize(const vertex_t t_n,
+                        const partition_t t_k,
+                        const weight_t t_lmax) override {
+            vertex_t t_n_64 = round_up_64(t_n);
+            vertex_t t_k_64 = round_up_64(t_k);
 
-            m_p_g = t_p_g;
-            m_p_av_manager = t_p_av_manager;
-            m_k = t_k;
+            m_n  = t_n;
+            m_k  = t_k;
+            lmax = t_lmax;
 
-            m_n_threads = t_n_threads;
-
-            // actual partition
-            partition.resize(m_p_g->get_n());
-
-            // partition weights
-            m_p_bweights = (std::atomic<weight_t> *) malloc(m_k * sizeof(std::atomic<weight_t>));
-            for(size_t i = 0; i < m_k; ++i){ m_p_bweights[i] = 0; }
+            partition = (partition_t *) aligned_alloc(64, t_n_64 * sizeof(partition_t));
+            bweights  = (weight_t *) aligned_alloc(64, t_k_64 * sizeof(weight_t));
+            n_nodes   = (size_t *) aligned_alloc(64, t_k_64 * sizeof(size_t));
+            std::fill_n(bweights, t_k_64, 0);
+            std::fill_n(n_nodes, t_k_64, 0);
         }
 
         // read
-        const partition_t &operator[](vertex_t u) const final { return partition[u]; }
+        const partition_t &operator[](const vertex_t u) const override { return partition[u]; }
 
         // write
-        void set(vertex_t u, partition_t id) final {
-            ASSERT(m_p_g != nullptr);
-            m_p_bweights[id] += m_p_g->get_weight(u);
+        void set(const vertex_t u, const weight_t w, const partition_t id) override {
+            bweights[id] += w;
             partition[u] = id;
+            n_nodes[id] += 1;
         }
 
-        bool is_boundary(vertex_t u) final {
-            partition_t u_id = partition[u];
-            for(size_t i = 0; i < m_p_g->size(u); ++i){
-                if(u_id != partition[m_p_g->neighbor(u, i)]){
-                    return true;
-                }
+        void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) override {
+            bweights[old_id] -= w;
+            bweights[new_id] += w;
+            partition[u] = new_id;
+            n_nodes[old_id] -= 1;
+            n_nodes[new_id] += 1;
+        }
+
+        weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
+
+        vertex_t get_n_nodes(const partition_t id) const { return n_nodes[id]; }
+
+        std::vector<weight_t> get_bweights() const override {
+            std::vector<weight_t> weights(m_k);
+            for (size_t           i = 0; i < m_k; ++i) {
+                weights[i] = bweights[i];
+            }
+            return weights;
+        }
+
+        void uncontract(const EdgeUV *matches, size_t &matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+
+            for (size_t i = 0; i < matches_size; ++i) {
+                partition[matches[i].v] = partition[matches[i].u];
+                n_nodes[partition[matches[i].u]] += 1;
+            }
+        }
+
+        bool is_overloaded() override {
+            for (size_t i = 0; i < m_k; ++i) {
+                if (bweights[i] > lmax) { return true; }
             }
             return false;
         }
-
-        void move(vertex_t u, partition_t old_id, partition_t new_id) final {
-            ASSERT(m_p_g != nullptr);
-            m_p_bweights[old_id] -= m_p_g->get_weight(u);
-            m_p_bweights[new_id] += m_p_g->get_weight(u);
-            partition[u] = new_id;
-        }
-
-        // weights
-        weight_t get_bweight(partition_t id) const final { return m_p_bweights[id]; }
-
-        std::vector<weight_t> get_bweights() const final {
-            std::vector<weight_t> temp(m_k);
-            for (size_t i = 0; i < m_k; ++i) { temp[i] = m_p_bweights[i]; }
-            return temp;
-        }
-
-        // uncoarsing
-        void uncontract(vertex_t u, vertex_t v) final { partition[v] = partition[u]; }
     };
 
 }

@@ -27,135 +27,84 @@
 #ifndef HEIPROMAP_PARALLEL_SOLVER_H
 #define HEIPROMAP_PARALLEL_SOLVER_H
 
-#include "../../serial/datastructures/graph.h"
-#include "../../serial/datastructures/active_vertex_manager.h"
-#include "../../serial/datastructures/partition_manager.h"
-#include "../../serial/datastructures/boundary_vertex_manager.h"
-#include "../../serial/coarsening/heavy_edge_matcher.h"
-#include "../../serial/partitioning/kaffpa_partitioner.h"
-#include "../../serial/refinement/label_propagation_refinement_Faraj20.h"
-#include "../../serial/refinement/identity_refinement.h"
-#include "../../serial/datastructures/statistic_collector.h"
 #include "parallel_boundary_vertex_manager.h"
 #include "parallel_partition_manager.h"
 #include "parallel_active_vertex_manager.h"
 #include "parallel_graph.h"
-#include "../coarsening/parallel_heavy_edge_matcher.h"
-#include "../partitioning/parallel_kaffpa_partitioner.h"
-#include "../refinement/parallel_label_propagation_refinement.h"
-#include "../refinement/parallel_quotient_graph_refinement.h"
 #include "parallel_distance_oracle.h"
 #include "parallel_quotient_graph.h"
+#include "../utility/parallel_assert_states.h"
 
 namespace HeiProMap {
+    /**
+     * Solver for parallel Process Mapping.
+     */
     class ParallelSolver {
     private:
-        // main structures
-        ParallelGraph m_g;
-        ParallelActiveVertexManager<typeof(m_g)> m_av_manager;
-        ParallelPartitionManager<typeof(m_g), typeof(m_av_manager)> m_p_manager;
-        ParallelBoundaryVertexManager<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager)> m_bv_manager;
-        ParallelDistanceOracle m_d_oracle;
-        ParallelQuotientGraph<typeof(m_g), typeof(m_av_manager), typeof(m_p_manager), typeof(m_d_oracle)> m_qgraph;
+        ParallelAlgorithmConfiguration ac;
 
-        // distance
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        partition_t m_k;
+        std::vector<ParallelGraph> graphs;
+
+        ParallelActiveVertexManager   av_manager;
+        ParallelPartitionManager      p_manager;
+        ParallelBoundaryVertexManager bv_manager;
+        ParallelQuotientGraph         q_graph;
+        ParallelDistanceOracle        d_oracle;
 
         // balance
-        weight_t m_lmax = 0;
+        weight_t lmax = 0;
 
         // threads
-        u64 m_n_threads = 1;
-
-        // multilevel
-        vertex_t m_threshold;
+        u64 threads = 1;
 
         // matching
-        // GreedyEdgeMatcher gem;
-        ParallelHeavyEdgeMatcher<typeof(m_g), typeof(m_av_manager)> m_he_matcher;
-        // SimpleClustering sc;
-
-        std::vector<std::vector<EdgeUV>> m_matches;
-
-        // partitioning
-        ParallelKaffpaPartitioner<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager)> m_kaffpa_partitioner;
+        std::vector<EdgeUV *>    matches;
+        std::vector<size_t>      matches_size;
+        ParallelHeavyEdgeMatcher parallel_he_matcher;
 
         // refinement
-        ParallelLabelPropagationRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle), typeof(m_qgraph)> m_lp_refine;
-        ParallelQuotientGraphRefinement<typeof(m_g), typeof(m_av_manager), typeof(m_bv_manager), typeof(m_p_manager), typeof(m_d_oracle), typeof(m_qgraph)> m_qg_refine;
 
         // statistics
-        StatisticCollector m_stat_collect;
 
     public:
-        ParallelSolver(std::string &t_graph_in,
-                       std::vector<partition_t> &t_hierarchy,
-                       std::vector<weight_t> &t_distance,
-                       f64 t_imbalance,
-                       u64 t_n_threads) {
-            auto sp_graph_io = std::chrono::high_resolution_clock::now();
-            m_g.initialize(t_graph_in, t_n_threads);
-            auto ep_graph_io = std::chrono::high_resolution_clock::now();
-
-            auto sp_io = std::chrono::high_resolution_clock::now();
-
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
-            m_k = prod<partition_t>(m_hierarchy);
-
-            // manager
-            m_av_manager.initialize(&m_g, t_n_threads);
-            m_p_manager.initialize(&m_g, &m_av_manager, m_k, t_n_threads);
-            m_bv_manager.initialize(&m_g, &m_av_manager, &m_p_manager, m_k, t_n_threads);
-            m_qgraph.initialize(&m_g, &m_p_manager, &m_d_oracle, m_k, t_n_threads);
-            HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
-
-            // distance
-            m_d_oracle.initialize(m_hierarchy, m_distance, t_n_threads);
-
-            // balance
-            m_lmax = ceil((1.0 + t_imbalance) * ((f64) m_g.get_weight() / (f64) m_k));
+        explicit ParallelSolver(ParallelAlgorithmConfiguration &t_ac) {
+            ac = t_ac;
 
             // threads
-            m_n_threads = t_n_threads;
+            threads = ac.threads;
 
-            // multilevel
-            m_threshold = m_g.get_n() / 500;
+            const auto sp_graph_io = std::chrono::high_resolution_clock::now();
+            graphs.emplace_back(ac.graph_in, threads);
+            const auto ep_graph_io = std::chrono::high_resolution_clock::now();
+
+            const auto sp_io = std::chrono::high_resolution_clock::now();
+
+            // balance
+            lmax = ceil((1.0 + ac.imbalance) * ((f64) graphs[0].get_weight() / (f64) ac.k));
+
+            // manager
+            av_manager.initialize(graphs[0].get_n());
+            p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
+            bv_manager.initialize(graphs[0].get_n(), ac.k);
+            q_graph.initialize(ac.k);
+            HEAVYASSERT(assert_state_pre_partitioning(graphs[0], av_manager, threads));
+
+            // distance
+            d_oracle.initialize(ac.hierarchy, ac.distance, threads);
 
             // matching
-            // gem.initialize(&g);
-            m_he_matcher.initialize(&m_g, &m_av_manager, t_n_threads);
-            // sc.initialize(&g);
-
-            // partitioning
-            m_kaffpa_partitioner.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, m_hierarchy, m_distance, t_imbalance, t_n_threads);
+            parallel_he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.seed);
 
             // refinement
-            // m_i_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, m_hierarchy, m_distance, m_lmax);
-            m_lp_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, &m_qgraph, m_hierarchy, m_distance, m_lmax, t_n_threads);
-            m_qg_refine.initialize(&m_g, &m_av_manager, &m_bv_manager, &m_p_manager, &m_d_oracle, &m_qgraph, m_hierarchy, m_distance, m_lmax, t_n_threads);
 
-            auto ep_io = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));
+            const auto ep_io = std::chrono::high_resolution_clock::now();
         }
 
         std::vector<vertex_t> solve() {
             internal_solve();
 
-#if STATISTICCOLLECTOR
-            weight_t qap = get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle);
-            std::vector<weight_t> pweights;
-            for (partition_t id = 0; id < m_k; ++id) { pweights.push_back(m_p_manager.get_bweight(id)); }
-            m_stat_collect.set_final(qap, pweights, m_lmax);
-#endif
-            m_stat_collect.finalize();
-
-            std::cout << m_stat_collect.to_JSON() << std::endl;
-
-            std::vector<partition_t> p(m_g.get_n());
-            for (vertex_t u = 0; u < m_g.get_n(); ++u) { p[u] = m_p_manager[u]; }
+            std::vector<partition_t> p(graphs.back().get_n());
+            for (vertex_t            u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
 
             return p;
         }
@@ -164,134 +113,109 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            while (!(m_av_manager.get_n_active() <= m_threshold || m_av_manager.get_n_active() <= m_k * 64)) {
+            std::cout << "level " << level << " size " << av_manager.get_n_active() << std::endl;
+
+            while (av_manager.get_n_active() > ac.k * 64) {
                 matching(level);
                 coarsening(level);
                 level += 1;
+                std::cout << "level " << level << " size " << av_manager.get_n_active() << std::endl;
             }
 
+            std::cout << "partition" << std::endl;
             partition();
 
             while (level > 0) {
                 level -= 1;
                 uncoarsening(level);
                 refinement(level);
+                std::cout << "level " << level << " size " << av_manager.get_n_active() << std::endl;
             }
         }
 
         void partition() {
-            auto sp_partition = std::chrono::high_resolution_clock::now();
+            const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            m_kaffpa_partitioner.partition();
+            if (ac.parallel_partitioning_algorithm_id == PARALLEL_PARTITIONING_ALG_KAFFPA) {
+                KaffpaPartitioner partitioner;
+                partitioner.partition(ac.parallel_kaffpa_partitioner_config, graphs.back(), av_manager, p_manager, ac.hierarchy, ac.distance, ac.imbalance, ac.seed);
+            } else {
+                std::cout << "Parallel Partitioning algorithm " << parallel_partitioning_algorithm_to_string(ac.parallel_partitioning_algorithm_id) << " with id " << ac.parallel_partitioning_algorithm_id << " not known!" << std::endl;
+                exit(EXIT_FAILURE);
+            }
 
-            // then initialize quotient graph
-            for(m_av_manager.reset_iterator(); m_av_manager.available(); m_av_manager.next()){
-                vertex_t u = m_av_manager.get();
-                for(size_t i = 0; i < m_g.size(u); ++i){
-                    vertex_t v = m_g.neighbor(u, i);
-                    weight_t w = m_g.get_weight(u, i);
+            // initialize boundary vertices and quotient graph
+            for (const vertex_t u: av_manager) {
+                for (size_t i = 0; i < graphs.back().size(u); ++i) {
+                    const vertex_t    v    = graphs.back().neighbor(u, i);
+                    const weight_t    w    = graphs.back().get_weight(u, i);
+                    const partition_t u_id = p_manager[u];
+                    const partition_t v_id = p_manager[v];
 
-                    partition_t u_id = m_p_manager[u];
-                    partition_t v_id = m_p_manager[v];
-
-                    m_qgraph.add_edge(u_id, v_id, w);
+                    if (u_id != v_id) {
+                        bv_manager.add(u, u_id); // boundary vertex
+                        q_graph.add_edge(u_id, v_id, w); // quotient graph
+                    }
                 }
             }
 
-            auto ep_partition = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));
+            const auto ep_partition = std::chrono::high_resolution_clock::now();
+            std::cout << "Partitioning : " << get_seconds(sp_partition, ep_partition) << std::endl;
 
-            // HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-#if STATISTICCOLLECTOR
-            m_stat_collect.set_partition_stats(get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle), m_p_manager.get_bweights(), m_lmax);
-#endif
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), av_manager, p_manager, bv_manager, q_graph, ac.k, threads));
         }
 
         void matching(s32 level) {
-            auto sp_match = std::chrono::high_resolution_clock::now();
+            const auto sp_match = std::chrono::high_resolution_clock::now();
 
-            m_matches.emplace_back();
-            m_matches.back().reserve(m_av_manager.get_n_active() / 2);
+            size_t t_n_64       = round_up_64(av_manager.get_n_active() / 2);
+            EdgeUV *matches_arr = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
+            matches.push_back(matches_arr);
+            matches_size.push_back(0);
 
-            m_he_matcher.match(m_matches.back());
+            if (ac.parallel_coarsening_algorithm_id == PARALLEL_COARSENING_ALG_HEAVY_MATCHING) {
+                parallel_he_matcher.match(level, ac.parallel_heavy_edge_matcher_config, graphs.back(), av_manager, matches.back(), matches_size.back());
+            } else {
+                std::cout << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.parallel_coarsening_algorithm_id) << " with id " << ac.parallel_coarsening_algorithm_id << " not known!" << std::endl;
+                exit(EXIT_FAILURE);
+            }
 
-            auto ep_match = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);
-
-#if STATISTICCOLLECTOR
-            m_stat_collect.set_matching_stats(level, m_matches.back().size());
-#endif
+            const auto ep_match = std::chrono::high_resolution_clock::now();
+            std::cout << "Matching : " << get_seconds(sp_match, ep_match) << std::endl;
         }
 
         void coarsening(s32 level) {
-            auto sp_coarse = std::chrono::high_resolution_clock::now();
+            const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
-            /*
-            std::vector<std::vector<EdgeUV>> hierarchy;
-            m_he_matcher.get_matching_hierarchy(m_matches.back(), hierarchy);
+            graphs.emplace_back(graphs.back(), matches.back(), matches_size.back(), threads); // coarse the graph
+            av_manager.contract(matches.back(), matches_size.back());
 
-            std::cout << "level : " << level << " " << hierarchy.size() << std::endl;
-            for(auto &h : hierarchy){
-                std::cout << h.size() << " ";
-            }
-            std::cout << std::endl;
-             */
+            const auto ep_coarse = std::chrono::high_resolution_clock::now();
+            std::cout << "Coarsening : " << get_seconds(sp_coarse, ep_coarse) << std::endl;
 
-// #pragma omp parallel for default(none) num_threads(m_n_threads)
-            for (auto &e: m_matches.back()) {
-                m_g.contract(e.u, e.v);
-                m_av_manager.contract(e.u, e.v);
-            }
-
-            auto ep_coarse = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);
-
-            // HEAVYASSERT(assert_state_pre_partitioning(m_g, m_av_manager));
-#if STATISTICCOLLECTOR
-            m_stat_collect.set_coarsening_stats(m_av_manager.get_n_active(), level);
-#endif
+            HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), av_manager, threads));
         }
 
         void uncoarsening(s32 level) {
-            auto sp_uncoarse = std::chrono::high_resolution_clock::now();
+            const auto sp_uncoarse = std::chrono::high_resolution_clock::now();
 
-            for (size_t i = 0; i < m_matches.back().size(); ++i) {
-                u64 idx = m_matches.back().size() - 1 - i;
-                vertex_t u = m_matches.back()[idx].u;
-                vertex_t v = m_matches.back()[idx].v;
+            p_manager.uncontract(matches.back(), matches_size.back());
+            av_manager.uncontract(matches.back(), matches_size.back());
+            bv_manager.uncontract(matches.back(), matches_size.back(), graphs[graphs.size() - 2], graphs[graphs.size() - 1], av_manager, p_manager);
+            graphs.pop_back(); // this is doing uncontraction
 
-                m_g.uncontract(u, v);
-                m_av_manager.uncontract(u, v);
-                m_p_manager.uncontract(u, v);
-                m_bv_manager.uncontract(u, v);
-            }
-            m_matches.pop_back();
+            free(matches.back());
+            matches.pop_back(); // throw away the matching, not needed anymore
+            matches_size.pop_back();
 
-            auto ep_uncoarse = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);
+            const auto ep_uncoarse = std::chrono::high_resolution_clock::now();
+            std::cout << "Uncoarsening : " << get_seconds(sp_uncoarse, ep_uncoarse) << std::endl;
 
-            // HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-#if STATISTICCOLLECTOR
-            m_stat_collect.set_uncoarsening_stats(level, m_av_manager.get_n_active());
-#endif
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), av_manager, p_manager, bv_manager, q_graph, ac.k, threads));
         }
 
         void refinement(s32 level) {
-            auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            // m_i_refine.refine();
-            m_lp_refine.refine();
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-            // m_qg_refine.refine();
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-
-            auto ep_refinement = std::chrono::high_resolution_clock::now();
-            m_stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);
-
-            HEAVYASSERT(assert_state_after_partitioning(m_g, m_av_manager, m_p_manager, m_bv_manager, m_k));
-#if STATISTICCOLLECTOR
-            m_stat_collect.set_refinement_stats(level, get_qap(m_g, m_av_manager, m_p_manager, m_d_oracle));
-#endif
         }
     };
 }

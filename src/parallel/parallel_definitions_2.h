@@ -24,38 +24,15 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_IPARALLELPARTITIONMANAGER_H
-#define HEIPROMAP_IPARALLELPARTITIONMANAGER_H
+#ifndef HEIPROMAP_PARALLEL_DEFINITIONS_2_H
+#define HEIPROMAP_PARALLEL_DEFINITIONS_2_H
 
-#include <string>
-#include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
-
-#include "../../definitions.h"
-#include "../../macros.h"
-#include "../../serial/utility/utils.h"
-
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
+#include "datastructures/parallel_boundary_vertex_manager.h"
+#include "datastructures/parallel_quotient_graph.h"
 
 namespace HeiProMap {
-
-    class IParallelPartitionManager {
-    public:
-        virtual ~IParallelPartitionManager() = default;
-        virtual void initialize(vertex_t n, partition_t k, weight_t t_lmax) = 0;
-        virtual const partition_t& operator[](vertex_t u) const = 0;
-        virtual void set(vertex_t u, weight_t w, partition_t id) = 0;
-        virtual void move(vertex_t u, weight_t w, partition_t old_id, partition_t new_id) = 0;
-        virtual weight_t get_bweight(partition_t id) const = 0;
-        virtual std::vector<weight_t> get_bweights() const = 0;
-        virtual void uncontract(const EdgeUV* matches, size_t &matches_size) = 0;
-        virtual bool is_overloaded() = 0;
-    };
-
+    typedef ParallelBoundaryVertexManager p_bv_manager_t;
+    typedef ParallelQuotientGraph         p_q_graph_t;
 }
 
-#endif //HEIPROMAP_IPARALLELPARTITIONMANAGER_H
+#endif //HEIPROMAP_PARALLEL_DEFINITIONS_2_H

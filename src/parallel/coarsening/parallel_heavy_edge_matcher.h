@@ -28,159 +28,134 @@
 #define HEIPROMAP_PARALLEL_HEAVY_EDGE_MATCHER_H
 
 #include "../interfaces/IParallelMatcher.h"
+#include "../../definitions.h"
 
 namespace HeiProMap {
 
-    template<typename TParallelGraph, typename TParallelActiveVertexManager>
-    class ParallelHeavyEdgeMatcher : public IParallelMatcher<TParallelGraph, TParallelActiveVertexManager> {
-    private:
-        TParallelGraph *m_p_g = nullptr;
-        TParallelActiveVertexManager *m_p_av_manager = nullptr;
+    class ParallelHeavyEdgeMatcherConfiguration final : public IParallelMatcherConfiguration {
+    public:
+        bool match_pendant_vertices_first = false;
+    };
 
-        u64 m_n_threads = 1;
+    class ParallelHeavyEdgeMatcher : public IParallelMatcher {
+        vertex_t    m_n     = 0;
+        vertex_t    m_m     = 0;
+        partition_t m_k     = 0;
+        weight_t    m_l_max = 0;
 
-        u32 m_mark = 0;
-        std::vector<u32> m_used;
+        u32              mark = 0;
+        std::vector<u32> used;
 
     public:
         ParallelHeavyEdgeMatcher() = default;
 
-        void initialize(TParallelGraph *t_p_g,
-                        TParallelActiveVertexManager *t_p_av_manager,
-                        u64 n_threads) final {
-            ASSERT(t_p_g != nullptr);
-            ASSERT(t_p_av_manager != nullptr);
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const weight_t t_l_max,
+                        const u64 t_seed) override {
+            m_n     = t_n;
+            m_m     = t_m;
+            m_k     = t_k;
+            m_l_max = t_l_max;
 
-            m_p_g = t_p_g;
-            m_p_av_manager = t_p_av_manager;
-
-            m_n_threads = n_threads;
-
-            m_mark = 0;
-            m_used.resize(m_p_g->get_n(), 0);
+            mark = 0;
+            used.resize(m_n, mark);
         }
 
-        void match(std::vector<EdgeUV> &matches) final {
-            ASSERT(m_p_g != nullptr);
-            ASSERT(m_p_av_manager != nullptr);
-            ASSERT(m_used.size() == m_p_g->get_n());
+        void match(size_t level,
+                   IParallelMatcherConfiguration &i_config,
+                   p_graph_t &g,
+                   p_av_manager_t &av_manager,
+                   EdgeUV *matches,
+                   size_t &matches_size) override {
+            auto &config = dynamic_cast<ParallelHeavyEdgeMatcherConfiguration &>(i_config);
 
-            m_mark += 1;
-            matches.clear();
+            matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+            matches_size = 0;
 
-            // first check vertices with degree 1
-            for (m_p_av_manager->reset_iterator(); m_p_av_manager->available(); m_p_av_manager->next()) {
-                vertex_t u = m_p_av_manager->get();
-                ASSERT(m_p_av_manager->is_active(u));
+            mark += 1;
 
-                if (m_used[u] != m_mark && m_p_g->size(u) == 1) {
-                    vertex_t v = m_p_g->neighbor(u, 0);
-                    if (m_used[v] != m_mark) {
-                        m_used[u] = m_mark;
-                        m_used[v] = m_mark;
+            if (config.match_pendant_vertices_first) {
+                // first check vertices with degree 1
+                for (vertex_t u: av_manager) {
+                    ASSERT(av_manager.is_active(u));
 
-                        matches.emplace_back(v, u); // pull u into v
-                    }
+                    if (used[u] == mark) { continue; }
+                    if (g.size(u) != 1) { continue; }
+
+                    vertex_t v = g.neighbor(u, 0);
+
+                    if (used[v] == mark) { continue; }
+
+                    weight_t u_w = g.get_weight(u);
+                    weight_t v_w = g.get_weight(v);
+
+                    if (u_w + v_w > m_l_max) { continue; }
+
+                    matches[matches_size++] = {v, u}; // pull u into v
+
+                    used[u] = mark;
+                    used[v] = mark;
                 }
             }
 
             // check all other vertices
-            for (m_p_av_manager->reset_iterator(); m_p_av_manager->available(); m_p_av_manager->next()) {
-                vertex_t u = m_p_av_manager->get();
-                ASSERT(m_p_av_manager->is_active(u));
+            for (vertex_t u: av_manager) {
+                ASSERT(av_manager.is_active(u));
 
-                if (m_used[u] != m_mark) {
-                    size_t best_idx;
-                    weight_t max_weight = 0;
+                if (used[u] == mark) { continue; }
 
-                    for (size_t i = 0; i < m_p_g->size(u); ++i) {
-                        vertex_t v = m_p_g->neighbor(u, i);
-                        weight_t ew = m_p_g->get_weight(u, i);
-                        ASSERT(u != v);
-                        ASSERT(m_p_av_manager->is_active(v));
-                        if (m_used[v] != m_mark) {
-                            if (ew > max_weight) {
-                                best_idx = i;
-                                max_weight = ew;
-                            }
-                        }
+                weight_t u_w        = g.get_weight(u);
+                vertex_t best_v     = u;
+                weight_t max_weight = 0;
+
+                for (size_t i = 0; i < g.size(u); ++i) {
+                    vertex_t v = g.neighbor(u, i);
+                    weight_t w = g.get_weight(u, i);
+                    if (used[v] == mark) { continue; }
+
+                    weight_t v_w = g.get_weight(v);
+
+                    if (u_w + v_w > m_l_max) { continue; }
+
+                    if (w > max_weight) {
+                        best_v     = v;
+                        max_weight = w;
                     }
+                }
 
-                    if (max_weight != 0) {
-                        vertex_t v = m_p_g->neighbor(u, best_idx);
-                        m_used[u] = m_mark;
-                        m_used[v] = m_mark;
-
-                        if (m_p_g->size(u) > m_p_g->size(v)) {
-                            matches.emplace_back(u, v);
-                        } else {
-                            matches.emplace_back(v, u);
-                        }
+                if (best_v != u) {
+                    if (g.size(u) > g.size(best_v)) {
+                        matches[matches_size++] = {u, best_v};
+                    } else {
+                        matches[matches_size++] = {best_v, u};
                     }
+                    used[u]      = mark;
+                    used[best_v] = mark;
                 }
             }
 
 #if ASSERT_ENABLED
-            for (const EdgeUV &e: matches) {
-                ASSERT(e.u != e.v);
-                ASSERT(m_p_av_manager->is_active(e.u));
-                ASSERT(m_p_av_manager->is_active(e.v));
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto &[u, v] = matches[i];
+                ASSERT(u != v);
+                ASSERT(av_manager.is_active(u));
+                ASSERT(av_manager.is_active(v));
             }
 #endif
 
 #if ASSERT_ENABLED
-            std::vector<u8> hit(m_p_g->get_n(), 0);
-            for (auto & e : matches) {
-                hit[e.u] += 1;
-                hit[e.v] += 1;
+            std::vector<u8> hit(g.get_n(), 0);
+            for (size_t     i = 0; i < matches_size; ++i) {
+                const auto &[u, v] = matches[i];
+                hit[u] += 1;
+                hit[v] += 1;
 
-                if(hit[e.u] == 2){
-                    ASSERT(false);
-                }
-                if(hit[e.v] == 2){
-                    ASSERT(false);
-                }
+                ASSERT(hit[u] == 1);
+                ASSERT(hit[v] == 1);
             }
 #endif
-        }
-
-        void get_matching_hierarchy(std::vector<EdgeUV> matches, std::vector<std::vector<EdgeUV>> &hierarchy){
-            hierarchy.clear();
-
-            while(!matches.empty() && hierarchy.size() < 10){
-                m_mark += 1;
-                hierarchy.emplace_back();
-                for(size_t i = 0; i < matches.size(); ++i){
-                    vertex_t u = matches[i].u;
-                    vertex_t v = matches[i].v;
-                    if(m_used[u] != m_mark && m_used[v] != m_mark){
-                        hierarchy.back().emplace_back(matches[i]);
-
-                        for(size_t j = 0; j < m_p_g->size(u); ++j){
-                            vertex_t uv = m_p_g->neighbor(u, j);
-                            m_used[uv] = m_mark;
-                            for(size_t jj = 0; jj < m_p_g->size(uv); ++jj){
-                                vertex_t uvv = m_p_g->neighbor(uv, jj);
-                                m_used[uvv] = m_mark;
-                            }
-                        }
-
-                        for(size_t j = 0; j < m_p_g->size(v); ++j){
-                            vertex_t vv = m_p_g->neighbor(v, j);
-                            m_used[vv] = m_mark;
-                            for(size_t jj = 0; jj < m_p_g->size(vv); ++jj){
-                                vertex_t vvv = m_p_g->neighbor(vv, jj);
-                                m_used[vvv] = m_mark;
-                            }
-                        }
-
-                        matches[i] = matches.back();
-                        matches.pop_back();
-                    }
-                }
-            }
-
-            hierarchy.emplace_back(matches);
         }
     };
 }

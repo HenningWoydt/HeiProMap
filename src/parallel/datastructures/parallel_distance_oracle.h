@@ -29,8 +29,6 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
-#include "../../serial/utility/utils.h"
-#include "../../interfaces/IDistanceOracle.h"
 #include "../interfaces/IParallelDistanceOracle.h"
 
 namespace HeiProMap {
@@ -50,12 +48,12 @@ namespace HeiProMap {
 
         void initialize(std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
-                        u64 n_threads) final {
+                        u64 t_threads) final {
             m_hierarchy = t_hierarchy;
             m_distance = t_distance;
             m_k = prod<partition_t>(m_hierarchy);
 
-            m_n_threads = n_threads;
+            m_n_threads = t_threads;
 
             m_mtx.resize(m_k * m_k);
             m_h_mtx.resize(m_k * m_k);

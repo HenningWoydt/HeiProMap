@@ -36,9 +36,9 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG -finline-functions -fwhole-program 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra -pedantic")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
-# Find all interfaces source and header files
-file(GLOB_RECURSE SOURCES_INTERFACE CONFIGURE_DEPENDS "src/interfaces/*.cpp")
-file(GLOB_RECURSE HEADERS_INTERFACE CONFIGURE_DEPENDS "src/interfaces/*.h")
+# Find all commons source and header files
+file(GLOB_RECURSE SOURCES_COMMONS CONFIGURE_DEPENDS "src/commons/*.cpp")
+file(GLOB_RECURSE HEADERS_COMMONS CONFIGURE_DEPENDS "src/commons/*.h")
 
 # Find all serial source and header files
 file(GLOB_RECURSE SOURCES_SERIAL CONFIGURE_DEPENDS "src/serial/*.cpp")
@@ -56,38 +56,38 @@ file(GLOB_RECURSE Test_HEADERS_SERIAL CONFIGURE_DEPENDS "tests/serial/*.h")
 file(GLOB_RECURSE Test_SOURCES_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.cpp")
 file(GLOB_RECURSE Test_HEADERS_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.h")
 
-add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL})
-# add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
+add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_SERIAL} ${SOURCES_SERIAL})
+add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
 # add_executable(MtHeiProMapRefinement application/MtHeiProMapRefinement.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)
 if (OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found")
-    # target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
+    target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
     # target_link_libraries(MtHeiProMapRefinement OpenMP::OpenMP_CXX)
 endif ()
 
 # Link KaHIP library
 target_link_libraries(HeiProMap kahip_static)
-# target_link_libraries(MtHeiProMap kahip)
+target_link_libraries(MtHeiProMap kahip_static)
 # target_link_libraries(MtHeiProMapRefinement kahip)
 
-add_subdirectory(external_tools/googletest)
-include(gmock)
-enable_testing()
+# add_subdirectory(external_tools/googletest)
+# include(gmock)
+# enable_testing()
 
 # Test executable
-add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
+# add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
 # add_executable(MtHeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL} ${Test_HEADERS_PARALLEL} ${Test_SOURCES_PARALLEL})
 
 # Link OpenMP library
-find_package(OpenMP REQUIRED)
-if (OpenMP_CXX_FOUND)
-    message(STATUS "OpenMP found")
+# find_package(OpenMP REQUIRED)
+# if (OpenMP_CXX_FOUND)
+    # message(STATUS "OpenMP found")
     # target_link_libraries(MtHeiProMap_gtest OpenMP::OpenMP_CXX)
-endif ()
+# endif ()
 
 # Link to Google Test
-target_link_libraries(HeiProMap_gtest gtest gtest_main)
+# target_link_libraries(HeiProMap_gtest gtest gtest_main)
 # target_link_libraries(MtHeiProMap_gtest gtest gtest_main)

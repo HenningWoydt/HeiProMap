@@ -28,17 +28,19 @@
 #define HEIPROMAP_IPARALLELACTIVEVERTEXMANAGER_H
 
 #include "IParallelGraph.h"
-#include "../../interfaces/IActiveVertexManager.h"
 
 namespace HeiProMap {
 
-    template<typename TParallelGraph>
-    class IParallelActiveVertexManager : public IActiveVertexManager {
-        static_assert(std::is_base_of<IParallelGraph, TParallelGraph>::value, "TParallelGraph must inherit from IParallelGraph");
+    class IParallelActiveVertexManager {
     public:
-        // initialize
-        virtual void initialize(TParallelGraph *t_p_g,
-                                u64 n_threads) = 0;
+        virtual ~IParallelActiveVertexManager() = default;
+        virtual void initialize(size_t n) = 0;
+        virtual vertex_t get_n_active() const = 0;
+        virtual bool is_active(vertex_t u) const = 0;
+        virtual bool is_disabled(vertex_t u) const = 0;
+        virtual bool get_state(vertex_t u) const = 0;
+        virtual void contract(const EdgeUV* matches, size_t &matches_size) = 0;
+        virtual void uncontract(const EdgeUV* matches, size_t &matches_size) = 0;
     };
 
 }

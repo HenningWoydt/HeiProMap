@@ -26,43 +26,100 @@
 
 #include <iostream>
 #include <chrono>
-
-#include "../src/definitions.h"
-#include "../src/macros.h"
-#include "../src/serial/utility/utils.h"
+#include <vector>
+#include <string>
+#include <cstring>
+#include "../src/parallel/utility/parallel_algorithm_configuration.h"
 #include "../src/parallel/datastructures/parallel_solver.h"
 
 using namespace HeiProMap;
 
-int main() {
-    auto sp = std::chrono::high_resolution_clock::now();
-    {
-        // std::string graph_in = "../data/mapping/afshell9.graph"; std::string mapping_out = "../data/out/partition/afshell9.txt";
-        // std::string graph_in = "../data/mapping/2cubes_sphere.mtx.graph"; std::string mapping_out = "../data/out/partition/2cubes_sphere.txt";
-        std::string graph_in = "../data/mapping/eur.graph"; std::string mapping_out = "../data/out/partition/eur.txt";
-        // std::string graph_in = "../data/mapping/rgg24.graph"; std::string mapping_out = "../data/out/partition/rgg24.txt";
-        // std::string graph_in = "../data/mapping/deu.graph"; std::string mapping_out = "../data/out/partition/deu.txt";
-        // std::string graph_in = "../data/mapping/PGPgiantcompo.graph"; std::string mapping_out = "../data/out/partition/PGPgiantcompo.txt";
-        // std::string graph_in = "../data/test/manual_graphs/0.graph";
-        std::string statistics_out = "statistics.JSON";
-        std::string hierarchy_string = "4:8:6";
-        std::string distance_string = "1:10:100";
-        f64 imbalance = 0.03;
-        u64 n_thread = 6;
+int main(const int argc, char *argv[]) {
+    if (argc == 1) {
+        const auto sp = std::chrono::high_resolution_clock::now();
+        {
+            std::vector<std::pair<std::string, std::string>> input = {
+                    // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
+                    // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
+                    // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
+                    {"--graph",                                                      "../data/dimacs10_delaunay/delaunay_n22.graph"},
+                    {"--mapping",                                                    "../data/out/partition/delaunay_n22.txt"},
+                    {"--statistics",                                                 "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph",                                                      "../data/dimacs10_delaunay/delaunay_n24.graph"},
+                    // {"--mapping",                                                    "../data/out/partition/delaunay_n24.txt"},
+                    // {"--statistics",                                                 "../data/out/statistics/delaunay_n24.JSON"},
+                    // {"--graph", "../data/training/598a.graph"},
+                    // {"--mapping", "../data/out/partition/598a.txt"},
+                    // {"--statistics", "../data/out/statistics/598a.JSON"},
+                    // {"--graph",                                                      "../data/training/rgg_n26.graph"},
+                    // {"--mapping",                                                    "../data/out/partition/rgg_n26.txt"},
+                    // {"--statistics",                                                 "../data/out/statistics/rgg_n26.JSON"},
+                    // {"--graph",                         "../data/training/G3_circuit.graph"},
+                    // {"--mapping",                       "../data/out/partition/G3_circuit.txt"},
+                    // {"--statistics",                    "../data/out/statistics/G3_circuit.JSON"},
+                    // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"},
+                    // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
+                    // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
+                    {"--hierarchy",                                                  "4:8:6"},
+                    {"--distance",                                                   "1:10:100"},
+                    {"--imbalance",                                                  "0.03"},
+                    {"--threads",                                                    "16"},
+                    {"--config",                                                     "experimental"},
+                    {"--seed",                                                       "0"},
 
-        std::vector<partition_t> hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
-        std::vector<weight_t> distance = convert<weight_t>(split(distance_string, ':'));
+                    // coarsening
+                    {"--parallel-coarsening-algorithm",                              "heavy-matching"},
 
-        ParallelSolver parallel_solver(graph_in,
-                                       hierarchy,
-                                       distance,
-                                       imbalance,
-                                       n_thread);
-        std::vector<partition_t> partition = parallel_solver.solve();
-        write_partition(partition, mapping_out);
+                    // coarsening - heavy configuration
+                    {"--parallel-coarsening-algorithm-heavy-matching-pendant-first", "1"},
+
+                    // Partitioning
+                    {"--parallel-partitioning-algorithm",                            "kaffpa"},
+                    // {"--partitioning-algorithm", "multisection"},
+
+                    // partitioning - kaffpa configuration
+                    {"--parallel-partitioning-algorithm-method",                     "bisection"},
+                    {"--parallel-partitioning-algorithm-mode",                       "fast"},
+            };
+
+            std::vector<std::string> args = {"HeiProMap"};
+            for (const auto &[key, val]: input) {
+                args.push_back(key);
+                args.push_back(val);
+            }
+
+            // Step 3: Prepare argc and argv.
+            int argc = args.size();
+            if (argc < 0) {
+                std::cerr << "Error: Invalid argc size" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+            // Allocate an array of char* for argv.
+            char **argv = new char *[argc];
+
+            for (int i = 0; i < argc; ++i) {
+                // Allocate enough space for the string plus the null terminator.
+                argv[i] = new char[args[i].size() + 1];
+                std::strcpy(argv[i], args[i].c_str());
+            }
+
+            ParallelAlgorithmConfiguration ac(argc, argv);
+
+            ParallelSolver parallel_solver(ac);
+            parallel_solver.solve();
+
+            for (int i = 0; i < argc; ++i) { delete[] argv[i]; }
+            delete[] argv;
+        }
+        const auto ep = std::chrono::high_resolution_clock::now();
+        std::cout << "Total time: " << get_seconds(sp, ep) << std::endl;
+    } else {
+        ParallelAlgorithmConfiguration ac(argc, argv);
+
+        ParallelSolver parallel_solver(ac);
+        parallel_solver.solve();
     }
-    auto ep = std::chrono::high_resolution_clock::now();
-    std::cout << "Total time: " << get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

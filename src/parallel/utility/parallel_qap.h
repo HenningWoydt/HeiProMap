@@ -24,38 +24,35 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_IPARALLELPARTITIONMANAGER_H
-#define HEIPROMAP_IPARALLELPARTITIONMANAGER_H
-
-#include <string>
-#include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
+#ifndef HEIPROMAP_PARALLEL_QAP_H
+#define HEIPROMAP_PARALLEL_QAP_H
 
 #include "../../definitions.h"
-#include "../../macros.h"
-#include "../../serial/utility/utils.h"
-
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
+#include "../parallel_definitions_1.h"
 
 namespace HeiProMap {
+    weight_t get_qap(p_graph_t &g,
+                     p_av_manager_t &av_manager,
+                     p_p_manager_t &p_manager,
+                     p_d_oracle_t &d_oracle) {
+        weight_t qap = 0;
 
-    class IParallelPartitionManager {
-    public:
-        virtual ~IParallelPartitionManager() = default;
-        virtual void initialize(vertex_t n, partition_t k, weight_t t_lmax) = 0;
-        virtual const partition_t& operator[](vertex_t u) const = 0;
-        virtual void set(vertex_t u, weight_t w, partition_t id) = 0;
-        virtual void move(vertex_t u, weight_t w, partition_t old_id, partition_t new_id) = 0;
-        virtual weight_t get_bweight(partition_t id) const = 0;
-        virtual std::vector<weight_t> get_bweights() const = 0;
-        virtual void uncontract(const EdgeUV* matches, size_t &matches_size) = 0;
-        virtual bool is_overloaded() = 0;
-    };
+        for (vertex_t u: av_manager) {
+            ASSERT(av_manager.is_active(u));
 
+            partition_t u_id = p_manager[u];
+
+            for (size_t i = 0; i < g.size(u); ++i) {
+                vertex_t    v    = g.neighbor(u, i);
+                weight_t    ew   = g.get_weight(u, i);
+                partition_t v_id = p_manager[v];
+                weight_t    d    = d_oracle.get(u_id, v_id);
+                qap += (d * ew);
+            }
+        }
+
+        return qap;
+    }
 }
 
-#endif //HEIPROMAP_IPARALLELPARTITIONMANAGER_H
+#endif //HEIPROMAP_PARALLEL_QAP_H

@@ -27,26 +27,25 @@
 #ifndef HEIPROMAP_IPARALLELQUOTIENTGRAPH_H
 #define HEIPROMAP_IPARALLELQUOTIENTGRAPH_H
 
-#include "../../interfaces/IQuotientGraph.h"
 
 namespace HeiProMap {
 
-    template<typename TParallelGraph,
-             typename TParallelActiveVertexManager,
-             typename TParallelPartitionManager,
-             typename TParallelDistanceOracle>
-    class IParallelQuotientGraph : public IQuotientGraph {
-        static_assert(std::is_base_of<IParallelGraph, TParallelGraph>::value, "TParallelGraph must inherit from IParallelGraph");
-        static_assert(std::is_base_of<IParallelPartitionManager<TParallelGraph, TParallelActiveVertexManager>, TParallelPartitionManager>::value, "TParallelPartitionManager must inherit from IParallelPartitionManager");
-        static_assert(std::is_base_of<IParallelDistanceOracle, TParallelDistanceOracle>::value, "TParallelDistanceOracle must inherit from IParallelDistanceOracle");
+    class IParallelQuotientGraph {
     public:
-        virtual void initialize(TParallelGraph *t_p_g,
-                                TParallelPartitionManager *t_p_p_manager,
-                                TParallelDistanceOracle *t_p_d_oracle,
-                                partition_t k,
-                                u64 n_threads) = 0;
+        virtual ~IParallelQuotientGraph() = default;
 
-        virtual void move(vertex_t u, partition_t old_id, partition_t new_id) = 0;
+        virtual void initialize(partition_t k) = 0;
+
+        virtual void add_edge(partition_t u, partition_t v, weight_t w) = 0;
+
+        virtual void remove_edge(partition_t u, partition_t v, weight_t w) = 0;
+
+        virtual bool has_edge(partition_t u, partition_t v) = 0;
+
+        virtual weight_t get_weight(partition_t u, partition_t v) = 0;
+
+        template<typename TSerialGraph, typename TSerialPartitionManager>
+        void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {}
     };
 
 }

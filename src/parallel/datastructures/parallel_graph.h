@@ -36,8 +36,9 @@
 #include <omp.h>
 #include <cstring>
 
-#include "../../interfaces/IGraph.h"
 #include "../interfaces/IParallelGraph.h"
+#include "../../definitions.h"
+#include "../../macros.h"
 
 namespace HeiProMap {
 
@@ -61,18 +62,8 @@ namespace HeiProMap {
         std::vector<std::vector<EdgeVW>> m_adj;
 
     public:
-        ParallelGraph() = default;
-
-        ~ParallelGraph() final {
-#pragma omp parallel for schedule(static) default(none) num_threads(m_n_threads)
-            for(size_t i = 0; i < m_n; ++i){
-                std::vector<EdgeVW>().swap(m_adj[i]);
-            }
-        }
-
-        // initialization
-        void initialize(const std::string &graph_in, u64 n_threads) final {
-            m_n_threads = n_threads;
+        ParallelGraph(const std::string &graph_in, u64 t_threads) {
+            m_n_threads = t_threads;
 
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
@@ -151,24 +142,24 @@ namespace HeiProMap {
 
             m_v_weights.resize(m_n);
             m_adj.resize(m_n);
-#pragma omp parallel default(none) firstprivate(i, file_size, file_arr, fmt_1, fmt_2, n_threads) num_threads(n_threads)
+#pragma omp parallel default(none) firstprivate(i, file_size, file_arr, fmt_1, fmt_2, m_n_threads) num_threads(m_n_threads)
             {
-                weight_t local_g_weight = 0;
+                weight_t            local_g_weight = 0;
                 std::vector<EdgeVW> edges;
                 edges.reserve(100);
 
-                size_t thread_id = omp_get_thread_num();
-                vertex_t base_range = floor((f64) m_n / (f64) n_threads);
-                vertex_t rem = m_n % n_threads;
+                size_t   thread_id  = omp_get_thread_num();
+                vertex_t base_range = floor((f64) m_n / (f64) m_n_threads);
+                vertex_t rem        = m_n % m_n_threads;
 
                 vertex_t start_u;
                 vertex_t end_u;
                 if (thread_id < rem) {
                     start_u = thread_id * (base_range + 1);
-                    end_u = start_u + base_range + 1;
+                    end_u   = start_u + base_range + 1;
                 } else {
                     start_u = rem * (base_range + 1) + (thread_id - rem) * base_range;
-                    end_u = start_u + base_range;
+                    end_u   = start_u + base_range;
                 }
 
                 vertex_t u = 0;
@@ -231,7 +222,7 @@ namespace HeiProMap {
                     ++i;
                     u += 1;
 
-                    if(u == m_n){
+                    if (u == m_n) {
                         break;
                     }
                 }
@@ -243,93 +234,143 @@ namespace HeiProMap {
             // Clean up
             munmap(file_arr, file_size);
             close(fd);
-        }
+        };
 
-        // graph properties
-        vertex_t get_n() const final { return m_n; }
+        ParallelGraph(const ParallelGraph &g,
+                      const EdgeUV *matches,
+                      size_t &matches_size,
+                      u64 threads) {
+            matches = ASSUME_ALIGNED(EdgeUV *, matches, 64);
 
-        vertex_t get_m() const final { return m_m; }
+            vertex_t m_n_64 = round_up_64(g.get_n() + 1);
+            vertex_t m_m_64 = round_up_64(g.get_m() + 1);
 
-        weight_t get_weight() const final { return m_g_weight; }
+            m_n = g.get_n();
+            m_m = 0;
 
-        // vertex weights
-        weight_t get_weight(vertex_t u) const final { return m_v_weights[u]; }
+            m_g_weight = g.m_g_weight;
+            m_v_weights.resize(m_n);
+            std::copy(g.m_v_weights.begin(), g.m_v_weights.end(), m_v_weights.begin());
 
-        size_t size(vertex_t u) const final { return m_adj[u].size(); }
+            m_adj.resize(m_n);
 
-        vertex_t neighbor(vertex_t u, size_t idx) const final { return m_adj[u][idx].v; }
-        weight_t get_weight(vertex_t u, size_t idx) const final { return m_adj[u][idx].w; }
+            // define the state of each vertex
+            constexpr u8 NOT_MATCHED    = 0;
+            constexpr u8 FIRST_MATCHED  = 1;
+            constexpr u8 SECOND_MATCHED = 2;
 
-        // edge manipulation
-        bool edge_exists(vertex_t u, vertex_t v) const final { return std::any_of(m_adj[u].begin(), m_adj[u].end(), [&](const EdgeVW &e) { return e.v == v; }); }
+            u8 *vertex_state = (u8 *) aligned_alloc(64, m_n_64 * sizeof(u8));
+            std::fill_n(vertex_state, m_n_64, NOT_MATCHED);
 
-        // coarsing and uncoarsing
-        void contract(vertex_t u, vertex_t v) final {
-            // add weight of v to u
-            m_v_weights[u] += m_v_weights[v];  // thread safe, only this thread modifies u
+            vertex_t *vertex_neighbor = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
 
-            // remove v from all its neighbors
-            for (const EdgeVW &e: m_adj[v]) {
-                remove_edge(e.v, v); // remove v from e.v  // not thread safe, multiple threads could remove from e.v
+            // check the matching
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto [u, v] = matches[i];
+
+                vertex_state[u]    = FIRST_MATCHED;
+                vertex_state[v]    = SECOND_MATCHED;
+                vertex_neighbor[u] = v;
+                vertex_neighbor[v] = u;
+
+                m_v_weights[v] = 0;
+                m_v_weights[u] = g.get_weight(u) + g.get_weight(v);
             }
 
-            // connect neighbors of v to u, but not u
-            for (const EdgeVW &e: m_adj[v]) {
-                if (u != e.v) {
-                    add_edge_with_weight(u, e.v, e.w);  // not thread safe, remove_edge(e.v, v) could modify u
-                    add_edge_with_weight(e.v, u, e.w);  // not thread safe, remove_edge(e.v, v) could modify e.v
+            for (vertex_t u = 0; u < m_n; ++u) {
+                if (vertex_state[u] == NOT_MATCHED) {
+                    // copy it to the next graph
+                    for (size_t i = 0; i < g.size(u); ++i) {
+                        vertex_t vv = g.neighbor(u, i);
+                        weight_t ww = g.get_weight(u, i);
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+
+                        // if the edge is present, then add the weight, else expand it
+                        bool found = false;
+                        for (auto &[v, w]: m_adj[u]) {
+                            if (v == vv) {
+                                w += ww;
+                                found = true;
+                            }
+                        }
+                        if (!found) {
+                            m_adj[u].emplace_back(vv, ww);
+                        }
+                    }
+                } else if (vertex_state[u] == FIRST_MATCHED) {
+                    // the vertex gets all neighbors of u and v
+                    vertex_t v = vertex_neighbor[u];
+
+                    for (size_t i = 0; i < g.size(u); ++i) {
+                        vertex_t vv = g.neighbor(u, i);
+                        weight_t ww = g.get_weight(u, i);
+                        // do not add edge to matched vertex
+                        if (vv == v) { continue; }
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+
+                        // if the edge is present, then add the weight, else expand it
+                        bool found = false;
+                        for (auto &[vvv, www]: m_adj[u]) {
+                            if (vvv == vv) {
+                                www += ww;
+                                found = true;
+                            }
+                        }
+                        if (!found) {
+                            m_adj[u].emplace_back(vv, ww);
+                        }
+                    }
+                    for (size_t i = 0; i < g.size(v); ++i) {
+                        vertex_t vv = g.neighbor(v, i);
+                        weight_t ww = g.get_weight(v, i);
+                        // do not add edge to matched vertex
+                        if (vv == u) { continue; }
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = vertex_state[vv] == SECOND_MATCHED ? vertex_neighbor[vv] : vv;
+
+                        // if the edge is present, then add the weight, else expand it
+                        bool found = false;
+                        for (auto &[vvv, www]: m_adj[u]) {
+                            if (vvv == vv) {
+                                www += ww;
+                                found = true;
+                            }
+                        }
+                        if (!found) {
+                            m_adj[u].emplace_back(vv, ww);
+                        }
+                    }
                 }
             }
+
+            free(vertex_state);
+            free(vertex_neighbor);
+
+            m_m = 0;
+            for (auto &vec: m_adj) { m_m += vec.size(); }
+
         }
 
-        void uncontract(vertex_t u, vertex_t v) final {
-            // remove neighbors of v from u
-            for (const EdgeVW &e: m_adj[v]) {
-                if (u != e.v) {
-                    remove_edge_with_weight(u, e.v, e.w);
-                    remove_edge_with_weight(e.v, u, e.w);
-                }
-            }
+        vertex_t get_n() const override { return m_n; }
 
-            // connect v to all its neighbors
-            for (const EdgeVW &e: m_adj[v]) {
-                add_edge_with_weight_guaranteed(e.v, v, e.w); // add v to e.v
-            }
+        vertex_t get_m() const override { return m_m; }
 
-            // subtract weight of v from u
-            m_v_weights[u] -= m_v_weights[v];
-        }
+        weight_t get_weight() const override { return m_g_weight; }
 
-    private:
-        // coarsing
-        void remove_edge(vertex_t u, vertex_t v) {
-            size_t lower_idx = own_lower_bound_guaranteed(m_adj[u], v);
-            m_adj[u].erase(m_adj[u].cbegin() + lower_idx);
-        }
+        weight_t get_weight(vertex_t u) const override { return m_v_weights[u]; }
 
-        void add_edge_with_weight(vertex_t u, vertex_t v, weight_t weight = 1) {
-            size_t lower_idx = own_lower_bound_not_guaranteed(m_adj[u], v);
-            if (lower_idx != m_adj[u].size() && m_adj[u][lower_idx].v == v) {
-                m_adj[u][lower_idx].w += weight;
-            } else {
-                m_adj[u].insert(m_adj[u].begin() + lower_idx, {v, weight});
-            }
-        }
+        size_t size(vertex_t u) const override { return m_adj[u].size(); }
 
-        // uncoarsing
-        void add_edge_with_weight_guaranteed(vertex_t u, vertex_t v, weight_t weight = 1) {
-            size_t lower_idx = own_lower_bound_not_guaranteed(m_adj[u], v);
-            m_adj[u].insert(m_adj[u].begin() + lower_idx, {v, weight});
-        }
+        vertex_t neighbor(vertex_t u, size_t idx) const override { return m_adj[u][idx].v; }
 
-        void remove_edge_with_weight(vertex_t u, vertex_t v, weight_t weight = 1) {
-            size_t lower_idx = own_lower_bound_guaranteed(m_adj[u], v);
-            m_adj[u][lower_idx].w -= weight;
-            if (m_adj[u][lower_idx].w == 0) {
-                m_adj[u].erase(m_adj[u].begin() + lower_idx);
-            }
-        }
+        weight_t get_weight(vertex_t u, size_t idx) const override { return m_adj[u][idx].w; }
 
+        bool edge_exists(vertex_t u, vertex_t v) const override { return std::any_of(m_adj[u].begin(), m_adj[u].end(), [&](const EdgeVW &e) { return e.v == v; }); }
     };
 
 }

@@ -34,27 +34,34 @@
 #include <numeric>
 #include <random>
 
-#include "../../interfaces/IBoundaryVertexManager.h"
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
-#include "IParallelPartitionManager.h"
+#include "../parallel_definitions_1.h"
 
 namespace HeiProMap {
 
-    template<typename TParallelGraph, typename TParallelActiveVertexManager, typename TParallelPartitionManager>
-    class IParallelBoundaryVertexManager : public IBoundaryVertexManager {
-        static_assert(std::is_base_of<IParallelGraph, TParallelGraph>::value, "TParallelGraph must inherit from IParallelGraph");
-        static_assert(std::is_base_of<IParallelActiveVertexManager<TParallelGraph>, TParallelActiveVertexManager>::value, "TParallelActiveVertexManager must inherit from IParallelActiveVertexManager");
-        static_assert(std::is_base_of<IParallelPartitionManager<TParallelGraph, TParallelActiveVertexManager>, TParallelPartitionManager>::value, "TParallelActiveVertexManager must inherit from IParallelActiveVertexManager");
+    class IParallelBoundaryVertexManager {
     public:
-        // initialization
-        virtual void initialize(TParallelGraph *t_p_g,
-                                TParallelActiveVertexManager *t_p_av_manager,
-                                TParallelPartitionManager *t_p_p_manger,
-                                partition_t t_k,
-                                u64 n_threads) = 0;
+        virtual ~IParallelBoundaryVertexManager() = default;
 
-        virtual vertex_t get_vertex(size_t idx) const = 0;
+        virtual void initialize(vertex_t t_n, partition_t t_k) = 0;
+
+        virtual void move(p_graph_t &g, p_p_manager_t &p_manager, vertex_t u, partition_t old_id, partition_t new_id) = 0;
+
+        virtual void uncontract(const EdgeUV *matches,
+                                size_t &matches_size,
+                                p_graph_t &new_g, // the larger uncontracted graph
+                                p_graph_t &old_g, // the smaller not contracted graph
+                                p_av_manager_t &av_manager,
+                                p_p_manager_t &p_manager) = 0;
+
+        virtual size_t get_n_boundary() const = 0;
+        virtual size_t get_n_boundary(partition_t id) const = 0;
+
+        virtual vertex_t get(size_t i) const = 0;
+        virtual vertex_t get(partition_t id, size_t i) const = 0;
+
+        virtual bool is_boundary(vertex_t u) const = 0;
+
+        virtual void add(vertex_t u, partition_t id) = 0;
     };
 
 }

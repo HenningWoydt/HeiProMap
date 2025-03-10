@@ -27,21 +27,32 @@
 #ifndef HEIPROMAP_IPARALLELMATCHER_H
 #define HEIPROMAP_IPARALLELMATCHER_H
 
-#include "../../interfaces/IMatcher.h"
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
+#include "../../definitions.h"
+#include "../parallel_definitions_1.h"
 
 namespace HeiProMap {
 
-    template<typename TParallelGraph, typename TParallelActiveVertexManager>
-    class IParallelMatcher : IMatcher {
-        static_assert(std::is_base_of<IParallelGraph, TParallelGraph>::value, "TParallelGraph must inherit from IParallelGraph");
-        static_assert(std::is_base_of<IParallelActiveVertexManager<TParallelGraph>, TParallelActiveVertexManager>::value, "TParallelActiveVertexManager must inherit from IParallelActiveVertexManager");
+    class IParallelMatcherConfiguration {
     public:
-        // initialize
-        virtual void initialize(TParallelGraph *t_p_g,
-                                TParallelActiveVertexManager *t_p_av_manager,
-                                u64 n_threads) = 0;
+        virtual ~IParallelMatcherConfiguration() = default;
+    };
+
+    class IParallelMatcher {
+    public:
+        virtual ~IParallelMatcher() = default;
+
+        virtual void initialize(const vertex_t t_n,
+                                const vertex_t t_m,
+                                const partition_t t_k,
+                                const weight_t t_l_max,
+                                const u64 t_seed) = 0;
+
+        virtual void match(size_t level,
+                           IParallelMatcherConfiguration &config,
+                           p_graph_t &g,
+                           p_av_manager_t &av_manager,
+                           EdgeUV *matches,
+                           size_t &matches_size) = 0;
     };
 
 }

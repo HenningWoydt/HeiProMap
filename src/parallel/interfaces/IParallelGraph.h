@@ -34,14 +34,19 @@
 #include <numeric>
 #include <random>
 
-#include "../../interfaces/IGraph.h"
-
 namespace HeiProMap {
 
-    class IParallelGraph : public IGraph {
+    class IParallelGraph {
     public:
-        // initialization
-        virtual void initialize(const std::string &graph_in, u64 n_threads) = 0;
+        virtual ~IParallelGraph() = default;
+        virtual vertex_t get_n() const = 0;
+        virtual vertex_t get_m() const = 0;
+        virtual weight_t get_weight() const = 0;
+        virtual weight_t get_weight(vertex_t u) const = 0;
+        virtual size_t size(vertex_t u) const = 0;
+        virtual vertex_t neighbor(vertex_t u, size_t idx) const = 0;
+        virtual weight_t get_weight(vertex_t u, size_t idx) const = 0;
+        virtual bool edge_exists(vertex_t u, vertex_t v) const = 0;
     };
 
 }
