@@ -27,13 +27,17 @@
 #ifndef HEIPROMAP_JSON_UTILS_H
 #define HEIPROMAP_JSON_UTILS_H
 
+#include <map>
 #include <string>
 #include <vector>
 
-#include "../../definitions.h"
-
+#include "../definitions.h"
 
 namespace HeiProMap {
+    struct JSONString {
+        std::string s;
+    };
+
 #define to_JSON_MACRO(x) (std::string("\"") + (#x) + "\" : " + to_JSON_value(x) + ",\n")
 
     std::string to_JSON_value(u8 x);
@@ -58,6 +62,32 @@ namespace HeiProMap {
 
     std::string to_JSON_value(const std::string& s);
 
+    std::string to_JSON_value(const JSONString& s);
+
+    template <typename T1, typename T2>
+        std::string to_JSON_value(const std::map<T1, T2>& m) {
+        if (m.empty()) {
+            return "{}";
+        }
+        std::vector<T1> arg1;
+        std::vector<T2> arg2;
+        for (auto const& x : m) {
+            arg1.push_back(x.first);
+            arg2.push_back(x.second);
+        }
+
+        if (arg1.size() == 1) {
+            return "{" + to_JSON_value(arg1[0]) + " : " + to_JSON_value(arg2[0]) + "}";
+        }
+        std::string s = "{";
+        for (size_t i = 0; i < arg1.size() - 1; ++i) {
+            s += to_JSON_value(arg1[i]) + " : " + to_JSON_value(arg2[i]) + ", ";
+        }
+        s += to_JSON_value(arg1[arg1.size() - 1]) + " : " + to_JSON_value(arg2[arg1.size() - 1]) + "}";
+
+        return s;
+    }
+
     template <typename T>
     std::string to_JSON_value(const std::vector<T>& vec) {
         if (vec.empty()) {
@@ -72,6 +102,13 @@ namespace HeiProMap {
         }
         s += to_JSON_value(vec.back()) + "]";
 
+        return s;
+    }
+
+    template <typename T>
+    std::string to_JSON_value(const std::pair<T, T>& p) {
+        std::string s = to_JSON_value(p.first);
+        s += " : " + to_JSON_value(p.second);
         return s;
     }
 }

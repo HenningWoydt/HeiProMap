@@ -27,11 +27,10 @@
 #ifndef HEIPROMAP_IPARALLELMATCHER_H
 #define HEIPROMAP_IPARALLELMATCHER_H
 
-#include "../../definitions.h"
 #include "../parallel_definitions_1.h"
+#include "../../definitions.h"
 
 namespace HeiProMap {
-
     class IParallelMatcherConfiguration {
     public:
         virtual ~IParallelMatcherConfiguration() = default;
@@ -40,21 +39,9 @@ namespace HeiProMap {
     class IParallelMatcher {
     public:
         virtual ~IParallelMatcher() = default;
-
-        virtual void initialize(const vertex_t t_n,
-                                const vertex_t t_m,
-                                const partition_t t_k,
-                                const weight_t t_l_max,
-                                const u64 t_seed) = 0;
-
-        virtual void match(size_t level,
-                           IParallelMatcherConfiguration &config,
-                           p_graph_t &g,
-                           p_av_manager_t &av_manager,
-                           EdgeUV *matches,
-                           size_t &matches_size) = 0;
+        virtual void initialize(vertex_t t_n, vertex_t t_m, partition_t t_k, weight_t t_l_max, u64 t_seed) = 0;
+        virtual void match(size_t level, IParallelMatcherConfiguration& config, p_graph_t& g, p_av_manager_t& av_manager, EdgeUV* matches, size_t& matches_size) = 0;
     };
-
 }
 
 #endif //HEIPROMAP_IPARALLELMATCHER_H

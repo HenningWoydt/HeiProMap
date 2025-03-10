@@ -24,13 +24,14 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include <iostream>
 #include <chrono>
-#include <vector>
-#include <string>
 #include <cstring>
-#include "../src/parallel/utility/parallel_algorithm_configuration.h"
+#include <iostream>
+#include <string>
+#include <vector>
+
 #include "../src/parallel/datastructures/parallel_solver.h"
+#include "../src/parallel/utility/parallel_algorithm_configuration.h"
 
 using namespace HeiProMap;
 

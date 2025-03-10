@@ -31,30 +31,28 @@
 #include "test_utils.h"
 #include "../../src/serial/coarsening/heavy_edge_matcher.h"
 #include "../../src/serial/datastructures/active_vertex_manager.h"
-#include "../../src/serial/datastructures/graph_csr.h"
-#include "../../src/serial/datastructures/graph_csr_arrays.h"
-#include "../../src/serial/datastructures/simple_graph.h"
-#include "../../src/serial/datastructures/sorted_graph_csr.h"
+#include "../../src/serial/datastructures/graph.h"
 
 namespace HeiProMap {
-
-    void compare_coarsening(const std::string &graph_in){
+    /*
+    void compare_coarsening(const std::string& graph_in) {
         SimpleGraph g(graph_in);
         GraphCSR csr_g(graph_in);
         SortedGraphCSR sorted_csr_g(graph_in);
         GraphCSRArrays csr_arrays_g(graph_in);
+        StatisticCollector stat_collector;
 
         ActiveVertexManager av_manager;
         av_manager.initialize(g.get_n());
 
         HeavyEdgeMatcherConfiguration heavy_edge_matcher_configuration;
         HeavyEdgeMatcher he_matcher;
-        he_matcher.initialize(g.get_n(), g.get_m(), 0, std::numeric_limits<weight_t>::max(), 0);
+        he_matcher.initialize(g.get_n(), g.get_m(), 0, std::numeric_limits<weight_t>::max(), 0, heavy_edge_matcher_configuration, stat_collector);
 
-        size_t n_64 = round_up_64(g.get_n() / 2);
-        EdgeUV* matches = (EdgeUV*) aligned_alloc(64, n_64 * sizeof(EdgeUV));
+        size_t n_64         = round_up_64(g.get_n() / 2);
+        EdgeUV* matches     = (EdgeUV*)aligned_alloc(64, n_64 * sizeof(EdgeUV));
         size_t matches_size = 0;
-        he_matcher.match(heavy_edge_matcher_configuration, g, av_manager, matches, matches_size);
+        he_matcher.match(0, g, av_manager, matches, matches_size);
 
         auto sp_g = std::chrono::high_resolution_clock::now();
         SimpleGraph g1(g, matches, matches_size); // coarse the graph
@@ -72,8 +70,8 @@ namespace HeiProMap {
         GraphCSRArrays csr_arrays_g1(csr_arrays_g, matches, matches_size); // coarse the graph
         auto ep_csr_arrays_g = std::chrono::high_resolution_clock::now();
 
-        double t_g = get_seconds(sp_g, ep_g);
-        double t_csr_g = get_seconds(sp_csr_g, ep_csr_g);
+        double t_g            = get_seconds(sp_g, ep_g);
+        double t_csr_g        = get_seconds(sp_csr_g, ep_csr_g);
         double t_sorted_csr_g = get_seconds(sp_sorted_csr_g, ep_sorted_csr_g);
         double t_csr_arrays_g = get_seconds(sp_csr_arrays_g, ep_csr_arrays_g);
         std::cout << "coarsening " << graph_in << " : g = " << t_g << " csr_g = " << t_csr_g << " speedup = " << t_g / t_csr_g << " sorted_csr_g = " << t_sorted_csr_g << " speedup = " << t_g / t_sorted_csr_g << " csr_arrays_g = " << t_csr_arrays_g << " speedup = " << t_g / t_csr_arrays_g << std::endl;
@@ -225,4 +223,5 @@ namespace HeiProMap {
         const std::string graph_in = "../data/mapping/rgg_n26.graph";
         // compare_coarsening(graph_in);
     }
+    */
 }

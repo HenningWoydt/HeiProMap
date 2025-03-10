@@ -27,16 +27,13 @@
 #ifndef HEIPROMAP_PARALLEL_PARTITION_MANAGER_H
 #define HEIPROMAP_PARALLEL_PARTITION_MANAGER_H
 
-#include <atomic>
-
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../interfaces/IParallelPartitionManager.h"
 
 namespace HeiProMap {
 
-    class ParallelPartitionManager : public IParallelPartitionManager {
-    private:
+    class ParallelPartitionManager final : public IParallelPartitionManager {
         vertex_t    m_n  = 0;
         partition_t m_k  = 0;
         weight_t    lmax = 0;

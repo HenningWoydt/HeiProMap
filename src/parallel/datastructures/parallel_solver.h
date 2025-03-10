@@ -27,12 +27,15 @@
 #ifndef HEIPROMAP_PARALLEL_SOLVER_H
 #define HEIPROMAP_PARALLEL_SOLVER_H
 
-#include "parallel_boundary_vertex_manager.h"
-#include "parallel_partition_manager.h"
+#include <iomanip>
+
 #include "parallel_active_vertex_manager.h"
-#include "parallel_graph.h"
+#include "parallel_boundary_vertex_manager.h"
 #include "parallel_distance_oracle.h"
+#include "parallel_graph.h"
+#include "parallel_partition_manager.h"
 #include "parallel_quotient_graph.h"
+#include "../utility/parallel_algorithm_configuration.h"
 #include "../utility/parallel_assert_states.h"
 
 namespace HeiProMap {
@@ -40,16 +43,15 @@ namespace HeiProMap {
      * Solver for parallel Process Mapping.
      */
     class ParallelSolver {
-    private:
         ParallelAlgorithmConfiguration ac;
 
         std::vector<ParallelGraph> graphs;
 
-        ParallelActiveVertexManager   av_manager;
-        ParallelPartitionManager      p_manager;
+        ParallelActiveVertexManager av_manager;
+        ParallelPartitionManager p_manager;
         ParallelBoundaryVertexManager bv_manager;
-        ParallelQuotientGraph         q_graph;
-        ParallelDistanceOracle        d_oracle;
+        ParallelQuotientGraph q_graph;
+        ParallelDistanceOracle d_oracle;
 
         // balance
         weight_t lmax = 0;
@@ -58,16 +60,24 @@ namespace HeiProMap {
         u64 threads = 1;
 
         // matching
-        std::vector<EdgeUV *>    matches;
-        std::vector<size_t>      matches_size;
+        std::vector<EdgeUV*> matches;
+        std::vector<size_t> matches_size;
         ParallelHeavyEdgeMatcher parallel_he_matcher;
 
         // refinement
 
         // statistics
+        f64 time              = 0.0;
+        f64 time_graph_io     = 0.0;
+        f64 time_io           = 0.0;
+        f64 time_matching     = 0.0;
+        f64 time_coarsening   = 0.0;
+        f64 time_partition    = 0.0;
+        f64 time_uncoarsening = 0.0;
+        f64 time_refinement   = 0.0;
 
     public:
-        explicit ParallelSolver(ParallelAlgorithmConfiguration &t_ac) {
+        explicit ParallelSolver(const ParallelAlgorithmConfiguration& t_ac) {
             ac = t_ac;
 
             // threads
@@ -76,11 +86,12 @@ namespace HeiProMap {
             const auto sp_graph_io = std::chrono::high_resolution_clock::now();
             graphs.emplace_back(ac.graph_in, threads);
             const auto ep_graph_io = std::chrono::high_resolution_clock::now();
+            time_graph_io += get_seconds(sp_graph_io, ep_graph_io);
 
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
             // balance
-            lmax = ceil((1.0 + ac.imbalance) * ((f64) graphs[0].get_weight() / (f64) ac.k));
+            lmax = ceil((1.0 + ac.imbalance) * ((f64)graphs[0].get_weight() / (f64)ac.k));
 
             // manager
             av_manager.initialize(graphs[0].get_n());
@@ -98,13 +109,31 @@ namespace HeiProMap {
             // refinement
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
+            time_io += get_seconds(sp_io, ep_io);
         }
 
         std::vector<vertex_t> solve() {
+            const auto sp = std::chrono::high_resolution_clock::now();
+
             internal_solve();
 
             std::vector<partition_t> p(graphs.back().get_n());
-            for (vertex_t            u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
+            for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
+
+            const auto ep = std::chrono::high_resolution_clock::now();
+            time          = get_seconds(sp, ep);
+
+            std::cout << std::fixed << std::setprecision(4);
+
+            std::cout << "Total Time:        " << time << " (" << 100.0 * time / time << "%)\n";
+            std::cout << "Graph IO Time:     " << time_graph_io << " (" << 100.0 * time_graph_io / time << "%)\n";
+            std::cout << "IO Time:           " << time_io << " (" << 100.0 * time_io / time << "%)\n";
+            std::cout << "Matching Time:     " << time_matching << " (" << 100.0 * time_matching / time << "%)\n";
+            std::cout << "Coarsening Time:   " << time_coarsening << " (" << 100.0 * time_coarsening / time << "%)\n";
+            std::cout << "Partitioning Time: " << time_partition << " (" << 100.0 * time_partition / time << "%)\n";
+            std::cout << "Uncoarsening Time: " << time_uncoarsening << " (" << 100.0 * time_uncoarsening / time << "%)\n";
+            std::cout << "Refinement Time:   " << time_refinement << " (" << 100.0 * time_refinement / time << "%)\n";
+            std::cout << std::endl;
 
             return p;
         }
@@ -113,23 +142,18 @@ namespace HeiProMap {
         void internal_solve() {
             s32 level = 0;
 
-            std::cout << "level " << level << " size " << av_manager.get_n_active() << std::endl;
-
-            while (av_manager.get_n_active() > ac.k * 64) {
+            while (av_manager.size() > ac.k * 64) {
                 matching(level);
                 coarsening(level);
                 level += 1;
-                std::cout << "level " << level << " size " << av_manager.get_n_active() << std::endl;
             }
 
-            std::cout << "partition" << std::endl;
             partition();
 
             while (level > 0) {
                 level -= 1;
                 uncoarsening(level);
                 refinement(level);
-                std::cout << "level " << level << " size " << av_manager.get_n_active() << std::endl;
             }
         }
 
@@ -145,22 +169,24 @@ namespace HeiProMap {
             }
 
             // initialize boundary vertices and quotient graph
-            for (const vertex_t u: av_manager) {
-                for (size_t i = 0; i < graphs.back().size(u); ++i) {
-                    const vertex_t    v    = graphs.back().neighbor(u, i);
-                    const weight_t    w    = graphs.back().get_weight(u, i);
-                    const partition_t u_id = p_manager[u];
-                    const partition_t v_id = p_manager[v];
+            forall_av_iu(av_manager, j, u)
+                {
+                    for (size_t i = 0; i < graphs.back().size(u); ++i) {
+                        const vertex_t v       = graphs.back().neighbor(u, i);
+                        const weight_t w       = graphs.back().get_weight(u, i);
+                        const partition_t u_id = p_manager[u];
+                        const partition_t v_id = p_manager[v];
 
-                    if (u_id != v_id) {
-                        bv_manager.add(u, u_id); // boundary vertex
-                        q_graph.add_edge(u_id, v_id, w); // quotient graph
+                        if (u_id != v_id) {
+                            bv_manager.add(u, u_id); // boundary vertex
+                            q_graph.add_edge(u_id, v_id, w); // quotient graph
+                        }
                     }
                 }
-            }
+            endfor
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
-            std::cout << "Partitioning : " << get_seconds(sp_partition, ep_partition) << std::endl;
+            time_partition += get_seconds(sp_partition, ep_partition);
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), av_manager, p_manager, bv_manager, q_graph, ac.k, threads));
         }
@@ -168,8 +194,8 @@ namespace HeiProMap {
         void matching(s32 level) {
             const auto sp_match = std::chrono::high_resolution_clock::now();
 
-            size_t t_n_64       = round_up_64(av_manager.get_n_active() / 2);
-            EdgeUV *matches_arr = (EdgeUV *) aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
+            size_t t_n_64       = round_up_64(av_manager.size() / 2);
+            EdgeUV* matches_arr = (EdgeUV*)aligned_alloc(64, t_n_64 * sizeof(EdgeUV));
             matches.push_back(matches_arr);
             matches_size.push_back(0);
 
@@ -181,7 +207,7 @@ namespace HeiProMap {
             }
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
-            std::cout << "Matching : " << get_seconds(sp_match, ep_match) << std::endl;
+            time_matching += get_seconds(sp_match, ep_match);
         }
 
         void coarsening(s32 level) {
@@ -191,7 +217,7 @@ namespace HeiProMap {
             av_manager.contract(matches.back(), matches_size.back());
 
             const auto ep_coarse = std::chrono::high_resolution_clock::now();
-            std::cout << "Coarsening : " << get_seconds(sp_coarse, ep_coarse) << std::endl;
+            time_coarsening += get_seconds(sp_coarse, ep_coarse);
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), av_manager, threads));
         }
@@ -201,7 +227,7 @@ namespace HeiProMap {
 
             p_manager.uncontract(matches.back(), matches_size.back());
             av_manager.uncontract(matches.back(), matches_size.back());
-            bv_manager.uncontract(matches.back(), matches_size.back(), graphs[graphs.size() - 2], graphs[graphs.size() - 1], av_manager, p_manager);
+            bv_manager.uncontract(graphs[graphs.size() - 2], av_manager, p_manager);
             graphs.pop_back(); // this is doing uncontraction
 
             free(matches.back());
@@ -209,13 +235,16 @@ namespace HeiProMap {
             matches_size.pop_back();
 
             const auto ep_uncoarse = std::chrono::high_resolution_clock::now();
-            std::cout << "Uncoarsening : " << get_seconds(sp_uncoarse, ep_uncoarse) << std::endl;
-
+            time_uncoarsening += get_seconds(sp_uncoarse, ep_uncoarse);
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), av_manager, p_manager, bv_manager, q_graph, ac.k, threads));
         }
 
         void refinement(s32 level) {
+            const auto sp_refine = std::chrono::high_resolution_clock::now();
 
+            const auto ep_refine = std::chrono::high_resolution_clock::now();
+            time_refinement += get_seconds(sp_refine, ep_refine);
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), av_manager, p_manager, bv_manager, q_graph, ac.k, threads));
         }
     };
 }

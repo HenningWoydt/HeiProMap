@@ -29,9 +29,9 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../../commons/utils.h"
 #include "../datastructures/translation_table.h"
 #include "../interfaces/ISerialPartitioner.h"
-#include "../utility/utils.h"
 #include "interface/kaHIP_interface.h"
 
 namespace HeiProMap {
@@ -42,7 +42,7 @@ namespace HeiProMap {
         GLOBAL_MULTISECTION_FAST,
     };
 
-    inline GlobalMultisectionMode string_to_global_multisection_mode(const std::string &str) {
+    inline GlobalMultisectionMode string_to_global_multisection_mode(const std::string& str) {
         if (str == "UNDEFINED") return GLOBAL_MULTISECTION_UNDEFINED;
         if (str == "strong") return GLOBAL_MULTISECTION_STRONG;
         if (str == "eco") return GLOBAL_MULTISECTION_ECO;
@@ -52,42 +52,43 @@ namespace HeiProMap {
 
     inline std::string global_multisection_mode_to_string(GlobalMultisectionMode mode) {
         switch (mode) {
-            case GLOBAL_MULTISECTION_UNDEFINED:
-                return "UNDEFINED";
-            case GLOBAL_MULTISECTION_STRONG:
-                return "strong";
-            case GLOBAL_MULTISECTION_ECO:
-                return "eco";
-            case GLOBAL_MULTISECTION_FAST:
-                return "fast";
-            default:
-                return "UNDEFINED";
+        case GLOBAL_MULTISECTION_UNDEFINED:
+            return "UNDEFINED";
+        case GLOBAL_MULTISECTION_STRONG:
+            return "strong";
+        case GLOBAL_MULTISECTION_ECO:
+            return "eco";
+        case GLOBAL_MULTISECTION_FAST:
+            return "fast";
+        default:
+            return "UNDEFINED";
         }
     }
 
-    struct GlobalMultisectionConfiguration {
-        std::string            mode_string;
+    class GlobalMultisectionConfiguration final : public ISerialPartitionerConfiguration {
+    public:
+        std::string mode_string;
         GlobalMultisectionMode mode; // Which mode to use STRONG, ECO, FAST
     };
 
     struct Item {
         // variables needed for KaFFPa
-        int    n               = 0;
-        int    *vwgt           = nullptr;
-        int    *xadj           = nullptr;
-        int    *adjcwgt        = nullptr;
-        int    *adjncy         = nullptr;
-        int    nparts          = 0;
-        double imbalance       = 0;
-        bool   suppress_output = true;
-        int    seed            = 0;
-        int    mode            = 0;
-        int    edge_cut        = 0;
-        int    *part           = nullptr;
+        int n                = 0;
+        int* vwgt            = nullptr;
+        int* xadj            = nullptr;
+        int* adjcwgt         = nullptr;
+        int* adjncy          = nullptr;
+        int nparts           = 0;
+        double imbalance     = 0;
+        bool suppress_output = true;
+        int seed             = 0;
+        int mode             = 0;
+        int edge_cut         = 0;
+        int* part            = nullptr;
 
         // variables needed for multisection
-        int                      total_weight = 0;
-        TranslationTable<int>         tt;
+        int total_weight = 0;
+        TranslationTable<int> tt;
         std::vector<partition_t> identifier;
 
         ~Item() {
@@ -101,31 +102,27 @@ namespace HeiProMap {
 
     class GlobalMultisectionPartitioner final : public ISerialPartitioner {
     private:
-        std::vector<Item *> free_items;
-
-#if COLLECT_METRICS
-        f64 time_own    = 0.0;
-        f64 time_kaffpa = 0.0;
-#endif
-
+        std::vector<Item*> free_items;
 
     public:
         ~GlobalMultisectionPartitioner() override {
-            for (auto & item : free_items) {
+            for (auto& item : free_items) {
                 delete item;
             }
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-        void partition(const GlobalMultisectionConfiguration &config,
-                       TSerialGraph &g,
-                       TSerialActiveVertexManager &av_manager,
-                       TSerialPartitionManager &p_manager,
-                       const std::vector<partition_t> &hierarchy,
-                       [[maybe_unused]] const std::vector<weight_t> &distance,
+        void partition(const graph_t& g,
+                       const av_manager_t& av_manager,
+                       p_manager_t& p_manager,
+                       const std::vector<partition_t>& hierarchy,
+                       const std::vector<weight_t>& distance,
                        const f64 imbalance,
-                       const u64 seed) {
-            TIME_POINT(sp);
+                       RandomEngine& t_random_engine,
+                       const ISerialPartitionerConfiguration& i_config,
+                       StatisticCollector& t_stat_collect) override {
+            GlobalMultisectionConfiguration config = *dynamic_cast<const GlobalMultisectionConfiguration*>(&i_config);
+
+            // TIME_POINT(sp);
             int mode;
 
             if (config.mode == GLOBAL_MULTISECTION_STRONG) {
@@ -139,96 +136,102 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-            int n = (int) av_manager.get_n_active();
-            int m = (int) g.get_m();
-            int l = (int) hierarchy.size();
+            int n = (int)av_manager.size();
+            int m = (int)g.get_m();
+            int l = (int)hierarchy.size();
 
             std::vector<partition_t> index_vec = {1};
-            for (int                 i         = 0; i < l - 1; ++i) { index_vec.push_back(index_vec[i] * hierarchy[i]); }
+            for (int i = 0; i < l - 1; ++i) { index_vec.push_back(index_vec[i] * hierarchy[i]); }
 
             std::vector<partition_t> k_rem_vec(l);
-            u64                      p = 1;
+            u64 p = 1;
 
             for (int i = 0; i < l; ++i) {
                 k_rem_vec[i] = p * hierarchy[i];
                 p *= hierarchy[i];
             }
 
-            const f64         global_imbalance = imbalance;
-            const weight_t    global_g_weight  = g.get_weight();
-            const partition_t global_k         = prod<partition_t>(hierarchy);
+            const f64 global_imbalance     = imbalance;
+            const weight_t global_g_weight = g.get_weight();
+            const partition_t global_k     = prod<partition_t>(hierarchy);
 
             // create the first graph
-            Item *first_graph = get_available_item(n, m, l);
+            Item* first_graph = get_available_item(n, m, l);
             first_graph->tt.reserve(n, g.get_n());
 
             // initialize the translation table of the first graph
-            vertex_t      new_u = 0;
-            for (vertex_t old_u: av_manager) {
-                first_graph->tt.add(old_u, new_u);
-                new_u += 1;
-            }
+            vertex_t new_u = 0;
+            forall_av_iu(av_manager, i, old_u)
+                {
+                    first_graph->tt.add(old_u, new_u);
+                    new_u += 1;
+                }
+            endfor
 
             // write the graph
-            first_graph->n = (int) new_u;
-            first_graph->xadj[0] = 0;
+            first_graph->n            = (int)new_u;
+            first_graph->xadj[0]      = 0;
             first_graph->total_weight = 0;
-            for (vertex_t old_u: av_manager) {
-                new_u = first_graph->tt.get_n(old_u);
+            forall_av_iu(av_manager, i, old_u)
+                {
+                    new_u = first_graph->tt.get_n(old_u);
 
-                first_graph->vwgt[new_u] = (int) g.get_weight(old_u);
-                first_graph->total_weight += (int) g.get_weight(old_u);
-                first_graph->xadj[new_u + 1] = first_graph->xadj[new_u];
+                    first_graph->vwgt[new_u] = (int)g.get_weight(old_u);
+                    first_graph->total_weight += (int)g.get_weight(old_u);
+                    first_graph->xadj[new_u + 1] = first_graph->xadj[new_u];
 
-                for (const auto [old_v, w]: g[old_u]) {
-                    vertex_t new_v = first_graph->tt.get_n(old_v);
+                    forall_guivw(g, old_u, i, old_v, w)
+                        {
+                            vertex_t new_v = first_graph->tt.get_n(old_v);
 
-                    first_graph->adjcwgt[first_graph->xadj[new_u + 1]] = (int) w;
-                    first_graph->adjncy[first_graph->xadj[new_u + 1]]  = (int) new_v;
-                    first_graph->xadj[new_u + 1] += 1;
+                            first_graph->adjcwgt[first_graph->xadj[new_u + 1]] = (int)w;
+                            first_graph->adjncy[first_graph->xadj[new_u + 1]]  = (int)new_v;
+                            first_graph->xadj[new_u + 1] += 1;
+                        }
+                    endfor
                 }
-            }
+            endfor
 
             // fill in other information
-            first_graph->nparts          = (int) hierarchy.back();
+            first_graph->nparts          = (int)hierarchy.back();
             first_graph->imbalance       = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, first_graph->total_weight, k_rem_vec[l - 1], l);
             first_graph->suppress_output = true;
-            first_graph->seed            = (int) seed;
+            first_graph->seed            = t_random_engine.get_int();
             first_graph->mode            = mode;
 
             // initialize stack;
-            std::vector<Item *> stack = {first_graph};
+            std::vector<Item*> stack = {first_graph};
 
             // process the stack
             while (!stack.empty()) {
-                Item *item = stack.back(); // process first item
+                Item* item = stack.back(); // process first item
                 stack.pop_back(); // remove top item
 
-                TIME_POINT(sp_kaffpa);
+                // TIME_POINT(sp_kaffpa);
                 kaffpa(&item->n, item->vwgt, item->xadj, item->adjcwgt, item->adjncy, &item->nparts, &item->imbalance, item->suppress_output, item->seed, item->mode, &item->edge_cut, item->part);
-                TIME_POINT(ep_kaffpa);
+                // TIME_POINT(ep_kaffpa);
 #if COLLECT_METRICS
-                time_kaffpa += get_seconds(sp_kaffpa, ep_kaffpa);
+                // time_kaffpa += get_seconds(sp_kaffpa, ep_kaffpa);
 #endif
 
-                if ((int) item->identifier.size() == l - 1) {
+                if ((int)item->identifier.size() == l - 1) {
                     // insert solution
-                    u64           offset = 0;
-                    for (int      i      = 0; i < l - 1; ++i) { offset += item->identifier[i] * index_vec[index_vec.size() - 1 - i]; }
-                    for (vertex_t u      = 0; u < (vertex_t) item->n; ++u) { p_manager.set(item->tt.get_o(u), item->vwgt[u], offset + item->part[u]); }
+                    u64 offset = 0;
+                    for (int i = 0; i < l - 1; ++i) { offset += item->identifier[i] * index_vec[index_vec.size() - 1 - i]; }
+                    for (vertex_t u = 0; u < (vertex_t)item->n; ++u) { p_manager.set(item->tt.get_o(u), item->vwgt[u], offset + item->part[u]); }
                 } else {
                     // create the subgraphs and place them in the next stack
 
                     // collect the number of vertices and edges for each new subgraph
                     std::vector<int> new_n(item->nparts, 0);
-                    for (int         u = 0; u < item->n; ++u) {
+                    for (int u = 0; u < item->n; ++u) {
                         int p_id = item->part[u];
-                        new_n[item->part[u]] += 1; // increase number of vertices
+                        new_n[p_id] += 1; // increase number of vertices
                     }
 
                     // create the new subgraphs on the stack
                     for (int i = 0; i < item->nparts; ++i) {
-                        Item *new_item = get_available_item(n, m, l);
+                        Item* new_item       = get_available_item(n, m, l);
                         new_item->identifier = item->identifier;
                         new_item->identifier.push_back(i);
                         new_item->tt.reserve(new_n[i], g.get_n());
@@ -240,7 +243,7 @@ namespace HeiProMap {
 
                     for (int old_u = 0; old_u < item->n; ++old_u) {
                         int p_id = item->part[old_u];
-                        int idx  = (int) stack.size() - (item->nparts - p_id);
+                        int idx  = (int)stack.size() - (item->nparts - p_id);
 
                         stack[idx]->tt.add(item->tt.get_o(old_u), new_us[p_id]);
                         new_us[p_id] += 1;
@@ -248,15 +251,15 @@ namespace HeiProMap {
 
                     // finalize the translation tables
                     for (int i = 0; i < item->nparts; ++i) {
-                        stack[stack.size() - 1 - i]->n            = (int) new_n[new_n.size() - 1 - i];
+                        stack[stack.size() - 1 - i]->n            = (int)new_n[new_n.size() - 1 - i];
                         stack[stack.size() - 1 - i]->total_weight = 0;
-                        stack[stack.size() - 1 - i]->xadj[0] = 0;
+                        stack[stack.size() - 1 - i]->xadj[0]      = 0;
                     }
 
                     // create the graphs
                     for (int old_u = 0; old_u < item->n; ++old_u) {
                         int p_id = item->part[old_u];
-                        int idx  = (int) stack.size() - (item->nparts - p_id);
+                        int idx  = (int)stack.size() - (item->nparts - p_id);
 
                         int new_u = stack[idx]->tt.get_n(item->tt.get_o(old_u)); // vertex in new graph
 
@@ -282,25 +285,18 @@ namespace HeiProMap {
 
                     // fill in other information
                     for (int i = 0; i < item->nparts; ++i) {
-                        int idx = (int) stack.size() - 1 - i;
-                        stack[idx]->nparts          = (int) hierarchy[l - 1 - stack[idx]->identifier.size()];
+                        int idx                     = (int)stack.size() - 1 - i;
+                        stack[idx]->nparts          = (int)hierarchy[l - 1 - stack[idx]->identifier.size()];
                         stack[idx]->imbalance       = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, stack[idx]->total_weight, k_rem_vec[l - 1 - stack[idx]->identifier.size()], l - stack[idx]->identifier.size());
                         stack[idx]->suppress_output = true;
-                        stack[idx]->seed            = (int) seed;
+                        stack[idx]->seed            = t_random_engine.get_int();
                         stack[idx]->mode            = mode;
                     }
                 }
                 free_items.push_back(item);
             }
 
-            TIME_POINT(ep);
-#if COLLECT_METRICS
-            time_own = get_seconds(sp, ep) - time_kaffpa;
-            f64 time_total = time_own + time_kaffpa;
-            std::cout << "time own    : " << std::setprecision(4) << time_own << " - " << time_own / time_total << std::endl;
-            std::cout << "time kaffpa : " << std::setprecision(4) << time_kaffpa << " - " << time_kaffpa / time_total << std::endl;
-            std::cout << "time total  : " << std::setprecision(4) << time_total << " - " << time_total / time_total << std::endl;
-#endif
+
         }
 
         /**
@@ -311,24 +307,23 @@ namespace HeiProMap {
          * @param l
          * @return
          */
-        Item *get_available_item(int n, int m, int l) {
+        Item* get_available_item(int n, int m, int l) {
             if (free_items.empty()) {
                 int n_64 = round_up_64(n + 1);
                 int m_64 = round_up_64(m);
-                int l_64 = round_up_64(l);
 
                 // if no items are available, then create a new one
-                Item *new_item = new Item();
-                new_item->vwgt    = (int *) aligned_alloc(64, n_64 * sizeof(int));
-                new_item->xadj    = (int *) aligned_alloc(64, n_64 * sizeof(int));
-                new_item->adjcwgt = (int *) aligned_alloc(64, m_64 * sizeof(int));
-                new_item->adjncy  = (int *) aligned_alloc(64, m_64 * sizeof(int));
-                new_item->part    = (int *) aligned_alloc(64, n_64 * sizeof(int));
+                Item* new_item    = new Item();
+                new_item->vwgt    = (int*)aligned_alloc(64, n_64 * sizeof(int));
+                new_item->xadj    = (int*)aligned_alloc(64, n_64 * sizeof(int));
+                new_item->adjcwgt = (int*)aligned_alloc(64, m_64 * sizeof(int));
+                new_item->adjncy  = (int*)aligned_alloc(64, m_64 * sizeof(int));
+                new_item->part    = (int*)aligned_alloc(64, n_64 * sizeof(int));
 
                 return new_item;
             } else {
                 // if an item exists, then just use the last one
-                Item *last_item = free_items.back();
+                Item* last_item = free_items.back();
                 free_items.pop_back();
                 return last_item;
             }
@@ -340,8 +335,8 @@ namespace HeiProMap {
                                                 const u64 local_g_weight,
                                                 const u64 local_k_rem,
                                                 const u64 depth) {
-            f64 local_imbalance = (1.0 + global_imbalance) * ((f64) (local_k_rem * global_g_weight) / (f64) (global_k * local_g_weight));
-            local_imbalance = std::pow(local_imbalance, (f64) 1 / (f64) depth) - 1.0;
+            f64 local_imbalance = (1.0 + global_imbalance) * ((f64)(local_k_rem * global_g_weight) / (f64)(global_k * local_g_weight));
+            local_imbalance     = std::pow(local_imbalance, (f64)1 / (f64)depth) - 1.0;
             return local_imbalance;
         }
     };

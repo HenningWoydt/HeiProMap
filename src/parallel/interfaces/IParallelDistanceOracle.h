@@ -27,29 +27,17 @@
 #ifndef HEIPROMAP_IPARALLELDISTANCEORACLE_H
 #define HEIPROMAP_IPARALLELDISTANCEORACLE_H
 
-#include <string>
-#include <vector>
-#include <fstream>
 #include <regex>
-#include <numeric>
-#include <random>
-
+#include <vector>
 
 namespace HeiProMap {
-
     class IParallelDistanceOracle {
     public:
         virtual ~IParallelDistanceOracle() = default;
-
-        virtual void initialize(std::vector<partition_t> &t_hierarchy,
-                                std::vector<weight_t> &t_distance,
-                                u64 t_threads) = 0;
-
+        virtual void initialize(std::vector<partition_t>& t_hierarchy, std::vector<weight_t>& t_distance, u64 t_threads) = 0;
         virtual weight_t get(partition_t u_id, partition_t v_id) const = 0;
-
         virtual partition_t get_h(partition_t u_id, partition_t v_id) const = 0;
     };
-
 }
 
 #endif //HEIPROMAP_IPARALLELDISTANCEORACLE_H

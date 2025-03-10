@@ -29,7 +29,7 @@ endif()
 
 # Compiler Flags
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
+set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -fno-exceptions")
 # set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g3 -DNDEBUG -march=native -Wall -Wextra -pedantic")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g3 -DNDEBUG -fno-inline -fno-omit-frame-pointer -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
@@ -56,7 +56,7 @@ file(GLOB_RECURSE Test_HEADERS_SERIAL CONFIGURE_DEPENDS "tests/serial/*.h")
 file(GLOB_RECURSE Test_SOURCES_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.cpp")
 file(GLOB_RECURSE Test_HEADERS_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.h")
 
-add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_SERIAL} ${SOURCES_SERIAL})
+add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL})
 add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
 # add_executable(MtHeiProMapRefinement application/MtHeiProMapRefinement.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
 

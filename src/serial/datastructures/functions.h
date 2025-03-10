@@ -27,42 +27,19 @@
 #ifndef HEIPROMAP_FUNCTIONS_H
 #define HEIPROMAP_FUNCTIONS_H
 
-#include <type_traits>
-
+#include "../serial_definitions_1.h"
+#include "../serial_definitions_2.h"
 #include "../../definitions.h"
-#include "../interfaces/ISerialGraph.h"
-#include "../interfaces/ISerialPartitionManager.h"
 
 namespace HeiProMap {
-    template <typename TSerialGraph, typename TSerialPartitionManager>
-    bool is_boundary(TSerialGraph& g, TSerialPartitionManager& p_manager, vertex_t u) {
-        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
-        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
+    bool is_boundary(const graph_t& g,
+                     const p_manager_t& p_manager,
+                     const vertex_t u);
 
-        partition_t u_id = p_manager[u];
-
-        for (const auto [v, w] : g[u]) {
-            partition_t v_id = p_manager[v];
-            if (u_id != v_id) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    template <typename TSerialGraph, typename TSerialPartitionManager>
-    bool is_connected_to(TSerialGraph& g, TSerialPartitionManager& p_manager, vertex_t u, partition_t id) {
-        static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
-        static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
-
-        for (const auto [v, w] : g[u]) {
-            partition_t v_id = p_manager[v];
-            if (id == v_id) {
-                return true;
-            }
-        }
-        return false;
-    }
+    bool is_connected_to(const graph_t& g,
+                         const p_manager_t& p_manager,
+                         const vertex_t u,
+                         const partition_t id);
 }
 
 #endif //HEIPROMAP_FUNCTIONS_H

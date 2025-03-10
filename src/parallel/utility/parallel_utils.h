@@ -27,18 +27,17 @@
 #ifndef HEIPROMAP_PARALLEL_UTILS_H
 #define HEIPROMAP_PARALLEL_UTILS_H
 
-#include <string>
-#include <vector>
-#include <cmath>
+#include <cstring>
+#include <fcntl.h>
 #include <iostream>
+#include <omp.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <omp.h>
 
 #include "../../definitions.h"
+#include "../../macros.h"
+#include "../../commons/utils.h"
 
 namespace HeiProMap {
 

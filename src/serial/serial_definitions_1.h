@@ -24,26 +24,26 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ISERIALPARTITIONMANAGER_H
-#define HEIPROMAP_ISERIALPARTITIONMANAGER_H
+#ifndef HEIPROMAP_SERIAL_DEFINITIONS_1_H
+#define HEIPROMAP_SERIAL_DEFINITIONS_1_H
 
-#include <vector>
-
-#include "../../definitions.h"
+#include "datastructures/active_vertex_manager.h"
+#include "datastructures/distance_oracle.h"
+#include "datastructures/graph.h"
 
 namespace HeiProMap {
-    class ISerialPartitionManager {
-    public:
-        virtual ~ISerialPartitionManager() = default;
-        virtual void initialize(const vertex_t n, const partition_t k, const weight_t t_lmax) = 0;
-        virtual const partition_t& operator[](const vertex_t u) const = 0;
-        virtual void set(const vertex_t u, const weight_t w, const partition_t id) = 0;
-        virtual void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) = 0;
-        virtual weight_t get_bweight(const partition_t id) const = 0;
-        virtual std::vector<weight_t> get_bweights() const = 0;
-        virtual void uncontract(const EdgeUV* matches, const size_t& matches_size) = 0;
-        virtual bool is_overloaded() = 0;
-    };
+    typedef Graph graph_t;
+    typedef ActiveVertexManager av_manager_t;
+    typedef DistanceOracle d_oracle_t;
+
+    // Macro to iterate over the neighborhood of vertex u of a graph
+#define forall_guivw(g, u, i, v, w)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.get_weight(u, i);
+#define forall_guiv(g, u, i, v)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i);
+
+    // Macro to iterate over all active vertices
+#define forall_av_iu(av_manager, i, u)  for (size_t i = 0; i < av_manager.size(); ++i) { const vertex_t u = av_manager.get(i);
+
+#define endfor }
 }
 
-#endif //HEIPROMAP_ISERIALPARTITIONMANAGER_H
+#endif //HEIPROMAP_SERIAL_DEFINITIONS_1_H

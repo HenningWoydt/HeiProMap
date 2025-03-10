@@ -27,20 +27,28 @@
 #ifndef HEIPROMAP_ISERIALPARTITIONER_H
 #define HEIPROMAP_ISERIALPARTITIONER_H
 
-#include <vector>
+#include "../serial_definitions_1.h"
+#include "../../definitions.h"
 
 namespace HeiProMap {
+    class ISerialPartitionerConfiguration {
+    public:
+        virtual ~ISerialPartitionerConfiguration() = default;
+    };
+
     class ISerialPartitioner {
     public:
         virtual ~ISerialPartitioner() = default;
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-        void partition(TSerialGraph &g,
-                       TSerialActiveVertexManager &av_manager,
-                       TSerialPartitionManager &p_manager,
-                       const std::vector<partition_t> &hierarchy,
-                       const std::vector<weight_t> &distance,
-                       f64 t_imbalance) {}
+        virtual void partition(const graph_t& g,
+                               const av_manager_t& av_manager,
+                               p_manager_t& p_manager,
+                               const std::vector<partition_t>& hierarchy,
+                               const std::vector<weight_t>& distance,
+                               const f64 imbalance,
+                               RandomEngine& t_random_engine,
+                               const ISerialPartitionerConfiguration& i_config,
+                               StatisticCollector& t_stat_collect) = 0;
     };
 }
 

@@ -24,17 +24,18 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_PARALLEL_BOUNDARY_VERTEX_MANAGER_H
-#define HEIPROMAP_PARALLEL_BOUNDARY_VERTEX_MANAGER_H
+#ifndef HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
+#define HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
 
-#include <atomic>
-
+#include "distance_oracle.h"
+#include "../serial_definitions_1.h"
+#include "../serial_definitions_2.h"
 #include "../../definitions.h"
 #include "../../macros.h"
-#include "../interfaces/IParallelBoundaryVertexManager.h"
+#include "../interfaces/ISerialBoundaryVertexManager.h"
 
 namespace HeiProMap {
-    class ParallelBoundaryVertexManager final : public IParallelBoundaryVertexManager {
+    class BoundaryVertexManager final : public ISerialBoundaryVertexManager {
         vertex_t m_n    = 0;
         partition_t m_k = 0;
 
@@ -50,7 +51,7 @@ namespace HeiProMap {
         size_t m_complete_boundary_size        = 0;
 
     public:
-        ~ParallelBoundaryVertexManager() override {
+        ~BoundaryVertexManager() override {
             free(m_n_boundary_edges);
             free(m_vertex_idx);
             free(m_complete_boundary);
@@ -106,8 +107,8 @@ namespace HeiProMap {
             m_n_boundary_edges[u] += 1;
         }
 
-        void move(const p_graph_t& g,
-                  const p_p_manager_t& p_manager,
+        void move(const graph_t& g,
+                  const p_manager_t& p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) override {
@@ -155,9 +156,9 @@ namespace HeiProMap {
             if (!u_was_boundary && m_n_boundary_edges[u] > 0) { emplace_in_complete(u); }
         }
 
-        void uncontract(const p_graph_t& new_g,
-                        const p_av_manager_t& av_manager,
-                        const p_p_manager_t& p_manager) override {
+        void uncontract(const graph_t& new_g,
+                        const av_manager_t& av_manager,
+                        const p_manager_t& p_manager) override {
             // compute all from scratch
             std::fill_n(m_n_boundary_edges, m_n, 0);
             std::fill_n(m_boundaries_size, m_k, 0);
@@ -224,4 +225,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_PARALLEL_BOUNDARY_VERTEX_MANAGER_H
+#endif //HEIPROMAP_BOUNDARY_VERTEX_MANGER_H

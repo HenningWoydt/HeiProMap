@@ -27,105 +27,88 @@
 #ifndef HEIPROMAP_ACTIVE_VERTEX_MANAGER_H
 #define HEIPROMAP_ACTIVE_VERTEX_MANAGER_H
 
+#include <algorithm>
 #include <numeric>
+#include <vector>
 
 #include "../../definitions.h"
+#include "../../macros.h"
+#include "../../commons/utils.h"
 #include "../interfaces/ISerialActiveVertexManager.h"
 
 namespace HeiProMap {
     class ActiveVertexManager final : public ISerialActiveVertexManager {
-        // active states
-        std::vector<u8>       m_states;
-        std::vector<vertex_t> m_vertices;
-        vertex_t              m_n_active = 0;
+        u8* m_states           = nullptr;
+        vertex_t* m_vertices   = nullptr;
+        size_t m_vertices_size = 0;
+        vertex_t m_n_active    = 0;
+
+        vertex_t* m_vertices_temp = nullptr;
+        std::vector<size_t> temp_points;
 
     public:
-        // initialize
-        void initialize(const size_t n) override {
-            m_states.resize(n, 1);
-            m_vertices.resize(n);
-            std::iota(m_vertices.begin(), m_vertices.end(), 0);
-            m_n_active = n;
+        ActiveVertexManager() = default;
+
+        ~ActiveVertexManager() override {
+            free(m_states);
+            free(m_vertices);
+            free(m_vertices_temp);
         }
 
-        // active vertex manipulation
-        vertex_t get_n_active() const override { return m_n_active; }
+        void initialize(const size_t t_n) override {
+            const size_t t_n_64 = round_up_64(t_n);
 
+            m_states = (u8*)aligned_alloc(64, t_n_64 * sizeof(u8));
+            std::fill_n(m_states, t_n, (u8)1);
+
+            m_vertices      = (vertex_t*)aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            m_vertices_size = t_n;
+            std::iota(m_vertices, m_vertices + t_n, 0);
+
+            m_n_active = t_n;
+
+            m_vertices_temp = (vertex_t*)aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            temp_points.push_back(t_n);
+        }
+
+        size_t size() const override { return m_n_active; }
+        vertex_t get(const size_t i) const override { return m_vertices[i]; }
         bool is_active(const vertex_t u) const override { return m_states[u] == 1; }
-
         bool is_disabled(const vertex_t u) const override { return m_states[u] == 0; }
-
         bool get_state(const vertex_t u) const override { return m_states[u]; }
 
-        void contract(const EdgeUV *matches, size_t &matches_size) override {
+        void contract(const EdgeUV* matches, const size_t& matches_size) override {
             matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
+            size_t temp_idx = 0;
             m_n_active -= matches_size;
             for (size_t i = 0; i < matches_size; ++i) { m_states[matches[i].v] = 0; }
+
+            size_t write_idx = 0;
+            for (size_t read_idx = 0; read_idx < m_vertices_size; ++read_idx) {
+                if (!is_disabled(m_vertices[read_idx])) {
+                    m_vertices[write_idx] = m_vertices[read_idx];
+                    ++write_idx;
+                } else {
+                    m_vertices_temp[temp_idx] = m_vertices[read_idx];
+                    ++temp_idx;
+                }
+            }
+            m_vertices_size = write_idx;
+
+            std::copy_n(m_vertices_temp, temp_idx, m_vertices + write_idx);
+            temp_points.push_back(write_idx);
         }
 
-        void uncontract(const EdgeUV *matches, size_t &matches_size) override {
+        void uncontract(const EdgeUV* matches, const size_t& matches_size) override {
             matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
             m_n_active += matches_size;
-            for (size_t i = 0; i < matches_size; ++i) {
-                vertex_t v = matches[i].v;
-                m_states[v] = 1;
-                m_vertices.push_back(v);
-            }
+            m_vertices_size = temp_points[temp_points.size() - 2];
+            for (size_t i = 0; i < matches_size; ++i) { m_states[matches[i].v] = 1; }
+            std::inplace_merge(m_vertices, m_vertices + temp_points[temp_points.size() - 1], m_vertices + temp_points[temp_points.size() - 2]); // merge
+            temp_points.pop_back();
         }
-
-        class Iterator {
-            std::vector<vertex_t> &m_vertices;
-            std::vector<u8>       &m_states;
-            size_t                m_idx = 0;
-
-        public:
-            // Constructor
-            Iterator(std::vector<vertex_t> &vertices,
-                     std::vector<u8> &states) : m_vertices(vertices), m_states(states) {
-                // Skip disabled vertices during initialization
-                advance_to_next_valid();
-            }
-
-            // Dereference operator
-            vertex_t operator*() const {
-                return m_vertices[m_idx];
-            }
-
-            // Pre-increment operator
-            Iterator &operator++() {
-                // Remove the current inactive vertex from the vector
-                if (!m_states[m_vertices[m_idx]]) {
-                    m_vertices[m_idx] = m_vertices.back();
-                    m_vertices.pop_back();
-                } else {
-                    ++m_idx;
-                }
-
-                // Advance to the next valid vertex
-                advance_to_next_valid();
-                return *this;
-            }
-
-            bool operator!=(const Iterator &other) const {
-                return m_idx != other.m_vertices.size();
-            }
-
-        private:
-            // Helper to advance the iterator to the next active vertex
-            void advance_to_next_valid() const {
-                while (m_idx < m_vertices.size() && !m_states[m_vertices[m_idx]]) {
-                    // Pop inactive vertices out of the container
-                    m_vertices[m_idx] = m_vertices.back();
-                    m_vertices.pop_back();
-                }
-            }
-        };
-
-        Iterator begin() { return {m_vertices, m_states}; }
-
-        Iterator end() { return {m_vertices, m_states}; }
     };
 }
 

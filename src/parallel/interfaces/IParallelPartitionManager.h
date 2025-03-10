@@ -27,19 +27,9 @@
 #ifndef HEIPROMAP_IPARALLELPARTITIONMANAGER_H
 #define HEIPROMAP_IPARALLELPARTITIONMANAGER_H
 
-#include <string>
 #include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
 
 #include "../../definitions.h"
-#include "../../macros.h"
-#include "../../serial/utility/utils.h"
-
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
 
 namespace HeiProMap {
 

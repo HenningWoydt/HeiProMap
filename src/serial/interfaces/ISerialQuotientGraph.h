@@ -27,20 +27,20 @@
 #ifndef HEIPROMAP_ISERIALQUOTIENTGRAPH_H
 #define HEIPROMAP_ISERIALQUOTIENTGRAPH_H
 
+#include "../serial_definitions_1.h"
+#include "../serial_definitions_2.h"
 #include "../../definitions.h"
 
 namespace HeiProMap {
     class ISerialQuotientGraph {
     public:
         virtual ~ISerialQuotientGraph() = default;
-        virtual void initialize(partition_t k) = 0;
-        virtual void add_edge(partition_t u, partition_t v, weight_t w) = 0;
-        virtual void remove_edge(partition_t u, partition_t v, weight_t w)  = 0;
-        virtual bool has_edge(partition_t u, partition_t v) = 0;
-        virtual weight_t get_weight(partition_t u, partition_t v) = 0;
-
-        template<typename TSerialGraph, typename TSerialPartitionManager>
-        void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {}
+        virtual void initialize(const partition_t k) = 0;
+        virtual void add_edge(const partition_t u, const partition_t v, const weight_t w) = 0;
+        virtual void remove_edge(const partition_t u, const partition_t v, const weight_t w) = 0;
+        virtual bool has_edge(const partition_t u, const partition_t v) = 0;
+        virtual weight_t get_weight(const partition_t u, const partition_t v) = 0;
+        virtual void move(const graph_t& g, const p_manager_t& p_manager, const vertex_t u, const partition_t old_id, const partition_t new_id) = 0;
     };
 }
 

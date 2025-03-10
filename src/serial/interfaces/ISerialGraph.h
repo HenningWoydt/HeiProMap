@@ -27,6 +27,8 @@
 #ifndef HEIPROMAP_ISERIALGRAPH_H
 #define HEIPROMAP_ISERIALGRAPH_H
 
+#include "../../definitions.h"
+
 namespace HeiProMap {
     class ISerialGraph {
     public:
@@ -34,11 +36,11 @@ namespace HeiProMap {
         virtual vertex_t get_n() const = 0;
         virtual vertex_t get_m() const = 0;
         virtual weight_t get_weight() const = 0;
-        virtual weight_t get_weight(vertex_t u) const = 0;
-        virtual size_t size(vertex_t u) const = 0;
-        virtual vertex_t neighbor(vertex_t u, size_t idx) const = 0;
-        virtual weight_t get_weight(vertex_t u, size_t idx) const = 0;
-        virtual bool edge_exists(vertex_t u, vertex_t v) const = 0;
+        virtual weight_t get_weight(const vertex_t u) const = 0;
+        virtual size_t size(const vertex_t u) const = 0;
+        virtual vertex_t neighbor(const vertex_t u, size_t idx) const = 0;
+        virtual weight_t get_weight(const vertex_t u, size_t idx) const = 0;
+        virtual bool edge_exists(const vertex_t u, const vertex_t v) const = 0;
     };
 }
 

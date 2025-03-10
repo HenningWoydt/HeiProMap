@@ -70,13 +70,18 @@ namespace HeiProMap {
         const partition_t& operator[](const vertex_t u) const override { return partition[u]; }
 
         // write
-        void set(const vertex_t u, const weight_t w, const partition_t id) override {
+        void set(const vertex_t u,
+                 const weight_t w,
+                 const partition_t id) override {
             bweights[id] += w;
             partition[u] = id;
             n_nodes[id] += 1;
         }
 
-        void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) override {
+        void move(const vertex_t u,
+                  const weight_t w,
+                  const partition_t old_id,
+                  const partition_t new_id) override {
             bweights[old_id] -= w;
             bweights[new_id] += w;
             partition[u] = new_id;
@@ -95,7 +100,8 @@ namespace HeiProMap {
             return weights;
         }
 
-        void uncontract(const EdgeUV* matches, size_t& matches_size) override {
+        void uncontract(const EdgeUV* matches,
+                        const size_t& matches_size) override {
             matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
             for (size_t i = 0; i < matches_size; ++i) {

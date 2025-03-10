@@ -27,18 +27,17 @@
 #ifndef HEIPROMAP_PARALLEL_GRAPH_H
 #define HEIPROMAP_PARALLEL_GRAPH_H
 
+#include <cstring>
+#include <fcntl.h>
 #include <iostream>
+#include <omp.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
 
-#include <omp.h>
-#include <cstring>
-
-#include "../interfaces/IParallelGraph.h"
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../interfaces/IParallelGraph.h"
 
 namespace HeiProMap {
 

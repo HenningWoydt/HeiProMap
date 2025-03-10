@@ -27,11 +27,6 @@
 #ifndef HEIPROMAP_TRANSLATION_TABLE_H
 #define HEIPROMAP_TRANSLATION_TABLE_H
 
-#include <unordered_map>
-
-#include "../definitions.h"
-#include "../macros.h"
-
 namespace HeiProMap {
     template<typename T>
     class TranslationTable {

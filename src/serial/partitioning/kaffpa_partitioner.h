@@ -90,7 +90,8 @@ namespace HeiProMap {
         }
     }
 
-    struct KaffpaPartitionerConfiguration {
+    class KaffpaPartitionerConfiguration final : public ISerialPartitionerConfiguration {
+    public:
         std::string mode_string;
         KaffpaPartitionerMode mode; // Which mode to use: strong, eco, fast
         std::string method_string;
@@ -99,32 +100,36 @@ namespace HeiProMap {
 
     class KaffpaPartitioner final : public ISerialPartitioner {
     public:
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialPartitionManager>
-        void partition(KaffpaPartitionerConfiguration& config,
-                       u64 seed,
-                       TSerialGraph& g,
-                       TSerialActiveVertexManager& av_manager,
-                       TSerialPartitionManager& p_manager,
+        void partition(const graph_t& g,
+                       const av_manager_t& av_manager,
+                       p_manager_t& p_manager,
                        const std::vector<partition_t>& hierarchy,
                        const std::vector<weight_t>& distance,
-                       const f64 imbalance) {
+                       const f64 imbalance,
+                       RandomEngine& t_random_engine,
+                       const ISerialPartitionerConfiguration& i_config,
+                       StatisticCollector& t_stat_collect) override {
+            KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration*>(&i_config);
+
             // number of vertices and edges
             int n = 0;
             int m = 0;
 
             // build translation table
             TranslationTable<int> tt;
-            tt.reserve(av_manager.get_n_active(), g.get_n());
+            tt.reserve(av_manager.size(), g.get_n());
             vertex_t translate = 0;
-            for (vertex_t u : av_manager) {
-                ASSERT(av_manager.is_active(u));
+            forall_av_iu(av_manager, i, u)
+                {
+                    ASSERT(av_manager.is_active(u));
 
-                tt.add(u, translate);
-                translate += 1;
+                    tt.add(u, translate);
+                    translate += 1;
 
-                n += 1;
-                m += (int)g.size(u);
-            }
+                    n += 1;
+                    m += (int)g.size(u);
+                }
+            endfor
 
             // vertex weights
             int* v_weights = (int*)malloc(n * sizeof(int));
@@ -193,7 +198,7 @@ namespace HeiProMap {
             // write_graph(n, m/2, v_weights, adj_ptr, e_weights, adj, file_path);
 
             // execute kaffpa
-            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int)hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, (int) seed, &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
+            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int)hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, t_random_engine.get_int(), &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
 
             // first read partition
             for (int new_u = 0; new_u < n; ++new_u) {
@@ -209,14 +214,14 @@ namespace HeiProMap {
             free(kaffpa_partition);
         }
 
-        void write_graph(int n, int m, int* vwgt, int* xadj, int* adjwgt, int*adjncy, std::string &file_path){
+        void write_graph(int n, int m, int* vwgt, int* xadj, int* adjwgt, int* adjncy, std::string& file_path) {
             std::ofstream file(file_path);
 
             file << n << " " << m << " 011" << std::endl;
-            for(int i = 0; i < n; ++i){
+            for (int i = 0; i < n; ++i) {
                 file << vwgt[i] << " ";
-                for(int j = xadj[i]; j < xadj[i+1]; ++j){
-                    file << adjncy[j]+1 << " " << adjwgt[j] << " ";
+                for (int j = xadj[i]; j < xadj[i + 1]; ++j) {
+                    file << adjncy[j] + 1 << " " << adjwgt[j] << " ";
                 }
                 file << std::endl;
             }

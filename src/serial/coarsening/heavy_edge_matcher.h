@@ -31,10 +31,14 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../../commons/JSON_utils.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    struct HeavyEdgeMatcherConfiguration {
+    class HeavyEdgeMatcherConfiguration final : public ISerialMatcherConfiguration {
+    public:
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
@@ -43,6 +47,10 @@ namespace HeiProMap {
         vertex_t m_m     = 0;
         partition_t m_k  = 0;
         weight_t m_l_max = 0;
+
+        const HeavyEdgeMatcherConfiguration* config = nullptr;
+        RandomEngine* random_engine                 = nullptr;
+        StatisticCollector* m_stat_collector        = nullptr;
 
         u32 mark = 0;
         std::vector<u32> used;
@@ -54,83 +62,93 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_l_max,
-                        const u64 t_seed) override {
+                        RandomEngine& t_random_engine,
+                        const ISerialMatcherConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
             m_l_max = t_l_max;
 
+            config           = dynamic_cast<const HeavyEdgeMatcherConfiguration*>(&i_config);
+            random_engine    = &t_random_engine;
+            m_stat_collector = &t_stat_collect;
+
             mark = 0;
             used.resize(m_n, mark);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(size_t level,
-                   HeavyEdgeMatcherConfiguration& config,
-                   TSerialGraph& g,
-                   TSerialActiveVertexManager& av_manager,
+        void match(const size_t level,
+                   const graph_t& g,
+                   const av_manager_t& av_manager,
                    EdgeUV* matches,
-                   size_t& matches_size) {
+                   size_t& matches_size) override {
             matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
             matches_size = 0;
 
             mark += 1;
 
-            if (config.match_pendant_vertices_first) {
+            if (config->match_pendant_vertices_first) {
                 // first check vertices with degree 1
-                for (vertex_t u : av_manager) {
-                    ASSERT(av_manager.is_active(u));
+                forall_av_iu(av_manager, i, u)
+                    {
+                        ASSERT(av_manager.is_active(u));
 
-                    if (used[u] == mark) { continue; }
-                    if (g.size(u) != 1) { continue; }
+                        if (used[u] == mark) { continue; }
+                        if (g.size(u) != 1) { continue; }
 
-                    vertex_t v = g.neighbor(u, 0);
+                        vertex_t v = g.neighbor(u, 0);
 
-                    if (used[v] == mark) { continue; }
+                        if (used[v] == mark) { continue; }
 
-                    weight_t u_w = g.get_weight(u);
-                    weight_t v_w = g.get_weight(v);
+                        weight_t u_w = g.get_weight(u);
+                        weight_t v_w = g.get_weight(v);
 
-                    if (u_w + v_w > m_l_max) { continue; }
+                        if (u_w + v_w > m_l_max) { continue; }
 
-                    matches[matches_size++] = {v, u}; // pull u into v
-                }
+                        matches[matches_size++] = {v, u}; // pull u into v
+                    }
+                endfor
             }
 
             // check all other vertices
-            for (vertex_t u : av_manager) {
-                ASSERT(av_manager.is_active(u));
+            forall_av_iu(av_manager, i, u)
+                {
+                    ASSERT(av_manager.is_active(u));
 
-                if (used[u] == mark) { continue; }
+                    if (used[u] == mark) { continue; }
 
-                weight_t u_w        = g.get_weight(u);
-                vertex_t best_v     = u;
-                weight_t max_weight = 0;
+                    weight_t u_w        = g.get_weight(u);
+                    vertex_t best_v     = u;
+                    weight_t max_weight = 0;
 
-                for (auto const& [v, w] : g[u]) {
-                    if (used[v] == mark) { continue; }
+                    forall_guivw(g, u, j, v, w)
+                        {
+                            if (used[v] == mark) { continue; }
 
-                    weight_t v_w = g.get_weight(v);
+                            weight_t v_w = g.get_weight(v);
 
-                    if (u_w + v_w > m_l_max) { continue; }
+                            if (u_w + v_w > m_l_max) { continue; }
 
-                    if (w > max_weight) {
-                        best_v     = v;
-                        max_weight = w;
+                            if (w > max_weight) {
+                                best_v     = v;
+                                max_weight = w;
+                            }
+                        }
+                    endfor
+
+                    if (best_v != u) {
+                        used[u]      = mark;
+                        used[best_v] = mark;
+
+                        if (g.size(u) > g.size(best_v)) {
+                            matches[matches_size++] = {u, best_v};
+                        } else {
+                            matches[matches_size++] = {best_v, u};
+                        }
                     }
                 }
-
-                if (best_v != u) {
-                    used[u]      = mark;
-                    used[best_v] = mark;
-
-                    if (g.size(u) > g.size(best_v)) {
-                        matches[matches_size++] = {u, best_v};
-                    } else {
-                        matches[matches_size++] = {best_v, u};
-                    }
-                }
-            }
+            endfor
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matches_size; ++i) {

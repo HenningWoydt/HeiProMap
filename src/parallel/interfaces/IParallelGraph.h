@@ -27,13 +27,6 @@
 #ifndef HEIPROMAP_IPARALLELGRAPH_H
 #define HEIPROMAP_IPARALLELGRAPH_H
 
-#include <string>
-#include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
-
 namespace HeiProMap {
 
     class IParallelGraph {

@@ -27,35 +27,36 @@
 #ifndef HEIPROMAP_ASSERT_STATE_H
 #define HEIPROMAP_ASSERT_STATE_H
 
-#include "utils.h"
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../../commons/utils.h"
+#include "../../parallel/parallel_definitions_1.h"
 
 namespace HeiProMap {
-    template <typename TGraph, typename TActiveVertexManager>
-    bool assert_n_active_vertices(TGraph& g,
-                                  TActiveVertexManager& av_manager) {
+    bool assert_n_active_vertices(graph_t& g,
+                                  av_manager_t& av_manager) {
         vertex_t count = 0;
         for (vertex_t u = 0; u < g.get_n(); ++u) {
             count += av_manager.is_active(u);
         }
 
-        ASSERT(count == av_manager.get_n_active());
-        return count == av_manager.get_n_active();
+        ASSERT(count == av_manager.size());
+        return count == av_manager.size();
     }
 
-    template <typename TGraph, typename TActiveVertexManager>
-    bool assert_correct_vertices_active(TGraph& g,
-                                        TActiveVertexManager& av_manager) {
+    bool assert_correct_vertices_active(graph_t& g,
+                                        av_manager_t& av_manager) {
         std::vector<vertex_t> manual;
         for (vertex_t u = 0; u < g.get_n(); ++u) {
             if (av_manager.is_active(u)) { manual.push_back(u); }
         }
 
         std::vector<vertex_t> automatic;
-        for (vertex_t v : av_manager) {
-            automatic.push_back(v);
-        }
+        forall_av_iu(av_manager, i, v)
+            {
+                automatic.push_back(v);
+            }
+        endfor
 
         std::sort(manual.begin(), manual.end());
         std::sort(automatic.begin(), automatic.end());
@@ -66,58 +67,62 @@ namespace HeiProMap {
         return manual == automatic;
     }
 
-    template <typename TGraph, typename TActiveVertexManager>
-    bool assert_active_edges(TGraph& g,
-                             TActiveVertexManager& av_manager) {
-        for (vertex_t u : av_manager) {
-            for (size_t i = 0; i < g.size(u); ++i) {
-                const vertex_t v = g.neighbor(u, i);
-                ASSERT(av_manager.is_active(v));
-            }
-        }
-
-        return true;
-    }
-
-    template <typename TGraph, typename TActiveVertexManager>
-    bool assert_no_self_loops(TGraph& g,
-                              TActiveVertexManager& av_manager) {
-        for (vertex_t u : av_manager) {
-            for (size_t i = 0; i < g.size(u); ++i) {
-                for (size_t j = i + 1; j < g.size(u); ++j) {
-                    ASSERT(g.neighbor(u, i) != g.neighbor(u, j));
+    bool assert_active_edges(graph_t& g,
+                             av_manager_t& av_manager) {
+        forall_av_iu(av_manager, j, u)
+            {
+                for (size_t i = 0; i < g.size(u); ++i) {
+                    const vertex_t v = g.neighbor(u, i);
+                    ASSERT(av_manager.is_active(v));
                 }
             }
-        }
+        endfor
+
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager>
-    bool assert_no_double_edges(TGraph& g,
-                                TActiveVertexManager& av_manager) {
-        std::vector<vertex_t> manual;
-        for (vertex_t u : av_manager) {
-            manual.clear();
-            for (size_t i = 0; i < g.size(u); ++i) {
-                manual.push_back(g.neighbor(u, i));
+    bool assert_no_self_loops(graph_t& g,
+                              av_manager_t& av_manager) {
+        forall_av_iu(av_manager, k, u)
+            {
+                for (size_t i = 0; i < g.size(u); ++i) {
+                    for (size_t j = i + 1; j < g.size(u); ++j) {
+                        ASSERT(g.neighbor(u, i) != g.neighbor(u, j));
+                    }
+                }
             }
-            std::sort(manual.begin(), manual.end());
-            ASSERT(no_duplicates_sorted(manual));
-        }
+        endfor
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager>
-    bool assert_bweights(TGraph& g,
-                         TActiveVertexManager& av_manager,
-                         TPartitionManager& p_manager,
+    bool assert_no_double_edges(graph_t& g,
+                                av_manager_t& av_manager) {
+        std::vector<vertex_t> manual;
+        forall_av_iu(av_manager, j, u)
+            {
+                manual.clear();
+                for (size_t i = 0; i < g.size(u); ++i) {
+                    manual.push_back(g.neighbor(u, i));
+                }
+                std::sort(manual.begin(), manual.end());
+                ASSERT(no_duplicates_sorted(manual));
+            }
+        endfor
+        return true;
+    }
+
+    bool assert_bweights(graph_t& g,
+                         av_manager_t& av_manager,
+                         p_manager_t& p_manager,
                          partition_t k) {
         std::vector<weight_t> weights(k, 0);
-        for (vertex_t u : av_manager) {
-            partition_t u_id = p_manager[u];
+        forall_av_iu(av_manager, i, u)
+            {
+                partition_t u_id = p_manager[u];
 
-            weights[u_id] += g.get_weight(u);
-        }
+                weights[u_id] += g.get_weight(u);
+            }
+        endfor
 
         for (partition_t id = 0; id < k; ++id) {
             ASSERT(weights[id] == p_manager.get_bweight(id));
@@ -126,51 +131,55 @@ namespace HeiProMap {
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TBoundaryVertexManager>
-    bool assert_n_boundary_vertices(TGraph& g,
-                                    TActiveVertexManager& av_manager,
-                                    TPartitionManager& p_manager,
-                                    TBoundaryVertexManager& bv_manager) {
+    bool assert_n_boundary_vertices(graph_t& g,
+                                    av_manager_t& av_manager,
+                                    p_manager_t& p_manager,
+                                    bv_manager_t& bv_manager) {
         vertex_t count = 0;
-        for (vertex_t u : av_manager) {
-            partition_t u_id = p_manager[u];
+        forall_av_iu(av_manager, j, u)
+            {
+                partition_t u_id = p_manager[u];
 
-            for (size_t i = 0; i < g.size(u); ++i) {
-                partition_t v_id = p_manager[g.neighbor(u, i)];
+                for (size_t i = 0; i < g.size(u); ++i) {
+                    partition_t v_id = p_manager[g.neighbor(u, i)];
 
-                if (u_id != v_id) {
-                    count += 1;
-                    break;
+                    if (u_id != v_id) {
+                        count += 1;
+                        break;
+                    }
                 }
             }
-        }
+        endfor
 
-        ASSERT(count == bv_manager.get_n_boundary());
-        return count == bv_manager.get_n_boundary();
+        ASSERT(count == bv_manager.size());
+        return count == bv_manager.size();
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TBoundaryVertexManager>
-    bool assert_correct_vertices_boundary(TGraph& g,
-                                          TActiveVertexManager& av_manager,
-                                          TPartitionManager& p_manager,
-                                          TBoundaryVertexManager& bv_manager) {
+    bool assert_correct_vertices_boundary(graph_t& g,
+                                          av_manager_t& av_manager,
+                                          p_manager_t& p_manager,
+                                          bv_manager_t& bv_manager) {
         std::vector<vertex_t> manual;
-        for (vertex_t u : av_manager) {
-            partition_t u_id = p_manager[u];
+        forall_av_iu(av_manager, j, u)
+            {
+                partition_t u_id = p_manager[u];
 
-            for (size_t i = 0; i < g.size(u); ++i) {
-                partition_t v_id = p_manager[g.neighbor(u, i)];
-                if (u_id != v_id) {
-                    manual.push_back(u);
-                    break;
+                for (size_t i = 0; i < g.size(u); ++i) {
+                    partition_t v_id = p_manager[g.neighbor(u, i)];
+                    if (u_id != v_id) {
+                        manual.push_back(u);
+                        break;
+                    }
                 }
             }
-        }
+        endfor
 
         std::vector<vertex_t> automatic;
-        for (vertex_t u : bv_manager) {
-            automatic.push_back(u);
-        }
+        forall_bv_iu(bv_manager, i, u)
+            {
+                automatic.push_back(u);
+            }
+        endfor
 
         std::sort(manual.begin(), manual.end());
         std::sort(automatic.begin(), automatic.end());
@@ -181,32 +190,35 @@ namespace HeiProMap {
         return manual == automatic;
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TBoundaryVertexManager>
-    bool assert_correct_vertices_boundary_per_block(TGraph& g,
-                                                    TActiveVertexManager& av_manager,
-                                                    TPartitionManager& p_manager,
-                                                    TBoundaryVertexManager& bv_manager,
+    bool assert_correct_vertices_boundary_per_block(graph_t& g,
+                                                    av_manager_t& av_manager,
+                                                    p_manager_t& p_manager,
+                                                    bv_manager_t& bv_manager,
                                                     partition_t k) {
         for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> manual;
 
-            for (vertex_t u : av_manager) {
-                partition_t u_id = p_manager[u];
-                if (u_id == id) {
-                    for (size_t i = 0; i < g.size(u); ++i) {
-                        partition_t v_id = p_manager[g.neighbor(u, i)];
-                        if (u_id != v_id) {
-                            manual.push_back(u);
-                            break;
+            forall_av_iu(av_manager, j, u)
+                {
+                    partition_t u_id = p_manager[u];
+                    if (u_id == id) {
+                        for (size_t i = 0; i < g.size(u); ++i) {
+                            partition_t v_id = p_manager[g.neighbor(u, i)];
+                            if (u_id != v_id) {
+                                manual.push_back(u);
+                                break;
+                            }
                         }
                     }
                 }
-            }
+            endfor
 
             std::vector<vertex_t> automatic;
-            for (vertex_t u : bv_manager[id]) {
-                automatic.push_back(u);
-            }
+            forall_bv_id_iu(bv_manager, id, i, u)
+                {
+                    automatic.push_back(u);
+                }
+            endfor
 
             std::sort(manual.begin(), manual.end());
             std::sort(automatic.begin(), automatic.end());
@@ -218,23 +230,26 @@ namespace HeiProMap {
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TQuotientGraph>
-    bool assert_correct_quotient_graph([[maybe_unused]] TGraph& g,
-                                       [[maybe_unused]] TActiveVertexManager& av_manager,
-                                       [[maybe_unused]] TPartitionManager& p_manager,
-                                       [[maybe_unused]] TQuotientGraph& q_graph,
-                                       [[maybe_unused]] partition_t k) {
+    bool assert_correct_quotient_graph(graph_t& g,
+                                       av_manager_t& av_manager,
+                                       p_manager_t& p_manager,
+                                       q_graph_t& q_graph,
+                                       partition_t k) {
         std::vector<weight_t> manual(k * k, 0);
 
-        for (vertex_t u : av_manager) {
-            partition_t u_id = p_manager[u];
-            for (const auto& [v, w] : g[u]) {
-                partition_t v_id = p_manager[v];
+        forall_av_iu(av_manager, j, u)
+            {
+                partition_t u_id = p_manager[u];
+                forall_guivw(g, u, i, v, w)
+                    {
+                        partition_t v_id = p_manager[v];
 
-                manual[u_id * k + v_id] += w;
-                manual[v_id * k + u_id] += w;
+                        manual[u_id * k + v_id] += w;
+                        manual[v_id * k + u_id] += w;
+                    }
+                endfor
             }
-        }
+        endfor
 
         for (partition_t id_1 = 0; id_1 < k; ++id_1) {
             for (partition_t id_2 = id_1 + 1; id_2 < k; ++id_2) {
@@ -244,9 +259,8 @@ namespace HeiProMap {
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager>
-    bool assert_state_pre_partitioning([[maybe_unused]] TGraph& g,
-                                       [[maybe_unused]] TActiveVertexManager& av_manager) {
+    bool assert_state_pre_partitioning(graph_t& g,
+                                       av_manager_t& av_manager) {
         // check the right number of vertices active
         ASSERT(assert_n_active_vertices(g, av_manager));
 
@@ -265,13 +279,12 @@ namespace HeiProMap {
         return true;
     }
 
-    template <typename TGraph, typename TActiveVertexManager, typename TPartitionManager, typename TBoundaryVertexManager, typename TQuotientGraph>
-    bool assert_state_after_partitioning([[maybe_unused]] TGraph& g,
-                                         [[maybe_unused]] TActiveVertexManager& av_manager,
-                                         [[maybe_unused]] TPartitionManager& p_manager,
-                                         [[maybe_unused]] TBoundaryVertexManager& bv_manager,
-                                         [[maybe_unused]] TQuotientGraph& q_graph,
-                                         [[maybe_unused]] partition_t k) {
+    bool assert_state_after_partitioning(graph_t& g,
+                                         av_manager_t& av_manager,
+                                         p_manager_t& p_manager,
+                                         bv_manager_t& bv_manager,
+                                         q_graph_t& q_graph,
+                                         partition_t k) {
         // check the right number of vertices active
         ASSERT(assert_n_active_vertices(g, av_manager));
 

@@ -25,3 +25,36 @@
  ******************************************************************************/
 
 #include "functions.h"
+
+namespace HeiProMap {
+    bool is_boundary(const graph_t& g,
+                     const p_manager_t& p_manager,
+                     const vertex_t u) {
+        partition_t u_id = p_manager[u];
+
+        forall_guiv(g, u, i, v)
+            {
+                partition_t v_id = p_manager[v];
+                if (u_id != v_id) {
+                    return true;
+                }
+            }
+        endfor
+        return false;
+    }
+
+    bool is_connected_to(const graph_t& g,
+                         const p_manager_t& p_manager,
+                         const vertex_t u,
+                         const partition_t id) {
+        forall_guiv(g, u, i, v)
+            {
+                partition_t v_id = p_manager[v];
+                if (id == v_id) {
+                    return true;
+                }
+            }
+        endfor
+        return false;
+    }
+}

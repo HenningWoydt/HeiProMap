@@ -27,12 +27,10 @@
 #ifndef HEIPROMAP_PARALLEL_DEFINITIONS_2_H
 #define HEIPROMAP_PARALLEL_DEFINITIONS_2_H
 
-#include "datastructures/parallel_boundary_vertex_manager.h"
-#include "datastructures/parallel_quotient_graph.h"
+#include "datastructures/parallel_partition_manager.h"
 
 namespace HeiProMap {
-    typedef ParallelBoundaryVertexManager p_bv_manager_t;
-    typedef ParallelQuotientGraph         p_q_graph_t;
+    typedef ParallelPartitionManager p_p_manager_t;
 }
 
 #endif //HEIPROMAP_PARALLEL_DEFINITIONS_2_H

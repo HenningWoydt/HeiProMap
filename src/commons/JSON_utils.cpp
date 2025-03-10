@@ -24,26 +24,30 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ISERIALPARTITIONMANAGER_H
-#define HEIPROMAP_ISERIALPARTITIONMANAGER_H
-
-#include <vector>
-
-#include "../../definitions.h"
+#include "JSON_utils.h"
 
 namespace HeiProMap {
-    class ISerialPartitionManager {
-    public:
-        virtual ~ISerialPartitionManager() = default;
-        virtual void initialize(const vertex_t n, const partition_t k, const weight_t t_lmax) = 0;
-        virtual const partition_t& operator[](const vertex_t u) const = 0;
-        virtual void set(const vertex_t u, const weight_t w, const partition_t id) = 0;
-        virtual void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) = 0;
-        virtual weight_t get_bweight(const partition_t id) const = 0;
-        virtual std::vector<weight_t> get_bweights() const = 0;
-        virtual void uncontract(const EdgeUV* matches, const size_t& matches_size) = 0;
-        virtual bool is_overloaded() = 0;
-    };
-}
+    std::string to_JSON_value(const u8 x) { return std::to_string(x); }
 
-#endif //HEIPROMAP_ISERIALPARTITIONMANAGER_H
+    std::string to_JSON_value(const u16 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const u32 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const u64 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const s8 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const s16 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const s32 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const s64 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const f32 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const f64 x) { return std::to_string(x); }
+
+    std::string to_JSON_value(const std::string& s) { return "\"" + s + "\""; }
+
+    std::string to_JSON_value(const JSONString& s) { return s.s; }
+}

@@ -27,27 +27,19 @@
 #ifndef HEIPROMAP_IPARALLELQUOTIENTGRAPH_H
 #define HEIPROMAP_IPARALLELQUOTIENTGRAPH_H
 
+#include "../parallel_definitions_1.h"
 
 namespace HeiProMap {
-
     class IParallelQuotientGraph {
     public:
         virtual ~IParallelQuotientGraph() = default;
-
         virtual void initialize(partition_t k) = 0;
-
         virtual void add_edge(partition_t u, partition_t v, weight_t w) = 0;
-
         virtual void remove_edge(partition_t u, partition_t v, weight_t w) = 0;
-
         virtual bool has_edge(partition_t u, partition_t v) = 0;
-
         virtual weight_t get_weight(partition_t u, partition_t v) = 0;
-
-        template<typename TSerialGraph, typename TSerialPartitionManager>
-        void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {}
+        virtual void move(p_graph_t& g, p_p_manager_t& p_manager, vertex_t u, partition_t old_id, partition_t new_id) = 0;
     };
-
 }
 
 #endif //HEIPROMAP_IPARALLELQUOTIENTGRAPH_H

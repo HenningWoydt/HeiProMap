@@ -27,66 +27,62 @@
 #ifndef HEIPROMAP_PARALLEL_ACTIVE_VERTEX_MANAGER_H
 #define HEIPROMAP_PARALLEL_ACTIVE_VERTEX_MANAGER_H
 
+#include <algorithm>
+#include <numeric>
+
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../../commons/utils.h"
 #include "../interfaces/IParallelActiveVertexManager.h"
 
 namespace HeiProMap {
+    class ParallelActiveVertexManager final : public IParallelActiveVertexManager {
+        u8* m_states           = nullptr;
+        vertex_t* m_vertices   = nullptr;
+        size_t m_vertices_size = 0;
+        vertex_t m_n_active    = 0;
 
-    class ParallelActiveVertexManager : public IParallelActiveVertexManager {
-        u8       *m_states       = nullptr;
-        vertex_t *m_vertices     = nullptr;
-        size_t   m_vertices_size = 0;
-        vertex_t m_n_active      = 0;
-
-        vertex_t            *m_vertices_temp = nullptr;
+        vertex_t* m_vertices_temp = nullptr;
         std::vector<size_t> temp_points;
 
     public:
-        ParallelActiveVertexManager() = default;
-
         ~ParallelActiveVertexManager() override {
             free(m_states);
             free(m_vertices);
-
             free(m_vertices_temp);
         }
 
-        // initialize
         void initialize(const size_t t_n) override {
-            size_t t_n_64 = round_up_64(t_n);
+            const size_t t_n_64 = round_up_64(t_n);
 
-            m_states = (u8 *) aligned_alloc(64, t_n_64 * sizeof(u8));
-            std::fill(m_states, m_states + t_n, (u8) 1);
+            m_states = (u8*)aligned_alloc(64, t_n_64 * sizeof(u8));
+            std::fill_n(m_states, t_n, (u8)1);
 
-            m_vertices      = (vertex_t *) aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            m_vertices      = (vertex_t*)aligned_alloc(64, t_n_64 * sizeof(vertex_t));
             m_vertices_size = t_n;
             std::iota(m_vertices, m_vertices + t_n, 0);
 
             m_n_active = t_n;
 
-            m_vertices_temp = (vertex_t *) aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            m_vertices_temp = (vertex_t*)aligned_alloc(64, t_n_64 * sizeof(vertex_t));
             temp_points.push_back(t_n);
         }
 
-        // active vertex manipulation
-        vertex_t get_n_active() const override { return m_n_active; }
-
+        size_t size() const override { return m_n_active; }
+        vertex_t get(const size_t i) const override { return m_vertices[i]; }
         bool is_active(const vertex_t u) const override { return m_states[u] == 1; }
-
         bool is_disabled(const vertex_t u) const override { return m_states[u] == 0; }
-
         bool get_state(const vertex_t u) const override { return m_states[u]; }
 
-        void contract(const EdgeUV *matches, size_t &matches_size) override {
+        void contract(const EdgeUV* matches, const size_t& matches_size) override {
             matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
             size_t temp_idx = 0;
             m_n_active -= matches_size;
             for (size_t i = 0; i < matches_size; ++i) { m_states[matches[i].v] = 0; }
 
-            size_t      write_idx = 0;
-            for (size_t read_idx  = 0; read_idx < m_vertices_size; ++read_idx) {
+            size_t write_idx = 0;
+            for (size_t read_idx = 0; read_idx < m_vertices_size; ++read_idx) {
                 if (!is_disabled(m_vertices[read_idx])) {
                     m_vertices[write_idx] = m_vertices[read_idx];
                     ++write_idx;
@@ -97,12 +93,12 @@ namespace HeiProMap {
             }
             m_vertices_size = write_idx;
 
-            std::copy(m_vertices_temp, m_vertices_temp + temp_idx, m_vertices + write_idx);
+            std::copy_n(m_vertices_temp, temp_idx, m_vertices + write_idx);
             temp_points.push_back(write_idx);
         }
 
-        void uncontract(const EdgeUV *matches, size_t &matches_size) override {
-            matches         = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+        void uncontract(const EdgeUV* matches, const size_t& matches_size) override {
+            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
 
             m_n_active += matches_size;
             m_vertices_size = temp_points[temp_points.size() - 2];
@@ -110,35 +106,6 @@ namespace HeiProMap {
             std::inplace_merge(m_vertices, m_vertices + temp_points[temp_points.size() - 1], m_vertices + temp_points[temp_points.size() - 2]); // merge
             temp_points.pop_back();
         }
-
-        class Iterator {
-            vertex_t *m_vertices = nullptr;
-            size_t   m_idx;
-
-        public:
-            // Constructor
-            explicit Iterator(vertex_t *vertices, size_t idx) {
-                m_vertices = ASSUME_ALIGNED(vertex_t *, vertices, 64);
-                m_idx      = idx;
-            }
-
-            // Dereference operator
-            vertex_t operator*() const {
-                return m_vertices[m_idx];
-            }
-
-            // Pre-increment operator
-            Iterator &operator++() {
-                m_idx++;
-                return *this;
-            }
-
-            bool operator!=(const Iterator &other) const { return m_idx != other.m_idx; }
-        };
-
-        Iterator begin() { return Iterator(m_vertices, 0); }
-
-        Iterator end() { return Iterator(m_vertices, m_vertices_size); }
     };
 }
 

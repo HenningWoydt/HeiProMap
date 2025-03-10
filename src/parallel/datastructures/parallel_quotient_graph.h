@@ -27,13 +27,11 @@
 #ifndef HEIPROMAP_PARALLEL_QUOTIENT_GRAPH_H
 #define HEIPROMAP_PARALLEL_QUOTIENT_GRAPH_H
 
-
-#include "../interfaces/IParallelQuotientGraph.h"
 #include "../parallel_definitions_1.h"
+#include "../interfaces/IParallelQuotientGraph.h"
 
 namespace HeiProMap {
-    class ParallelQuotientGraph : public IParallelQuotientGraph {
-    private:
+    class ParallelQuotientGraph final : public IParallelQuotientGraph {
         partition_t k = 0;
 
         std::vector<weight_t> m_adj_mtx;

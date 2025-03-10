@@ -32,11 +32,11 @@
 
 namespace HeiProMap {
 #ifndef ASSERT_ENABLED
-#define ASSERT_ENABLED true
+#define ASSERT_ENABLED false
 #endif
 
 #ifndef HEAVYASSERT_ENABLED
-#define HEAVYASSERT_ENABLED true
+#define HEAVYASSERT_ENABLED false
 #endif
 
 #if (ASSERT_ENABLED)
@@ -53,19 +53,6 @@ namespace HeiProMap {
 #else
 #define HEAVYASSERT(condition) ((void)0)
 #endif
-
-#ifndef COLLECT_METRICS
-#define COLLECT_METRICS false
-#endif
-
-#if (COLLECT_METRICS)
-#define TIME_POINT(x) auto x = std::chrono::high_resolution_clock::now()
-#define INCREASE_COUNTER(x) x += 1
-#else
-#define TIME_POINT(x) ((void)0)
-#define INCREASE_COUNTER(x) ((void)0)
-#endif
-
 
 #ifdef __GNUC__  // (GCC or Clang)
 #define ASSUME_ALIGNED(dtype, ptr, alignment) (dtype) __builtin_assume_aligned((ptr), (alignment))

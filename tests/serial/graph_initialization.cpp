@@ -30,13 +30,10 @@
 #include <gtest/gtest.h>
 
 #include "test_utils.h"
-#include "../../src/serial/datastructures/graph_csr.h"
-#include "../../src/serial/datastructures/graph_csr_arrays.h"
-#include "../../src/serial/datastructures/simple_graph.h"
-#include "../../src/serial/datastructures/sorted_graph_csr.h"
+#include "../../src/serial/datastructures/graph.h"
 
 namespace HeiProMap {
-
+    /*
     void compare_initialization(const std::string &graph_in){
         auto sp_g = std::chrono::high_resolution_clock::now();
         SimpleGraph simple_graph(graph_in);
@@ -51,7 +48,7 @@ namespace HeiProMap {
         auto ep_sorted_csr_g = std::chrono::high_resolution_clock::now();
 
         auto sp_csr_arrays_g = std::chrono::high_resolution_clock::now();
-        GraphCSRArrays csr_arrays_g(graph_in);
+        Graph csr_arrays_g(graph_in);
         auto ep_csr_arrays_g = std::chrono::high_resolution_clock::now();
 
         double t_g = get_seconds(sp_g, ep_g);
@@ -204,5 +201,6 @@ namespace HeiProMap {
         const std::string graph_in = "../data/mapping/rgg_n26.graph";
         compare_initialization(graph_in);
     }
+    */
 }
 

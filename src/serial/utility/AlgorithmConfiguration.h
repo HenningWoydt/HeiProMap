@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-#include "utils.h"
+#include "../../commons/utils.h"
 #include "../../definitions.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
@@ -145,10 +145,10 @@ namespace HeiProMap {
                 {"--seed", "", "Seed for diversifying results.", "", "", false},
 
                 /** Coarsening */
-                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, global-paths}.", "random-or-global-paths", "", false},
+                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, global-paths}.", "global-paths", "", false},
 
                 // Coarsening global-path
-                {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if random-or-global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
+                {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
 
                 // Coarsening greedy matching
                 {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
@@ -706,20 +706,12 @@ namespace HeiProMap {
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
-            // disable all Faraj20 refinements
-            do_refinement_label_propagation_faraj20 = false;
-            do_refinement_quotient_graph_faraj20    = false;
-            do_refinement_k_way_fm_faraj20          = false;
-            do_refinement_multi_try_fm_faraj20      = false;
-
-            do_refinement_quotient_graph                = false;
-            do_refinement_k_way_fm_faraj20              = false;
-            do_refinement_multi_try_fm_faraj20          = false;
-            do_refinement_hierarchy_aware_cycles_enable = false;
-
             // enable label propagation
             do_refinement_label_propagation        = true;
             label_propagation_config.max_iteration = 25;
+
+            do_refinement_two_vertex_label_propagation_enable = false;
+            two_vertex_label_propagation_config.max_iteration = 1;
         }
 
         void set_eco() {
@@ -743,15 +735,6 @@ namespace HeiProMap {
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // disable all Faraj20 refinements
-            do_refinement_label_propagation_faraj20 = false;
-            do_refinement_quotient_graph_faraj20    = false;
-            do_refinement_k_way_fm_faraj20          = false;
-            do_refinement_multi_try_fm_faraj20      = false;
-
-            // disable multi-try fm
-            do_refinement_multi_try_fm = false;
 
             // enable label propagation
             do_refinement_label_propagation        = true;
@@ -792,23 +775,20 @@ namespace HeiProMap {
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
-            // disable all Faraj20 refinements
-            do_refinement_label_propagation_faraj20 = false;
-            do_refinement_quotient_graph_faraj20    = false;
-            do_refinement_k_way_fm_faraj20          = false;
-            do_refinement_multi_try_fm_faraj20      = false;
-
             // enable label propagation
-            do_refinement_label_propagation        = true;
+            do_refinement_label_propagation        = false;
             label_propagation_config.max_iteration = 25;
 
+            do_refinement_two_vertex_label_propagation_enable = false;
+            two_vertex_label_propagation_config.max_iteration = 1;
+
             // enable quotient graph refinement
-            do_refinement_quotient_graph                           = true;
+            do_refinement_quotient_graph                           = false;
             quotient_graph_refinement_config.max_iteration         = std::numeric_limits<u64>::max();
             quotient_graph_refinement_config.max_moves_without_max = 10;
 
             // enable k-way fm
-            do_refinement_k_way_fm = true;
+            do_refinement_k_way_fm = false;
 
             // enable multi-try fm
             do_refinement_multi_try_fm = true;
@@ -827,12 +807,6 @@ namespace HeiProMap {
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "eco";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
-
-            // disable all Faraj20 refinements
-            do_refinement_label_propagation_faraj20 = false;
-            do_refinement_quotient_graph_faraj20    = false;
-            do_refinement_k_way_fm_faraj20          = false;
-            do_refinement_multi_try_fm_faraj20      = false;
 
             // disable multi-try fm
             do_refinement_multi_try_fm = false;

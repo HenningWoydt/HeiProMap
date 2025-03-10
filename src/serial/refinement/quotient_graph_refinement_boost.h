@@ -28,32 +28,27 @@
 #define HEIPROMAP_QUOTIENT_GRAPH_REFINEMENT_BOOST_H
 
 #include <boost/heap/binomial_heap.hpp>
-#include <boost/heap/fibonacci_heap.hpp>
-#include <boost/heap/priority_queue.hpp>
 #include <boost/heap/d_ary_heap.hpp>
+#include <boost/heap/fibonacci_heap.hpp>
 #include <boost/heap/pairing_heap.hpp>
+#include <boost/heap/priority_queue.hpp>
 
 #include "quotient_graph_refinement.h"
 #include "quotient_graph_refinement_Faraj20.h"
-#include "../datastructures/indexed_max_heap.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
-#include "../interfaces/ISerialQuotientGraph.h"
+#include "../../commons/utils.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
-#include "../utility/utils.h"
 
 namespace HeiProMap {
-
     class QuotientGraphRefinementBoost final : public ISerialRefiner {
     private:
-        vertex_t                 m_n    = 0;
-        vertex_t                 m_m    = 0;
-        partition_t              m_k    = 0;
-        weight_t                 m_lmax = 0;
+        vertex_t m_n    = 0;
+        vertex_t m_m    = 0;
+        partition_t m_k = 0;
+        weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
-        u64                      m_seed = 0;
+        std::vector<weight_t> m_distance;
+        u64 m_seed = 0;
 
         // priority queues
         // typedef boost::heap::binomial_heap<MoveQR> Heap;
@@ -72,24 +67,25 @@ namespace HeiProMap {
         std::vector<u32> boundary_vertices_v_is_inserted;
 
         // store change
-        vertex_t *moves        = nullptr;
-        size_t   moves_size    = 0;
-        s64      curr_qap_gain = 0;
-        s64      max_qap_gain  = 0;
-        size_t   best_idx      = 0;
+        vertex_t* moves   = nullptr;
+        size_t moves_size = 0;
+        s64 curr_qap_gain = 0;
+        s64 max_qap_gain  = 0;
+        size_t best_idx   = 0;
 
         // active block scheduling
-        u8     *active_this_round = nullptr;
-        u8     *active_next_round = nullptr;
-        Pair   *pairs             = nullptr;
-        size_t pairs_size         = 0;
+        u8* active_this_round = nullptr;
+        u8* active_next_round = nullptr;
+        Pair* pairs           = nullptr;
+        size_t pairs_size     = 0;
 
         // store which vertices have been moved
-        u32 *vertex_used = nullptr;
+        u32* vertex_used = nullptr;
         u32 vertex_mark  = 0;
 
-        std::mt19937                          gen;
-        std::uniform_real_distribution<float> dis;
+        RandomEngine* random_engine                        = nullptr;
+        const QuotientGraphRefinementConfiguration* config = nullptr;
+        StatisticCollector* m_stat_collector               = nullptr;
 
     public:
         QuotientGraphRefinementBoost() = default;
@@ -106,10 +102,12 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        const u64 t_seed) override {
-            vertex_t    t_n_64     = round_up_64(t_n);
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        RandomEngine& t_random_engine,
+                        const ISerialRefinerConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
+            vertex_t t_n_64        = round_up_64(t_n);
             partition_t t_k_64     = round_up_64(t_k);
             partition_t t_k_t_k_64 = round_up_64(t_k * t_k);
 
@@ -119,19 +117,22 @@ namespace HeiProMap {
             m_lmax      = t_lmax;
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
-            m_seed      = t_seed;
+
+            random_engine    = &t_random_engine;
+            config           = dynamic_cast<const QuotientGraphRefinementConfiguration*>(&i_config);
+            m_stat_collector = &t_stat_collect;
 
             vertex_mark = 0;
-            vertex_used = (u32 *) aligned_alloc(64, t_n_64 * sizeof(u32));
+            vertex_used = (u32*)aligned_alloc(64, t_n_64 * sizeof(u32));
             std::fill_n(vertex_used, t_n_64, vertex_mark);
 
-            moves      = (vertex_t *) aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            moves      = (vertex_t*)aligned_alloc(64, t_n_64 * sizeof(vertex_t));
             moves_size = 0;
 
             // active block scheduling
-            active_this_round = (u8 *) aligned_alloc(64, t_k_64 * sizeof(u8));
-            active_next_round = (u8 *) aligned_alloc(64, t_k_64 * sizeof(u8));
-            pairs             = (Pair *) aligned_alloc(64, t_k_t_k_64 * sizeof(Pair));
+            active_this_round = (u8*)aligned_alloc(64, t_k_64 * sizeof(u8));
+            active_next_round = (u8*)aligned_alloc(64, t_k_64 * sizeof(u8));
+            pairs             = (Pair*)aligned_alloc(64, t_k_t_k_64 * sizeof(Pair));
             pairs_size        = 0;
 
             // priority queue
@@ -141,31 +142,20 @@ namespace HeiProMap {
             boundary_vertices_v_last_qap_delta.resize(t_n_64);
             boundary_vertices_u_is_inserted.resize(t_n_64, is_inserted_marker);
             boundary_vertices_v_is_inserted.resize(t_n_64, is_inserted_marker);
-
-            gen.seed(m_seed);
-            dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
 
-        template<typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(QuotientGraphRefinementConfiguration &config,
-                    [[maybe_unused]] TSerialGraph &g,
-                    [[maybe_unused]] TSerialActiveVertexManager &av_manager,
-                    [[maybe_unused]] TSerialBoundaryVertexManager &bv_manager,
-                    [[maybe_unused]] TSerialPartitionManager &p_manager,
-                    [[maybe_unused]] TSerialDistanceOracle &d_oracle,
-                    [[maybe_unused]] TSerialQuotientGraph &q_graph) {
-            static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
-            static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
-            static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
-            static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
-            static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
-            static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
-
+        void refine(const u64 level,
+                    const graph_t& g,
+                    const av_manager_t& av_manager,
+                    const d_oracle_t& d_oracle,
+                    bv_manager_t& bv_manager,
+                    p_manager_t& p_manager,
+                    q_graph_t& q_graph) override {
             std::fill_n(active_this_round, m_k, 1);
             std::fill_n(active_next_round, m_k, 0);
 
-            bool     one_pair_active = true;
-            for (u64 iteration       = 0; iteration < config.max_iteration && one_pair_active; ++iteration) {
+            bool one_pair_active = true;
+            for (u64 iteration = 0; iteration < config->max_iteration && one_pair_active; ++iteration) {
                 one_pair_active = false;
 
                 // determine all pairs in the quotient graph
@@ -190,38 +180,42 @@ namespace HeiProMap {
                     is_inserted_marker += 1;
 
                     vertex_mark += 1;
-                    for (vertex_t u: bv_manager[u_id]) {
-                        for (const auto [v, w]: g[u]) {
-                            if (p_manager[v] == v_id) {
-                                // u is connected to block v_id
-                                if (vertex_used[u] != vertex_mark) {
-                                    s64 qap_delta_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                                    boundary_vertices_u_handles[u] = boundary_vertices_u.push({u, qap_delta_u});
-                                    boundary_vertices_u_last_qap_delta[u] = qap_delta_u;
-                                    boundary_vertices_u_is_inserted[u] = is_inserted_marker;
-                                    vertex_used[u] = vertex_mark;
-                                    max_n_swaps += 1;
-                                }
+                    forall_bv_id_iu(bv_manager, u_id, j, u)
+                        {
+                            forall_guiv(g, u, i, v)
+                                {
+                                    if (p_manager[v] == v_id) {
+                                        // u is connected to block v_id
+                                        if (vertex_used[u] != vertex_mark) {
+                                            s64 qap_delta_u                       = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                            boundary_vertices_u_handles[u]        = boundary_vertices_u.push({u, qap_delta_u});
+                                            boundary_vertices_u_last_qap_delta[u] = qap_delta_u;
+                                            boundary_vertices_u_is_inserted[u]    = is_inserted_marker;
+                                            vertex_used[u]                        = vertex_mark;
+                                            max_n_swaps += 1;
+                                        }
 
-                                if (vertex_used[v] != vertex_mark) {
-                                    s64 qap_delta_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
-                                    boundary_vertices_v_handles[v] = boundary_vertices_v.push({v, qap_delta_v});
-                                    boundary_vertices_v_last_qap_delta[v] = qap_delta_v;
-                                    boundary_vertices_v_is_inserted[v] = is_inserted_marker;
-                                    vertex_used[v] = vertex_mark;
-                                    max_n_swaps += 1;
+                                        if (vertex_used[v] != vertex_mark) {
+                                            s64 qap_delta_v                       = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
+                                            boundary_vertices_v_handles[v]        = boundary_vertices_v.push({v, qap_delta_v});
+                                            boundary_vertices_v_last_qap_delta[v] = qap_delta_v;
+                                            boundary_vertices_v_is_inserted[v]    = is_inserted_marker;
+                                            vertex_used[v]                        = vertex_mark;
+                                            max_n_swaps += 1;
+                                        }
+                                    }
                                 }
-                            }
+                            endfor
                         }
-                    }
+                    endfor
 
 
                     // start executing moves based on the TopGain method
                     vertex_mark += 1;
-                    moves_size    = 0;
-                    best_idx      = 0;
-                    curr_qap_gain = 0;
-                    max_qap_gain  = 0;
+                    moves_size                   = 0;
+                    best_idx                     = 0;
+                    curr_qap_gain                = 0;
+                    max_qap_gain                 = 0;
                     u32 moves_since_last_maximum = 0;
 
                     while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
@@ -235,7 +229,7 @@ namespace HeiProMap {
                             if (boundary_vertices_v.top().qap_delta > boundary_vertices_u.top().qap_delta) {
                                 choose_u = false;
                             } else if (boundary_vertices_v.top().qap_delta == boundary_vertices_u.top().qap_delta) {
-                                choose_u = dis(gen) < 0.5;
+                                choose_u = random_engine->get_f32() < 0.5;
                             }
 
                             // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
@@ -244,15 +238,15 @@ namespace HeiProMap {
 
                             if (u_id_weight > m_lmax && u_id_weight > v_id_weight) { choose_u = true; }
                             if (v_id_weight > m_lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                            if (u_id_weight > m_lmax && v_id_weight > m_lmax && u_id_weight == v_id_weight) { choose_u = dis(gen) < 0.5; }
+                            if (u_id_weight > m_lmax && v_id_weight > m_lmax && u_id_weight == v_id_weight) { choose_u = random_engine->get_f32() < 0.5; }
                         }
 
                         // choose the priority queue
-                        vertex_t    vertex;
+                        vertex_t vertex;
                         partition_t vertex_id;
                         partition_t move_id;
-                        s64         qap_delta;
-                        weight_t    partition_weight;
+                        s64 qap_delta;
+                        weight_t partition_weight;
                         if (choose_u) {
                             vertex           = boundary_vertices_u.top().u;
                             vertex_id        = u_id;
@@ -285,53 +279,55 @@ namespace HeiProMap {
                         vertex_used[vertex] = vertex_mark;
 
                         // break search if too many moves without improvement
-                        if (moves_since_last_maximum > config.max_moves_without_max) { break; }
+                        if (moves_since_last_maximum > config->max_moves_without_max) { break; }
 
                         // we have to push or update the neighbors that were not moved already
-                        for (const auto [neighbor, w]: g[vertex]) {
-                            if (vertex_used[neighbor] == vertex_mark) { continue; }
+                        forall_guiv(g, vertex_id, i, neighbor)
+                            {
+                                if (vertex_used[neighbor] == vertex_mark) { continue; }
 
-                            partition_t neighbor_id = p_manager[neighbor];
+                                partition_t neighbor_id = p_manager[neighbor];
 
-                            if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
+                                if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
 
-                            partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
+                                partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
-                            bool is_connected_to_neighbor_id, is_connected_to_new_id;
-                            s64  new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_neighbor_id, is_connected_to_new_id, p_manager, d_oracle);
+                                bool is_connected_to_neighbor_id, is_connected_to_new_id;
+                                s64 new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_neighbor_id, is_connected_to_new_id, p_manager, d_oracle);
 
-                            if (!is_connected_to_new_id) { continue; }
+                                if (!is_connected_to_new_id) { continue; }
 
-                            if (neighbor_id == u_id) {
-                                if (boundary_vertices_u_is_inserted[neighbor] == is_inserted_marker) {
-                                    // entry exists in heap, update
-                                    if (new_qap_delta > boundary_vertices_u_last_qap_delta[neighbor]) {
-                                        boundary_vertices_u.increase(boundary_vertices_u_handles[neighbor], {neighbor, new_qap_delta});
-                                    } else if (new_qap_delta < boundary_vertices_u_last_qap_delta[neighbor]) {
-                                        boundary_vertices_u.decrease(boundary_vertices_u_handles[neighbor], {neighbor, new_qap_delta});
+                                if (neighbor_id == u_id) {
+                                    if (boundary_vertices_u_is_inserted[neighbor] == is_inserted_marker) {
+                                        // entry exists in heap, update
+                                        if (new_qap_delta > boundary_vertices_u_last_qap_delta[neighbor]) {
+                                            boundary_vertices_u.increase(boundary_vertices_u_handles[neighbor], {neighbor, new_qap_delta});
+                                        } else if (new_qap_delta < boundary_vertices_u_last_qap_delta[neighbor]) {
+                                            boundary_vertices_u.decrease(boundary_vertices_u_handles[neighbor], {neighbor, new_qap_delta});
+                                        }
+                                    } else {
+                                        // entry does not exist, insert
+                                        boundary_vertices_u_handles[neighbor]        = boundary_vertices_u.push({neighbor, new_qap_delta});
+                                        boundary_vertices_u_last_qap_delta[neighbor] = new_qap_delta;
+                                        boundary_vertices_u_is_inserted[neighbor]    = is_inserted_marker;
                                     }
                                 } else {
-                                    // entry does not exist, insert
-                                    boundary_vertices_u_handles[neighbor] = boundary_vertices_u.push({neighbor, new_qap_delta});
-                                    boundary_vertices_u_last_qap_delta[neighbor] = new_qap_delta;
-                                    boundary_vertices_u_is_inserted[neighbor] = is_inserted_marker;
-                                }
-                            } else {
-                                if (boundary_vertices_v_is_inserted[neighbor] == is_inserted_marker) {
-                                    // entry exists in heap, update
-                                    if (new_qap_delta > boundary_vertices_v_last_qap_delta[neighbor]) {
-                                        boundary_vertices_v.increase(boundary_vertices_v_handles[neighbor], {neighbor, new_qap_delta});
-                                    } else if (new_qap_delta < boundary_vertices_v_last_qap_delta[neighbor]) {
-                                        boundary_vertices_v.decrease(boundary_vertices_v_handles[neighbor], {neighbor, new_qap_delta});
+                                    if (boundary_vertices_v_is_inserted[neighbor] == is_inserted_marker) {
+                                        // entry exists in heap, update
+                                        if (new_qap_delta > boundary_vertices_v_last_qap_delta[neighbor]) {
+                                            boundary_vertices_v.increase(boundary_vertices_v_handles[neighbor], {neighbor, new_qap_delta});
+                                        } else if (new_qap_delta < boundary_vertices_v_last_qap_delta[neighbor]) {
+                                            boundary_vertices_v.decrease(boundary_vertices_v_handles[neighbor], {neighbor, new_qap_delta});
+                                        }
+                                    } else {
+                                        // entry does not exist, insert
+                                        boundary_vertices_v_handles[neighbor]        = boundary_vertices_v.push({neighbor, new_qap_delta});
+                                        boundary_vertices_v_last_qap_delta[neighbor] = new_qap_delta;
+                                        boundary_vertices_v_is_inserted[neighbor]    = is_inserted_marker;
                                     }
-                                } else {
-                                    // entry does not exist, insert
-                                    boundary_vertices_v_handles[neighbor] = boundary_vertices_v.push({neighbor, new_qap_delta});
-                                    boundary_vertices_v_last_qap_delta[neighbor] = new_qap_delta;
-                                    boundary_vertices_v_is_inserted[neighbor] = is_inserted_marker;
                                 }
                             }
-                        }
+                        endfor
 
                         // remove vertex from u if it is not boundary
                         while (!boundary_vertices_u.empty()) {
@@ -358,20 +354,20 @@ namespace HeiProMap {
 
                     // revert all moves in partitioning manager
                     for (size_t i = 0; i < moves_size; i++) {
-                        vertex_t    vertex        = moves[moves_size - 1 - i];
-                        weight_t    vertex_weight = g.get_weight(vertex);
-                        partition_t vertex_id     = p_manager[vertex];
-                        partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                        vertex_t vertex        = moves[moves_size - 1 - i];
+                        weight_t vertex_weight = g.get_weight(vertex);
+                        partition_t vertex_id  = p_manager[vertex];
+                        partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                     }
 
                     // make all moves to best index
                     for (size_t i = 0; i < best_idx; ++i) {
-                        vertex_t    vertex        = moves[i];
-                        weight_t    vertex_weight = g.get_weight(vertex);
-                        partition_t vertex_id     = p_manager[vertex];
-                        partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                        vertex_t vertex        = moves[i];
+                        weight_t vertex_weight = g.get_weight(vertex);
+                        partition_t vertex_id  = p_manager[vertex];
+                        partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
                         bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                         q_graph.move(g, p_manager, vertex, vertex_id, move_id);
@@ -381,7 +377,7 @@ namespace HeiProMap {
                     if (max_qap_gain > 0) {
                         active_next_round[u_id] = 1;
                         active_next_round[v_id] = 1;
-                        one_pair_active = true;
+                        one_pair_active         = true;
                     }
                 }
                 std::swap(active_this_round, active_next_round);

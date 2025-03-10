@@ -30,12 +30,14 @@
 #include <regex>
 #include <vector>
 
+#include "../../definitions.h"
+
 namespace HeiProMap {
     class ISerialDistanceOracle {
     public:
         virtual ~ISerialDistanceOracle() = default;
-        virtual void initialize(std::vector<partition_t>& t_hierarchy,
-                                std::vector<weight_t>& t_distance) = 0;
+        virtual void initialize(const std::vector<partition_t>& t_hierarchy,
+                                const std::vector<weight_t>& t_distance) = 0;
     };
 }
 

@@ -29,8 +29,8 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../../commons/utils.h"
 #include "../interfaces/ISerialDistanceOracle.h"
-#include "../utility/utils.h"
 
 namespace HeiProMap {
     class DistanceOracle final : public ISerialDistanceOracle {
@@ -48,8 +48,8 @@ namespace HeiProMap {
             free(m_h_mtx);
         }
 
-        void initialize(std::vector<partition_t>& t_hierarchy,
-                        std::vector<weight_t>& t_distance) override {
+        void initialize(const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance) override {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
             m_k         = prod<partition_t>(m_hierarchy);

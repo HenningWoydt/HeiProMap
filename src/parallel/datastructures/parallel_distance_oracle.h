@@ -33,8 +33,7 @@
 
 namespace HeiProMap {
 
-    class ParallelDistanceOracle : public IParallelDistanceOracle {
-    private:
+    class ParallelDistanceOracle final : public IParallelDistanceOracle {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
         partition_t m_k = 0;
@@ -48,7 +47,7 @@ namespace HeiProMap {
 
         void initialize(std::vector<partition_t> &t_hierarchy,
                         std::vector<weight_t> &t_distance,
-                        u64 t_threads) final {
+                        u64 t_threads) override {
             m_hierarchy = t_hierarchy;
             m_distance = t_distance;
             m_k = prod<partition_t>(m_hierarchy);

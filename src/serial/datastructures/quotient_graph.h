@@ -27,10 +27,8 @@
 #ifndef HEIPROMAP_QUOTIENT_GRAPH_H
 #define HEIPROMAP_QUOTIENT_GRAPH_H
 
-#include "distance_oracle.h"
 #include "../../definitions.h"
 #include "../interfaces/ISerialQuotientGraph.h"
-#include "../utility/utils.h"
 
 namespace HeiProMap {
     class QuotientGraph final : public ISerialQuotientGraph {
@@ -72,23 +70,26 @@ namespace HeiProMap {
             return m_adj_mtx[min * k + max];
         }
 
-        template<typename TSerialGraph, typename TSerialPartitionManager>
-        void move(TSerialGraph &g, TSerialPartitionManager &p_manager, vertex_t u, partition_t old_id, partition_t new_id) {
+        void move(const graph_t& g,
+                  const p_manager_t& p_manager,
+                  const vertex_t u,
+                  const partition_t old_id,
+                  const partition_t new_id) override {
             ASSERT(new_id < k);
             ASSERT(new_id != old_id);
 
             for (size_t i = 0; i < g.size(u); ++i) {
-                vertex_t    v    = g.neighbor(u, i);
-                weight_t    w    = g.get_weight(u, i);
+                vertex_t v       = g.neighbor(u, i);
+                weight_t w       = g.get_weight(u, i);
                 partition_t v_id = p_manager[v];
 
                 // remove old edge, if existed
-                if(old_id != v_id) {
-                    remove_edge(old_id, v_id, w*2);
+                if (old_id != v_id) {
+                    remove_edge(old_id, v_id, w * 2);
                 }
                 // add new edge, if has to exist
-                if(new_id != v_id){
-                    add_edge(new_id, v_id, w*2);
+                if (new_id != v_id) {
+                    add_edge(new_id, v_id, w * 2);
                 }
             }
         }

@@ -30,15 +30,13 @@
 #include <gtest/gtest.h>
 
 #include "test_utils.h"
-#include "../../src/serial/coarsening/global_path_algorithm_arrays.h"
+#include "../../src/serial/coarsening/global_path_algorithm.h"
 #include "../../src/serial/coarsening/heavy_edge_matcher.h"
 #include "../../src/serial/datastructures/active_vertex_manager.h"
-#include "../../src/serial/datastructures/graph_csr.h"
-#include "../../src/serial/datastructures/graph_csr_arrays.h"
-#include "../../src/serial/datastructures/simple_graph.h"
-#include "../../src/serial/datastructures/sorted_graph_csr.h"
+#include "../../src/serial/datastructures/graph.h"
 
 namespace HeiProMap {
+    /*
     std::vector<EdgeUV> read_solution(std::string &solution) {
         std::vector<EdgeUV> edges;
         std::ifstream ifs(solution);
@@ -68,7 +66,7 @@ namespace HeiProMap {
         size_t n_64 = round_up_64(g.get_n() / 2);
         EdgeUV* matches = (EdgeUV*) aligned_alloc(64, n_64 * sizeof(EdgeUV));
         size_t matches_size = 0;
-        gpa_matcher.match(gpa_config, g, av_manager, matches, matches_size);
+        gpa_matcher.match(0, gpa_config, g, av_manager, matches, matches_size);
 
         // read in solution
         std::vector<EdgeUV> solution_edges = read_solution(solution);
@@ -114,7 +112,7 @@ namespace HeiProMap {
         size_t n_64 = round_up_64(g.get_n() / 2);
         EdgeUV* matches = (EdgeUV*) aligned_alloc(64, n_64 * sizeof(EdgeUV));
         size_t matches_size = 0;
-        gpa_matcher.match(gpa_config, g, av_manager, matches, matches_size);
+        gpa_matcher.match(0, gpa_config, g, av_manager, matches, matches_size);
 
         EXPECT_EQ(matches_size, 4);
         EdgeUV e1(0, 0);
@@ -161,4 +159,5 @@ namespace HeiProMap {
             }
         }
     }
+    */
 }

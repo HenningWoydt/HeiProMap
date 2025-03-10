@@ -27,20 +27,19 @@
 #ifndef HEIPROMAP_IPARALLELACTIVEVERTEXMANAGER_H
 #define HEIPROMAP_IPARALLELACTIVEVERTEXMANAGER_H
 
-#include "IParallelGraph.h"
-
 namespace HeiProMap {
 
     class IParallelActiveVertexManager {
     public:
         virtual ~IParallelActiveVertexManager() = default;
         virtual void initialize(size_t n) = 0;
-        virtual vertex_t get_n_active() const = 0;
+        virtual size_t size() const = 0;
+        virtual vertex_t get(size_t i) const = 0;
         virtual bool is_active(vertex_t u) const = 0;
         virtual bool is_disabled(vertex_t u) const = 0;
         virtual bool get_state(vertex_t u) const = 0;
-        virtual void contract(const EdgeUV* matches, size_t &matches_size) = 0;
-        virtual void uncontract(const EdgeUV* matches, size_t &matches_size) = 0;
+        virtual void contract(const EdgeUV* matches, const size_t& matches_size) = 0;
+        virtual void uncontract(const EdgeUV* matches, const size_t& matches_size) = 0;
     };
 
 }

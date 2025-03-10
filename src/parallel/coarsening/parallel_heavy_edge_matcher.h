@@ -27,23 +27,23 @@
 #ifndef HEIPROMAP_PARALLEL_HEAVY_EDGE_MATCHER_H
 #define HEIPROMAP_PARALLEL_HEAVY_EDGE_MATCHER_H
 
-#include "../interfaces/IParallelMatcher.h"
+#include "../parallel_definitions_1.h"
 #include "../../definitions.h"
+#include "../interfaces/IParallelMatcher.h"
 
 namespace HeiProMap {
-
     class ParallelHeavyEdgeMatcherConfiguration final : public IParallelMatcherConfiguration {
     public:
         bool match_pendant_vertices_first = false;
     };
 
-    class ParallelHeavyEdgeMatcher : public IParallelMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
-        weight_t    m_l_max = 0;
+    class ParallelHeavyEdgeMatcher final : public IParallelMatcher {
+        vertex_t m_n     = 0;
+        vertex_t m_m     = 0;
+        partition_t m_k  = 0;
+        weight_t m_l_max = 0;
 
-        u32              mark = 0;
+        u32 mark = 0;
         std::vector<u32> used;
 
     public:
@@ -64,12 +64,12 @@ namespace HeiProMap {
         }
 
         void match(size_t level,
-                   IParallelMatcherConfiguration &i_config,
-                   p_graph_t &g,
-                   p_av_manager_t &av_manager,
-                   EdgeUV *matches,
-                   size_t &matches_size) override {
-            auto &config = dynamic_cast<ParallelHeavyEdgeMatcherConfiguration &>(i_config);
+                   IParallelMatcherConfiguration& i_config,
+                   p_graph_t& g,
+                   p_av_manager_t& av_manager,
+                   EdgeUV* matches,
+                   size_t& matches_size) override {
+            auto& config = dynamic_cast<ParallelHeavyEdgeMatcherConfiguration&>(i_config);
 
             matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
             matches_size = 0;
@@ -78,67 +78,71 @@ namespace HeiProMap {
 
             if (config.match_pendant_vertices_first) {
                 // first check vertices with degree 1
-                for (vertex_t u: av_manager) {
-                    ASSERT(av_manager.is_active(u));
+                forall_av_iu(av_manager, i, u)
+                    {
+                        ASSERT(av_manager.is_active(u));
 
-                    if (used[u] == mark) { continue; }
-                    if (g.size(u) != 1) { continue; }
+                        if (used[u] == mark) { continue; }
+                        if (g.size(u) != 1) { continue; }
 
-                    vertex_t v = g.neighbor(u, 0);
+                        vertex_t v = g.neighbor(u, 0);
 
-                    if (used[v] == mark) { continue; }
+                        if (used[v] == mark) { continue; }
 
-                    weight_t u_w = g.get_weight(u);
-                    weight_t v_w = g.get_weight(v);
+                        weight_t u_w = g.get_weight(u);
+                        weight_t v_w = g.get_weight(v);
 
-                    if (u_w + v_w > m_l_max) { continue; }
+                        if (u_w + v_w > m_l_max) { continue; }
 
-                    matches[matches_size++] = {v, u}; // pull u into v
+                        matches[matches_size++] = {v, u}; // pull u into v
 
-                    used[u] = mark;
-                    used[v] = mark;
-                }
+                        used[u] = mark;
+                        used[v] = mark;
+                    }
+                endfor
             }
 
             // check all other vertices
-            for (vertex_t u: av_manager) {
-                ASSERT(av_manager.is_active(u));
+            forall_av_iu(av_manager, i, u)
+                {
+                    ASSERT(av_manager.is_active(u));
 
-                if (used[u] == mark) { continue; }
+                    if (used[u] == mark) { continue; }
 
-                weight_t u_w        = g.get_weight(u);
-                vertex_t best_v     = u;
-                weight_t max_weight = 0;
+                    weight_t u_w        = g.get_weight(u);
+                    vertex_t best_v     = u;
+                    weight_t max_weight = 0;
 
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    vertex_t v = g.neighbor(u, i);
-                    weight_t w = g.get_weight(u, i);
-                    if (used[v] == mark) { continue; }
+                    for (size_t i = 0; i < g.size(u); ++i) {
+                        vertex_t v = g.neighbor(u, i);
+                        weight_t w = g.get_weight(u, i);
+                        if (used[v] == mark) { continue; }
 
-                    weight_t v_w = g.get_weight(v);
+                        weight_t v_w = g.get_weight(v);
 
-                    if (u_w + v_w > m_l_max) { continue; }
+                        if (u_w + v_w > m_l_max) { continue; }
 
-                    if (w > max_weight) {
-                        best_v     = v;
-                        max_weight = w;
+                        if (w > max_weight) {
+                            best_v     = v;
+                            max_weight = w;
+                        }
+                    }
+
+                    if (best_v != u) {
+                        if (g.size(u) > g.size(best_v)) {
+                            matches[matches_size++] = {u, best_v};
+                        } else {
+                            matches[matches_size++] = {best_v, u};
+                        }
+                        used[u]      = mark;
+                        used[best_v] = mark;
                     }
                 }
-
-                if (best_v != u) {
-                    if (g.size(u) > g.size(best_v)) {
-                        matches[matches_size++] = {u, best_v};
-                    } else {
-                        matches[matches_size++] = {best_v, u};
-                    }
-                    used[u]      = mark;
-                    used[best_v] = mark;
-                }
-            }
+            endfor
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+                const auto& [u, v] = matches[i];
                 ASSERT(u != v);
                 ASSERT(av_manager.is_active(u));
                 ASSERT(av_manager.is_active(v));
@@ -147,8 +151,8 @@ namespace HeiProMap {
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (size_t     i = 0; i < matches_size; ++i) {
-                const auto &[u, v] = matches[i];
+            for (size_t i = 0; i < matches_size; ++i) {
+                const auto& [u, v] = matches[i];
                 hit[u] += 1;
                 hit[v] += 1;
 

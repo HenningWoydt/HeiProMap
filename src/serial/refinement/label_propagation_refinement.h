@@ -27,19 +27,14 @@
 #ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
 #define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
 
-#include <random>
-
 #include "../../definitions.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
-#include "../interfaces/ISerialDistanceOracle.h"
-#include "../interfaces/ISerialGraph.h"
-#include "../interfaces/ISerialPartitionManager.h"
-#include "../interfaces/ISerialQuotientGraph.h"
-#include "../interfaces/ISerialRefiner.h"
+#include "../../commons/JSON_utils.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
 
 namespace HeiProMap {
-    struct LabelPropagationConfiguration {
+    class LabelPropagationConfiguration final : public ISerialRefinerConfiguration {
+    public:
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
@@ -65,8 +60,17 @@ namespace HeiProMap {
         s64* blocks_qap_delta = nullptr;
         size_t blocks_size    = 0;
 
-        std::mt19937 gen;
-        std::uniform_real_distribution<float> dis;
+        RandomEngine* random_engine                 = nullptr;
+        const LabelPropagationConfiguration* config = nullptr;
+        StatisticCollector* m_stat_collector        = nullptr;
+
+        METRICS(f64 global_time = 0;)
+        METRICS(f64 global_time_get_boundary = 0.0;)
+        METRICS(f64 global_time_iterate = 0.0;)
+
+        METRICS(s64 global_qap_delta = 0;)
+        METRICS(u64 global_n_pos_moves = 0;)
+        METRICS(u64 global_n_0gain_moves = 0;)
 
     public:
         LabelPropagationRefinement() = default;
@@ -83,14 +87,19 @@ namespace HeiProMap {
                         const weight_t t_lmax,
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
-                        const u64 t_seed) override {
+                        RandomEngine& t_random_engine,
+                        const ISerialRefinerConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
             m_lmax      = t_lmax;
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
-            m_seed      = t_seed;
+
+            random_engine    = &t_random_engine;
+            config           = dynamic_cast<const LabelPropagationConfiguration*>(&i_config);
+            m_stat_collector = &t_stat_collect;
 
             vertex_t m_n_64 = round_up_64(m_n);
             vertex_used     = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
@@ -106,33 +115,51 @@ namespace HeiProMap {
             blocks           = (partition_t*)aligned_alloc(64, m_k_64 * sizeof(partition_t));
             blocks_qap_delta = (s64*)aligned_alloc(64, m_k_64 * sizeof(s64));
             blocks_size      = 0;
-
-            gen.seed(m_seed);
-            dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
-        void refine(LabelPropagationConfiguration& config,
-                    TSerialGraph& g,
-                    [[maybe_unused]] TSerialActiveVertexManager& av_manager,
-                    TSerialBoundaryVertexManager& bv_manager,
-                    TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle,
-                    TSerialQuotientGraph& q_graph) {
-            static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
-            static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
-            static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
-            static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
-            static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");
-            static_assert(std::is_base_of_v<ISerialQuotientGraph, TSerialQuotientGraph>, "TSerialQuotientGraph must inherit from ISerialQuotientGraph");
+        void refine(const u64 level,
+                    const graph_t& g,
+                    const av_manager_t& av_manager,
+                    const d_oracle_t& d_oracle,
+                    bv_manager_t& bv_manager,
+                    p_manager_t& p_manager,
+                    q_graph_t& q_graph) override {
+            METRICS(std::vector<f64> iteration_time);
+            METRICS(std::vector<f64> iteration_time_get_boundary);
+            METRICS(std::vector<f64> iteration_time_iterate);
+
+            METRICS(f64 level_time = 0.0);
+            METRICS(f64 level_time_get_boundary = 0.0);
+            METRICS(f64 level_time_iterate = 0.0);
+
+            METRICS(std::vector<s64> iteration_qap_delta);
+            METRICS(std::vector<u64> iteration_n_pos_moves);
+            METRICS(std::vector<u64> iteration_n_0gain_moves);
+
+            METRICS(s64 level_qap_delta = 0);
+            METRICS(u64 level_n_pos_moves = 0);
+            METRICS(u64 level_n_0gain_moves = 0);
 
             bool move_occurred = true;
-            for (u64 iteration = 0; iteration < config.max_iteration && move_occurred; ++iteration) {
+            for (u64 iteration = 0; iteration < config->max_iteration && move_occurred; ++iteration) {
                 move_occurred = false;
 
+                METRICS(s64 temp_qap_delta = 0);
+                METRICS(u64 temp_n_pos_moves = 0);
+                METRICS(u64 temp_n_0gain_moves = 0);
+                METRICS(auto sp_iteration = std::chrono::high_resolution_clock::now());
+                METRICS(auto sp_get_boundary = std::chrono::high_resolution_clock::now());
+
                 curr_boundary_size = 0;
-                for (vertex_t u : bv_manager) { curr_boundary[curr_boundary_size++] = u; }
-                std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, gen);
+                forall_bv_iu(bv_manager, i, u)
+                    {
+                        curr_boundary[curr_boundary_size++] = u;
+                    }
+                endfor
+                std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, random_engine->gen);
+
+                METRICS(auto ep_get_boundary = std::chrono::high_resolution_clock::now());
+                METRICS(auto sp_iterate = std::chrono::high_resolution_clock::now());
 
                 vertex_marker += 1;
                 for (size_t j = 0; j < curr_boundary_size; ++j) {
@@ -152,80 +179,118 @@ namespace HeiProMap {
 
                     block_marker += 1;
                     block_used[u_id] = block_marker;
-                    for (const auto [v, w] : g[u]) {
-                        partition_t v_id     = p_manager[v];
-                        weight_t v_id_weight = p_manager.get_bweight(v_id);
+                    forall_guiv(g, u, i, v)
+                        {
+                            partition_t v_id     = p_manager[v];
+                            weight_t v_id_weight = p_manager.get_bweight(v_id);
 
-                        if (block_used[v_id] != block_marker) {
-                            if (v_id_weight + u_weight <= m_lmax) {
-                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                            if (block_used[v_id] != block_marker) {
+                                if (v_id_weight + u_weight <= m_lmax) {
+                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                                if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && v_id_weight < best_id_weight)) {
-                                    best_id        = v_id;
-                                    best_id_weight = v_id_weight;
-                                    best_qap_delta = qap_delta;
-                                    counter        = 1.0;
-                                } else if (qap_delta == best_qap_delta && qap_delta != -1) {
-                                    counter += 1.0;
-                                    // choose with probability 1/counter as it ensures uniform distribution
-                                    if (dis(gen) < 1.0f / counter) {
-                                        best_id = v_id;
+                                    if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && v_id_weight < best_id_weight)) {
+                                        best_id        = v_id;
+                                        best_id_weight = v_id_weight;
+                                        best_qap_delta = qap_delta;
+                                        counter        = 1.0;
+                                    } else if (qap_delta == best_qap_delta && qap_delta != -1) {
+                                        counter += 1.0;
+                                        // choose with probability 1/counter as it ensures uniform distribution
+                                        if (random_engine->get_f32() < 1.0f / counter) {
+                                            best_id = v_id;
+                                        }
                                     }
                                 }
-                            }
-                            block_used[v_id] = block_marker;
-                        }
-                    }
-
-                    /*
-                    // collect all blocks to check
-                    blocks_size = 0;
-                    for (const auto [v, w] : g[u]) {
-                        partition_t v_id     = p_manager[v];
-                        weight_t v_id_weight = p_manager.get_bweight(v_id);
-
-                        if (v_id_weight + u_weight <= m_lmax && v_id != u_id) {
-                            blocks[blocks_size++] = v_id;
-                        }
-                    }
-
-                    // sort and remove duplicates
-                    std::sort(blocks, blocks + blocks_size);
-                    partition_t* newEnd = std::unique(blocks, blocks + blocks_size);
-                    blocks_size         = newEnd - blocks;
-
-                    // determine qap_delta for each block
-                    get_u_qap_delta(g, u, u_id, blocks, blocks_qap_delta, blocks_size, p_manager, d_oracle);
-
-                    // choose the best block
-                    for (size_t i = 0; i < blocks_size; ++i) {
-                        if (blocks_qap_delta[i] > best_qap_delta || (blocks_qap_delta[i] == best_qap_delta && p_manager.get_bweight(blocks[i]) < best_id_weight)) {
-                            best_id        = blocks[i];
-                            best_id_weight = p_manager.get_bweight(blocks[i]);
-                            best_qap_delta = blocks_qap_delta[i];
-                            counter        = 1.0;
-                        } else if (blocks_qap_delta[i] == best_qap_delta && blocks_qap_delta[i] != -1) {
-                            counter += 1.0;
-                            // choose with probability 1/counter as it ensures uniform distribution
-                            if (dis(gen) < 1.0f / counter) {
-                                best_id = blocks[i];
+                                block_used[v_id] = block_marker;
                             }
                         }
-                    }
-                    */
+                    endfor
 
                     if (best_id != u_id) {
                         // choose if positive, if 0-gain choose 50% of the time
-                        if (best_qap_delta > 0 || dis(gen) < 0.5) {
+                        if (best_qap_delta > 0 || random_engine->get_f32() < 0.5) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             p_manager.move(u, u_weight, u_id, best_id);
                             move_occurred = true;
+
+                            METRICS(temp_qap_delta += best_qap_delta * (best_qap_delta > 0));
+                            METRICS(temp_n_pos_moves += (best_qap_delta > 0));
+                            METRICS(temp_n_0gain_moves += (best_qap_delta == 0));
                         }
                     }
                     vertex_used[u] = vertex_marker;
                 }
+
+#if COLLECT_METRICS
+                auto ep_iterate   = std::chrono::high_resolution_clock::now();
+                auto ep_iteration = std::chrono::high_resolution_clock::now();
+
+                f64 t_iteration    = get_seconds(sp_iteration, ep_iteration);
+                f64 t_get_boundary = get_seconds(sp_get_boundary, ep_get_boundary);
+                f64 t_iterate      = get_seconds(sp_iterate, ep_iterate);
+
+                iteration_time.push_back(t_iteration);
+                iteration_time_get_boundary.push_back(t_get_boundary);
+                iteration_time_iterate.push_back(t_iterate);
+
+                level_time += t_iteration;
+                level_time_get_boundary += t_get_boundary;
+                level_time_iterate += t_iterate;
+
+                global_time += t_iteration;
+                global_time_get_boundary += t_get_boundary;
+                global_time_iterate += t_iterate;
+
+                temp_qap_delta *= 2;
+
+                iteration_qap_delta.push_back(temp_qap_delta);
+                iteration_n_pos_moves.push_back(temp_n_pos_moves);
+                iteration_n_0gain_moves.push_back(temp_n_0gain_moves);
+
+                level_qap_delta += temp_qap_delta;
+                level_n_pos_moves += temp_n_pos_moves;
+                level_n_0gain_moves += temp_n_0gain_moves;
+
+                global_qap_delta += temp_qap_delta;
+                global_n_pos_moves += temp_n_pos_moves;
+                global_n_0gain_moves += temp_n_0gain_moves;
+#endif
             }
+
+#if COLLECT_METRICS
+            std::string stats = "{ \n";
+            f64 global_qap_delta_per_s = (f64) global_qap_delta / global_time;
+            f64 level_qap_delta_per_s = (f64) level_qap_delta / level_time;
+            stats += to_JSON_MACRO(global_time);
+            stats += to_JSON_MACRO(global_time_get_boundary);
+            stats += to_JSON_MACRO(global_time_iterate);
+            stats += to_JSON_MACRO(global_qap_delta);
+            stats += to_JSON_MACRO(global_qap_delta_per_s);
+            stats += to_JSON_MACRO(global_n_pos_moves);
+            stats += to_JSON_MACRO(global_n_0gain_moves);
+            stats += to_JSON_MACRO(level_time);
+            stats += to_JSON_MACRO(level_time_get_boundary);
+            stats += to_JSON_MACRO(level_time_iterate);
+            stats += to_JSON_MACRO(level_qap_delta);
+            stats += to_JSON_MACRO(level_qap_delta_per_s);
+            stats += to_JSON_MACRO(level_n_pos_moves);
+            stats += to_JSON_MACRO(level_n_0gain_moves);
+            stats += to_JSON_MACRO(iteration_time);
+            stats += to_JSON_MACRO(iteration_time_get_boundary);
+            stats += to_JSON_MACRO(iteration_time_iterate);
+            stats += to_JSON_MACRO(iteration_qap_delta);
+            stats += to_JSON_MACRO(iteration_n_pos_moves);
+            stats += to_JSON_MACRO(iteration_n_0gain_moves);
+
+            stats.pop_back();
+            stats.pop_back();
+            stats += "\n}";
+            JSONString json_stats;
+            json_stats.s       = stats;
+            std::string method = "Label Propagation";
+            m_stat_collector->add_refinement_method_stats(level, method, json_stats);
+#endif
         }
     };
 }

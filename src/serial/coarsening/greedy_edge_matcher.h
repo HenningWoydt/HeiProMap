@@ -32,10 +32,14 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
+#include "../../commons/JSON_utils.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    struct GreedyEdgeMatcherConfiguration {
+    class GreedyEdgeMatcherConfiguration final : public ISerialMatcherConfiguration {
+    public:
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
@@ -45,6 +49,10 @@ namespace HeiProMap {
         partition_t m_k  = 0;
         weight_t m_l_max = 0;
 
+        const GreedyEdgeMatcherConfiguration* config = nullptr;
+        RandomEngine* random_engine                  = nullptr;
+        StatisticCollector* m_stat_collector         = nullptr;
+
         std::vector<EdgeUVW> edges;
 
         u32 mark = 0;
@@ -53,29 +61,33 @@ namespace HeiProMap {
     public:
         GreedyEdgeMatcher() = default;
 
-        void initialize(const vertex_t n,
-                        const vertex_t m,
-                        const partition_t k,
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
                         const weight_t t_l_max,
-                        const u64 t_seed) override {
-            m_n     = n;
-            m_m     = m;
-            m_k     = k;
+                        RandomEngine& t_random_engine,
+                        const ISerialMatcherConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
+            m_n     = t_n;
+            m_m     = t_m;
+            m_k     = t_k;
             m_l_max = t_l_max;
+
+            config           = dynamic_cast<const GreedyEdgeMatcherConfiguration*>(&i_config);
+            random_engine    = &t_random_engine;
+            m_stat_collector = &t_stat_collect;
 
             edges.reserve(m_m);
 
             mark = 0;
-            used.resize(n, 0);
+            used.resize(m_n, 0);
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(size_t level,
-                   GreedyEdgeMatcherConfiguration& config,
-                   TSerialGraph& g,
-                   TSerialActiveVertexManager& av_manager,
+        void match(const size_t level,
+                   const graph_t& g,
+                   const av_manager_t& av_manager,
                    EdgeUV* matches,
-                   size_t& matches_size) {
+                   size_t& matches_size) override {
             matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
             matches_size = 0;
 
@@ -83,19 +95,21 @@ namespace HeiProMap {
             edges.clear();
 
             // first handle pendant vertices
-            if (config.match_pendant_vertices_first) {
-                for (vertex_t u : av_manager) {
-                    ASSERT(av_manager.is_active(u));
+            if (config->match_pendant_vertices_first) {
+                forall_av_iu(av_manager, i, u)
+                    {
+                        ASSERT(av_manager.is_active(u));
 
-                    if (g.size(u) != 1) {
-                        continue;
+                        if (g.size(u) != 1) {
+                            continue;
+                        }
+
+                        const vertex_t v  = g.neighbor(u, 0);
+                        const weight_t ew = g.get_weight(u, 0);
+                        const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
+                        edges.emplace_back(u, v, rating);
                     }
-
-                    const vertex_t v  = g.neighbor(u, 0);
-                    const weight_t ew = g.get_weight(u, 0);
-                    const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
-                    edges.emplace_back(u, v, rating);
-                }
+                endfor
                 std::sort(edges.begin(), edges.end(), std::greater<>());
 
                 for (const auto& [u, v, w] : edges) {
@@ -121,29 +135,33 @@ namespace HeiProMap {
             }
 
             // handle all other vertices
-            for (vertex_t u : av_manager) {
-                ASSERT(av_manager.is_active(u));
-                weight_t u_w = g.get_weight(u);
+            forall_av_iu(av_manager, i, u)
+                {
+                    ASSERT(av_manager.is_active(u));
+                    weight_t u_w = g.get_weight(u);
 
-                if (used[u] == mark) {
-                    continue;
-                }
-
-                for (const auto& [v, w] : g[u]) {
-                    weight_t v_w = g.get_weight(v);
-
-                    if (used[v] == mark) {
+                    if (used[u] == mark) {
                         continue;
                     }
 
-                    if (g.get_weight(u) + g.get_weight(v) > m_l_max) {
-                        continue;
-                    }
+                    forall_guivw(g, u, j, v, w)
+                        {
+                            weight_t v_w = g.get_weight(v);
 
-                    const f32 edge_rating = (f32)w / (f32)(u_w * v_w);
-                    edges.emplace_back(u, v, edge_rating);
+                            if (used[v] == mark) {
+                                continue;
+                            }
+
+                            if (g.get_weight(u) + g.get_weight(v) > m_l_max) {
+                                continue;
+                            }
+
+                            const f32 edge_rating = (f32)w / (f32)(u_w * v_w);
+                            edges.emplace_back(u, v, edge_rating);
+                        }
+                    endfor
                 }
-            }
+            endfor
             std::sort(edges.begin(), edges.end(), std::greater<>());
 
             for (const auto& [u, v, w] : edges) {

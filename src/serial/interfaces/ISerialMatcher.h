@@ -27,25 +27,34 @@
 #ifndef HEIPROMAP_ISERIALMATCHER_H
 #define HEIPROMAP_ISERIALMATCHER_H
 
-#include "ISerialActiveVertexManager.h"
+#include "../serial_definitions_1.h"
+#include "../../definitions.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
 
 namespace HeiProMap {
+    class ISerialMatcherConfiguration {
+    public:
+        virtual ~ISerialMatcherConfiguration() = default;
+    };
+
     class ISerialMatcher {
     public:
         virtual ~ISerialMatcher() = default;
 
-        virtual void initialize(vertex_t n,
-                                vertex_t m,
-                                partition_t k,
+        virtual void initialize(vertex_t t_n,
+                                vertex_t t_m,
+                                partition_t t_k,
                                 weight_t t_l_max,
-                                u64 t_seed) = 0;
+                                RandomEngine& t_random_engine,
+                                const ISerialMatcherConfiguration& i_config,
+                                StatisticCollector& t_stat_collect) = 0;
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager>
-        void match(size_t level,
-                   TSerialGraph& g,
-                   TSerialActiveVertexManager& av_manager,
-                   EdgeUV* matches,
-                   size_t& matches_size) {}
+        virtual void match(size_t level,
+                           const graph_t& g,
+                           const av_manager_t& av_manager,
+                           EdgeUV* matches,
+                           size_t& matches_size) = 0;
     };
 }
 

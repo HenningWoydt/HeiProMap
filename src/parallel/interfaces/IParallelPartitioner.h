@@ -27,19 +27,7 @@
 #ifndef HEIPROMAP_IPARALLELPARTITIONER_H
 #define HEIPROMAP_IPARALLELPARTITIONER_H
 
-#include <string>
-#include <vector>
-#include <fstream>
-#include <regex>
-#include <numeric>
-#include <random>
-
-#include "IParallelGraph.h"
-#include "IParallelActiveVertexManager.h"
-#include "IParallelBoundaryVertexManager.h"
-
 namespace HeiProMap {
-
     class IParallelPartitionerConfiguration {
     public:
         virtual ~IParallelPartitionerConfiguration() = default;
@@ -48,8 +36,8 @@ namespace HeiProMap {
     class IParallelPartitioner {
     public:
         virtual ~IParallelPartitioner() = default;
+        virtual void partition(IParallelPartitionerConfiguration& i_config, p_graph_t& g, p_av_manager_t& av_manager, p_p_manager_t& p_manager, const std::vector<partition_t>& hierarchy, const std::vector<weight_t>& distance, f64 imbalance, u64 seed) = 0;
     };
-
 }
 
 #endif //HEIPROMAP_IPARALLELPARTITIONER_H

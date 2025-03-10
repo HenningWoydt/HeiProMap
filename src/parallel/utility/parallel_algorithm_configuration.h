@@ -27,14 +27,14 @@
 #ifndef HEIPROMAP_PARALLEL_ALGORITHM_CONFIGURATION_H
 #define HEIPROMAP_PARALLEL_ALGORITHM_CONFIGURATION_H
 
+#include <random>
 #include <string>
 #include <vector>
-#include <random>
 
-#include "../../commons.h"
-#include "../../commons/utils.h"
 #include "parallel_utils.h"
+#include "../../commons.h"
 #include "../../definitions.h"
+#include "../../commons/utils.h"
 #include "../coarsening/parallel_heavy_edge_matcher.h"
 #include "../partitioning/parallel_kaffpa_partitioner.h"
 

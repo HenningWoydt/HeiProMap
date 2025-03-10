@@ -24,28 +24,19 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include "JSON_utils.h"
+#ifndef HEIPROMAP_PARALLEL_DEFINITIONS_3_H
+#define HEIPROMAP_PARALLEL_DEFINITIONS_3_H
+
+#include "datastructures/parallel_boundary_vertex_manager.h"
+#include "datastructures/parallel_quotient_graph.h"
 
 namespace HeiProMap {
-    std::string to_JSON_value(const u8 x) { return std::to_string(x); }
+    typedef ParallelBoundaryVertexManager p_bv_manager_t;
+    typedef ParallelQuotientGraph p_q_graph_t;
 
-    std::string to_JSON_value(const u16 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const u32 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const u64 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const s8 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const s16 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const s32 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const s64 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const f32 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const f64 x) { return std::to_string(x); }
-
-    std::string to_JSON_value(const std::string& s) { return "\"" + s + "\""; }
+    // Macro to iterate over all boundary vertices
+#define forall_bv_iu(bv_manager, i, u)  for (size_t i = 0; i < bv_manager.size(); ++i) { const vertex_t u = bv_manager.get(i);
+#define forall_bv_id_iu(bv_manager, id, i, u)  for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
 }
+
+#endif //HEIPROMAP_PARALLEL_DEFINITIONS_3_H

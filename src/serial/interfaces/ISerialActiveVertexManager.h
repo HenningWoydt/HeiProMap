@@ -27,19 +27,20 @@
 #ifndef HEIPROMAP_ISERIALACTIVEVERTEXMANAGER_H
 #define HEIPROMAP_ISERIALACTIVEVERTEXMANAGER_H
 
-#include <vector>
+#include "../../definitions.h"
 
 namespace HeiProMap {
     class ISerialActiveVertexManager {
     public:
         virtual ~ISerialActiveVertexManager() = default;
-        virtual void initialize(size_t n) = 0;
-        virtual vertex_t get_n_active() const = 0;
-        virtual bool is_active(vertex_t u) const = 0;
-        virtual bool is_disabled(vertex_t u) const = 0;
-        virtual bool get_state(vertex_t u) const = 0;
-        virtual void contract(const EdgeUV* matches, size_t &matches_size) = 0;
-        virtual void uncontract(const EdgeUV* matches, size_t &matches_size) = 0;
+        virtual void initialize(const size_t n) = 0;
+        virtual size_t size() const = 0;
+        virtual vertex_t get(const size_t i) const = 0;
+        virtual bool is_active(const vertex_t u) const = 0;
+        virtual bool is_disabled(const vertex_t u) const = 0;
+        virtual bool get_state(const vertex_t u) const = 0;
+        virtual void contract(const EdgeUV* matches, const size_t& matches_size) = 0;
+        virtual void uncontract(const EdgeUV* matches, const size_t& matches_size) = 0;
     };
 }
 

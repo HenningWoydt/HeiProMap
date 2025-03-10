@@ -27,36 +27,40 @@
 #ifndef HEIPROMAP_IPARALLELREFINER_H
 #define HEIPROMAP_IPARALLELREFINER_H
 
-#include <string>
-#include <vector>
-#include <fstream>
 #include <regex>
-#include <numeric>
-#include <random>
+#include <vector>
 
-#include "IParallelActiveVertexManager.h"
-#include "IParallelBoundaryVertexManager.h"
-#include "IParallelDistanceOracle.h"
-#include "IParallelQuotientGraph.h"
-#include "../datastructures/parallel_static_csr_graph.h"
-#include "../datastructures/parallel_distance_oracle.h"
+#include "../../commons/random_engine.h"
+#include "../../definitions.h"
+#include "../../"
 
 namespace HeiProMap {
+    class IParallelGraphRefinerConfiguration {
+    public:
+        virtual ~IParallelGraphRefinerConfiguration() = default;
+    };
 
     class IParallelRefiner {
     public:
         virtual ~IParallelRefiner() = default;
-
-        // initialization
         virtual void initialize(vertex_t t_n,
                                 vertex_t t_m,
                                 partition_t t_k,
                                 weight_t t_lmax,
-                                const std::vector<partition_t> &t_hierarchy,
-                                const std::vector<weight_t> &t_distance,
-                                u64 t_seed) = 0;
-    };
+                                const std::vector<partition_t>& t_hierarchy,
+                                const std::vector<weight_t>& t_distance,
+                                RandomEngine& t_random_engine,
+                                const IParallelRefinerConfiguration& i_config,
+                                StatisticCollector& t_stat_collect) = 0;
 
+        virtual void refine(u64 level,
+                            const graph_t& g,
+                            const av_manager_t& av_manager,
+                            const d_oracle_t& d_oracle,
+                            bv_manager_t& bv_manager,
+                            p_manager_t& p_manager,
+                            q_graph_t& q_graph) = 0;
+    };
 }
 
 #endif //HEIPROMAP_IPARALLELREFINER_H

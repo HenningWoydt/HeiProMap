@@ -27,14 +27,27 @@
 #ifndef HEIPROMAP_STATISTIC_COLLECTOR_H
 #define HEIPROMAP_STATISTIC_COLLECTOR_H
 
-#ifndef STATISTICCOLLECTOR
-#define STATISTICCOLLECTOR false
+#ifndef COLLECT_METRICS
+#define COLLECT_METRICS true
 #endif
 
-#include "../utility/JSON_utils.h"
+#if COLLECT_METRICS
+#define METRICS(x) x
+#else
+#define METRICS(x)
+#endif
+
+#if COLLECT_METRICS
+#define METRICS_TIME(x) const auto x = std::chrono::high_resolution_clock::now();
+#else
+#define METRICS_TIME(x)
+#endif
+
+#include "../commons/JSON_utils.h"
 
 namespace HeiProMap {
     class StatisticCollector {
+#if COLLECT_METRICS
         u64 max_level  = 0;
         f64 total_time = 0.0;
 
@@ -44,46 +57,37 @@ namespace HeiProMap {
 
         // matching
         f64 total_matching_time = 0.0;
-#if STATISTICCOLLECTOR
         std::vector<f64> matching_time      = {0};
         std::vector<vertex_t> matching_size = {0};
         vertex_t total_matching_size        = 0;
-#endif
+        std::vector<JSONString> matching_method_stats;
 
         // coarsening
         f64 total_coarsening_time = 0.0;
-#if STATISTICCOLLECTOR
         std::vector<f64> coarsening_time          = {0.0};
         std::vector<vertex_t> coarsening_end_size = {0};
-#endif
 
         // uncoarsening
         f64 total_uncoarsening_time = 0.0;
-#if STATISTICCOLLECTOR
         std::vector<f64> uncoarsening_time          = {0.0};
         std::vector<vertex_t> uncoarsening_end_size = {0};
-#endif
 
         // refinement
         f64 total_refinement_time = 0.0;
-#if STATISTICCOLLECTOR
+        std::vector<std::map<std::string, JSONString>> refinement_method_stats;
         std::vector<f64> refinement_time    = {0.0};
         std::vector<u64> refinement_end_qap = {0};
-#endif
 
         // partition
         f64 total_partition_time = 0.0;
-#if STATISTICCOLLECTOR
         u64 partition_end_qap              = 0;
         weight_t partition_end_max_pweight = 0.0;
         f64 partition_end_avg_pweight      = 0.0;
         weight_t partition_end_min_pweight = 0.0;
         std::vector<weight_t> partition_end_pweights;
         bool partition_end_balanced = false;
-#endif
 
         // final information
-#if STATISTICCOLLECTOR
         u64 final_qap              = 0;
         weight_t final_max_pweight = 0.0;
         f64 final_avg_pweight      = 0.0;
@@ -91,7 +95,6 @@ namespace HeiProMap {
         std::vector<weight_t> final_pweights;
         u64 final_lmax      = 0;
         bool final_balanced = false;
-#endif
 
     public:
         StatisticCollector() {
@@ -110,77 +113,72 @@ namespace HeiProMap {
 
         void set_matching_time(const f64 time, const u64 level) {
             total_matching_time += time;
-#if STATISTICCOLLECTOR
             resize(level);
             matching_time[level] = time;
-#endif
         }
 
         void set_matching_stats(const u64 level, const vertex_t size) {
-#if STATISTICCOLLECTOR
             matching_size[level] = size;
             total_matching_size += size;
-#endif
         }
 
 
         void set_coarsening_time(const f64 time, const u64 level) {
             total_coarsening_time += time;
-#if STATISTICCOLLECTOR
             resize(level);
             coarsening_time[level] = time;
-#endif
         }
 
         void set_coarsening_stats(const vertex_t size, const u64 level) {
-#if STATISTICCOLLECTOR
             coarsening_end_size[level] = size;
-#endif
         }
 
         void set_uncoarsening_time(const f64 time, const u64 level) {
             total_uncoarsening_time += time;
-#if STATISTICCOLLECTOR
             resize(level);
             uncoarsening_time[level] = time;
-#endif
         }
 
         void set_uncoarsening_stats(const u64 level, const vertex_t size) {
-#if STATISTICCOLLECTOR
             uncoarsening_end_size[level] = size;
-#endif
         }
 
         void set_refinement_time(const f64 time, const u64 level) {
             total_refinement_time += time;
-#if STATISTICCOLLECTOR
             resize(level);
             refinement_time[level] = time;
-#endif
         }
 
         void set_refinement_stats(const u64 level, const u64 objective) {
-#if STATISTICCOLLECTOR
             refinement_end_qap[level] = objective;
-#endif
+        }
+
+        void add_refinement_method_stats(const u64 level, const std::string& method, const JSONString& stats) {
+            if (level + 1  > refinement_method_stats.size()) {
+                refinement_method_stats.resize(level + 1, std::map<std::string, JSONString>());
+            }
+            refinement_method_stats[level].emplace(method, stats);
+        }
+
+        void add_matching_method_stats(const u64 level, const JSONString& stats) {
+            if (level + 1  > matching_method_stats.size()) {
+                matching_method_stats.resize(level + 1);
+            }
+            matching_method_stats[level] = stats;
         }
 
         void set_partition_time(const f64 time) { total_partition_time = time; }
 
         void set_partition_stats(const u64 end_objective, const std::vector<weight_t>& pweights, const weight_t lmax) {
-#if STATISTICCOLLECTOR
             partition_end_qap         = end_objective;
             partition_end_pweights    = pweights;
             partition_end_max_pweight = max(pweights);
             partition_end_avg_pweight = (f64)avg(pweights);
             partition_end_min_pweight = min(pweights);
             partition_end_balanced    = partition_end_max_pweight <= lmax;
-#endif
         }
 
         void set_final(const u64 end_objective, const std::vector<weight_t>& pweights, const weight_t lmax) {
-#if STATISTICCOLLECTOR
             final_qap         = end_objective;
             final_pweights    = pweights;
             final_max_pweight = max(pweights);
@@ -188,7 +186,6 @@ namespace HeiProMap {
             final_min_pweight = min(pweights);
             final_lmax        = lmax;
             final_balanced    = final_max_pweight <= lmax;
-#endif
         }
 
         std::string to_JSON() const {
@@ -202,7 +199,6 @@ namespace HeiProMap {
             s += to_JSON_MACRO(total_partition_time);
             s += to_JSON_MACRO(total_uncoarsening_time);
             s += to_JSON_MACRO(total_refinement_time);
-#if STATISTICCOLLECTOR
             s += to_JSON_MACRO(max_level);
             s += to_JSON_MACRO(matching_time);
             s += to_JSON_MACRO(matching_size);
@@ -225,7 +221,9 @@ namespace HeiProMap {
             s += to_JSON_MACRO(final_pweights);
             s += to_JSON_MACRO(final_lmax);
             s += to_JSON_MACRO(final_balanced);
-#endif
+
+            s += to_JSON_MACRO(matching_method_stats);
+            s += to_JSON_MACRO(refinement_method_stats);
 
             s.pop_back();
             s.pop_back();
@@ -235,7 +233,6 @@ namespace HeiProMap {
 
     private:
         void resize(const u64 new_max_level) {
-#if STATISTICCOLLECTOR
             if (new_max_level > max_level) {
                 // matching
                 matching_time.resize(new_max_level + 1, 0.0);
@@ -255,8 +252,8 @@ namespace HeiProMap {
 
                 max_level = new_max_level;
             }
-#endif
         }
+#endif
     };
 }
 

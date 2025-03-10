@@ -29,39 +29,38 @@
 
 #include "../src/definitions.h"
 #include "../src/macros.h"
+#include "../src/commons/utils.h"
 #include "../src/serial/datastructures/solver.h"
 #include "../src/serial/utility/AlgorithmConfiguration.h"
-#include "../src/serial/utility/utils.h"
 
 using namespace HeiProMap;
 
 int main(const int argc, char* argv[]) {
     if (argc == 1) {
-        const auto sp = std::chrono::high_resolution_clock::now();
         {
             std::vector<std::pair<std::string, std::string>> input = {
                     // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
                     // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
                     // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
-                    // {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"},
-                    // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                    // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 3080796 in 3.655 s
+                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
                     // {"--graph", "../data/training/598a.graph"},
                     // {"--mapping", "../data/out/partition/598a.txt"},
                     // {"--statistics", "../data/out/statistics/598a.JSON"},
                     // {"--graph", "../data/training/rgg_n26.graph"},
                     // {"--mapping", "../data/out/partition/rgg_n26.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n26.JSON"},
-                    {"--graph", "../data/training/G3_circuit.graph"},
-                    {"--mapping", "../data/out/partition/G3_circuit.txt"},
-                    {"--statistics", "../data/out/statistics/G3_circuit.JSON"},
+                    // {"--graph", "../data/training/G3_circuit.graph"},
+                    // {"--mapping", "../data/out/partition/G3_circuit.txt"},
+                    // {"--statistics", "../data/out/statistics/G3_circuit.JSON"},
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"},
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "fastest"},
+                    {"--config", "strong"},
                     {"--seed", "0"},
 
                     // coarsening
@@ -152,8 +151,6 @@ int main(const int argc, char* argv[]) {
             for (int i = 0; i < argc; ++i) { delete[] argv[i]; }
             delete[] argv;
         }
-        const auto ep = std::chrono::high_resolution_clock::now();
-        std::cout << "Total time: " << get_seconds(sp, ep) << std::endl;
     } else {
         AlgorithmConfiguration ac(argc, argv);
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* MIT License
+ * MIT License
  *
  * This file is part of HeiProMap.
  *
@@ -27,18 +27,11 @@
 #ifndef HEIPROMAP_SIMPLE_REBALANCER_H
 #define HEIPROMAP_SIMPLE_REBALANCER_H
 
-#include <algorithm>
-#include <random>
-
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
-#include "../datastructures/indexed_max_heap.h"
 #include "../interfaces/ISerialActiveVertexManager.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialQuotientGraph.h"
-#include "../interfaces/ISerialRefiner.h"
-#include "../utility/qap.h"
-#include "../utility/utils.h"
 
 namespace HeiProMap {
     struct SimpleRebalancerConfiguration {};
@@ -50,10 +43,11 @@ namespace HeiProMap {
         vertex_t m_n;
         partition_t m_k;
         weight_t m_lmax;
+
     public:
         SimpleRebalancer(vertex_t t_n, partition_t t_k, weight_t t_lmax) {
-            m_n = t_n;
-            m_k = t_k;
+            m_n    = t_n;
+            m_k    = t_k;
             m_lmax = t_lmax;
         }
 

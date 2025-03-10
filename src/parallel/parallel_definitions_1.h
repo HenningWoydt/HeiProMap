@@ -27,16 +27,23 @@
 #ifndef HEIPROMAP_PARALLEL_DEFINITIONS_1_H
 #define HEIPROMAP_PARALLEL_DEFINITIONS_1_H
 
-#include "datastructures/parallel_graph.h"
 #include "datastructures/parallel_active_vertex_manager.h"
-#include "datastructures/parallel_partition_manager.h"
 #include "datastructures/parallel_distance_oracle.h"
+#include "datastructures/parallel_graph.h"
 
 namespace HeiProMap {
     typedef ParallelGraph               p_graph_t;
     typedef ParallelActiveVertexManager p_av_manager_t;
-    typedef ParallelPartitionManager    p_p_manager_t;
     typedef ParallelDistanceOracle      p_d_oracle_t;
+
+    // Macro to iterate over the neighborhood of vertex u of a graph
+#define forall_guivw(g, u, i, v, w)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.get_weight(u, i);
+#define forall_guiv(g, u, i, v)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i);
+
+    // Macro to iterate over all active vertices
+#define forall_av_iu(av_manager, i, u)  for (size_t i = 0; i < av_manager.size(); ++i) { const vertex_t u = av_manager.get(i);
+
+#define endfor }
 }
 
 #endif //HEIPROMAP_PARALLEL_DEFINITIONS_1_H

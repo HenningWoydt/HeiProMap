@@ -29,25 +29,40 @@
 
 #include <vector>
 
+#include "../serial_definitions_1.h"
+#include "../serial_definitions_2.h"
+#include "../serial_definitions_3.h"
+#include "../../definitions.h"
+
 namespace HeiProMap {
+    class ISerialRefinerConfiguration {
+    public:
+        virtual ~ISerialRefinerConfiguration() = default;
+
+        std::string name;
+        bool enabled = false;
+    };
+
     class ISerialRefiner {
     public:
         virtual ~ISerialRefiner() = default;
-        // initialization
         virtual void initialize(vertex_t t_n,
                                 vertex_t t_m,
                                 partition_t t_k,
                                 weight_t t_lmax,
                                 const std::vector<partition_t>& t_hierarchy,
                                 const std::vector<weight_t>& t_distance,
-                                u64 t_seed) = 0;
+                                RandomEngine& t_random_engine,
+                                const ISerialRefinerConfiguration& i_config,
+                                StatisticCollector& t_stat_collect) = 0;
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle>
-        void refine(TSerialGraph& g,
-                    TSerialActiveVertexManager& av_manager,
-                    TSerialBoundaryVertexManager& bv_manager,
-                    TSerialPartitionManager& p_manager,
-                    TSerialDistanceOracle& d_oracle) {}
+        virtual void refine(u64 level,
+                            const graph_t& g,
+                            const av_manager_t& av_manager,
+                            const d_oracle_t& d_oracle,
+                            bv_manager_t& bv_manager,
+                            p_manager_t& p_manager,
+                            q_graph_t& q_graph) = 0;
     };
 }
 
