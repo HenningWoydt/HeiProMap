@@ -32,7 +32,6 @@
 
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialQuotientGraph.h"
 #include "../interfaces/ISerialRefiner.h"
@@ -42,9 +41,12 @@
 namespace HeiProMap {
     class HierarchyAwareCyclesConfiguration final : public ISerialRefinerConfiguration {
     public:
+        explicit HierarchyAwareCyclesConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
     };
 
+    /*
     inline partition_t get_island_id(partition_t u_id, const std::vector<std::vector<partition_t>>& island_ids) {
         for (partition_t i = 0; i < island_ids.size(); ++i) {
             if (std::find(island_ids[i].begin(), island_ids[i].end(), u_id) != island_ids[i].end()) {
@@ -54,12 +56,14 @@ namespace HeiProMap {
         std::cout << "Error u_id " << u_id << " not found!" << std::endl;
         exit(EXIT_FAILURE);
     }
+     */
 
     /**
      * Since the top level of the hierarchy is the most important, try to optimize it the most.
      * Aggregate all partitions of the islands and then try to find moves between the islands instead of individual partitions.
      * If moves between the islands have been found, then try to distribute it onto the individual partitions.
      */
+    /*
     class HierarchyAwareCycleRefinement final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
@@ -194,7 +198,11 @@ namespace HeiProMap {
                 std::cout << "Hierarchy Aware Cycles: " << unavailable_moves.size() << " moves unavailable, but would improve by " << total_qap_delta << " in " << seconds << " seconds!" << std::endl;
             }
         }
+
+        JSONString get_stats() override { return {}; };
+
     };
+     */
 }
 
 #endif //HEIPROMAP_HIERARCHY_AWARE_CYCLE_REFINEMENT_H

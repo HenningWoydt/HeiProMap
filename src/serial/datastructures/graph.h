@@ -37,6 +37,7 @@
 #include "../../macros.h"
 #include "../../commons/utils.h"
 #include "../interfaces/ISerialGraph.h"
+#include "../coarsening/matching.h"
 
 namespace HeiProMap {
     /**
@@ -257,11 +258,9 @@ namespace HeiProMap {
             close(fd);
         }
 
+        /*
         Graph(const Graph& g,
-              const EdgeUV* matches,
-              const size_t& matches_size) {
-            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
-
+              const Matching &matching) {
             vertex_t m_n_64 = round_up_64(g.get_n() + 1);
             vertex_t m_m_64 = round_up_64(g.get_m() + 1);
 
@@ -287,8 +286,8 @@ namespace HeiProMap {
             vertex_t* vertex_neighbor = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
 
             // check the matching
-            for (size_t i = 0; i < matches_size; ++i) {
-                const auto [u, v] = matches[i];
+            for (size_t i = 0; i < matching.size(); ++i) {
+                const auto [u, v] = matching[i];
 
                 vertex_state[u]    = FIRST_MATCHED;
                 vertex_state[v]    = SECOND_MATCHED;
@@ -376,6 +375,120 @@ namespace HeiProMap {
             free(vertex_state);
             free(vertex_neighbor);
         }
+        */
+
+        Graph(const Graph& g,
+              Matching &matching) {
+            matching.set_partners();
+            matching.set_translation();
+
+            m_n = matching.get_n_coarse_nodes();
+
+            vertex_t m_n_64 = round_up_64(m_n + 1);
+            vertex_t m_m_64 = round_up_64(g.get_m() + 1);
+
+            m_curr_m = 0;
+
+            m_vertex_weights = g.m_vertex_weights;
+            m_v_weights      = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+
+            m_neighborhoods = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_edges         = (EdgeVW*)aligned_alloc(64, m_m_64 * sizeof(size_t));
+
+            m_neighborhoods[0] = 0;
+            for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
+                if (old_u == matching.get_partner(old_u)) {
+                    // the vertex was not matched, so copy it to the next graph
+                    vertex_t new_u = matching.get_n(old_u);
+                    m_v_weights[new_u] = g.get_weight(old_u);
+
+                    for (size_t i = 0; i < g.size(old_u); ++i) {
+                        vertex_t vv = g.neighbor(old_u, i);
+                        vertex_t vv_partner = matching.get_partner(vv);
+                        weight_t ww = g.get_weight(old_u, i);
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = std::min(vv, vv_partner);
+
+                        // map to the new node range
+                        vv = matching.get_n(vv);
+
+                        // if the edge is present, then add the weight, else expand it
+                        bool found = false;
+                        for (size_t j = m_neighborhoods[new_u]; j < m_curr_m; ++j) {
+                            bool same = m_edges[j].v == vv;
+                            m_edges[j].w += same * ww;
+                            found |= same;
+                        }
+
+                        m_edges[m_curr_m].v = vv;
+                        m_edges[m_curr_m].w = ww;
+                        m_curr_m += !found;
+                    }
+                    m_neighborhoods[new_u + 1] = m_curr_m;
+                } else if (old_u < matching.get_partner(old_u)) {
+                    vertex_t new_u = matching.get_n(old_u);
+
+                    // the vertex gets all neighbors of u and v
+                    vertex_t old_v = matching.get_partner(old_u);
+
+                    m_v_weights[new_u] = g.get_weight(old_u) + g.get_weight(old_v);
+
+                    for (size_t i = 0; i < g.size(old_u); ++i) {
+                        vertex_t vv = g.neighbor(old_u, i);
+                        vertex_t vv_partner = matching.get_partner(vv);
+                        weight_t ww = g.get_weight(old_u, i);
+                        // do not add edge to matched vertex
+                        if (vv == old_v) { continue; }
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = std::min(vv, vv_partner);
+
+                        // map to the new node range
+                        vv = matching.get_n(vv);
+
+                        // if the edge is present, then add the weight, else expand it
+                        bool found = false;
+                        for (size_t j = m_neighborhoods[new_u]; j < m_curr_m; ++j) {
+                            bool same = m_edges[j].v == vv;
+                            m_edges[j].w += same * ww;
+                            found |= same;
+                        }
+
+                        m_edges[m_curr_m].v = vv;
+                        m_edges[m_curr_m].w = ww;
+                        m_curr_m += !found;
+                    }
+                    for (size_t i = 0; i < g.size(old_v); ++i) {
+                        vertex_t vv = g.neighbor(old_v, i);
+                        vertex_t vv_partner = matching.get_partner(vv);
+                        weight_t ww = g.get_weight(old_v, i);
+                        // do not add edge to matched vertex
+                        if (vv == old_u) { continue; }
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = std::min(vv, vv_partner);
+
+                        // map to the new node range
+                        vv = matching.get_n(vv);
+
+                        // if the edge is present, then add the weight, else expand it
+                        bool found = false;
+                        for (size_t j = m_neighborhoods[new_u]; j < m_curr_m; ++j) {
+                            bool same = m_edges[j].v == vv;
+                            m_edges[j].w += same * ww;
+                            found |= same;
+                        }
+
+                        m_edges[m_curr_m].v = vv;
+                        m_edges[m_curr_m].w = ww;
+                        m_curr_m += !found;
+                    }
+                    m_neighborhoods[new_u + 1] = m_curr_m;
+                }
+            }
+            m_m = m_curr_m;
+        }
 
         // Move constructor
         Graph(Graph&& other) noexcept {
@@ -397,7 +510,6 @@ namespace HeiProMap {
 
         // Optionally disable copying.
         Graph(const Graph&) = delete;
-
         Graph& operator=(const Graph&) = delete;
 
         ~Graph() override {

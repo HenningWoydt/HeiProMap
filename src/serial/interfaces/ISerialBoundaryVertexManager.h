@@ -35,15 +35,15 @@ namespace HeiProMap {
     class ISerialBoundaryVertexManager {
     public:
         virtual ~ISerialBoundaryVertexManager() = default;
-        virtual void initialize(const vertex_t t_n, const partition_t t_k) = 0;
+        virtual void initialize(vertex_t t_n, partition_t t_k) = 0;
         virtual size_t size() = 0;
-        virtual size_t size(const partition_t id) = 0;
-        virtual vertex_t get(const size_t i) = 0;
-        virtual vertex_t get(const partition_t id, const size_t i) = 0;
-        virtual bool is_boundary(const vertex_t u) const = 0;
-        virtual void add(const vertex_t u, const partition_t id) = 0;
-        virtual void move(const graph_t& g, const p_manager_t& p_manager, const vertex_t u, const partition_t old_id, const partition_t new_id) = 0;
-        virtual void uncontract(const graph_t& g, const av_manager_t& av_manager, const p_manager_t& p_manager) = 0;
+        virtual size_t size(partition_t id) = 0;
+        virtual vertex_t get(size_t i) = 0;
+        virtual vertex_t get(partition_t id, size_t i) = 0;
+        virtual bool is_boundary(vertex_t u) const = 0;
+        virtual void add(vertex_t u, partition_t id) = 0;
+        virtual void move(const graph_t& g, const p_manager_t& p_manager, vertex_t u, partition_t old_id, partition_t new_id) = 0;
+        virtual void uncontract(const graph_t& g, const p_manager_t& p_manager) = 0;
     };
 }
 

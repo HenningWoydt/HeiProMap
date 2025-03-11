@@ -36,19 +36,19 @@
 
 namespace HeiProMap {
     class BoundaryVertexManager final : public ISerialBoundaryVertexManager {
-        vertex_t m_n    = 0;
+        vertex_t    m_n = 0;
         partition_t m_k = 0;
 
-        vertex_t m_n_boundary        = 0;
-        vertex_t* m_n_boundary_edges = nullptr;
+        vertex_t m_n_boundary = 0;
+        vertex_t *m_n_boundary_edges = nullptr;
 
-        vertex_t** m_boundaries   = nullptr;
-        size_t* m_boundaries_size = nullptr;
-        size_t* m_vertex_idx      = nullptr;
+        vertex_t **m_boundaries     = nullptr;
+        size_t   *m_boundaries_size = nullptr;
+        size_t   *m_vertex_idx      = nullptr;
 
-        vertex_t* m_complete_boundary          = nullptr;
-        size_t* m_complete_boundary_vertex_idx = nullptr;
-        size_t m_complete_boundary_size        = 0;
+        vertex_t *m_complete_boundary            = nullptr;
+        size_t   *m_complete_boundary_vertex_idx = nullptr;
+        size_t m_complete_boundary_size = 0;
 
     public:
         ~BoundaryVertexManager() override {
@@ -68,29 +68,33 @@ namespace HeiProMap {
             m_n = t_n;
             m_k = t_k;
 
-            vertex_t m_n_64    = round_up_64(m_n);
-            m_n_boundary_edges = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            vertex_t m_n_64 = round_up_64(m_n);
+            m_n_boundary_edges = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             std::fill_n(m_n_boundary_edges, m_n_64, 0);
 
             vertex_t m_k_64 = round_up_64(m_k);
-            m_boundaries    = (vertex_t**)aligned_alloc(64, m_k_64 * sizeof(vertex_t*));
+            m_boundaries = (vertex_t **) aligned_alloc(64, m_k_64 * sizeof(vertex_t *));
             std::fill_n(m_boundaries, m_k_64, nullptr);
             for (partition_t i = 0; i < m_k; i++) {
-                m_boundaries[i] = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+                m_boundaries[i] = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             }
-            m_boundaries_size = (size_t*)aligned_alloc(64, m_k_64 * sizeof(size_t));
+            m_boundaries_size = (size_t *) aligned_alloc(64, m_k_64 * sizeof(size_t));
             std::fill_n(m_boundaries_size, m_k_64, 0);
-            m_vertex_idx = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_vertex_idx = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
 
-            m_complete_boundary            = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
-            m_complete_boundary_vertex_idx = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_complete_boundary            = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            m_complete_boundary_vertex_idx = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
             m_complete_boundary_size       = 0;
         }
 
         size_t size() override { return m_n_boundary; }
+
         size_t size(const partition_t id) override { return m_boundaries_size[id]; }
+
         vertex_t get(const size_t i) override { return m_complete_boundary[i]; }
+
         vertex_t get(const partition_t id, const size_t i) override { return m_boundaries[id][i]; }
+
         bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
 
         void add(const vertex_t u,
@@ -107,8 +111,8 @@ namespace HeiProMap {
             m_n_boundary_edges[u] += 1;
         }
 
-        void move(const graph_t& g,
-                  const p_manager_t& p_manager,
+        void move(const graph_t &g,
+                  const p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) override {
@@ -156,23 +160,22 @@ namespace HeiProMap {
             if (!u_was_boundary && m_n_boundary_edges[u] > 0) { emplace_in_complete(u); }
         }
 
-        void uncontract(const graph_t& new_g,
-                        const av_manager_t& av_manager,
-                        const p_manager_t& p_manager) override {
+        void uncontract(const graph_t &g,
+                        const p_manager_t &p_manager) override {
             // compute all from scratch
             std::fill_n(m_n_boundary_edges, m_n, 0);
             std::fill_n(m_boundaries_size, m_k, 0);
             m_complete_boundary_size = 0;
             m_n_boundary             = 0;
 
-            forall_av_iu(av_manager, j, u)
+            forall_gu(g, u)
                 {
-                    size_t n_different = 0;
-                    partition_t u_id   = p_manager[u];
+                    size_t      n_different = 0;
+                    partition_t u_id        = p_manager[u];
 
-                    for (size_t i = 0; i < new_g.size(u); ++i) {
-                        const vertex_t v = new_g.neighbor(u, i);
-                        partition_t v_id = p_manager[v];
+                    for (size_t i = 0; i < g.size(u); ++i) {
+                        const vertex_t v    = g.neighbor(u, i);
+                        partition_t    v_id = p_manager[v];
 
                         n_different += u_id != v_id;
                     }
@@ -211,7 +214,7 @@ namespace HeiProMap {
         void remove(const vertex_t u,
                     const partition_t id) const {
             vertex_t last_vertex = m_boundaries[id][--m_boundaries_size[id]];
-            size_t u_idx         = m_vertex_idx[u];
+            size_t   u_idx       = m_vertex_idx[u];
 
             m_boundaries[id][u_idx]   = last_vertex;
             m_vertex_idx[last_vertex] = u_idx;

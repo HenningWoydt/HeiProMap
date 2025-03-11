@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_ISERIALREFINER_H
 #define HEIPROMAP_ISERIALREFINER_H
 
+#include <utility>
 #include <vector>
 
 #include "../serial_definitions_1.h"
@@ -37,6 +38,7 @@
 namespace HeiProMap {
     class ISerialRefinerConfiguration {
     public:
+        explicit ISerialRefinerConfiguration(const std::string &t_name) { name = t_name; }
         virtual ~ISerialRefinerConfiguration() = default;
 
         std::string name;
@@ -58,11 +60,12 @@ namespace HeiProMap {
 
         virtual void refine(u64 level,
                             const graph_t& g,
-                            const av_manager_t& av_manager,
                             const d_oracle_t& d_oracle,
                             bv_manager_t& bv_manager,
                             p_manager_t& p_manager,
                             q_graph_t& q_graph) = 0;
+
+        virtual JSONString get_stats() = 0;
     };
 }
 

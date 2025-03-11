@@ -34,6 +34,11 @@ namespace HeiProMap {
         T* m_translation_o_to_n = nullptr;
         T* m_translation_n_to_o = nullptr;
 
+#if ASSERT_ENABLED
+        u8* o_to_n_set = nullptr;
+        u8* n_to_o_set = nullptr;
+#endif
+
     public:
         /**
          * Default constructor.
@@ -43,6 +48,11 @@ namespace HeiProMap {
         ~TranslationTable() {
             free(m_translation_o_to_n);
             free(m_translation_n_to_o);
+
+#if ASSERT_ENABLED
+            free(o_to_n_set);
+            free(n_to_o_set);
+#endif
         }
 
         /**
@@ -53,8 +63,12 @@ namespace HeiProMap {
          */
         void add(const T o, const T n) {
             m_translation_o_to_n[o] = n;
-
             m_translation_n_to_o[n] = o;
+
+#if ASSERT_ENABLED
+            o_to_n_set[o] = 1;
+            n_to_o_set[n] = 1;
+#endif
         }
 
         void reserve(size_t n_space, size_t o_space){
@@ -65,6 +79,15 @@ namespace HeiProMap {
             size_t o_space_64 = round_up_64(o_space + 1);
             m_translation_n_to_o = (T*) aligned_alloc(64, n_space_64 * sizeof(T));
             m_translation_o_to_n = (T*) aligned_alloc(64, o_space_64 * sizeof(T));
+
+#if ASSERT_ENABLED
+            free(o_to_n_set);
+            free(n_to_o_set);
+            n_to_o_set = (u8*) aligned_alloc(64, n_space_64 * sizeof(u8));
+            o_to_n_set = (u8*) aligned_alloc(64, o_space_64 * sizeof(u8));
+            std::fill_n(n_to_o_set, n_space_64, 0);
+            std::fill_n(o_to_n_set, o_space_64, 0);
+#endif
         }
 
         /**
@@ -73,6 +96,7 @@ namespace HeiProMap {
          * @param o Old value
          */
         T get_n(const T o) const {
+            ASSERT(o_to_n_set[o] == 1);
             return m_translation_o_to_n[o];
         }
 
@@ -82,6 +106,7 @@ namespace HeiProMap {
          * @param n New value.
          */
         T get_o(const T n) const {
+            ASSERT(n_to_o_set[n] == 1);
             return m_translation_n_to_o[n];
         }
     };

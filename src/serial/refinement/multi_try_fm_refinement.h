@@ -38,46 +38,48 @@
 namespace HeiProMap {
     class MultiTryFmRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
+        explicit MultiTryFmRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+
         u64 max_iteration = 1;
         f64 alpha         = 10.0;
         f64 beta          = 1.0;
     };
 
+    /*
     class MultiTryFMRefinement final : public ISerialRefiner {
     private:
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n    = 0;
+        vertex_t                 m_m    = 0;
+        partition_t              m_k    = 0;
+        weight_t                 m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
+        std::vector<weight_t>    m_distance;
 
-        u32* vertex_used = nullptr;
+        u32 *vertex_used = nullptr;
         u32 vertex_mark  = 0;
 
-        u32* block_used = nullptr;
+        u32 *block_used = nullptr;
         u32 block_mark  = 0;
 
-        vertex_t* curr_boundary   = nullptr;
-        size_t curr_boundary_size = 0;
+        vertex_t *curr_boundary     = nullptr;
+        size_t   curr_boundary_size = 0;
 
-        KWayFMMove* moves = nullptr;
-        size_t moves_size = 0;
+        KWayFMMove *moves     = nullptr;
+        size_t     moves_size = 0;
 
-        s64* last_qap_delta       = nullptr;
-        partition_t* last_best_id = nullptr;
+        // priority queues
+        IndexedMaxHeap<KWayFMMove> boundary_vertices;
 
-        std::priority_queue<KWayFMMove> pqueue;
+        RandomEngine                            *random_engine    = nullptr;
+        const MultiTryFmRefinementConfiguration *config           = nullptr;
+        StatisticCollector                      *m_stat_collector = nullptr;
 
-        RandomEngine* random_engine                     = nullptr;
-        const MultiTryFmRefinementConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector            = nullptr;
-
-        METRICS(f64 global_time = 0.0;)
-        METRICS(f64 global_time_get_boundary = 0.0 ;)
-        METRICS(f64 global_time_initialize = 0.0 ;)
-        METRICS(f64 global_time_queue = 0.0 ;)
-        METRICS(f64 global_time_moves = 0.0 ;)
+        METRICS(std::vector<std::vector<f64>> iteration_time;)
+        METRICS(std::vector<std::vector<f64>> iteration_time_get_boundary;)
+        METRICS(std::vector<std::vector<f64>> iteration_time_initialize;)
+        METRICS(std::vector<std::vector<f64>> iteration_time_queue;)
+        METRICS(std::vector<std::vector<f64>> iteration_time_moves;)
+        METRICS(std::vector<std::vector<s64>> iteration_qap_delta;)
 
     public:
         MultiTryFMRefinement() = default;
@@ -87,19 +89,17 @@ namespace HeiProMap {
             free(block_used);
             free(curr_boundary);
             free(moves);
-            free(last_qap_delta);
-            free(last_best_id);
         }
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
-                        RandomEngine& t_random_engine,
-                        const ISerialRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
+                        RandomEngine &t_random_engine,
+                        const ISerialRefinerConfiguration &i_config,
+                        StatisticCollector &t_stat_collect) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -108,42 +108,54 @@ namespace HeiProMap {
             m_distance  = t_distance;
 
             random_engine    = &t_random_engine;
-            config           = dynamic_cast<const MultiTryFmRefinementConfiguration*>(&i_config);
+            config           = dynamic_cast<const MultiTryFmRefinementConfiguration *>(&i_config);
             m_stat_collector = &t_stat_collect;
 
-            vertex_t m_n_64    = round_up_64(m_n);
+            vertex_t    m_n_64 = round_up_64(m_n);
             partition_t m_k_64 = round_up_64(m_k);
 
-            vertex_used = (u32*)aligned_alloc(64, sizeof(u32) * m_n_64);
-            block_used  = (u32*)aligned_alloc(64, sizeof(u32) * m_k_64);
+            vertex_used = (u32 *) aligned_alloc(64, sizeof(u32) * m_n_64);
+            block_used  = (u32 *) aligned_alloc(64, sizeof(u32) * m_k_64);
 
-            curr_boundary      = (vertex_t*)aligned_alloc(64, sizeof(vertex_t) * m_n_64);
+            curr_boundary      = (vertex_t *) aligned_alloc(64, sizeof(vertex_t) * m_n_64);
             curr_boundary_size = 0;
 
-            moves      = (KWayFMMove*)aligned_alloc(64, sizeof(KWayFMMove) * m_n_64);
+            moves      = (KWayFMMove *) aligned_alloc(64, sizeof(KWayFMMove) * m_n_64);
             moves_size = 0;
 
-            last_qap_delta = (s64*)aligned_alloc(64, sizeof(s64) * m_n_64);
-            last_best_id   = (partition_t*)aligned_alloc(64, sizeof(partition_t) * m_n_64);
+            boundary_vertices.initialize(m_n);
         }
 
         void refine(const u64 level,
-                    const graph_t& g,
-                    const av_manager_t& av_manager,
-                    const d_oracle_t& d_oracle,
-                    bv_manager_t& bv_manager,
-                    p_manager_t& p_manager,
-                    q_graph_t& q_graph) override {
-            METRICS(f64 level_time = 0.0;)
-            METRICS(f64 level_time_get_boundary = 0.0 ;)
-            METRICS(f64 level_time_initialize = 0.0 ;)
-            METRICS(f64 level_time_queue = 0.0 ;)
-            METRICS(f64 level_time_moves = 0.0 ;)
+                    const graph_t &g,
+                    const av_manager_t &av_manager,
+                    const d_oracle_t &d_oracle,
+                    bv_manager_t &bv_manager,
+                    p_manager_t &p_manager,
+                    q_graph_t &q_graph) override {
+            METRICS(std::vector<f64> time;)
+            METRICS(std::vector<f64> time_get_boundary;)
+            METRICS(std::vector<f64> time_initialize;)
+            METRICS(std::vector<f64> time_queue;)
+            METRICS(std::vector<f64> time_moves;)
+            METRICS(std::vector<s64> qap_delta;)
 
             f64 alpha = config->alpha;
-            f64 beta  = std::log(g.get_n());
+            f64 beta  = std::log(av_manager.size());
 
-            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+            bool     positive_move_occurred = true;
+            for (u64 iteration              = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
+                METRICS(time.push_back(0.0);)
+                METRICS(time_get_boundary.push_back(0.0);)
+                METRICS(time_initialize.push_back(0.0);)
+                METRICS(time_queue.push_back(0.0);)
+                METRICS(time_moves.push_back(0.0);)
+                METRICS(qap_delta.push_back(0);)
+
+                METRICS_TIME(sp)
+
+                positive_move_occurred = false;
+
                 METRICS_TIME(sp_get_boundary)
                 curr_boundary_size = 0;
                 forall_bv_iu(bv_manager, i, u)
@@ -155,7 +167,7 @@ namespace HeiProMap {
 
                 METRICS_TIME(ep_get_boundary)
 
-                METRICS(level_time_get_boundary += get_seconds(sp_get_boundary, ep_get_boundary);)
+                METRICS(time_get_boundary.back() += get_seconds(sp_get_boundary, ep_get_boundary);)
 
                 vertex_mark += 1;
                 for (size_t ii = 0; ii < curr_boundary_size; ++ii) {
@@ -164,34 +176,32 @@ namespace HeiProMap {
 
                     METRICS_TIME(sp_initialize)
 
-                    pqueue = std::priority_queue<KWayFMMove>();
+                    boundary_vertices.clear();
 
                     // insert u into the priority queue
-                    partition_t u_id  = p_manager[u];
-                    weight_t u_weight = g.get_weight(u);
+                    partition_t u_id     = p_manager[u];
+                    weight_t    u_weight = g.get_weight(u);
 
                     // find all connected partitions to u
                     block_mark += 1;
                     partition_t best_id;
-                    s64 best_qap_delta = -std::numeric_limits<s64>::max();
+                    s64         best_qap_delta = -std::numeric_limits<s64>::max();
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
                             if (v_id != u_id && block_used[v_id] != block_mark && p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
-                                s64 qap_delta    = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                s64 u_qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                                 block_used[v_id] = block_mark;
 
-                                if (qap_delta > best_qap_delta) {
-                                    best_qap_delta = qap_delta;
+                                if (u_qap_delta > best_qap_delta) {
+                                    best_qap_delta = u_qap_delta;
                                     best_id        = v_id;
                                 }
                             }
                         }
                     endfor
                     if (best_qap_delta != -std::numeric_limits<s64>::max()) {
-                        pqueue.emplace(u, u_id, best_id, best_qap_delta);
-                        last_qap_delta[u] = best_qap_delta;
-                        last_best_id[u]   = best_id;
+                        boundary_vertices.push(u, KWayFMMove(u, u_id, best_id, best_qap_delta));
                     }
 
                     // insert all neighbors of u that are boundary into the queue
@@ -200,60 +210,54 @@ namespace HeiProMap {
                             if (vertex_used[neighbor] == vertex_mark) { continue; }
                             if (!bv_manager.is_boundary(neighbor)) { continue; }
 
-                            partition_t neighbor_id  = p_manager[neighbor];
-                            weight_t neighbor_weight = g.get_weight(neighbor);
+                            partition_t neighbor_id     = p_manager[neighbor];
+                            weight_t    neighbor_weight = g.get_weight(neighbor);
 
                             block_mark += 1;
-                            best_qap_delta = -std::numeric_limits<s64>::max();
+                            best_qap_delta              = -std::numeric_limits<s64>::max();
                             forall_guiv(g, neighbor, j, v)
                                 {
                                     partition_t v_id = p_manager[v];
                                     if (v_id != neighbor_id && block_used[v_id] != block_mark && p_manager.get_bweight(v_id) + neighbor_weight <= m_lmax) {
-                                        s64 qap_delta    = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
+                                        s64 u_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
                                         block_used[v_id] = block_mark;
 
-                                        if (qap_delta > best_qap_delta) {
-                                            best_qap_delta = qap_delta;
+                                        if (u_qap_delta > best_qap_delta) {
+                                            best_qap_delta = u_qap_delta;
                                             best_id        = v_id;
                                         }
                                     }
                                 }
                             endfor
                             if (best_qap_delta != -std::numeric_limits<s64>::max()) {
-                                pqueue.emplace(neighbor, neighbor_id, best_id, best_qap_delta);
-                                last_qap_delta[neighbor] = best_qap_delta;
-                                last_best_id[neighbor]   = best_id;
+                                boundary_vertices.push(neighbor, KWayFMMove(neighbor, neighbor_id, best_id, best_qap_delta));
                             }
                         }
                     endfor
 
                     METRICS_TIME(ep_initialize)
-                    METRICS(level_time_initialize += get_seconds(sp_initialize, ep_initialize);)
+                    METRICS(time_initialize.back() += get_seconds(sp_initialize, ep_initialize);)
 
                     // process the queue
-                    moves_size        = 0;
-                    size_t best_idx   = 0;
-                    s64 curr_qap_gain = 0;
-                    s64 max_qap_gain  = 0;
+                    moves_size = 0;
+                    size_t best_idx      = 0;
+                    s64    curr_qap_gain = 0;
+                    s64    max_qap_gain  = 0;
 
-                    f64 steps_since_last_improvement = 0.0;
-                    f64 qap_gain_mean                = 0.0;
-                    f64 qap_gain_var                 = 0.0;
+                    f64         steps_since_last_improvement = 0.0;
+                    f64         qap_gain_mean                = 0.0;
+                    f64         qap_gain_var                 = 0.0;
 
                     METRICS_TIME(sp_queue)
 
-                    while (!pqueue.empty()) {
-                        const KWayFMMove move = pqueue.top();
-                        pqueue.pop();
+                    while (!boundary_vertices.empty()) {
+                        const KWayFMMove move = boundary_vertices.top();
+                        boundary_vertices.pop();
 
-                        if (vertex_used[move.u] == vertex_mark) { continue; }
-                        if (move.qap_delta != last_qap_delta[move.u]) { continue; }
-                        if (move.to_move_id != last_best_id[move.u]) { continue; }
-
-                        vertex_t vertex        = move.u;
-                        partition_t vertex_id  = p_manager[vertex];
-                        weight_t vertex_weight = g.get_weight(vertex);
-                        partition_t move_id    = move.to_move_id;
+                        vertex_t    vertex        = move.u;
+                        partition_t vertex_id     = p_manager[vertex];
+                        weight_t    vertex_weight = g.get_weight(vertex);
+                        partition_t move_id       = move.to_move_id;
 
                         if (!is_connected_to(g, p_manager, vertex, move_id)) { continue; }
                         if (p_manager.get_bweight(move_id) + vertex_weight > m_lmax) { continue; }
@@ -274,15 +278,13 @@ namespace HeiProMap {
                         vertex_used[vertex] = vertex_mark;
 
                         steps_since_last_improvement += 1.0;
-                        f64 new_qap_gain_mean = qap_gain_mean + ((f64)move.qap_delta - qap_gain_mean) / steps_since_last_improvement;
-                        f64 new_qap_gain_var  = (qap_gain_var + ((f64)move.qap_delta - qap_gain_mean) * ((f64)move.qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
+                        f64 new_qap_gain_mean = qap_gain_mean + ((f64) move.qap_delta - qap_gain_mean) / steps_since_last_improvement;
+                        f64 new_qap_gain_var  = (qap_gain_var + ((f64) move.qap_delta - qap_gain_mean) * ((f64) move.qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
 
                         qap_gain_mean = new_qap_gain_mean;
                         qap_gain_var  = new_qap_gain_var;
 
-                        if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
-                            break;
-                        }
+                        if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) { break; }
 
                         // we have to push or update the neighbors that were not moved already
                         forall_guiv(g, vertex, i, neighbor)
@@ -290,79 +292,131 @@ namespace HeiProMap {
                                 if (vertex_used[neighbor] == vertex_mark) { continue; }
                                 if (!is_boundary(g, p_manager, neighbor)) { continue; }
 
-                                partition_t neighbor_id  = p_manager[neighbor];
-                                weight_t neighbor_weight = g.get_weight(neighbor);
+                                partition_t neighbor_id     = p_manager[neighbor];
+                                weight_t    neighbor_weight = g.get_weight(neighbor);
 
                                 block_mark += 1;
-                                best_qap_delta = -std::numeric_limits<s64>::max();
+                                best_qap_delta              = -std::numeric_limits<s64>::max();
                                 forall_guiv(g, neighbor, j, v)
                                     {
                                         partition_t v_id = p_manager[v];
                                         if (v_id != neighbor_id && block_used[v_id] != block_mark && p_manager.get_bweight(v_id) + neighbor_weight <= m_lmax) {
-                                            s64 qap_delta    = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
+                                            s64 v_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
                                             block_used[v_id] = block_mark;
 
-                                            if (qap_delta > best_qap_delta) {
-                                                best_qap_delta = qap_delta;
+                                            if (v_qap_delta > best_qap_delta) {
+                                                best_qap_delta = v_qap_delta;
                                                 best_id        = v_id;
                                             }
                                         }
                                     }
                                 endfor
                                 if (best_qap_delta != -std::numeric_limits<s64>::max()) {
-                                    pqueue.emplace(neighbor, neighbor_id, best_id, best_qap_delta);
-                                    last_qap_delta[neighbor] = best_qap_delta;
-                                    last_best_id[neighbor]   = best_id;
+                                    boundary_vertices.push_update(neighbor, KWayFMMove(neighbor, neighbor_id, best_id, best_qap_delta));
                                 }
                             }
                         endfor
                     }
 
                     METRICS_TIME(ep_queue)
-                    METRICS(level_time_queue += get_seconds(sp_queue, ep_queue) ;)
+                    METRICS(time_queue.back() += get_seconds(sp_queue, ep_queue);)
 
                     METRICS_TIME(sp_moves)
                     // revert all moves in partitioning manager
-                    for (size_t i = 0; i < moves_size; i++) {
-                        vertex_t vertex        = moves[moves_size - 1 - i].u;
-                        weight_t vertex_weight = g.get_weight(vertex);
-                        partition_t vertex_id  = moves[moves_size - 1 - i].to_move_id;
-                        partition_t move_id    = moves[moves_size - 1 - i].u_id;
+                    for (size_t i                            = 0; i < moves_size; i++) {
+                        vertex_t    vertex        = moves[moves_size - 1 - i].u;
+                        weight_t    vertex_weight = g.get_weight(vertex);
+                        partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
+                        partition_t move_id       = moves[moves_size - 1 - i].u_id;
 
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                     }
 
                     // make all moves to best index
                     for (size_t i = 0; i < best_idx; ++i) {
-                        vertex_t vertex        = moves[i].u;
-                        weight_t vertex_weight = g.get_weight(vertex);
-                        partition_t vertex_id  = moves[i].u_id;
-                        partition_t move_id    = moves[i].to_move_id;
+                        vertex_t    vertex        = moves[i].u;
+                        weight_t    vertex_weight = g.get_weight(vertex);
+                        partition_t vertex_id     = moves[i].u_id;
+                        partition_t move_id       = moves[i].to_move_id;
 
                         bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                         q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                     }
+
+                    positive_move_occurred |= max_qap_gain > 0;
+
                     METRICS_TIME(ep_moves)
-                    METRICS(level_time_moves += get_seconds(sp_moves, ep_moves) ;)
+                    METRICS(time_moves.back() += get_seconds(sp_moves, ep_moves);)
+                    METRICS(qap_delta.back() += max_qap_gain;)
                 }
+
+                METRICS_TIME(ep)
+                METRICS(time.back() += get_seconds(sp, ep);)
             }
-            METRICS(level_time = level_time_get_boundary + level_time_initialize + level_time_queue + level_time_moves ;)
+            METRICS(iteration_time.push_back(time);)
+            METRICS(iteration_time_get_boundary.push_back(time_get_boundary);)
+            METRICS(iteration_time_initialize.push_back(time_initialize);)
+            METRICS(iteration_time_queue.push_back(time_queue);)
+            METRICS(iteration_time_moves.push_back(time_moves);)
+            METRICS(iteration_qap_delta.push_back(qap_delta);)
+        }
 
-            METRICS(global_time += level_time;)
-            METRICS(global_time_get_boundary += level_time_get_boundary ;)
-            METRICS(global_time_initialize += level_time_initialize ;)
-            METRICS(global_time_queue += level_time_queue ;)
-            METRICS(global_time_moves += level_time_moves ;)
+        JSONString get_stats() override {
+            std::string stats = "{ \n";
+#if COLLECT_METRICS
+            std::vector<f64> level_time(iteration_time.size(), 0.0);
+            std::vector<f64> level_time_get_boundary(iteration_time.size(), 0.0);
+            std::vector<f64> level_time_initialize(iteration_time.size(), 0.0);
+            std::vector<f64> level_time_queue(iteration_time.size(), 0.0);
+            std::vector<f64> level_time_moves(iteration_time.size(), 0.0);
+            std::vector<s64> level_qap_delta(iteration_time.size(), 0);
 
-            // std::cout << std::endl;
-            // std::cout << "Time         : " << global_time << std::endl;
-            // std::cout << "get_boundary : " << global_time_get_boundary << std::endl;
-            // std::cout << "initialize   : " << global_time_initialize << std::endl;
-            // std::cout << "queue        : " << global_time_queue << std::endl;
-            // std::cout << "moves        : " << global_time_moves << std::endl;
+            for (size_t i = 0; i < iteration_time.size(); ++i) {
+                level_time[i]              = sum<f64>(iteration_time[i]);
+                level_time_get_boundary[i] = sum<f64>(iteration_time_get_boundary[i]);
+                level_time_initialize[i]   = sum<f64>(iteration_time_initialize[i]);
+                level_time_queue[i]        = sum<f64>(iteration_time_queue[i]);
+                level_time_moves[i]        = sum<f64>(iteration_time_moves[i]);
+                level_qap_delta[i]         = sum<s64>(iteration_qap_delta[i]);
+            }
+
+            f64 global_time              = sum<f64>(level_time);
+            f64 global_time_get_boundary = sum<f64>(level_time_get_boundary);
+            f64 global_time_initialize   = sum<f64>(level_time_initialize);
+            f64 global_time_queue        = sum<f64>(level_time_queue);
+            f64 global_time_moves        = sum<f64>(level_time_moves);
+            s64 global_qap_delta         = sum<s64>(level_qap_delta);
+
+            stats += to_JSON_MACRO(global_time);
+            stats += to_JSON_MACRO(global_time_get_boundary);
+            stats += to_JSON_MACRO(global_time_initialize);
+            stats += to_JSON_MACRO(global_time_queue);
+            stats += to_JSON_MACRO(global_time_moves);
+            stats += to_JSON_MACRO(global_qap_delta);
+            stats += to_JSON_MACRO(level_time);
+            stats += to_JSON_MACRO(level_time_get_boundary);
+            stats += to_JSON_MACRO(level_time_initialize);
+            stats += to_JSON_MACRO(level_time_queue);
+            stats += to_JSON_MACRO(level_time_moves);
+            stats += to_JSON_MACRO(level_qap_delta);
+            stats += to_JSON_MACRO(iteration_time);
+            stats += to_JSON_MACRO(iteration_time_get_boundary);
+            stats += to_JSON_MACRO(iteration_time_initialize);
+            stats += to_JSON_MACRO(iteration_time_queue);
+            stats += to_JSON_MACRO(iteration_time_moves);
+            stats += to_JSON_MACRO(iteration_qap_delta);
+#endif
+            stats.pop_back();
+            stats.pop_back();
+            stats += "\n}";
+
+            JSONString json_stats;
+            json_stats.s = stats;
+            return json_stats;
         }
     };
+     */
 }
 
 #endif //HEIPROMAP_MULTI_TRY_FM_REFINEMENT_H

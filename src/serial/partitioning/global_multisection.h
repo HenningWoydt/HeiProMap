@@ -112,7 +112,6 @@ namespace HeiProMap {
         }
 
         void partition(const graph_t& g,
-                       const av_manager_t& av_manager,
                        p_manager_t& p_manager,
                        const std::vector<partition_t>& hierarchy,
                        const std::vector<weight_t>& distance,
@@ -136,7 +135,7 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-            int n = (int)av_manager.size();
+            int n = (int)g.get_n();
             int m = (int)g.get_m();
             int l = (int)hierarchy.size();
 
@@ -161,7 +160,7 @@ namespace HeiProMap {
 
             // initialize the translation table of the first graph
             vertex_t new_u = 0;
-            forall_av_iu(av_manager, i, old_u)
+            forall_gu(g, old_u)
                 {
                     first_graph->tt.add(old_u, new_u);
                     new_u += 1;
@@ -172,7 +171,7 @@ namespace HeiProMap {
             first_graph->n            = (int)new_u;
             first_graph->xadj[0]      = 0;
             first_graph->total_weight = 0;
-            forall_av_iu(av_manager, i, old_u)
+            forall_gu(g, old_u)
                 {
                     new_u = first_graph->tt.get_n(old_u);
 

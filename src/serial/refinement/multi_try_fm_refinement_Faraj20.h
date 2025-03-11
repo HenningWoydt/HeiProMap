@@ -32,7 +32,6 @@
 
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialQuotientGraph.h"
 #include "../interfaces/ISerialRefiner.h"
@@ -42,6 +41,7 @@
 namespace HeiProMap {
     class MultiTryFmRefinementFaraj20Configuration final : public ISerialRefinerConfiguration {
     public:
+        explicit MultiTryFmRefinementFaraj20Configuration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
         u64 max_iteration = 1;
         f64 alpha         = 1000.0;
         f64 beta          = 1.0;
@@ -54,6 +54,7 @@ namespace HeiProMap {
      * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      * > Schloss Dagstuhl - Leibniz-Zentrum für Informatik, 2020.
      */
+     /*
     class MultiTryFMRefinementFaraj20 final : public ISerialRefiner {
     private:
         vertex_t m_n    = 0;
@@ -311,7 +312,10 @@ namespace HeiProMap {
                 // std::cout << "iteration: " << iteration << " gain: " << iteration_qap_gain << " push ops: " << iteration_n_queue_push << " moves: " << iteration_n_moves << " time: " << get_seconds(sp, ep) << std::endl;
             }
         }
+
+        JSONString get_stats() override { return {}; };
     };
+      */
 }
 
 #endif //HEIPROMAP_MULTI_TRY_FM_REFINEMENT_FARAJ20_H

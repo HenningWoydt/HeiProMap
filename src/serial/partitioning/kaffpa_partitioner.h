@@ -41,7 +41,7 @@ namespace HeiProMap {
         KAFFPA_PARTITIONER_MODE_FAST,
     };
 
-    inline KaffpaPartitionerMode string_to_kaffpa_partitioner_mode(const std::string& str) {
+    inline KaffpaPartitionerMode string_to_kaffpa_partitioner_mode(const std::string &str) {
         if (str == "UNDEFINED") return KAFFPA_PARTITIONER_MODE_UNDEFINED;
         if (str == "strong") return KAFFPA_PARTITIONER_MODE_STRONG;
         if (str == "eco") return KAFFPA_PARTITIONER_MODE_ECO;
@@ -51,16 +51,16 @@ namespace HeiProMap {
 
     inline std::string kaffpa_partitioner_mode_to_string(KaffpaPartitionerMode mode) {
         switch (mode) {
-        case KAFFPA_PARTITIONER_MODE_UNDEFINED:
-            return "UNDEFINED";
-        case KAFFPA_PARTITIONER_MODE_STRONG:
-            return "strong";
-        case KAFFPA_PARTITIONER_MODE_ECO:
-            return "eco";
-        case KAFFPA_PARTITIONER_MODE_FAST:
-            return "fast";
-        default:
-            return "UNDEFINED";
+            case KAFFPA_PARTITIONER_MODE_UNDEFINED:
+                return "UNDEFINED";
+            case KAFFPA_PARTITIONER_MODE_STRONG:
+                return "strong";
+            case KAFFPA_PARTITIONER_MODE_ECO:
+                return "eco";
+            case KAFFPA_PARTITIONER_MODE_FAST:
+                return "fast";
+            default:
+                return "UNDEFINED";
         }
     }
 
@@ -70,7 +70,7 @@ namespace HeiProMap {
         KAFFPA_PARTITIONER_METHOD_MULTISECTION,
     };
 
-    inline KaffpaPartitionerMethod string_to_kaffpa_partitioner_method(const std::string& str) {
+    inline KaffpaPartitionerMethod string_to_kaffpa_partitioner_method(const std::string &str) {
         if (str == "UNDEFINED") return KAFFPA_PARTITIONER_METHOD_UNDEFINED;
         if (str == "bisection") return KAFFPA_PARTITIONER_METHOD_BISECTION;
         if (str == "multisection") return KAFFPA_PARTITIONER_METHOD_MULTISECTION;
@@ -79,37 +79,36 @@ namespace HeiProMap {
 
     inline std::string kaffpa_partitioner_method_to_string(KaffpaPartitionerMethod mode) {
         switch (mode) {
-        case KAFFPA_PARTITIONER_METHOD_UNDEFINED:
-            return "UNDEFINED";
-        case KAFFPA_PARTITIONER_METHOD_BISECTION:
-            return "bisection";
-        case KAFFPA_PARTITIONER_METHOD_MULTISECTION:
-            return "multisection";
-        default:
-            return "UNDEFINED";
+            case KAFFPA_PARTITIONER_METHOD_UNDEFINED:
+                return "UNDEFINED";
+            case KAFFPA_PARTITIONER_METHOD_BISECTION:
+                return "bisection";
+            case KAFFPA_PARTITIONER_METHOD_MULTISECTION:
+                return "multisection";
+            default:
+                return "UNDEFINED";
         }
     }
 
     class KaffpaPartitionerConfiguration final : public ISerialPartitionerConfiguration {
     public:
-        std::string mode_string;
-        KaffpaPartitionerMode mode; // Which mode to use: strong, eco, fast
-        std::string method_string;
+        std::string             mode_string;
+        KaffpaPartitionerMode   mode; // Which mode to use: strong, eco, fast
+        std::string             method_string;
         KaffpaPartitionerMethod method; // Which method to use: bisection, multisection
     };
 
     class KaffpaPartitioner final : public ISerialPartitioner {
     public:
-        void partition(const graph_t& g,
-                       const av_manager_t& av_manager,
-                       p_manager_t& p_manager,
-                       const std::vector<partition_t>& hierarchy,
-                       const std::vector<weight_t>& distance,
+        void partition(const graph_t &g,
+                       p_manager_t &p_manager,
+                       const std::vector<partition_t> &hierarchy,
+                       const std::vector<weight_t> &distance,
                        const f64 imbalance,
-                       RandomEngine& t_random_engine,
-                       const ISerialPartitionerConfiguration& i_config,
-                       StatisticCollector& t_stat_collect) override {
-            KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration*>(&i_config);
+                       RandomEngine &t_random_engine,
+                       const ISerialPartitionerConfiguration &i_config,
+                       StatisticCollector &t_stat_collect) override {
+            KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration *>(&i_config);
 
             // number of vertices and edges
             int n = 0;
@@ -117,53 +116,51 @@ namespace HeiProMap {
 
             // build translation table
             TranslationTable<int> tt;
-            tt.reserve(av_manager.size(), g.get_n());
+            tt.reserve(g.get_n(), g.get_n());
             vertex_t translate = 0;
-            forall_av_iu(av_manager, i, u)
+            forall_gu(g, u)
                 {
-                    ASSERT(av_manager.is_active(u));
-
                     tt.add(u, translate);
                     translate += 1;
 
                     n += 1;
-                    m += (int)g.size(u);
+                    m += (int) g.size(u);
                 }
             endfor
 
             // vertex weights
-            int* v_weights = (int*)malloc(n * sizeof(int));
-            for (int i = 0; i < n; ++i) { v_weights[i] = (int)g.get_weight(tt.get_o(i)); }
+            int *v_weights = (int *) malloc(n * sizeof(int));
+            for (int i = 0; i < n; ++i) { v_weights[i] = (int) g.get_weight(tt.get_o(i)); }
 
             // pointer to adjacency lists
-            int* adj_ptr   = (int*)malloc((n + 1) * sizeof(int));
-            int* adj       = (int*)malloc(m * sizeof(int));
-            int* e_weights = (int*)malloc(m * sizeof(int));
+            int *adj_ptr   = (int *) malloc((n + 1) * sizeof(int));
+            int *adj       = (int *) malloc(m * sizeof(int));
+            int *e_weights = (int *) malloc(m * sizeof(int));
 
             // set adj_ptr
             adj_ptr[0] = 0;
-            for (int new_u = 0; new_u < n; ++new_u) {
-                vertex_t old_u = tt.get_o(new_u);
-                int insert_idx = 0;
-                for (size_t i = 0; i < g.size(old_u); ++i) {
+            for (int new_u            = 0; new_u < n; ++new_u) {
+                vertex_t    old_u      = tt.get_o(new_u);
+                int         insert_idx = 0;
+                for (size_t i          = 0; i < g.size(old_u); ++i) {
                     vertex_t v                             = g.neighbor(old_u, i);
                     weight_t ew                            = g.get_weight(old_u, i);
-                    adj[adj_ptr[new_u] + insert_idx]       = (int)tt.get_n(v);
-                    e_weights[adj_ptr[new_u] + insert_idx] = (int)ew;
+                    adj[adj_ptr[new_u] + insert_idx]       = (int) tt.get_n(v);
+                    e_weights[adj_ptr[new_u] + insert_idx] = (int) ew;
                     insert_idx += 1;
                 }
                 adj_ptr[new_u + 1] = adj_ptr[new_u] + insert_idx;
             }
             // imbalance
-            double kaffpa_imbalance = imbalance;
+            double   kaffpa_imbalance = imbalance;
 
             // hierarchy
-            int* kaffpa_hierarchy = (int*)malloc(hierarchy.size() * sizeof(int));
-            for (u64 i = 0; i < hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int)hierarchy[i]; }
+            int *kaffpa_hierarchy = (int *) malloc(hierarchy.size() * sizeof(int));
+            for (u64 i = 0; i < hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int) hierarchy[i]; }
 
             // distance
-            int* kaffpa_distance = (int*)malloc(distance.size() * sizeof(int));
-            for (u64 i = 0; i < distance.size(); ++i) { kaffpa_distance[i] = (int)distance[i]; }
+            int *kaffpa_distance = (int *) malloc(distance.size() * sizeof(int));
+            for (u64 i = 0; i < distance.size(); ++i) { kaffpa_distance[i] = (int) distance[i]; }
 
             // mode
             int kaffpa_map_mode;
@@ -190,7 +187,7 @@ namespace HeiProMap {
             }
 
             // partition result
-            int* kaffpa_partition = (int*)malloc(n * sizeof(int));
+            int *kaffpa_partition = (int *) malloc(n * sizeof(int));
 
             int kaffpa_edgecut, kaffpa_qap;
 
@@ -198,7 +195,7 @@ namespace HeiProMap {
             // write_graph(n, m/2, v_weights, adj_ptr, e_weights, adj, file_path);
 
             // execute kaffpa
-            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int)hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, t_random_engine.get_int(), &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
+            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int) hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, t_random_engine.get_int(), &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
 
             // first read partition
             for (int new_u = 0; new_u < n; ++new_u) {
@@ -214,7 +211,7 @@ namespace HeiProMap {
             free(kaffpa_partition);
         }
 
-        void write_graph(int n, int m, int* vwgt, int* xadj, int* adjwgt, int* adjncy, std::string& file_path) {
+        void write_graph(int n, int m, int *vwgt, int *xadj, int *adjwgt, int *adjncy, std::string &file_path) {
             std::ofstream file(file_path);
 
             file << n << " " << m << " 011" << std::endl;

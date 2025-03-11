@@ -52,9 +52,7 @@ namespace HeiProMap {
 
         virtual void match(size_t level,
                            const graph_t& g,
-                           const av_manager_t& av_manager,
-                           EdgeUV* matches,
-                           size_t& matches_size) = 0;
+                           Matching &matching) = 0;
     };
 }
 

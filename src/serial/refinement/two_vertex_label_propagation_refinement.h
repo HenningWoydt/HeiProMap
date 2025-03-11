@@ -38,43 +38,46 @@
 namespace HeiProMap {
     class TwoVertexLabelPropagationConfiguration final : public ISerialRefinerConfiguration {
     public:
+        explicit TwoVertexLabelPropagationConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
+    /*
     class TwoVertexLabelPropagationRefinement final : public ISerialRefiner {
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n    = 0;
+        vertex_t                 m_m    = 0;
+        partition_t              m_k    = 0;
+        weight_t                 m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        u64 m_seed = 0;
+        std::vector<weight_t>    m_distance;
+        u64                      m_seed = 0;
 
-        u32* vertex_used  = nullptr;
+        u32 *vertex_used = nullptr;
         u32 vertex_marker = 0;
 
-        u32* block_used  = nullptr;
+        u32 *block_used = nullptr;
         u32 block_marker = 0;
 
-        vertex_t* curr_boundary   = nullptr;
+        vertex_t *curr_boundary = nullptr;
         size_t curr_boundary_size = 0;
 
-        partition_t* u_move_ids = nullptr;
-        size_t u_move_ids_size  = 0;
+        partition_t *u_move_ids = nullptr;
+        size_t u_move_ids_size = 0;
 
-        partition_t* v_move_ids = nullptr;
-        size_t v_move_ids_size  = 0;
+        partition_t *v_move_ids = nullptr;
+        size_t v_move_ids_size = 0;
 
-        RandomEngine* random_engine                          = nullptr;
-        const TwoVertexLabelPropagationConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector                 = nullptr;
+        RandomEngine                                 *random_engine    = nullptr;
+        const TwoVertexLabelPropagationConfiguration *config           = nullptr;
+        StatisticCollector                           *m_stat_collector = nullptr;
 
-        METRICS(f64 global_time = 0;)
+        METRICS(f64 global_time              = 0;)
         METRICS(f64 global_time_get_boundary = 0.0;)
-        METRICS(f64 global_time_iterate = 0.0;)
+        METRICS(f64 global_time_iterate      = 0.0;)
 
-        METRICS(s64 global_qap_delta = 0;)
-        METRICS(u64 global_n_pos_moves = 0;)
+        METRICS(s64 global_qap_delta     = 0;)
+        METRICS(u64 global_n_pos_moves   = 0;)
         METRICS(u64 global_n_0gain_moves = 0;)
 
     public:
@@ -92,11 +95,11 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
-                        RandomEngine& t_random_engine,
-                        const ISerialRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
+                        RandomEngine &t_random_engine,
+                        const ISerialRefinerConfiguration &i_config,
+                        StatisticCollector &t_stat_collect) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -105,60 +108,60 @@ namespace HeiProMap {
             m_distance  = t_distance;
 
             random_engine    = &t_random_engine;
-            config           = dynamic_cast<const TwoVertexLabelPropagationConfiguration*>(&i_config);
+            config           = dynamic_cast<const TwoVertexLabelPropagationConfiguration *>(&i_config);
             m_stat_collector = &t_stat_collect;
 
-            vertex_t m_n_64    = round_up_64(m_n);
+            vertex_t    m_n_64 = round_up_64(m_n);
             partition_t m_k_64 = round_up_64(m_k);
 
-            vertex_used = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
+            vertex_used = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(vertex_used, m_n_64, vertex_marker);
 
-            block_used = (u32*)aligned_alloc(64, m_k_64 * sizeof(u32));
+            block_used = (u32 *) aligned_alloc(64, m_k_64 * sizeof(u32));
             std::fill_n(block_used, m_k_64, block_marker);
 
-            curr_boundary      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            curr_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             curr_boundary_size = 0;
 
-            u_move_ids      = (vertex_t*)aligned_alloc(64, m_k_64 * sizeof(vertex_t));
+            u_move_ids      = (vertex_t *) aligned_alloc(64, m_k_64 * sizeof(vertex_t));
             u_move_ids_size = 0;
 
-            v_move_ids      = (vertex_t*)aligned_alloc(64, m_k_64 * sizeof(vertex_t));
+            v_move_ids      = (vertex_t *) aligned_alloc(64, m_k_64 * sizeof(vertex_t));
             v_move_ids_size = 0;
         }
 
         void refine(const u64 level,
-                    const graph_t& g,
-                    const av_manager_t& av_manager,
-                    const d_oracle_t& d_oracle,
-                    bv_manager_t& bv_manager,
-                    p_manager_t& p_manager,
-                    q_graph_t& q_graph) override {
+                    const graph_t &g,
+                    const av_manager_t &av_manager,
+                    const d_oracle_t &d_oracle,
+                    bv_manager_t &bv_manager,
+                    p_manager_t &p_manager,
+                    q_graph_t &q_graph) override {
             METRICS(std::vector<f64> iteration_time);
             METRICS(std::vector<f64> iteration_time_get_boundary);
             METRICS(std::vector<f64> iteration_time_iterate);
 
-            METRICS(f64 level_time = 0.0);
+            METRICS(f64 level_time              = 0.0);
             METRICS(f64 level_time_get_boundary = 0.0);
-            METRICS(f64 level_time_iterate = 0.0);
+            METRICS(f64 level_time_iterate      = 0.0);
 
             METRICS(std::vector<s64> iteration_qap_delta);
             METRICS(std::vector<u64> iteration_n_pos_moves);
             METRICS(std::vector<u64> iteration_n_0gain_moves);
 
-            METRICS(s64 level_qap_delta = 0);
-            METRICS(u64 level_n_pos_moves = 0);
+            METRICS(s64 level_qap_delta     = 0);
+            METRICS(u64 level_n_pos_moves   = 0);
             METRICS(u64 level_n_0gain_moves = 0);
 
-            bool move_occurred = true;
-            for (u64 iteration = 0; iteration < config->max_iteration && move_occurred; ++iteration) {
+            bool     move_occurred = true;
+            for (u64 iteration     = 0; iteration < config->max_iteration && move_occurred; ++iteration) {
                 move_occurred = false;
 
-                METRICS(s64 temp_qap_delta = 0);
-                METRICS(u64 temp_n_pos_moves = 0);
-                METRICS(u64 temp_n_0gain_moves = 0);
-                METRICS(auto sp_iteration = std::chrono::high_resolution_clock::now());
-                METRICS(auto sp_get_boundary = std::chrono::high_resolution_clock::now());
+                METRICS(s64  temp_qap_delta     = 0);
+                METRICS(u64  temp_n_pos_moves   = 0);
+                METRICS(u64  temp_n_0gain_moves = 0);
+                METRICS(auto sp_iteration       = std::chrono::high_resolution_clock::now());
+                METRICS(auto sp_get_boundary    = std::chrono::high_resolution_clock::now());
 
                 curr_boundary_size = 0;
                 forall_bv_iu(bv_manager, i, u)
@@ -169,7 +172,7 @@ namespace HeiProMap {
                 std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, random_engine->gen);
 
                 METRICS(auto ep_get_boundary = std::chrono::high_resolution_clock::now());
-                METRICS(auto sp_iterate = std::chrono::high_resolution_clock::now());
+                METRICS(auto sp_iterate      = std::chrono::high_resolution_clock::now());
 
                 vertex_marker += 1;
                 for (size_t i = 0; i < curr_boundary_size; ++i) {
@@ -177,13 +180,13 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; } // vertex was used
                     if (!bv_manager.is_boundary(u)) { continue; } // vertex is not boundary
 
-                    weight_t u_weight = g.get_weight(u);
-                    partition_t u_id  = p_manager[u];
+                    weight_t    u_weight = g.get_weight(u);
+                    partition_t u_id     = p_manager[u];
 
                     // get all connected partitions to u
                     block_marker += 1;
                     block_used[u_id] = block_marker;
-                    u_move_ids_size  = 0;
+                    u_move_ids_size = 0;
                     forall_guiv(g, u, i, neighbor)
                         {
                             partition_t neighbor_id = p_manager[neighbor];
@@ -195,11 +198,11 @@ namespace HeiProMap {
                     endfor
 
                     partition_t best_u_move_id = 0;
-                    vertex_t best_v            = 0;
+                    vertex_t    best_v         = 0;
                     partition_t best_v_id      = 0;
-                    weight_t best_v_weight     = 0;
+                    weight_t    best_v_weight  = 0;
                     partition_t best_v_move_id = 0;
-                    s64 best_qap_delta         = -1;
+                    s64         best_qap_delta = -1;
 
                     // check all neighbors v
                     forall_guiv(g, u, i, v)
@@ -207,13 +210,13 @@ namespace HeiProMap {
                             if (vertex_used[v] == vertex_marker) { continue; } // vertex was used
                             if (!bv_manager.is_boundary(v)) { continue; } // vertex is not boundary
 
-                            weight_t v_weight = g.get_weight(v);
-                            partition_t v_id  = p_manager[v];
+                            weight_t    v_weight = g.get_weight(v);
+                            partition_t v_id     = p_manager[v];
 
                             // get all connected partitions to v
                             block_marker += 1;
                             block_used[v_id] = block_marker;
-                            v_move_ids_size  = 0;
+                            v_move_ids_size = 0;
                             forall_guiv(g, v, i, neighbor)
                                 {
                                     partition_t neighbor_id = p_manager[neighbor];
@@ -266,7 +269,7 @@ namespace HeiProMap {
                         p_manager.move(best_v, best_v_weight, best_v_id, best_v_move_id);
 
                         vertex_used[best_v] = 1;
-                        move_occurred       = true;
+                        move_occurred = true;
 
                         METRICS(temp_qap_delta += best_qap_delta * (best_qap_delta > 0));
                         METRICS(temp_n_pos_moves += (best_qap_delta > 0));
@@ -310,8 +313,8 @@ namespace HeiProMap {
 #endif
             }
 #if COLLECT_METRICS
-            std::string stats          = "{ \n";
-            f64 global_qap_delta_per_s = (f64)global_qap_delta / global_time;
+            std::string stats                  = "{ \n";
+            f64         global_qap_delta_per_s = (f64) global_qap_delta / global_time;
             stats += to_JSON_MACRO(global_time);
             stats += to_JSON_MACRO(global_time_get_boundary);
             stats += to_JSON_MACRO(global_time_iterate);
@@ -336,12 +339,15 @@ namespace HeiProMap {
             stats.pop_back();
             stats += "\n}";
             JSONString json_stats;
-            json_stats.s       = stats;
+            json_stats.s = stats;
             std::string method = "Two Vertex Label Propagation";
             m_stat_collector->add_refinement_method_stats(level, method, json_stats);
 #endif
         }
+
+        JSONString get_stats() override { return {}; };
     };
+     */
 }
 
 #endif //HEIPROMAP_TWO_VERTEX_LABEL_PROPAGATION_REFINEMENT_H

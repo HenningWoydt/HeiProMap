@@ -32,13 +32,13 @@
 
 namespace HeiProMap {
     class PartitionManager final : public ISerialPartitionManager {
-        vertex_t m_n    = 0;
-        partition_t m_k = 0;
-        weight_t lmax   = 0;
+        vertex_t    m_n  = 0;
+        partition_t m_k  = 0;
+        weight_t    lmax = 0;
 
-        partition_t* partition = nullptr;
-        weight_t* bweights     = nullptr;
-        size_t* n_nodes        = nullptr;
+        partition_t *partition = nullptr;
+        weight_t    *bweights  = nullptr;
+        size_t      *n_nodes   = nullptr;
 
     public:
         PartitionManager() = default;
@@ -59,15 +59,15 @@ namespace HeiProMap {
             m_k  = t_k;
             lmax = t_lmax;
 
-            partition = (partition_t*)aligned_alloc(64, t_n_64 * sizeof(partition_t));
-            bweights  = (weight_t*)aligned_alloc(64, t_k_64 * sizeof(weight_t));
-            n_nodes   = (size_t*)aligned_alloc(64, t_k_64 * sizeof(size_t));
+            partition = (partition_t *) aligned_alloc(64, t_n_64 * sizeof(partition_t));
+            bweights  = (weight_t *) aligned_alloc(64, t_k_64 * sizeof(weight_t));
+            n_nodes   = (size_t *) aligned_alloc(64, t_k_64 * sizeof(size_t));
             std::fill_n(bweights, t_k_64, 0);
             std::fill_n(n_nodes, t_k_64, 0);
         }
 
         // read
-        const partition_t& operator[](const vertex_t u) const override { return partition[u]; }
+        const partition_t &operator[](const vertex_t u) const override { return partition[u]; }
 
         // write
         void set(const vertex_t u,
@@ -90,23 +90,26 @@ namespace HeiProMap {
         }
 
         weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
+
         vertex_t get_n_nodes(const partition_t id) const { return n_nodes[id]; }
 
         std::vector<weight_t> get_bweights() const override {
             std::vector<weight_t> weights(m_k);
-            for (size_t i = 0; i < m_k; ++i) {
+            for (size_t           i = 0; i < m_k; ++i) {
                 weights[i] = bweights[i];
             }
             return weights;
         }
 
-        void uncontract(const EdgeUV* matches,
-                        const size_t& matches_size) override {
-            matches = ASSUME_ALIGNED(EdgeUV*, matches, 64);
+        void uncontract(const Matching &matching) override {
+            std::vector<partition_t> temp;
+            for (size_t              i = 0; i < m_n; ++i) { temp.push_back(partition[i]); }
 
-            for (size_t i = 0; i < matches_size; ++i) {
-                partition[matches[i].v] = partition[matches[i].u];
-                n_nodes[partition[matches[i].u]] += 1;
+            for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
+                vertex_t old_u         = matching.get_o(new_u);
+                vertex_t old_u_partner = matching.get_partner(old_u);
+                partition[old_u]         = temp[new_u];
+                partition[old_u_partner] = temp[new_u];
             }
         }
 

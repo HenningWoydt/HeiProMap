@@ -39,6 +39,7 @@
 namespace HeiProMap {
     class KWayFMRefinementFaraj20Configuration final : public ISerialRefinerConfiguration {
     public:
+        explicit KWayFMRefinementFaraj20Configuration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
         f64 alpha         = 1000.0;
         f64 beta          = 1.0;
@@ -51,6 +52,8 @@ namespace HeiProMap {
         partition_t to_move_id;
         s64 qap_delta;
 
+        KWayFMMove() = default;
+
         KWayFMMove(const vertex_t t_u, const partition_t t_u_id, const partition_t t_to_move, const s64 t_qap_delta) {
             u          = t_u;
             u_id       = t_u_id;
@@ -62,8 +65,16 @@ namespace HeiProMap {
             return qap_delta > m.qap_delta;
         }
 
+        bool operator>=(const KWayFMMove& m) const {
+            return qap_delta >= m.qap_delta;
+        }
+
         bool operator<(const KWayFMMove& m) const {
             return qap_delta < m.qap_delta;
+        }
+
+        bool operator<=(const KWayFMMove& m) const {
+            return qap_delta <= m.qap_delta;
         }
     };
 
@@ -278,6 +289,7 @@ namespace HeiProMap {
      * > In: Demetrescu, C., Halldórsson, M.M. (eds) Algorithms – ESA 2011. ESA 2011. Lecture Notes in Computer Science, vol 6942. Springer, Berlin, Heidelberg
      *
      */
+     /*
     class KWayFMRefinementFaraj20 final : public ISerialRefiner {
     private:
         vertex_t m_n    = 0;
@@ -491,7 +503,10 @@ namespace HeiProMap {
                 // std::cout << "iteration: " << iteration << " best_idx: " << best_idx << " new_gain: " << max_qap_gain << " push ops: " << queue.push_operations << " max moves: " << moves.size() << " time: " << get_seconds(sp, ep) << std::endl;
             }
         }
+
+        JSONString get_stats() override { return {}; };
     };
+      */
 }
 
 

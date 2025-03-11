@@ -42,6 +42,9 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
                     // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
                     // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
+                    // {"--graph", "../data/training/PGPgiantcompo.graph"},
+                    // {"--mapping", "../data/out/partition/PGPgiantcompo.txt"},
+                    // {"--statistics", "../data/out/statistics/PGPgiantcompo.JSON"},
                     {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 3080796 in 3.655 s
                     {"--mapping", "../data/out/partition/delaunay_n22.txt"},
                     {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
@@ -60,7 +63,7 @@ int main(const int argc, char* argv[]) {
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "strong"},
+                    {"--config", "experimental"},
                     {"--seed", "0"},
 
                     // coarsening

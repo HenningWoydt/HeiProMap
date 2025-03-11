@@ -43,6 +43,7 @@ namespace HeiProMap {
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
+    /*
     class GreedyEdgeMatcher final : public ISerialMatcher {
         vertex_t m_n     = 0;
         vertex_t m_m     = 0;
@@ -203,6 +204,7 @@ namespace HeiProMap {
 #endif
         }
     };
+     */
 }
 
 #endif //HEIPROMAP_GREEDY_EDGE_MATCHER_H

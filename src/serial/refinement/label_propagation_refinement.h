@@ -35,9 +35,11 @@
 namespace HeiProMap {
     class LabelPropagationConfiguration final : public ISerialRefinerConfiguration {
     public:
+        explicit LabelPropagationConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
+    /*
     class LabelPropagationRefinement final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
@@ -45,7 +47,6 @@ namespace HeiProMap {
         weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
-        u64 m_seed = 0;
 
         u32* vertex_used  = nullptr;
         u32 vertex_marker = 0;
@@ -140,9 +141,9 @@ namespace HeiProMap {
             METRICS(u64 level_n_pos_moves = 0);
             METRICS(u64 level_n_0gain_moves = 0);
 
-            bool move_occurred = true;
-            for (u64 iteration = 0; iteration < config->max_iteration && move_occurred; ++iteration) {
-                move_occurred = false;
+            bool positive_move_occurred = true;
+            for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
+                positive_move_occurred = false;
 
                 METRICS(s64 temp_qap_delta = 0);
                 METRICS(u64 temp_n_pos_moves = 0);
@@ -212,7 +213,7 @@ namespace HeiProMap {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             p_manager.move(u, u_weight, u_id, best_id);
-                            move_occurred = true;
+                            positive_move_occurred |= best_qap_delta > 0;
 
                             METRICS(temp_qap_delta += best_qap_delta * (best_qap_delta > 0));
                             METRICS(temp_n_pos_moves += (best_qap_delta > 0));
@@ -292,7 +293,10 @@ namespace HeiProMap {
             m_stat_collector->add_refinement_method_stats(level, method, json_stats);
 #endif
         }
+
+        JSONString get_stats() override { return {}; };
     };
+     */
 }
 
 #endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H

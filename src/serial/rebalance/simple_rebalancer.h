@@ -29,7 +29,6 @@
 
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
-#include "../interfaces/ISerialActiveVertexManager.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialQuotientGraph.h"
 
@@ -51,16 +50,14 @@ namespace HeiProMap {
             m_lmax = t_lmax;
         }
 
-        template <typename TSerialGraph, typename TSerialActiveVertexManager, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
+        template <typename TSerialGraph, typename TSerialBoundaryVertexManager, typename TSerialPartitionManager, typename TSerialDistanceOracle, typename TSerialQuotientGraph>
         void rebalance([[maybe_unused]] SimpleRebalancerConfiguration& config,
                        [[maybe_unused]] TSerialGraph& g,
-                       [[maybe_unused]] TSerialActiveVertexManager& av_manager,
                        [[maybe_unused]] TSerialBoundaryVertexManager& bv_manager,
                        [[maybe_unused]] TSerialPartitionManager& p_manager,
                        [[maybe_unused]] TSerialDistanceOracle& d_oracle,
                        [[maybe_unused]] TSerialQuotientGraph& q_graph) {
             static_assert(std::is_base_of_v<ISerialGraph, TSerialGraph>, "TSerialGraph must inherit from ISerialGraph");
-            static_assert(std::is_base_of_v<ISerialActiveVertexManager, TSerialActiveVertexManager>, "TSerialActiveVertexManager must inherit from ISerialActiveVertexManager");
             static_assert(std::is_base_of_v<ISerialBoundaryVertexManager, TSerialBoundaryVertexManager>, "TSerialBoundaryVertexManager must inherit from ISerialBoundaryVertexManager");
             static_assert(std::is_base_of_v<ISerialPartitionManager, TSerialPartitionManager>, "TSerialPartitionManager must inherit from ISerialPartitionManager");
             static_assert(std::is_base_of_v<ISerialDistanceOracle, TSerialDistanceOracle>, "TSerialDistanceOracle must inherit from ISerialDistanceOracle");

@@ -27,21 +27,17 @@
 #ifndef HEIPROMAP_SERIAL_DEFINITIONS_1_H
 #define HEIPROMAP_SERIAL_DEFINITIONS_1_H
 
-#include "datastructures/active_vertex_manager.h"
 #include "datastructures/distance_oracle.h"
 #include "datastructures/graph.h"
 
 namespace HeiProMap {
-    typedef Graph graph_t;
-    typedef ActiveVertexManager av_manager_t;
-    typedef DistanceOracle d_oracle_t;
+    typedef Graph               graph_t;
+    typedef DistanceOracle      d_oracle_t;
 
     // Macro to iterate over the neighborhood of vertex u of a graph
-#define forall_guivw(g, u, i, v, w)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.get_weight(u, i);
+#define forall_guivw(g, u, i, v, w) for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.get_weight(u, i);
 #define forall_guiv(g, u, i, v)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i);
-
-    // Macro to iterate over all active vertices
-#define forall_av_iu(av_manager, i, u)  for (size_t i = 0; i < av_manager.size(); ++i) { const vertex_t u = av_manager.get(i);
+#define forall_gu(g, u) for (vertex_t u = 0; u < g.get_n(); ++u) {
 
 #define endfor }
 }

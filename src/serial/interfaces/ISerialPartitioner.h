@@ -41,11 +41,10 @@ namespace HeiProMap {
         virtual ~ISerialPartitioner() = default;
 
         virtual void partition(const graph_t& g,
-                               const av_manager_t& av_manager,
                                p_manager_t& p_manager,
                                const std::vector<partition_t>& hierarchy,
                                const std::vector<weight_t>& distance,
-                               const f64 imbalance,
+                               f64 imbalance,
                                RandomEngine& t_random_engine,
                                const ISerialPartitionerConfiguration& i_config,
                                StatisticCollector& t_stat_collect) = 0;

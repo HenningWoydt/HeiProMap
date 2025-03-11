@@ -31,10 +31,12 @@
 
 #include "../../definitions.h"
 #include "../interfaces/ISerialRefiner.h"
+#include "../utility/qap.h"
 
 namespace HeiProMap {
     class LabelPropagationFaraj20Configuration final : public ISerialRefinerConfiguration {
     public:
+        explicit LabelPropagationFaraj20Configuration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
@@ -44,6 +46,7 @@ namespace HeiProMap {
      * > High-quality Hierarchical Process Mapping.
      * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      */
+     /*
     class LabelPropagationRefinementFaraj20 final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
@@ -175,7 +178,10 @@ namespace HeiProMap {
                 }
             }
         }
+
+        JSONString get_stats() override { return {}; };
     };
+      */
 }
 
 #endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H

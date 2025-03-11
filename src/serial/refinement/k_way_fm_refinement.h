@@ -40,11 +40,13 @@
 namespace HeiProMap {
     class KWayFMRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
+        explicit KWayFMRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
         f64 alpha         = 1000.0;
         f64 beta          = 1.0;
     };
 
+/*
     class KWayFMRefinement final : public ISerialRefiner {
     private:
         vertex_t m_n    = 0;
@@ -259,7 +261,11 @@ namespace HeiProMap {
                 // std::cout << "iteration: " << iteration << " best_idx: " << best_idx << " new_gain: " << max_qap_gain << " max moves: " << moves.size() << " time: " << get_seconds(sp, ep) << std::endl;
             }
         }
+
+        JSONString get_stats() override { return {}; };
+
     };
+    */
 }
 
 #endif //HEIPROMAP_K_WAY_FM_REFINEMENT_H

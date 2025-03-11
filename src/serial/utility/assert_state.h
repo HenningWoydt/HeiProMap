@@ -33,57 +33,8 @@
 #include "../../parallel/parallel_definitions_1.h"
 
 namespace HeiProMap {
-    bool assert_n_active_vertices(graph_t& g,
-                                  av_manager_t& av_manager) {
-        vertex_t count = 0;
-        for (vertex_t u = 0; u < g.get_n(); ++u) {
-            count += av_manager.is_active(u);
-        }
-
-        ASSERT(count == av_manager.size());
-        return count == av_manager.size();
-    }
-
-    bool assert_correct_vertices_active(graph_t& g,
-                                        av_manager_t& av_manager) {
-        std::vector<vertex_t> manual;
-        for (vertex_t u = 0; u < g.get_n(); ++u) {
-            if (av_manager.is_active(u)) { manual.push_back(u); }
-        }
-
-        std::vector<vertex_t> automatic;
-        forall_av_iu(av_manager, i, v)
-            {
-                automatic.push_back(v);
-            }
-        endfor
-
-        std::sort(manual.begin(), manual.end());
-        std::sort(automatic.begin(), automatic.end());
-        ASSERT(no_duplicates_sorted(manual));
-        ASSERT(no_duplicates_sorted(automatic));
-
-        ASSERT(manual == automatic);
-        return manual == automatic;
-    }
-
-    bool assert_active_edges(graph_t& g,
-                             av_manager_t& av_manager) {
-        forall_av_iu(av_manager, j, u)
-            {
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    const vertex_t v = g.neighbor(u, i);
-                    ASSERT(av_manager.is_active(v));
-                }
-            }
-        endfor
-
-        return true;
-    }
-
-    bool assert_no_self_loops(graph_t& g,
-                              av_manager_t& av_manager) {
-        forall_av_iu(av_manager, k, u)
+    bool assert_no_self_loops(graph_t& g) {
+        forall_gu(g, u)
             {
                 for (size_t i = 0; i < g.size(u); ++i) {
                     for (size_t j = i + 1; j < g.size(u); ++j) {
@@ -95,10 +46,9 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_no_double_edges(graph_t& g,
-                                av_manager_t& av_manager) {
+    bool assert_no_double_edges(graph_t& g) {
         std::vector<vertex_t> manual;
-        forall_av_iu(av_manager, j, u)
+        forall_gu(g, u)
             {
                 manual.clear();
                 for (size_t i = 0; i < g.size(u); ++i) {
@@ -112,11 +62,10 @@ namespace HeiProMap {
     }
 
     bool assert_bweights(graph_t& g,
-                         av_manager_t& av_manager,
                          p_manager_t& p_manager,
                          partition_t k) {
         std::vector<weight_t> weights(k, 0);
-        forall_av_iu(av_manager, i, u)
+        forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
 
@@ -132,11 +81,10 @@ namespace HeiProMap {
     }
 
     bool assert_n_boundary_vertices(graph_t& g,
-                                    av_manager_t& av_manager,
                                     p_manager_t& p_manager,
                                     bv_manager_t& bv_manager) {
         vertex_t count = 0;
-        forall_av_iu(av_manager, j, u)
+        forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
 
@@ -156,11 +104,10 @@ namespace HeiProMap {
     }
 
     bool assert_correct_vertices_boundary(graph_t& g,
-                                          av_manager_t& av_manager,
                                           p_manager_t& p_manager,
                                           bv_manager_t& bv_manager) {
         std::vector<vertex_t> manual;
-        forall_av_iu(av_manager, j, u)
+        forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
 
@@ -191,14 +138,13 @@ namespace HeiProMap {
     }
 
     bool assert_correct_vertices_boundary_per_block(graph_t& g,
-                                                    av_manager_t& av_manager,
                                                     p_manager_t& p_manager,
                                                     bv_manager_t& bv_manager,
                                                     partition_t k) {
         for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> manual;
 
-            forall_av_iu(av_manager, j, u)
+            forall_gu(g, u)
                 {
                     partition_t u_id = p_manager[u];
                     if (u_id == id) {
@@ -231,13 +177,12 @@ namespace HeiProMap {
     }
 
     bool assert_correct_quotient_graph(graph_t& g,
-                                       av_manager_t& av_manager,
                                        p_manager_t& p_manager,
                                        q_graph_t& q_graph,
                                        partition_t k) {
         std::vector<weight_t> manual(k * k, 0);
 
-        forall_av_iu(av_manager, j, u)
+        forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
                 forall_guivw(g, u, i, v, w)
@@ -259,61 +204,41 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_state_pre_partitioning(graph_t& g,
-                                       av_manager_t& av_manager) {
-        // check the right number of vertices active
-        ASSERT(assert_n_active_vertices(g, av_manager));
-
-        // check the right vertices are active
-        ASSERT(assert_correct_vertices_active(g, av_manager));
-
-        // check only active edges
-        ASSERT(assert_active_edges(g, av_manager));
-
+    bool assert_state_pre_partitioning(graph_t& g) {
         // check no self-loops
-        ASSERT(assert_no_self_loops(g, av_manager));
+        ASSERT(assert_no_self_loops(g));
 
         // check no duplicate edges
-        ASSERT(assert_no_double_edges(g, av_manager));
+        ASSERT(assert_no_double_edges(g));
 
         return true;
     }
 
     bool assert_state_after_partitioning(graph_t& g,
-                                         av_manager_t& av_manager,
                                          p_manager_t& p_manager,
                                          bv_manager_t& bv_manager,
                                          q_graph_t& q_graph,
                                          partition_t k) {
-        // check the right number of vertices active
-        ASSERT(assert_n_active_vertices(g, av_manager));
-
-        // check the right vertices are active
-        ASSERT(assert_correct_vertices_active(g, av_manager));
-
-        // check only active edges
-        ASSERT(assert_active_edges(g, av_manager));
-
         // check no self-loops
-        ASSERT(assert_no_self_loops(g, av_manager));
+        ASSERT(assert_no_self_loops(g));
 
         // check no duplicate edges
-        ASSERT(assert_no_double_edges(g, av_manager));
+        ASSERT(assert_no_double_edges(g));
 
         // check the correct block weights
-        ASSERT(assert_bweights(g, av_manager, p_manager, k));
+        ASSERT(assert_bweights(g,  p_manager, k));
 
         // check the correct number of partitions
-        ASSERT(assert_n_boundary_vertices(g, av_manager, p_manager, bv_manager));
+        ASSERT(assert_n_boundary_vertices(g,  p_manager, bv_manager));
 
         // check the right vertices are boundary
-        ASSERT(assert_correct_vertices_boundary(g, av_manager, p_manager, bv_manager));
+        ASSERT(assert_correct_vertices_boundary(g,  p_manager, bv_manager));
 
         // check the right vertices are boundary per block
-        ASSERT(assert_correct_vertices_boundary_per_block(g, av_manager, p_manager, bv_manager, k));
+        ASSERT(assert_correct_vertices_boundary_per_block(g,  p_manager, bv_manager, k));
 
         // check the correct quotient graph
-        ASSERT(assert_correct_quotient_graph(g, av_manager, p_manager, q_graph, k));
+        ASSERT(assert_correct_quotient_graph(g, p_manager, q_graph, k));
 
         return true;
     }

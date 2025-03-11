@@ -35,13 +35,13 @@ namespace HeiProMap {
     class ISerialPartitionManager {
     public:
         virtual ~ISerialPartitionManager() = default;
-        virtual void initialize(const vertex_t n, const partition_t k, const weight_t t_lmax) = 0;
-        virtual const partition_t& operator[](const vertex_t u) const = 0;
-        virtual void set(const vertex_t u, const weight_t w, const partition_t id) = 0;
-        virtual void move(const vertex_t u, const weight_t w, const partition_t old_id, const partition_t new_id) = 0;
-        virtual weight_t get_bweight(const partition_t id) const = 0;
+        virtual void initialize(vertex_t n, partition_t k, weight_t t_lmax) = 0;
+        virtual const partition_t& operator[](vertex_t u) const = 0;
+        virtual void set(vertex_t u, weight_t w, partition_t id) = 0;
+        virtual void move(vertex_t u, weight_t w, partition_t old_id, partition_t new_id) = 0;
+        virtual weight_t get_bweight(partition_t id) const = 0;
         virtual std::vector<weight_t> get_bweights() const = 0;
-        virtual void uncontract(const EdgeUV* matches, const size_t& matches_size) = 0;
+        virtual void uncontract(const Matching &matching) = 0;
         virtual bool is_overloaded() = 0;
     };
 }
