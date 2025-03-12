@@ -46,7 +46,6 @@ namespace HeiProMap {
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
     };
 
-    /*
     inline partition_t get_island_id(partition_t u_id, const std::vector<std::vector<partition_t>>& island_ids) {
         for (partition_t i = 0; i < island_ids.size(); ++i) {
             if (std::find(island_ids[i].begin(), island_ids[i].end(), u_id) != island_ids[i].end()) {
@@ -56,14 +55,12 @@ namespace HeiProMap {
         std::cout << "Error u_id " << u_id << " not found!" << std::endl;
         exit(EXIT_FAILURE);
     }
-     */
 
     /**
      * Since the top level of the hierarchy is the most important, try to optimize it the most.
      * Aggregate all partitions of the islands and then try to find moves between the islands instead of individual partitions.
      * If moves between the islands have been found, then try to distribute it onto the individual partitions.
      */
-    /*
     class HierarchyAwareCycleRefinement final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
@@ -108,7 +105,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t& g,
-                    const av_manager_t& av_manager,
                     const d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
@@ -173,7 +169,7 @@ namespace HeiProMap {
                             partition_t u_island_id    = get_island_id(u_id, island_ids);
                             partition_t best_island_id = get_island_id(best_id, island_ids);
                             if (u_island_id == best_island_id) { continue; }
-                            weight_t u_weight = g.get_weight(u);
+                            weight_t u_weight = g.weight(u);
 
                             bool different_island       = u_island_id != best_island_id;
                             bool would_overload_best_id = best_id_weight + u_weight > m_lmax;
@@ -202,7 +198,6 @@ namespace HeiProMap {
         JSONString get_stats() override { return {}; };
 
     };
-     */
 }
 
 #endif //HEIPROMAP_HIERARCHY_AWARE_CYCLE_REFINEMENT_H

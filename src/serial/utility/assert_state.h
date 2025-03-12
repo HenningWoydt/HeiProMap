@@ -69,7 +69,7 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-                weights[u_id] += g.get_weight(u);
+                weights[u_id] += g.weight(u);
             }
         endfor
 

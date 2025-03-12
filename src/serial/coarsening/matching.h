@@ -28,20 +28,20 @@
 #define HEIPROMAP_MATCHING_H
 
 #include <numeric>
+
 #include "../../definitions.h"
 #include "../../commons/utils.h"
 #include "../../commons/translation_table.h"
 
 namespace HeiProMap {
-
     class Matching {
     private:
         vertex_t m_n = 0;
 
-        EdgeUV *matches     = nullptr;
+        EdgeUV* matches     = nullptr;
         size_t matches_size = 0;
 
-        vertex_t *partner = nullptr;
+        vertex_t* partner = nullptr;
 
         TranslationTable<vertex_t> tt;
 
@@ -50,18 +50,18 @@ namespace HeiProMap {
 
         void initialize(vertex_t n) {
             vertex_t n_64 = round_up_64(n);
-            m_n = n;
+            m_n           = n;
 
-            matches      = (EdgeUV *) aligned_alloc(64, (n_64 / 2) * sizeof(EdgeUV));
+            matches      = (EdgeUV*)aligned_alloc(64, (n_64 / 2) * sizeof(EdgeUV));
             matches_size = 0;
 
-            partner = (vertex_t *) aligned_alloc(64, n_64 * sizeof(vertex_t));
+            partner = (vertex_t*)aligned_alloc(64, n_64 * sizeof(vertex_t));
 
             tt.reserve(n, n);
         }
 
         // Move constructor
-        Matching(Matching &&other) noexcept {
+        Matching(Matching&& other) noexcept {
             m_n          = other.m_n;
             matches      = other.matches;
             matches_size = other.matches_size;
@@ -75,9 +75,9 @@ namespace HeiProMap {
         }
 
         // Optionally disable copying.
-        Matching(const Matching &) = delete;
+        Matching(const Matching&) = delete;
 
-        Matching &operator=(const Matching &) = delete;
+        Matching& operator=(const Matching&) = delete;
 
         ~Matching() {
             free(matches);
@@ -96,15 +96,15 @@ namespace HeiProMap {
 
         size_t size() const { return matches_size; }
 
-        vertex_t get_n() const {return m_n; }
+        vertex_t get_n() const { return m_n; }
 
         void set_partners() {
             std::iota(partner, partner + m_n, 0);
 
             for (size_t i = 0; i < matches_size; ++i) {
                 auto [u, v] = matches[i];
-                partner[u] = v;
-                partner[v] = u;
+                partner[u]  = v;
+                partner[v]  = u;
             }
         }
 
@@ -117,24 +117,11 @@ namespace HeiProMap {
         vertex_t get_partner(vertex_t u) const { return partner[u]; }
 
         void set_translation() {
-            size_t matched_self = 0;
-            size_t matched = 0;
-            size_t larger = 0;
-
-            vertex_t      new_u = 0;
+            vertex_t new_u = 0;
             for (vertex_t old_u = 0; old_u < m_n; ++old_u) {
-                if (old_u == partner[old_u]) {
-                    matched_self += 1;
+                if (old_u == partner[old_u] || old_u < partner[old_u]) {
                     tt.add(old_u, new_u);
                     new_u += 1;
-                }
-                if(old_u < partner[old_u]){
-                    matched += 1;
-                    tt.add(old_u, new_u);
-                    new_u += 1;
-                }
-                if(old_u > partner[old_u]){
-                    larger += 1;
                 }
             }
             ASSERT(new_u == get_n_coarse_nodes());
@@ -146,7 +133,6 @@ namespace HeiProMap {
 
         vertex_t get_n(vertex_t o) const { return tt.get_n(o); }
     };
-
 }
 
 #endif //HEIPROMAP_MATCHING_H

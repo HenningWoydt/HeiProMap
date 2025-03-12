@@ -30,7 +30,6 @@
 #include "../../definitions.h"
 #include "../../macros.h"
 #include "../../commons/utils.h"
-#include "../datastructures/translation_table.h"
 #include "../interfaces/ISerialPartitioner.h"
 #include "interface/kaHIP_interface.h"
 
@@ -151,7 +150,7 @@ namespace HeiProMap {
             }
 
             const f64 global_imbalance     = imbalance;
-            const weight_t global_g_weight = g.get_weight();
+            const weight_t global_g_weight = g.weight();
             const partition_t global_k     = prod<partition_t>(hierarchy);
 
             // create the first graph
@@ -175,8 +174,8 @@ namespace HeiProMap {
                 {
                     new_u = first_graph->tt.get_n(old_u);
 
-                    first_graph->vwgt[new_u] = (int)g.get_weight(old_u);
-                    first_graph->total_weight += (int)g.get_weight(old_u);
+                    first_graph->vwgt[new_u] = (int)g.weight(old_u);
+                    first_graph->total_weight += (int)g.weight(old_u);
                     first_graph->xadj[new_u + 1] = first_graph->xadj[new_u];
 
                     forall_guivw(g, old_u, i, old_v, w)

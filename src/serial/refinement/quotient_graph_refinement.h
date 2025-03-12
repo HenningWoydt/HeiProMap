@@ -250,7 +250,7 @@ namespace HeiProMap {
                             partition_weight = p_manager.get_bweight(u_id);
                             boundary_vertices_v.pop();
                         }
-                        weight_t vertex_weight = g.get_weight(vertex);
+                        weight_t vertex_weight = g.weight(vertex);
 
                         // move the vertex
                         moves[moves_size++] = vertex;
@@ -298,7 +298,7 @@ namespace HeiProMap {
                     // revert all moves in partitioning manager
                     for (size_t i = 0; i < moves_size; i++) {
                         vertex_t    vertex        = moves[moves_size - 1 - i];
-                        weight_t    vertex_weight = g.get_weight(vertex);
+                        weight_t    vertex_weight = g.weight(vertex);
                         partition_t vertex_id     = p_manager[vertex];
                         partition_t move_id       = u_id == vertex_id ? v_id : u_id;
 
@@ -308,7 +308,7 @@ namespace HeiProMap {
                     // make all moves to best index
                     for (size_t i = 0; i < best_idx; ++i) {
                         vertex_t    vertex        = moves[i];
-                        weight_t    vertex_weight = g.get_weight(vertex);
+                        weight_t    vertex_weight = g.weight(vertex);
                         partition_t vertex_id     = p_manager[vertex];
                         partition_t move_id       = u_id == vertex_id ? v_id : u_id;
 

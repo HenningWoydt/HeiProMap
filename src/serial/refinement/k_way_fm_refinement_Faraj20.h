@@ -289,7 +289,6 @@ namespace HeiProMap {
      * > In: Demetrescu, C., Halldórsson, M.M. (eds) Algorithms – ESA 2011. ESA 2011. Lecture Notes in Computer Science, vol 6942. Springer, Berlin, Heidelberg
      *
      */
-     /*
     class KWayFMRefinementFaraj20 final : public ISerialRefiner {
     private:
         vertex_t m_n    = 0;
@@ -346,7 +345,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t& g,
-                    const av_manager_t& av_manager,
                     const d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
@@ -365,7 +363,7 @@ namespace HeiProMap {
                 forall_bv_iu(bv_manager, j, u)
                     {
                         partition_t u_id  = p_manager[u];
-                        weight_t u_weight = g.get_weight(u);
+                        weight_t u_weight = g.weight(u);
 
                         // find all connected partitions to u
                         block_marker += 1;
@@ -411,7 +409,7 @@ namespace HeiProMap {
                     if (!is_connected_to(g, p_manager, vertex, move_id)) { continue; }
 
                     partition_t vertex_id  = p_manager[vertex];
-                    weight_t vertex_weight = g.get_weight(vertex);
+                    weight_t vertex_weight = g.weight(vertex);
                     if (p_manager.get_bweight(move_id) + vertex_weight > m_lmax) { continue; }
 
                     s64 curr_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);
@@ -452,7 +450,7 @@ namespace HeiProMap {
                             if (!is_boundary(g, p_manager, neighbor)) { continue; }
 
                             partition_t neighbor_id  = p_manager[neighbor];
-                            weight_t neighbor_weight = g.get_weight(neighbor);
+                            weight_t neighbor_weight = g.weight(neighbor);
 
                             block_marker += 1;
                             bool one_id_is_valid = false;
@@ -480,7 +478,7 @@ namespace HeiProMap {
                 // revert all moves in partitioning manager
                 for (size_t i = 0; i < moves.size(); i++) {
                     vertex_t vertex        = moves[moves.size() - 1 - i].u;
-                    weight_t vertex_weight = g.get_weight(vertex);
+                    weight_t vertex_weight = g.weight(vertex);
                     partition_t vertex_id  = moves[moves.size() - 1 - i].to_move_id;
                     partition_t move_id    = moves[moves.size() - 1 - i].u_id;
 
@@ -490,7 +488,7 @@ namespace HeiProMap {
                 // make all moves to best index
                 for (size_t i = 0; i < best_idx; ++i) {
                     vertex_t vertex        = moves[i].u;
-                    weight_t vertex_weight = g.get_weight(vertex);
+                    weight_t vertex_weight = g.weight(vertex);
                     partition_t vertex_id  = moves[i].u_id;
                     partition_t move_id    = moves[i].to_move_id;
 
@@ -506,7 +504,6 @@ namespace HeiProMap {
 
         JSONString get_stats() override { return {}; };
     };
-      */
 }
 
 

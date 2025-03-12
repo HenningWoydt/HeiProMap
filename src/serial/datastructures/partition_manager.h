@@ -32,21 +32,21 @@
 
 namespace HeiProMap {
     class PartitionManager final : public ISerialPartitionManager {
-        vertex_t    m_n  = 0;
-        partition_t m_k  = 0;
-        weight_t    lmax = 0;
+        vertex_t m_n    = 0;
+        partition_t m_k = 0;
+        weight_t lmax   = 0;
 
-        partition_t *partition = nullptr;
-        weight_t    *bweights  = nullptr;
-        size_t      *n_nodes   = nullptr;
+        partition_t* partition      = nullptr;
+        partition_t* partition_temp = nullptr;
+        weight_t* bweights          = nullptr;
 
     public:
         PartitionManager() = default;
 
         ~PartitionManager() override {
             free(partition);
+            free(partition_temp);
             free(bweights);
-            free(n_nodes);
         }
 
         void initialize(const vertex_t t_n,
@@ -59,15 +59,14 @@ namespace HeiProMap {
             m_k  = t_k;
             lmax = t_lmax;
 
-            partition = (partition_t *) aligned_alloc(64, t_n_64 * sizeof(partition_t));
-            bweights  = (weight_t *) aligned_alloc(64, t_k_64 * sizeof(weight_t));
-            n_nodes   = (size_t *) aligned_alloc(64, t_k_64 * sizeof(size_t));
+            partition      = (partition_t*)aligned_alloc(64, t_n_64 * sizeof(partition_t));
+            partition_temp = (partition_t*)aligned_alloc(64, t_n_64 * sizeof(partition_t));
+            bweights       = (weight_t*)aligned_alloc(64, t_k_64 * sizeof(weight_t));
             std::fill_n(bweights, t_k_64, 0);
-            std::fill_n(n_nodes, t_k_64, 0);
         }
 
         // read
-        const partition_t &operator[](const vertex_t u) const override { return partition[u]; }
+        const partition_t& operator[](const vertex_t u) const override { return partition[u]; }
 
         // write
         void set(const vertex_t u,
@@ -75,7 +74,6 @@ namespace HeiProMap {
                  const partition_t id) override {
             bweights[id] += w;
             partition[u] = id;
-            n_nodes[id] += 1;
         }
 
         void move(const vertex_t u,
@@ -85,32 +83,27 @@ namespace HeiProMap {
             bweights[old_id] -= w;
             bweights[new_id] += w;
             partition[u] = new_id;
-            n_nodes[old_id] -= 1;
-            n_nodes[new_id] += 1;
         }
 
         weight_t get_bweight(const partition_t id) const override { return bweights[id]; }
 
-        vertex_t get_n_nodes(const partition_t id) const { return n_nodes[id]; }
 
         std::vector<weight_t> get_bweights() const override {
             std::vector<weight_t> weights(m_k);
-            for (size_t           i = 0; i < m_k; ++i) {
+            for (size_t i = 0; i < m_k; ++i) {
                 weights[i] = bweights[i];
             }
             return weights;
         }
 
-        void uncontract(const Matching &matching) override {
-            std::vector<partition_t> temp;
-            for (size_t              i = 0; i < m_n; ++i) { temp.push_back(partition[i]); }
-
+        void uncontract(const Matching& matching) override {
             for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
-                vertex_t old_u         = matching.get_o(new_u);
-                vertex_t old_u_partner = matching.get_partner(old_u);
-                partition[old_u]         = temp[new_u];
-                partition[old_u_partner] = temp[new_u];
+                vertex_t old_u           = matching.get_o(new_u);
+                vertex_t old_u_partner   = matching.get_partner(old_u);
+                partition_temp[old_u]         = partition[new_u];
+                partition_temp[old_u_partner] = partition[new_u];
             }
+            std::swap(partition, partition_temp);
         }
 
         bool is_overloaded() override {

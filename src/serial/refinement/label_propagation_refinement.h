@@ -39,7 +39,6 @@ namespace HeiProMap {
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
-    /*
     class LabelPropagationRefinement final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
@@ -120,7 +119,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t& g,
-                    const av_manager_t& av_manager,
                     const d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
@@ -169,7 +167,7 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t u_weight = g.get_weight(u);
+                    weight_t u_weight = g.weight(u);
                     partition_t u_id  = p_manager[u];
 
                     // make the move that reduces qap the most
@@ -296,7 +294,6 @@ namespace HeiProMap {
 
         JSONString get_stats() override { return {}; };
     };
-     */
 }
 
 #endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H

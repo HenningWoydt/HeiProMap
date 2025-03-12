@@ -34,12 +34,12 @@
 namespace HeiProMap {
     bool is_boundary(const graph_t& g,
                      const p_manager_t& p_manager,
-                     const vertex_t u);
+                     vertex_t u);
 
     bool is_connected_to(const graph_t& g,
                          const p_manager_t& p_manager,
-                         const vertex_t u,
-                         const partition_t id);
+                         vertex_t u,
+                         partition_t id);
 }
 
 #endif //HEIPROMAP_FUNCTIONS_H

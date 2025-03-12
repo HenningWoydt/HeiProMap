@@ -685,17 +685,18 @@ namespace HeiProMap {
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = true;
+            label_propagation_config.enabled       = false;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = true;
+            k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = true;
+            multi_try_fm_refinement_config.max_iteration = 3;
         }
 
         void set_experimental() {
@@ -731,7 +732,7 @@ namespace HeiProMap {
             k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 3;
 
             // enable two vertex label propagation

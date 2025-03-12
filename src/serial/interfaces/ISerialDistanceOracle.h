@@ -38,6 +38,9 @@ namespace HeiProMap {
         virtual ~ISerialDistanceOracle() = default;
         virtual void initialize(const std::vector<partition_t>& t_hierarchy,
                                 const std::vector<weight_t>& t_distance) = 0;
+        virtual weight_t get(partition_t u_id, partition_t v_id) const = 0;
+        virtual partition_t get_h(partition_t u_id, partition_t v_id) const = 0;
+
     };
 }
 

@@ -189,12 +189,12 @@ namespace HeiProMap {
             f32 min_rating = std::numeric_limits<f32>::max();
             forall_gu(g, u)
                 {
-                    weight_t u_w = g.get_weight(u);
+                    weight_t u_w = g.weight(u);
 
                     forall_guivw(g, u, j, v, w)
                         {
                             if (u > v) { continue; }
-                            weight_t v_w = g.get_weight(v);
+                            weight_t v_w = g.weight(v);
 
                             // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
                             // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
@@ -414,9 +414,6 @@ namespace HeiProMap {
             vertex_t vv = m_neighbors[u].n1;
             f32      w  = m_neighbors[u].w1;
 
-            if (g.size(uu) >= g.size(vv)) {
-                std::swap(uu, vv);
-            }
             matching.add(uu, vv);
 
             return w;
@@ -451,9 +448,6 @@ namespace HeiProMap {
                 w  = w2;
             }
 
-            if (g.size(uu) >= g.size(vv)) {
-                std::swap(uu, vv);
-            }
             matching.add(uu, vv);
             return w;
         }
@@ -552,9 +546,6 @@ namespace HeiProMap {
                     vertex_t uu = dp_edges[idx];
                     vertex_t vv = dp_edges[idx + 1];
 
-                    if (g.size(uu) >= g.size(vv)) {
-                        std::swap(uu, vv);
-                    }
                     matching.add(uu, vv);
                 }
                 idx = dp_m[idx];
@@ -627,12 +618,12 @@ namespace HeiProMap {
             forall_gu(g, u)
                 {
                     if (is_matched[u]) { continue; }
-                    weight_t u_w = g.get_weight(u);
+                    weight_t u_w = g.weight(u);
 
                     forall_guiv(g, u, j, v)
                         {
                             if (is_matched[v]) { continue; }
-                            weight_t v_w = g.get_weight(v);
+                            weight_t v_w = g.weight(v);
 
                             if (u_w + v_w > m_l_max) { continue; }
 

@@ -32,6 +32,7 @@ namespace HeiProMap {
                      const vertex_t u) {
         partition_t u_id = p_manager[u];
 
+#pragma GCC unroll 4
         forall_guiv(g, u, i, v)
             {
                 partition_t v_id = p_manager[v];
@@ -47,6 +48,8 @@ namespace HeiProMap {
                          const p_manager_t& p_manager,
                          const vertex_t u,
                          const partition_t id) {
+
+#pragma GCC unroll 4
         forall_guiv(g, u, i, v)
             {
                 partition_t v_id = p_manager[v];

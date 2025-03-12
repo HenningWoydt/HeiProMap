@@ -45,9 +45,7 @@ namespace HeiProMap {
         f64 beta          = 1.0;
     };
 
-    /*
     class MultiTryFMRefinement final : public ISerialRefiner {
-    private:
         vertex_t                 m_n    = 0;
         vertex_t                 m_m    = 0;
         partition_t              m_k    = 0;
@@ -128,7 +126,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t &g,
-                    const av_manager_t &av_manager,
                     const d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
@@ -141,7 +138,7 @@ namespace HeiProMap {
             METRICS(std::vector<s64> qap_delta;)
 
             f64 alpha = config->alpha;
-            f64 beta  = std::log(av_manager.size());
+            f64 beta  = std::log(g.get_n());
 
             bool     positive_move_occurred = true;
             for (u64 iteration              = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
@@ -180,7 +177,7 @@ namespace HeiProMap {
 
                     // insert u into the priority queue
                     partition_t u_id     = p_manager[u];
-                    weight_t    u_weight = g.get_weight(u);
+                    weight_t    u_weight = g.weight(u);
 
                     // find all connected partitions to u
                     block_mark += 1;
@@ -211,7 +208,7 @@ namespace HeiProMap {
                             if (!bv_manager.is_boundary(neighbor)) { continue; }
 
                             partition_t neighbor_id     = p_manager[neighbor];
-                            weight_t    neighbor_weight = g.get_weight(neighbor);
+                            weight_t    neighbor_weight = g.weight(neighbor);
 
                             block_mark += 1;
                             best_qap_delta              = -std::numeric_limits<s64>::max();
@@ -256,7 +253,7 @@ namespace HeiProMap {
 
                         vertex_t    vertex        = move.u;
                         partition_t vertex_id     = p_manager[vertex];
-                        weight_t    vertex_weight = g.get_weight(vertex);
+                        weight_t    vertex_weight = g.weight(vertex);
                         partition_t move_id       = move.to_move_id;
 
                         if (!is_connected_to(g, p_manager, vertex, move_id)) { continue; }
@@ -293,7 +290,7 @@ namespace HeiProMap {
                                 if (!is_boundary(g, p_manager, neighbor)) { continue; }
 
                                 partition_t neighbor_id     = p_manager[neighbor];
-                                weight_t    neighbor_weight = g.get_weight(neighbor);
+                                weight_t    neighbor_weight = g.weight(neighbor);
 
                                 block_mark += 1;
                                 best_qap_delta              = -std::numeric_limits<s64>::max();
@@ -325,7 +322,7 @@ namespace HeiProMap {
                     // revert all moves in partitioning manager
                     for (size_t i                            = 0; i < moves_size; i++) {
                         vertex_t    vertex        = moves[moves_size - 1 - i].u;
-                        weight_t    vertex_weight = g.get_weight(vertex);
+                        weight_t    vertex_weight = g.weight(vertex);
                         partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
                         partition_t move_id       = moves[moves_size - 1 - i].u_id;
 
@@ -335,7 +332,7 @@ namespace HeiProMap {
                     // make all moves to best index
                     for (size_t i = 0; i < best_idx; ++i) {
                         vertex_t    vertex        = moves[i].u;
-                        weight_t    vertex_weight = g.get_weight(vertex);
+                        weight_t    vertex_weight = g.weight(vertex);
                         partition_t vertex_id     = moves[i].u_id;
                         partition_t move_id       = moves[i].to_move_id;
 
@@ -416,7 +413,6 @@ namespace HeiProMap {
             return json_stats;
         }
     };
-     */
 }
 
 #endif //HEIPROMAP_MULTI_TRY_FM_REFINEMENT_H

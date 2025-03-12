@@ -35,7 +35,7 @@ namespace HeiProMap {
     typedef DistanceOracle      d_oracle_t;
 
     // Macro to iterate over the neighborhood of vertex u of a graph
-#define forall_guivw(g, u, i, v, w) for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.get_weight(u, i);
+#define forall_guivw(g, u, i, v, w) for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.weight(u, i);
 #define forall_guiv(g, u, i, v)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i);
 #define forall_gu(g, u) for (vertex_t u = 0; u < g.get_n(); ++u) {
 

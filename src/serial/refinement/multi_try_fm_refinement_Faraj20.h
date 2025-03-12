@@ -54,7 +54,6 @@ namespace HeiProMap {
      * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      * > Schloss Dagstuhl - Leibniz-Zentrum für Informatik, 2020.
      */
-     /*
     class MultiTryFMRefinementFaraj20 final : public ISerialRefiner {
     private:
         vertex_t m_n    = 0;
@@ -107,7 +106,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t& g,
-                    const av_manager_t& av_manager,
                     const d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
@@ -144,7 +142,7 @@ namespace HeiProMap {
 
                     // insert u into the priority queue
                     partition_t u_id  = p_manager[u];
-                    weight_t u_weight = g.get_weight(u);
+                    weight_t u_weight = g.weight(u);
 
                     // find all connected partitions to u
                     block_mark += 1;
@@ -218,7 +216,7 @@ namespace HeiProMap {
                         if (!is_connected_to(g, p_manager, vertex, move_id)) { continue; }
 
                         partition_t vertex_id  = p_manager[vertex];
-                        weight_t vertex_weight = g.get_weight(vertex);
+                        weight_t vertex_weight = g.weight(vertex);
                         if (p_manager.get_bweight(move_id) + vertex_weight > m_lmax) { continue; }
 
                         s64 curr_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);
@@ -284,7 +282,7 @@ namespace HeiProMap {
                     // revert all moves in partitioning manager
                     for (size_t i = 0; i < moves.size(); i++) {
                         vertex_t vertex        = moves[moves.size() - 1 - i].u;
-                        weight_t vertex_weight = g.get_weight(vertex);
+                        weight_t vertex_weight = g.weight(vertex);
                         partition_t vertex_id  = moves[moves.size() - 1 - i].to_move_id;
                         partition_t move_id    = moves[moves.size() - 1 - i].u_id;
 
@@ -294,7 +292,7 @@ namespace HeiProMap {
                     // make all moves to best index
                     for (size_t i = 0; i < best_idx; ++i) {
                         vertex_t vertex        = moves[i].u;
-                        weight_t vertex_weight = g.get_weight(vertex);
+                        weight_t vertex_weight = g.weight(vertex);
                         partition_t vertex_id  = moves[i].u_id;
                         partition_t move_id    = moves[i].to_move_id;
 
@@ -315,7 +313,6 @@ namespace HeiProMap {
 
         JSONString get_stats() override { return {}; };
     };
-      */
 }
 
 #endif //HEIPROMAP_MULTI_TRY_FM_REFINEMENT_FARAJ20_H

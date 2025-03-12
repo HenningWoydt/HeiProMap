@@ -77,21 +77,21 @@ namespace HeiProMap {
 
         // matching
         std::vector<Matching>      matches;
-        // GreedyEdgeMatcher          ge_matcher;
-        // HeavyEdgeMatcher           he_matcher;
+        GreedyEdgeMatcher          ge_matcher;
+        HeavyEdgeMatcher           he_matcher;
         GlobalPathAlgorithmMatcher gpa_matcher;
 
         // refinement
-        // LabelPropagationRefinementFaraj20   lp_refine_faraj20;
-        // LabelPropagationRefinement          lp_refine;
-        // TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
-        // QuotientGraphRefinementFaraj20      qg_refine_faraj20;
+        LabelPropagationRefinementFaraj20   lp_refine_faraj20;
+        LabelPropagationRefinement          lp_refine;
+        TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
+        QuotientGraphRefinementFaraj20      qg_refine_faraj20;
         QuotientGraphRefinement qg_refine;
-        // KWayFMRefinementFaraj20             k_way_refine_faraj20;
-        // KWayFMRefinement                    k_way_refine;
-        // MultiTryFMRefinementFaraj20         multi_try_fm_refinement_faraj20;
-        // MultiTryFMRefinement                multi_try_fm_refinement;
-        // HierarchyAwareCycleRefinement       hierarchy_aware_cycle_refinement;
+        KWayFMRefinementFaraj20             k_way_refine_faraj20;
+        KWayFMRefinement                    k_way_refine;
+        MultiTryFMRefinementFaraj20         multi_try_fm_refinement_faraj20;
+        MultiTryFMRefinement                multi_try_fm_refinement;
+        HierarchyAwareCycleRefinement       hierarchy_aware_cycle_refinement;
 
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
 
@@ -107,7 +107,7 @@ namespace HeiProMap {
 
             const auto sp_io = std::chrono::high_resolution_clock::now();
             // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].get_weight() / (f64) ac.k));
+            lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].weight() / (f64) ac.k));
 
             // manager
             p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
@@ -119,34 +119,34 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            // ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
-            // he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
+            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
+            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config, stat_collect);
 
             // refinement
-            // qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.quotient_graph_refinement_faraj20_config, stat_collect);
-            // lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.label_propagation_faraj20_config, stat_collect);
-            // k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.k_way_fm_refinement_faraj20_config, stat_collect);
-            // multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.multi_try_fm_refinement_faraj20_config, stat_collect);
+            qg_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.quotient_graph_refinement_faraj20_config, stat_collect);
+            lp_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.label_propagation_faraj20_config, stat_collect);
+            k_way_refine_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.k_way_fm_refinement_faraj20_config, stat_collect);
+            multi_try_fm_refinement_faraj20.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.multi_try_fm_refinement_faraj20_config, stat_collect);
 
             qg_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.quotient_graph_refinement_config, stat_collect);
-            // lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.label_propagation_config, stat_collect);
-            // k_way_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.k_way_fm_refinement_config, stat_collect);
-            // multi_try_fm_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.multi_try_fm_refinement_config, stat_collect);
-            // two_vertex_lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.two_vertex_label_propagation_config, stat_collect);
-            // hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.hierarchy_aware_cycles_config, stat_collect);
+            lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.label_propagation_config, stat_collect);
+            k_way_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.k_way_fm_refinement_config, stat_collect);
+            multi_try_fm_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.multi_try_fm_refinement_config, stat_collect);
+            two_vertex_lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.two_vertex_label_propagation_config, stat_collect);
+            hierarchy_aware_cycle_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.hierarchy_aware_cycles_config, stat_collect);
 
-            // refinements.emplace_back(&qg_refine_faraj20, &ac.quotient_graph_refinement_faraj20_config);
-            // refinements.emplace_back(&lp_refine_faraj20, &ac.label_propagation_faraj20_config);
-            // refinements.emplace_back(&k_way_refine_faraj20, &ac.k_way_fm_refinement_faraj20_config);
-            // refinements.emplace_back(&multi_try_fm_refinement_faraj20, &ac.multi_try_fm_refinement_faraj20_config);
+            refinements.emplace_back(&qg_refine_faraj20, &ac.quotient_graph_refinement_faraj20_config);
+            refinements.emplace_back(&lp_refine_faraj20, &ac.label_propagation_faraj20_config);
+            refinements.emplace_back(&k_way_refine_faraj20, &ac.k_way_fm_refinement_faraj20_config);
+            refinements.emplace_back(&multi_try_fm_refinement_faraj20, &ac.multi_try_fm_refinement_faraj20_config);
 
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            // refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
-            // refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
-            // refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
-            // refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
-            // refinements.emplace_back(&hierarchy_aware_cycle_refinement, &ac.hierarchy_aware_cycles_config);
+            refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
+            refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
+            refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
+            refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
+            refinements.emplace_back(&hierarchy_aware_cycle_refinement, &ac.hierarchy_aware_cycles_config);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));
@@ -240,7 +240,7 @@ namespace HeiProMap {
                 {
                     for (size_t i = 0; i < graphs.back().size(u); ++i) {
                         const vertex_t    v    = graphs.back().neighbor(u, i);
-                        const weight_t    w    = graphs.back().get_weight(u, i);
+                        const weight_t    w    = graphs.back().weight(u, i);
                         const partition_t u_id = p_manager[u];
                         const partition_t v_id = p_manager[v];
 
@@ -270,9 +270,9 @@ namespace HeiProMap {
             matches.back().initialize(graphs.back().get_n());
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                // ge_matcher.match(level, graphs.back(), av_manager, matches.back());
+                ge_matcher.match(level, graphs.back(), matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                // he_matcher.match(level, graphs.back(), av_manager, matches.back());
+                he_matcher.match(level, graphs.back(), matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(level, graphs.back(), matches.back());
             } else {
@@ -290,7 +290,8 @@ namespace HeiProMap {
         void coarsening(const u64 level) {
             const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
-            graphs.emplace_back(graphs.back(), matches.back()); // coarse the graph
+            graphs.emplace_back(); // coarse the graph
+            graphs.back().initialize(graphs[graphs.size() - 2], matches.back());
 
             const auto ep_coarse = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("coarsening", get_seconds(sp_coarse, ep_coarse));
@@ -319,7 +320,7 @@ namespace HeiProMap {
         void refinement(const u64 level) {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
-            SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), av_manager, p_manager, d_oracle);)
+            SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
             for (auto [refiner, config]: refinements) {
                 if (config->enabled) {
                     const auto sp = std::chrono::high_resolution_clock::now();
@@ -327,7 +328,7 @@ namespace HeiProMap {
                     refiner->refine(level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
 
                     const auto        ep        = std::chrono::high_resolution_clock::now();
-                    SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), av_manager, p_manager, d_oracle);)
+                    SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
                     s64               qap_delta = 0;
                     SMALL_METRICS(qap_delta = qap_before - qap_after;)
 

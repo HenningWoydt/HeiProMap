@@ -46,7 +46,6 @@ namespace HeiProMap {
      * > High-quality Hierarchical Process Mapping.
      * > In 18th International Symposium on Experimental Algorithms, SEA 2020, June 16-18, 2020, Catania, Italy, volume 160 of LIPIcs, pages 4:1–4:15.
      */
-     /*
     class LabelPropagationRefinementFaraj20 final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
@@ -105,7 +104,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t& g,
-                    const av_manager_t& av_manager,
                     const d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
@@ -127,7 +125,7 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t u_weight = g.get_weight(u);
+                    weight_t u_weight = g.weight(u);
                     partition_t u_id  = p_manager[u];
 
                     // make the move that reduces qap the most
@@ -181,7 +179,6 @@ namespace HeiProMap {
 
         JSONString get_stats() override { return {}; };
     };
-      */
 }
 
 #endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H

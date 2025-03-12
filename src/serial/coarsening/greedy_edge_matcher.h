@@ -43,7 +43,6 @@ namespace HeiProMap {
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
-    /*
     class GreedyEdgeMatcher final : public ISerialMatcher {
         vertex_t m_n     = 0;
         vertex_t m_m     = 0;
@@ -86,18 +85,13 @@ namespace HeiProMap {
 
         void match(const size_t level,
                    const graph_t& g,
-                   const av_manager_t& av_manager,
-                   EdgeUV* matches,
-                   size_t& matches_size) override {
-            matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
-            matches_size = 0;
-
+                   Matching& matching) override {
             mark += 1;
             edges.clear();
 
             // first handle pendant vertices
             if (config->match_pendant_vertices_first) {
-                forall_av_iu(av_manager, i, u)
+                forall_gu(g, u)
                     {
                         ASSERT(av_manager.is_active(u));
 
@@ -106,7 +100,7 @@ namespace HeiProMap {
                         }
 
                         const vertex_t v  = g.neighbor(u, 0);
-                        const weight_t ew = g.get_weight(u, 0);
+                        const weight_t ew = g.weight(u, 0);
                         const f64 rating  = (f64)ew / (f64)(g.size(u) * g.size(v));
                         edges.emplace_back(u, v, rating);
                     }
@@ -118,7 +112,7 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    if (g.get_weight(u) + g.get_weight(v) > m_l_max) {
+                    if (g.weight(u) + g.weight(v) > m_l_max) {
                         continue;
                     }
 
@@ -126,20 +120,17 @@ namespace HeiProMap {
                         // use this edge
                         used[u] = mark;
                         used[v] = mark;
-                        if (g.size(u) > g.size(v)) {
-                            matches[matches_size++] = {u, v};
-                        } else {
-                            matches[matches_size++] = {v, u};
-                        }
+
+                        matching.add(u, v);
                     }
                 }
             }
 
             // handle all other vertices
-            forall_av_iu(av_manager, i, u)
+            forall_gu(g, u)
                 {
                     ASSERT(av_manager.is_active(u));
-                    weight_t u_w = g.get_weight(u);
+                    weight_t u_w = g.weight(u);
 
                     if (used[u] == mark) {
                         continue;
@@ -147,13 +138,13 @@ namespace HeiProMap {
 
                     forall_guivw(g, u, j, v, w)
                         {
-                            weight_t v_w = g.get_weight(v);
+                            weight_t v_w = g.weight(v);
 
                             if (used[v] == mark) {
                                 continue;
                             }
 
-                            if (g.get_weight(u) + g.get_weight(v) > m_l_max) {
+                            if (g.weight(u) + g.weight(v) > m_l_max) {
                                 continue;
                             }
 
@@ -170,11 +161,8 @@ namespace HeiProMap {
                     // use this edge
                     used[u] = mark;
                     used[v] = mark;
-                    if (g.size(u) > g.size(v)) {
-                        matches[matches_size++] = {u, v};
-                    } else {
-                        matches[matches_size++] = {v, u};
-                    }
+
+                    matching.add(u, v);
                 }
             }
 
@@ -204,7 +192,6 @@ namespace HeiProMap {
 #endif
         }
     };
-     */
 }
 
 #endif //HEIPROMAP_GREEDY_EDGE_MATCHER_H

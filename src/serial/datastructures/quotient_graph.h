@@ -80,7 +80,7 @@ namespace HeiProMap {
 
             for (size_t i = 0; i < g.size(u); ++i) {
                 vertex_t v       = g.neighbor(u, i);
-                weight_t w       = g.get_weight(u, i);
+                weight_t w       = g.weight(u, i);
                 partition_t v_id = p_manager[v];
 
                 // remove old edge, if existed

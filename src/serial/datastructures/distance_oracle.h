@@ -86,17 +86,6 @@ namespace HeiProMap {
             return m_mtx_copy[u_id * m_k + v_id];
         }
 
-        void get(partition_t u_id, partition_t v_id1, partition_t v_id2, weight_t &w1, weight_t &w2) const {
-            ASSERT(u_id < m_k);
-            ASSERT(v_id1 < m_k);
-            ASSERT(v_id2 < m_k);
-            ASSERT(u_id * m_k + v_id1 < m_k * m_k);
-            ASSERT(u_id * m_k + v_id2 < m_k * m_k);
-            weight_t* m_mtx_copy = ASSUME_ALIGNED(weight_t*, m_mtx, 64);
-            w1 = m_mtx_copy[u_id * m_k + v_id1];
-            w2 = m_mtx_copy[u_id * m_k + v_id2];
-        }
-
         partition_t get_h(partition_t u_id, partition_t v_id) const {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);

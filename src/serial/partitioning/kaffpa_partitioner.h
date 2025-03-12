@@ -29,7 +29,6 @@
 
 #include "../../definitions.h"
 #include "../../macros.h"
-#include "../datastructures/translation_table.h"
 #include "../interfaces/ISerialPartitioner.h"
 #include "interface/kaHIP_interface.h"
 
@@ -130,7 +129,7 @@ namespace HeiProMap {
 
             // vertex weights
             int *v_weights = (int *) malloc(n * sizeof(int));
-            for (int i = 0; i < n; ++i) { v_weights[i] = (int) g.get_weight(tt.get_o(i)); }
+            for (int i = 0; i < n; ++i) { v_weights[i] = (int) g.weight(tt.get_o(i)); }
 
             // pointer to adjacency lists
             int *adj_ptr   = (int *) malloc((n + 1) * sizeof(int));
@@ -144,7 +143,7 @@ namespace HeiProMap {
                 int         insert_idx = 0;
                 for (size_t i          = 0; i < g.size(old_u); ++i) {
                     vertex_t v                             = g.neighbor(old_u, i);
-                    weight_t ew                            = g.get_weight(old_u, i);
+                    weight_t ew                            = g.weight(old_u, i);
                     adj[adj_ptr[new_u] + insert_idx]       = (int) tt.get_n(v);
                     e_weights[adj_ptr[new_u] + insert_idx] = (int) ew;
                     insert_idx += 1;
@@ -199,7 +198,7 @@ namespace HeiProMap {
 
             // first read partition
             for (int new_u = 0; new_u < n; ++new_u) {
-                p_manager.set(tt.get_o(new_u), g.get_weight(tt.get_o(new_u)), kaffpa_partition[new_u]);
+                p_manager.set(tt.get_o(new_u), g.weight(tt.get_o(new_u)), kaffpa_partition[new_u]);
             }
 
             free(v_weights);

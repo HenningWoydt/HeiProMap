@@ -43,7 +43,6 @@ namespace HeiProMap {
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
-    /*
     class TwoVertexLabelPropagationRefinement final : public ISerialRefiner {
         vertex_t                 m_n    = 0;
         vertex_t                 m_m    = 0;
@@ -132,7 +131,6 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const graph_t &g,
-                    const av_manager_t &av_manager,
                     const d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
@@ -180,7 +178,7 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; } // vertex was used
                     if (!bv_manager.is_boundary(u)) { continue; } // vertex is not boundary
 
-                    weight_t    u_weight = g.get_weight(u);
+                    weight_t    u_weight = g.weight(u);
                     partition_t u_id     = p_manager[u];
 
                     // get all connected partitions to u
@@ -210,7 +208,7 @@ namespace HeiProMap {
                             if (vertex_used[v] == vertex_marker) { continue; } // vertex was used
                             if (!bv_manager.is_boundary(v)) { continue; } // vertex is not boundary
 
-                            weight_t    v_weight = g.get_weight(v);
+                            weight_t    v_weight = g.weight(v);
                             partition_t v_id     = p_manager[v];
 
                             // get all connected partitions to v
@@ -347,7 +345,6 @@ namespace HeiProMap {
 
         JSONString get_stats() override { return {}; };
     };
-     */
 }
 
 #endif //HEIPROMAP_TWO_VERTEX_LABEL_PROPAGATION_REFINEMENT_H

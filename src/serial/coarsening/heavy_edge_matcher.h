@@ -42,7 +42,6 @@ namespace HeiProMap {
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
-    /*
     class HeavyEdgeMatcher final : public ISerialMatcher {
         vertex_t m_n     = 0;
         vertex_t m_m     = 0;
@@ -81,17 +80,12 @@ namespace HeiProMap {
 
         void match(const size_t level,
                    const graph_t& g,
-                   const av_manager_t& av_manager,
-                   EdgeUV* matches,
-                   size_t& matches_size) override {
-            matches      = ASSUME_ALIGNED(EdgeUV*, matches, 64);
-            matches_size = 0;
-
+                   Matching& matching) override {
             mark += 1;
 
             if (config->match_pendant_vertices_first) {
                 // first check vertices with degree 1
-                forall_av_iu(av_manager, i, u)
+                forall_gu(g, u)
                     {
                         ASSERT(av_manager.is_active(u));
 
@@ -102,24 +96,24 @@ namespace HeiProMap {
 
                         if (used[v] == mark) { continue; }
 
-                        weight_t u_w = g.get_weight(u);
-                        weight_t v_w = g.get_weight(v);
+                        weight_t u_w = g.weight(u);
+                        weight_t v_w = g.weight(v);
 
                         if (u_w + v_w > m_l_max) { continue; }
 
-                        matches[matches_size++] = {v, u}; // pull u into v
+                        matching.add(u, v);
                     }
                 endfor
             }
 
             // check all other vertices
-            forall_av_iu(av_manager, i, u)
+            forall_gu(g, u)
                 {
                     ASSERT(av_manager.is_active(u));
 
                     if (used[u] == mark) { continue; }
 
-                    weight_t u_w        = g.get_weight(u);
+                    weight_t u_w        = g.weight(u);
                     vertex_t best_v     = u;
                     weight_t max_weight = 0;
 
@@ -127,7 +121,7 @@ namespace HeiProMap {
                         {
                             if (used[v] == mark) { continue; }
 
-                            weight_t v_w = g.get_weight(v);
+                            weight_t v_w = g.weight(v);
 
                             if (u_w + v_w > m_l_max) { continue; }
 
@@ -142,11 +136,7 @@ namespace HeiProMap {
                         used[u]      = mark;
                         used[best_v] = mark;
 
-                        if (g.size(u) > g.size(best_v)) {
-                            matches[matches_size++] = {u, best_v};
-                        } else {
-                            matches[matches_size++] = {best_v, u};
-                        }
+                        matching.add(u, best_v);
                     }
                 }
             endfor
@@ -177,7 +167,6 @@ namespace HeiProMap {
 #endif
         }
     };
-     */
 }
 
 #endif //HEIPROMAP_HEAVY_EDGE_MATCHER_H
