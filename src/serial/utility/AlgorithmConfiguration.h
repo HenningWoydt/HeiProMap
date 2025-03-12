@@ -587,12 +587,12 @@ namespace HeiProMap {
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.random_level = 1;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
+            global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
         }
 
@@ -607,7 +607,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
+            global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
@@ -626,7 +626,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "eco";
+            global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
