@@ -39,7 +39,7 @@ namespace HeiProMap {
     class TwoVertexLabelPropagationConfiguration final : public ISerialRefinerConfiguration {
     public:
         explicit TwoVertexLabelPropagationConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
-
+        u64 last_n_levels = 2;
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
@@ -130,11 +130,16 @@ namespace HeiProMap {
         }
 
         void refine(const u64 level,
+                    const u64 max_level,
                     const graph_t &g,
                     const d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            if (level + config->last_n_levels < max_level) {
+                return;
+            }
+
             METRICS(std::vector<f64> iteration_time);
             METRICS(std::vector<f64> iteration_time_get_boundary);
             METRICS(std::vector<f64> iteration_time_iterate);
@@ -266,14 +271,14 @@ namespace HeiProMap {
                         q_graph.move(g, p_manager, best_v, best_v_id, best_v_move_id);
                         p_manager.move(best_v, best_v_weight, best_v_id, best_v_move_id);
 
-                        vertex_used[best_v] = 1;
+                        vertex_used[best_v] = vertex_marker;
                         move_occurred = true;
 
                         METRICS(temp_qap_delta += best_qap_delta * (best_qap_delta > 0));
                         METRICS(temp_n_pos_moves += (best_qap_delta > 0));
                         METRICS(temp_n_0gain_moves += (best_qap_delta == 0));
                     }
-                    vertex_used[u] = 1;
+                    vertex_used[u] = vertex_marker;
                 }
 #if COLLECT_METRICS
                 auto ep_iterate   = std::chrono::high_resolution_clock::now();

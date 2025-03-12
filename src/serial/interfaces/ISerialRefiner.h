@@ -38,7 +38,7 @@
 namespace HeiProMap {
     class ISerialRefinerConfiguration {
     public:
-        explicit ISerialRefinerConfiguration(const std::string &t_name) { name = t_name; }
+        explicit ISerialRefinerConfiguration(const std::string& t_name) { name = t_name; }
         virtual ~ISerialRefinerConfiguration() = default;
 
         std::string name;
@@ -59,6 +59,7 @@ namespace HeiProMap {
                                 StatisticCollector& t_stat_collect) = 0;
 
         virtual void refine(u64 level,
+                            u64 max_level,
                             const graph_t& g,
                             const d_oracle_t& d_oracle,
                             bv_manager_t& bv_manager,

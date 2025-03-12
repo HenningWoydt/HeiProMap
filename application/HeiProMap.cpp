@@ -57,13 +57,13 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/training/G3_circuit.graph"},
                     // {"--mapping", "../data/out/partition/G3_circuit.txt"},
                     // {"--statistics", "../data/out/statistics/G3_circuit.JSON"},
-                    // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"},
+                    // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"}, // To beat 207196 in 0.29
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "strong"},
+                    {"--config", "experimental"},
                     {"--seed", "0"},
 
                     // coarsening

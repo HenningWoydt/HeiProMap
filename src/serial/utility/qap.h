@@ -150,6 +150,79 @@ namespace HeiProMap {
         return qap_delta;
     }
 
+    inline s64 get_qap_delta(const graph_t& g,
+                             const vertex_t v,
+                             const vertex_t vv,
+                             const vertex_t vvv,
+                             const partition_t v_id,
+                             const partition_t vv_id,
+                             const partition_t vvv_id,
+                             const partition_t new_v_id,
+                             const partition_t new_vv_id,
+                             const partition_t new_vvv_id,
+                             const p_manager_t& p_manager,
+                             const d_oracle_t& d_oracle) {
+        s64 qap_delta = 0;
+
+        // process v
+#pragma GCC unroll 4
+        forall_guivw(g, v, i, neighbor, w)
+            {
+                if (neighbor == vv) {
+                    weight_t old_d = d_oracle.get(v_id, vv_id);
+                    weight_t new_d = d_oracle.get(new_v_id, new_vv_id);
+                    qap_delta += (old_d - new_d) * w;
+                } else if (neighbor == vvv) {
+                    weight_t old_d = d_oracle.get(v_id, vvv_id);
+                    weight_t new_d = d_oracle.get(new_v_id, new_vvv_id);
+                    qap_delta += (old_d - new_d) * w;
+                } else {
+                    partition_t neighbor_id = p_manager[neighbor];
+
+                    weight_t old_d = d_oracle.get(neighbor_id, v_id);
+                    weight_t new_d = d_oracle.get(neighbor_id, new_v_id);
+                    qap_delta += (old_d - new_d) * w;
+                }
+            }
+        endfor
+
+        // process vv
+#pragma GCC unroll 4
+        forall_guivw(g, vv, i, neighbor, w)
+            {
+                if (neighbor == v) { continue; }
+                if (neighbor == vvv) {
+                    weight_t old_d = d_oracle.get(vv_id, vvv_id);
+                    weight_t new_d = d_oracle.get(new_vv_id, new_vvv_id);
+                    qap_delta += (old_d - new_d) * w;
+                } else {
+                    partition_t neighbor_id = p_manager[neighbor];
+
+                    weight_t old_d = d_oracle.get(neighbor_id, vv_id);
+                    weight_t new_d = d_oracle.get(neighbor_id, new_vv_id);
+                    qap_delta += (old_d - new_d) * w;
+                }
+            }
+        endfor
+
+        // process vvv
+#pragma GCC unroll 4
+        forall_guivw(g, vvv, i, neighbor, w)
+            {
+                if (neighbor == v) { continue; }
+                if (neighbor == vv) { continue; }
+
+                partition_t neighbor_id = p_manager[neighbor];
+
+                weight_t old_d = d_oracle.get(neighbor_id, vvv_id);
+                weight_t new_d = d_oracle.get(neighbor_id, new_vvv_id);
+                qap_delta += (old_d - new_d) * w;
+            }
+        endfor
+
+        return qap_delta;
+    }
+
     inline s64 get_u_qap_delta_and_is_boundary(const graph_t& g,
                                                const vertex_t u,
                                                const partition_t old_id,

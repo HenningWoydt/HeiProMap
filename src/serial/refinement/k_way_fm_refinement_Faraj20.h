@@ -344,6 +344,7 @@ namespace HeiProMap {
         }
 
         void refine(const u64 level,
+                    const u64 max_level,
                     const graph_t& g,
                     const d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,

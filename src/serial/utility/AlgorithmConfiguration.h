@@ -262,6 +262,8 @@ namespace HeiProMap {
         MultiTryFmRefinementConfiguration      multi_try_fm_refinement_config      = MultiTryFmRefinementConfiguration("Multi Try-FM");
         HierarchyAwareCyclesConfiguration      hierarchy_aware_cycles_config       = HierarchyAwareCyclesConfiguration("Hierarchy Aware Cycle");
         TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
+        ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
+
 
         AlgorithmConfiguration() = default;
 
@@ -592,14 +594,6 @@ namespace HeiProMap {
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string = "kaffpa";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
         }
 
         void set_fast() {
@@ -615,14 +609,6 @@ namespace HeiProMap {
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string = "kaffpa";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // enable label propagation
             label_propagation_config.enabled       = true;
@@ -642,14 +628,6 @@ namespace HeiProMap {
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "eco";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string = "kaffpa";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
 
             // enable label propagation
             label_propagation_config.enabled       = true;
@@ -676,23 +654,15 @@ namespace HeiProMap {
             global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string = "kaffpa";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
             // enable label propagation
-            label_propagation_config.enabled       = false;
+            label_propagation_config.enabled       = true;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
+            k_way_fm_refinement_config.enabled = true;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = true;
@@ -710,26 +680,18 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
+            global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string = "kaffpa";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
             // enable label propagation
-            label_propagation_config.enabled       = false;
+            label_propagation_config.enabled       = true;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
+            k_way_fm_refinement_config.enabled = true;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
@@ -737,7 +699,13 @@ namespace HeiProMap {
 
             // enable two vertex label propagation
             two_vertex_label_propagation_config.enabled       = false;
-            two_vertex_label_propagation_config.max_iteration = 3;
+            two_vertex_label_propagation_config.max_iteration = 25;
+            two_vertex_label_propagation_config.last_n_levels = 4;
+
+            // enable three vertex label propagation
+            three_vertex_label_propagation_config.enabled       = false;
+            three_vertex_label_propagation_config.max_iteration = 2;
+            three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable experimental refinement
             hierarchy_aware_cycles_config.enabled = false;
