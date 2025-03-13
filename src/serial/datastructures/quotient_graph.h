@@ -32,42 +32,44 @@
 
 namespace HeiProMap {
     class QuotientGraph final : public ISerialQuotientGraph {
-    private:
-        partition_t k = 0;
+        partition_t m_k = 0;
 
-        std::vector<weight_t> m_adj_mtx;
+        weight_t* m_adj_mtx = nullptr;
 
     public:
         QuotientGraph() = default;
+        ~QuotientGraph() override { free(m_adj_mtx); }
 
-        void initialize(partition_t t_k) override {
-            k = t_k;
+        void initialize(const partition_t t_k) override {
+            partition_t k_k_64 = round_up_64(t_k * t_k);
+            m_k                = t_k;
 
-            m_adj_mtx.resize(k * k, 0);
+            m_adj_mtx = (weight_t*)aligned_alloc(64, k_k_64 * sizeof(weight_t));
+            std::fill_n(m_adj_mtx, k_k_64, 0);
         }
 
-        void add_edge(partition_t u, partition_t v, weight_t w) override {
-            partition_t min = std::min(u, v);
-            partition_t max = std::max(u, v);
-            m_adj_mtx[min * k + max] += w;
+        void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
+            partition_t min = std::min(u_id, v_id);
+            partition_t max = std::max(u_id, v_id);
+            m_adj_mtx[min * m_k + max] += w;
         }
 
-        void remove_edge(partition_t u, partition_t v, weight_t w) override {
-            partition_t min = std::min(u, v);
-            partition_t max = std::max(u, v);
-            m_adj_mtx[min * k + max] -= w;
+        void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
+            partition_t min = std::min(u_id, v_id);
+            partition_t max = std::max(u_id, v_id);
+            m_adj_mtx[min * m_k + max] -= w;
         }
 
-        bool has_edge(partition_t u, partition_t v) override {
-            partition_t min = std::min(u, v);
-            partition_t max = std::max(u, v);
-            return m_adj_mtx[min * k + max] > 0;
+        bool has_edge(const partition_t u_id, const partition_t v_id) override {
+            partition_t min = std::min(u_id, v_id);
+            partition_t max = std::max(u_id, v_id);
+            return m_adj_mtx[min * m_k + max] > 0;
         }
 
-        weight_t get_weight(partition_t u, partition_t v) override {
-            partition_t min = std::min(u, v);
-            partition_t max = std::max(u, v);
-            return m_adj_mtx[min * k + max];
+        weight_t get_weight(const partition_t u_id, const partition_t v_id) override {
+            partition_t min = std::min(u_id, v_id);
+            partition_t max = std::max(u_id, v_id);
+            return m_adj_mtx[min * m_k + max];
         }
 
         void move(const graph_t& g,
@@ -78,20 +80,20 @@ namespace HeiProMap {
             ASSERT(new_id < k);
             ASSERT(new_id != old_id);
 
-            for (size_t i = 0; i < g.size(u); ++i) {
-                vertex_t v       = g.neighbor(u, i);
-                weight_t w       = g.weight(u, i);
-                partition_t v_id = p_manager[v];
+            forall_guivw(g, u, i, v, w)
+                {
+                    partition_t v_id = p_manager[v];
 
-                // remove old edge, if existed
-                if (old_id != v_id) {
-                    remove_edge(old_id, v_id, w * 2);
+                    // remove old edge, if existed
+                    if (old_id != v_id) {
+                        remove_edge(old_id, v_id, w * 2);
+                    }
+                    // add new edge, if has to exist
+                    if (new_id != v_id) {
+                        add_edge(new_id, v_id, w * 2);
+                    }
                 }
-                // add new edge, if has to exist
-                if (new_id != v_id) {
-                    add_edge(new_id, v_id, w * 2);
-                }
-            }
+            endfor
         }
     };
 }

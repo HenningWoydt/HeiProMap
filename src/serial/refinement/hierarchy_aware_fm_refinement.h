@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_HIERARCHY_AWARE_CYCLE_REFINEMENT_H
-#define HEIPROMAP_HIERARCHY_AWARE_CYCLE_REFINEMENT_H
+#ifndef HEIPROMAP_HIERARCHY_AWARE_FM_REFINEMENT_H
+#define HEIPROMAP_HIERARCHY_AWARE_FM_REFINEMENT_H
 
 #include <algorithm>
 #include <random>
@@ -39,9 +39,9 @@
 #include "../../commons/utils.h"
 
 namespace HeiProMap {
-    class HierarchyAwareCyclesConfiguration final : public ISerialRefinerConfiguration {
+    class HierarchyAwareFMConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit HierarchyAwareCyclesConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+        explicit HierarchyAwareFMConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
 
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
     };
@@ -61,7 +61,7 @@ namespace HeiProMap {
      * Aggregate all partitions of the islands and then try to find moves between the islands instead of individual partitions.
      * If moves between the islands have been found, then try to distribute it onto the individual partitions.
      */
-    class HierarchyAwareCycleRefinement final : public ISerialRefiner {
+    class HierarchyAwareFMRefinement final : public ISerialRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
         partition_t m_k = 0;
@@ -74,11 +74,11 @@ namespace HeiProMap {
         s32 mark = -1;
 
         RandomEngine* random_engine                     = nullptr;
-        const HierarchyAwareCyclesConfiguration* config = nullptr;
+        const HierarchyAwareFMConfiguration* config = nullptr;
         StatisticCollector* m_stat_collector            = nullptr;
 
     public:
-        HierarchyAwareCycleRefinement() = default;
+        HierarchyAwareFMRefinement() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -97,7 +97,7 @@ namespace HeiProMap {
             m_distance  = t_distance;
 
             random_engine = &t_random_engine;
-            config        = dynamic_cast<const HierarchyAwareCyclesConfiguration*>(&i_config);
+            config        = dynamic_cast<const HierarchyAwareFMConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
             used.resize(t_n, -1);
@@ -192,7 +192,7 @@ namespace HeiProMap {
                 }
                 auto ep     = std::chrono::high_resolution_clock::now();
                 f64 seconds = get_seconds(sp, ep);
-                std::cout << "Hierarchy Aware Cycles: " << unavailable_moves.size() << " moves unavailable, but would improve by " << total_qap_delta << " in " << seconds << " seconds!" << std::endl;
+                std::cout << "Hierarchy Aware FM: " << unavailable_moves.size() << " moves unavailable, but would improve by " << total_qap_delta << " in " << seconds << " seconds!" << std::endl;
             }
         }
 
@@ -201,4 +201,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_HIERARCHY_AWARE_CYCLE_REFINEMENT_H
+#endif //HEIPROMAP_HIERARCHY_AWARE_FM_REFINEMENT_H

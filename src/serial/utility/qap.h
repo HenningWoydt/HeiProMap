@@ -41,7 +41,7 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-#pragma GCC unroll 4
+#pragma GCC unroll 8
                 for (size_t i = 0; i < g.size(u); ++i) {
                     vertex_t v       = g.neighbor(u, i);
                     weight_t ew      = g.weight(u, i);
@@ -62,7 +62,8 @@ namespace HeiProMap {
                                const p_manager_t& p_manager,
                                const d_oracle_t& d_oracle) {
         s64 qap_delta = 0;
-#pragma GCC unroll 4
+
+#pragma GCC unroll 8
         forall_guivw(g, u, i, v, w)
             {
                 partition_t v_id = p_manager[v];
@@ -90,7 +91,7 @@ namespace HeiProMap {
         // reset all to 0
         std::fill_n(blocks_qap_delta, blocks_size, 0);
 
-#pragma GCC unroll 4
+#pragma GCC unroll 8
         forall_guivw(g, u, j, v, w)
             {
                 partition_t v_id = p_manager[v];
@@ -116,7 +117,7 @@ namespace HeiProMap {
         s64 qap_delta = 0;
 
         // process u
-#pragma GCC unroll 4
+#pragma GCC unroll 8
         forall_guivw(g, u, i, neighbor, w)
             {
                 if (neighbor != v) {
@@ -134,7 +135,7 @@ namespace HeiProMap {
         endfor
 
         // process v
-#pragma GCC unroll 4
+#pragma GCC unroll 8
         forall_guivw(g, v, i, neighbor, w)
             {
                 if (neighbor == u) { continue; }
@@ -165,7 +166,7 @@ namespace HeiProMap {
         s64 qap_delta = 0;
 
         // process v
-#pragma GCC unroll 4
+#pragma GCC unroll 8
         forall_guivw(g, v, i, neighbor, w)
             {
                 if (neighbor == vv) {
@@ -187,7 +188,7 @@ namespace HeiProMap {
         endfor
 
         // process vv
-#pragma GCC unroll 4
+#pragma GCC unroll 8
         forall_guivw(g, vv, i, neighbor, w)
             {
                 if (neighbor == v) { continue; }
@@ -206,7 +207,7 @@ namespace HeiProMap {
         endfor
 
         // process vvv
-#pragma GCC unroll 4
+#pragma GCC unroll 8
         forall_guivw(g, vvv, i, neighbor, w)
             {
                 if (neighbor == v) { continue; }
@@ -235,7 +236,8 @@ namespace HeiProMap {
         is_boundary_new_id = false;
 
         s64 qap_delta = 0;
-#pragma GCC unroll 4
+
+#pragma GCC unroll 8
         forall_guivw(g, u, i, v, w)
             {
                 partition_t v_id = p_manager[v];
@@ -256,20 +258,18 @@ namespace HeiProMap {
                                                    const vertex_t u,
                                                    const partition_t old_id,
                                                    const partition_t new_id,
-                                                   bool& is_connected_to_old_id,
                                                    bool& is_connected_to_new_id,
                                                    const p_manager_t& p_manager,
                                                    const d_oracle_t& d_oracle) {
-        is_connected_to_old_id = false;
         is_connected_to_new_id = false;
 
         s64 qap_delta = 0;
-#pragma GCC unroll 4
+
+#pragma GCC unroll 8
         forall_guivw(g, u, i, v, w)
             {
                 partition_t v_id = p_manager[v];
 
-                is_connected_to_old_id |= (v_id == old_id);
                 is_connected_to_new_id |= (v_id == new_id);
 
                 weight_t old_d = d_oracle.get(v_id, old_id);

@@ -34,7 +34,7 @@
 #include "../../definitions.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
-#include "../refinement/hierarchy_aware_cycle_refinement.h"
+#include "../refinement/hierarchy_aware_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
 #include "../refinement/label_propagation_refinement.h"
@@ -202,7 +202,7 @@ namespace HeiProMap {
                 {"--refinement-multi-try-fm-max-iterations",              "",   "How many iterations to run Multi-Try FM refinement at most.",                                                                              "1",                    "", false},
 
                 // Refinement Hierarchy Aware Cycles
-                {"--refinement-hierarchy-aware-cycles-enable",            "",   "Enables the hierarchy aware cycles refinement.",                                                                                           "0",                    "", false},
+                {"--refinement-hierarchy-aware-fm-enable",            "",   "Enables the Hierarchy Aware FM refinement.",                                                                                           "0",                    "", false},
 
                 // Refinement Two Vertex Label Propagation
                 {"--refinement-two-vertex-label-propagation-enable",      "",   "Enables Label Propagation with two vertices.",                                                                                             "0",                    "", false},
@@ -260,7 +260,7 @@ namespace HeiProMap {
         QuotientGraphRefinementConfiguration   quotient_graph_refinement_config    = QuotientGraphRefinementConfiguration("Quotient Graph");
         KWayFMRefinementConfiguration          k_way_fm_refinement_config          = KWayFMRefinementConfiguration("K-Way-FM");
         MultiTryFmRefinementConfiguration      multi_try_fm_refinement_config      = MultiTryFmRefinementConfiguration("Multi Try-FM");
-        HierarchyAwareCyclesConfiguration      hierarchy_aware_cycles_config       = HierarchyAwareCyclesConfiguration("Hierarchy Aware Cycle");
+        HierarchyAwareFMConfiguration      hierarchy_aware_fm_config       = HierarchyAwareFMConfiguration("Hierarchy Aware FM");
         TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
 
@@ -407,8 +407,8 @@ namespace HeiProMap {
             }
 
             // initialize hierarchy aware cycle refinement
-            if (use_default || is_set("--refinement-hierarchy-aware-cycles-enable")) {
-                hierarchy_aware_cycles_config.enabled = get("--refinement-hierarchy-aware-cycles-enable") == "1";
+            if (use_default || is_set("--refinement-hierarchy-aware-fm-enable")) {
+                hierarchy_aware_fm_config.enabled = get("--refinement-hierarchy-aware-fm-enable") == "1";
             }
 
             // initialize two vertex label propagation
@@ -655,18 +655,18 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = true;
+            label_propagation_config.enabled       = false;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = true;
+            k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = true;
-            multi_try_fm_refinement_config.max_iteration = 3;
+            multi_try_fm_refinement_config.max_iteration = 2;
         }
 
         void set_experimental() {
@@ -684,31 +684,31 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = true;
+            label_propagation_config.enabled       = false;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = true;
+            k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
-            multi_try_fm_refinement_config.max_iteration = 3;
+            multi_try_fm_refinement_config.max_iteration = 2;
 
             // enable two vertex label propagation
-            two_vertex_label_propagation_config.enabled       = false;
+            two_vertex_label_propagation_config.enabled       = true;
             two_vertex_label_propagation_config.max_iteration = 25;
             two_vertex_label_propagation_config.last_n_levels = 4;
 
             // enable three vertex label propagation
-            three_vertex_label_propagation_config.enabled       = false;
+            three_vertex_label_propagation_config.enabled       = true;
             three_vertex_label_propagation_config.max_iteration = 2;
             three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable experimental refinement
-            hierarchy_aware_cycles_config.enabled = false;
+            hierarchy_aware_fm_config.enabled = true;
         }
 
         /**

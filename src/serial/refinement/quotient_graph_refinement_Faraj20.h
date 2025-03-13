@@ -297,8 +297,8 @@ namespace HeiProMap {
 
                                 partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
-                                bool is_connected_to_neighbor_id, is_connected_to_new_id;
-                                s64  new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_neighbor_id, is_connected_to_new_id, p_manager, d_oracle);
+                                bool is_connected_to_new_id;
+                                s64  new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
 
                                 if (!is_connected_to_new_id) { continue; }
 
