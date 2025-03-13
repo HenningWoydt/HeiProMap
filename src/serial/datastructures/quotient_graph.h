@@ -60,13 +60,13 @@ namespace HeiProMap {
             m_adj_mtx[min * m_k + max] -= w;
         }
 
-        bool has_edge(const partition_t u_id, const partition_t v_id) override {
+        bool has_edge(const partition_t u_id, const partition_t v_id) const override {
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
             return m_adj_mtx[min * m_k + max] > 0;
         }
 
-        weight_t get_weight(const partition_t u_id, const partition_t v_id) override {
+        weight_t get_weight(const partition_t u_id, const partition_t v_id) const override {
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
             return m_adj_mtx[min * m_k + max];
@@ -77,7 +77,7 @@ namespace HeiProMap {
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) override {
-            ASSERT(new_id < k);
+            ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 
             forall_guivw(g, u, i, v, w)

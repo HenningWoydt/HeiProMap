@@ -33,7 +33,7 @@
 #include "../../parallel/parallel_definitions_1.h"
 
 namespace HeiProMap {
-    bool assert_no_self_loops(graph_t& g) {
+    bool assert_no_self_loops(const  graph_t& g) {
         forall_gu(g, u)
             {
                 for (size_t i = 0; i < g.size(u); ++i) {
@@ -46,7 +46,7 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_no_double_edges(graph_t& g) {
+    bool assert_no_double_edges(const  graph_t& g) {
         std::vector<vertex_t> manual;
         forall_gu(g, u)
             {
@@ -61,9 +61,9 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_bweights(graph_t& g,
-                         p_manager_t& p_manager,
-                         partition_t k) {
+    bool assert_bweights(const graph_t& g,
+                         const p_manager_t& p_manager,
+                         const partition_t k) {
         std::vector<weight_t> weights(k, 0);
         forall_gu(g, u)
             {
@@ -80,9 +80,9 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_n_boundary_vertices(graph_t& g,
-                                    p_manager_t& p_manager,
-                                    bv_manager_t& bv_manager) {
+    bool assert_n_boundary_vertices(const graph_t& g,
+                                    const p_manager_t& p_manager,
+                                    const bv_manager_t& bv_manager) {
         vertex_t count = 0;
         forall_gu(g, u)
             {
@@ -103,9 +103,9 @@ namespace HeiProMap {
         return count == bv_manager.size();
     }
 
-    bool assert_correct_vertices_boundary(graph_t& g,
-                                          p_manager_t& p_manager,
-                                          bv_manager_t& bv_manager) {
+    bool assert_correct_vertices_boundary(const graph_t& g,
+                                          const p_manager_t& p_manager,
+                                          const bv_manager_t& bv_manager) {
         std::vector<vertex_t> manual;
         forall_gu(g, u)
             {
@@ -137,10 +137,10 @@ namespace HeiProMap {
         return manual == automatic;
     }
 
-    bool assert_correct_vertices_boundary_per_block(graph_t& g,
-                                                    p_manager_t& p_manager,
-                                                    bv_manager_t& bv_manager,
-                                                    partition_t k) {
+    bool assert_correct_vertices_boundary_per_block(const graph_t& g,
+                                                    const p_manager_t& p_manager,
+                                                    const bv_manager_t& bv_manager,
+                                                    const partition_t k) {
         for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> manual;
 
@@ -176,10 +176,10 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_correct_quotient_graph(graph_t& g,
-                                       p_manager_t& p_manager,
-                                       q_graph_t& q_graph,
-                                       partition_t k) {
+    bool assert_correct_quotient_graph(const graph_t& g,
+                                       const p_manager_t& p_manager,
+                                       const q_graph_t& q_graph,
+                                       const partition_t k) {
         std::vector<weight_t> manual(k * k, 0);
 
         forall_gu(g, u)
@@ -204,7 +204,7 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_state_pre_partitioning(graph_t& g) {
+    bool assert_state_pre_partitioning(const graph_t& g) {
         // check no self-loops
         ASSERT(assert_no_self_loops(g));
 
@@ -214,11 +214,11 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_state_after_partitioning(graph_t& g,
-                                         p_manager_t& p_manager,
-                                         bv_manager_t& bv_manager,
-                                         q_graph_t& q_graph,
-                                         partition_t k) {
+    bool assert_state_after_partitioning(const graph_t& g,
+                                         const p_manager_t& p_manager,
+                                         const bv_manager_t& bv_manager,
+                                         const q_graph_t& q_graph,
+                                         const partition_t k) {
         // check no self-loops
         ASSERT(assert_no_self_loops(g));
 

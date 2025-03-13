@@ -688,27 +688,28 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled = false;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
+            k_way_fm_refinement_config.enabled = true;
+            k_way_fm_refinement_config.max_iteration = 1;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = true;
+            multi_try_fm_refinement_config.enabled       = false;
             multi_try_fm_refinement_config.max_iteration = 2;
 
             // enable two vertex label propagation
-            two_vertex_label_propagation_config.enabled       = true;
+            two_vertex_label_propagation_config.enabled       = false;
             two_vertex_label_propagation_config.max_iteration = 25;
             two_vertex_label_propagation_config.last_n_levels = 4;
 
             // enable three vertex label propagation
-            three_vertex_label_propagation_config.enabled       = true;
+            three_vertex_label_propagation_config.enabled       = false;
             three_vertex_label_propagation_config.max_iteration = 2;
             three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable experimental refinement
-            hierarchy_aware_fm_config.enabled = true;
+            hierarchy_aware_fm_config.enabled = false;
         }
 
         /**

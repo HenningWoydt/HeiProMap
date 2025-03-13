@@ -87,8 +87,6 @@ namespace HeiProMap {
                 // first check vertices with degree 1
                 forall_gu(g, u)
                     {
-                        ASSERT(av_manager.is_active(u));
-
                         if (used[u] == mark) { continue; }
                         if (g.size(u) != 1) { continue; }
 
@@ -109,8 +107,6 @@ namespace HeiProMap {
             // check all other vertices
             forall_gu(g, u)
                 {
-                    ASSERT(av_manager.is_active(u));
-
                     if (used[u] == mark) { continue; }
 
                     weight_t u_w        = g.weight(u);
@@ -142,18 +138,16 @@ namespace HeiProMap {
             endfor
 
 #if ASSERT_ENABLED
-            for (size_t i = 0; i < matches_size; ++i) {
-                const auto& [u, v] = matches[i];
+            for (size_t i = 0; i < matching.size(); ++i) {
+                const auto& [u, v] = matching[i];
                 ASSERT(u != v);
-                ASSERT(av_manager.is_active(u));
-                ASSERT(av_manager.is_active(v));
             }
 #endif
 
 #if ASSERT_ENABLED
             std::vector<u8> hit(g.get_n(), 0);
-            for (size_t i = 0; i < matches_size; ++i) {
-                const auto& [u, v] = matches[i];
+            for (size_t i = 0; i < matching.size(); ++i) {
+                const auto& [u, v] = matching[i];
                 hit[u] += 1;
                 hit[v] += 1;
 
