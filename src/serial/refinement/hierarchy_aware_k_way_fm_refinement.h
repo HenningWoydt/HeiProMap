@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_HIERARCHY_AWARE_K_FM_REFINEMENT_H
-#define HEIPROMAP_HIERARCHY_AWARE_K_FM_REFINEMENT_H
+#ifndef HEIPROMAP_HIERARCHY_AWARE_K_WAY_FM_REFINEMENT_H
+#define HEIPROMAP_HIERARCHY_AWARE_K_WAY_FM_REFINEMENT_H
 
 #include <algorithm>
 
@@ -443,4 +443,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_HIERARCHY_AWARE_K_FM_REFINEMENT_H
+#endif //HEIPROMAP_HIERARCHY_AWARE_K_WAY_FM_REFINEMENT_H

@@ -50,7 +50,7 @@
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
-#include "../utility/AlgorithmConfiguration.h"
+#include "../utility/algorithm_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 
@@ -59,7 +59,7 @@ namespace HeiProMap {
      * Solver for serial Process Mapping.
      */
     class Solver {
-        AlgorithmConfiguration ac;
+        algorithm_configuration ac;
         RandomEngine random_engine;
 
         // statistics
@@ -98,7 +98,7 @@ namespace HeiProMap {
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
     public:
-        explicit Solver(const AlgorithmConfiguration& t_ac) {
+        explicit Solver(const algorithm_configuration& t_ac) {
             ac            = t_ac;
             random_engine = RandomEngine(ac.seed);
 

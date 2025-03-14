@@ -34,7 +34,7 @@
 #include "../../definitions.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
-#include "../refinement/hierarchy_aware_k_fm_refinement.h"
+#include "../refinement/hierarchy_aware_k_way_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
 #include "../refinement/label_propagation_refinement.h"
@@ -131,7 +131,7 @@ namespace HeiProMap {
         bool        is_set;
     };
 
-    class AlgorithmConfiguration {
+    class algorithm_configuration {
     private:
         std::vector<CommandLineOption> options = {
                 {"--help",                                                "",   "Produces the help message",                                                                                                                "",                     "", false},
@@ -265,7 +265,7 @@ namespace HeiProMap {
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
 
 
-        AlgorithmConfiguration() = default;
+        algorithm_configuration() = default;
 
         void set_hierarchy() {
             hierarchy_string = get("--hierarchy");
@@ -417,7 +417,7 @@ namespace HeiProMap {
             }
         }
 
-        AlgorithmConfiguration(int argc, char *argv[]) {
+        algorithm_configuration(int argc, char *argv[]) {
             // read command lines into vector
             std::vector<std::string> args(argv, argv + argc);
 

@@ -31,7 +31,7 @@
 #include "../src/macros.h"
 #include "../src/commons/utils.h"
 #include "../src/serial/datastructures/solver.h"
-#include "../src/serial/utility/AlgorithmConfiguration.h"
+#include "../src/serial/utility/algorithm_configuration.h"
 
 using namespace HeiProMap;
 
@@ -146,7 +146,7 @@ int main(const int argc, char* argv[]) {
                 std::strcpy(argv[i], args[i].c_str());
             }
 
-            AlgorithmConfiguration ac(argc, argv);
+            algorithm_configuration ac(argc, argv);
 
             Solver solver(ac);
             solver.solve();
@@ -155,7 +155,7 @@ int main(const int argc, char* argv[]) {
             delete[] argv;
         }
     } else {
-        AlgorithmConfiguration ac(argc, argv);
+        algorithm_configuration ac(argc, argv);
 
         Solver solver(ac);
         solver.solve();
