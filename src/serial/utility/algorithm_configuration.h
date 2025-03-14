@@ -711,6 +711,7 @@ namespace HeiProMap {
             // enable experimental refinement
             hierarchy_aware_k_way_fm_config.enabled = true;
             hierarchy_aware_k_way_fm_config.max_iteration = 1;
+            hierarchy_aware_k_way_fm_config.alpha = 100;
         }
 
         /**

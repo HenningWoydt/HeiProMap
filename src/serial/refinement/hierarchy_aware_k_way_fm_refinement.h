@@ -281,7 +281,9 @@ namespace HeiProMap {
                 }
 
                 // now we have to rebalance the actual blocks and spend at most qap_gain to do so
-                k_way_rebalancer.rebalance(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph);
+                if(level == 0) {
+                    k_way_rebalancer.rebalance(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph);
+                }
             }
         }
 
