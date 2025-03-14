@@ -29,6 +29,7 @@
 
 #include "datastructures/distance_oracle.h"
 #include "datastructures/graph.h"
+#include "datastructures/graph_64.h"
 
 namespace HeiProMap {
     typedef Graph               graph_t;
