@@ -47,14 +47,14 @@ namespace HeiProMap {
 
         weight_t m_graph_weight = 0;
 
-        weight_t* m_v_weights   = nullptr;
-        size_t* m_neighborhoods = nullptr;
-        EdgeVW* m_edges         = nullptr;
+        weight_t *m_v_weights     = nullptr;
+        size_t   *m_neighborhoods = nullptr;
+        EdgeVW   *m_edges         = nullptr;
 
     public:
         Graph() = default;
 
-        explicit Graph(const std::string& graph_in) {
+        explicit Graph(const std::string &graph_in) {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -72,7 +72,7 @@ namespace HeiProMap {
             size_t file_size = fileInfo.st_size;
 
             // Memory-map the file
-            char* file_arr = static_cast<char*>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
+            char *file_arr = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
             if (file_arr == MAP_FAILED) {
                 std::cerr << "File " << graph_in << " Could not map the file!" << std::endl;
                 close(fd);
@@ -131,19 +131,19 @@ namespace HeiProMap {
             move_while(file_arr, i, ' ', file_size);
             ++i; // now on the next line
 
-            vertex_t m_n_64    = round_up_64(m_n + 1);
-            vertex_t m_m_64    = round_up_64(m_m + 1);
-            m_neighborhoods    = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            vertex_t m_n_64 = round_up_64(m_n + 1);
+            vertex_t m_m_64 = round_up_64(m_m + 1);
+            m_neighborhoods = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
             m_neighborhoods[0] = 0;
-            m_edges            = (EdgeVW*)aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
+            m_edges = (EdgeVW *) aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
 
-            size_t curr_m = 0;
-            vertex_t u    = 0;
+            size_t   curr_m = 0;
+            vertex_t u      = 0;
             if (fmt_1 == '0' && fmt_2 == '0') {
-                m_v_weights = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+                m_v_weights = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
                 std::fill_n(m_v_weights, m_n_64, 1);
 
-                m_graph_weight = (weight_t)m_n;
+                m_graph_weight = (weight_t) m_n;
                 while (true) {
                     if (file_arr[i] == '%') {
                         // this line is a comment, ignore it
@@ -202,7 +202,7 @@ namespace HeiProMap {
                     }
                 }
             } else {
-                m_v_weights = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+                m_v_weights = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
                 std::fill_n(m_v_weights, m_n_64, 0);
 
                 while (true) {
@@ -257,8 +257,8 @@ namespace HeiProMap {
             close(fd);
         }
 
-        void initialize(const Graph& g,
-                        Matching& matching) {
+        void initialize(const Graph &g,
+                        Matching &matching) {
             matching.set_partners();
             matching.set_translation();
 
@@ -268,23 +268,23 @@ namespace HeiProMap {
             const vertex_t m_m_64 = round_up_64(g.get_m() + 1);
 
             m_graph_weight = g.m_graph_weight;
-            m_v_weights    = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            m_v_weights    = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
 
-            m_neighborhoods = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
-            m_edges         = (EdgeVW*)aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
+            m_neighborhoods = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_edges         = (EdgeVW *) aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
 
-            size_t* vertex_idx = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
-            u32* vertex_mark   = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
+            size_t *vertex_idx  = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
+            u32    *vertex_mark = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(vertex_mark, m_n_64, 0);
             u32 mark = 0;
 
-            size_t curr_m      = 0;
+            size_t curr_m = 0;
             m_neighborhoods[0] = 0;
             for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
                 mark += 1;
                 if (old_u == matching.get_partner(old_u)) {
                     // the vertex was not matched, so copy it to the next graph
-                    vertex_t new_u     = matching.get_n(old_u);
+                    vertex_t new_u = matching.get_n(old_u);
                     m_v_weights[new_u] = g.weight(old_u);
 
                     for (size_t i = 0; i < g.size(old_u); ++i) {
@@ -302,8 +302,8 @@ namespace HeiProMap {
                             size_t idx = vertex_idx[vv];
                             m_edges[idx].w += ww;
                         } else {
-                            vertex_idx[vv]    = curr_m;
-                            vertex_mark[vv]   = mark;
+                            vertex_idx[vv]  = curr_m;
+                            vertex_mark[vv] = mark;
                             m_edges[curr_m].v = vv;
                             m_edges[curr_m].w = ww;
                             curr_m += 1;
@@ -335,8 +335,8 @@ namespace HeiProMap {
                             size_t idx = vertex_idx[vv];
                             m_edges[idx].w += ww;
                         } else {
-                            vertex_idx[vv]    = curr_m;
-                            vertex_mark[vv]   = mark;
+                            vertex_idx[vv]  = curr_m;
+                            vertex_mark[vv] = mark;
                             m_edges[curr_m].v = vv;
                             m_edges[curr_m].w = ww;
                             curr_m += 1;
@@ -360,8 +360,8 @@ namespace HeiProMap {
                             size_t idx = vertex_idx[vv];
                             m_edges[idx].w += ww;
                         } else {
-                            vertex_idx[vv]    = curr_m;
-                            vertex_mark[vv]   = mark;
+                            vertex_idx[vv]  = curr_m;
+                            vertex_mark[vv] = mark;
                             m_edges[curr_m].v = vv;
                             m_edges[curr_m].w = ww;
                             curr_m += 1;
@@ -377,7 +377,7 @@ namespace HeiProMap {
         }
 
         // Move constructor
-        Graph(Graph&& other) noexcept {
+        Graph(Graph &&other) noexcept {
             m_n = other.m_n;
             m_m = other.m_m;
 
@@ -393,8 +393,9 @@ namespace HeiProMap {
         }
 
         // Optionally disable copying.
-        Graph(const Graph&)            = delete;
-        Graph& operator=(const Graph&) = delete;
+        Graph(const Graph &) = delete;
+
+        Graph &operator=(const Graph &) = delete;
 
         ~Graph() override {
             free(m_v_weights);
@@ -403,11 +404,17 @@ namespace HeiProMap {
         }
 
         vertex_t get_n() const override { return m_n; }
+
         vertex_t get_m() const override { return m_m; }
+
         weight_t weight() const override { return m_graph_weight; }
+
         weight_t weight(const vertex_t u) const override { return m_v_weights[u]; }
+
         size_t size(const vertex_t u) const override { return m_neighborhoods[u + 1] - m_neighborhoods[u]; }
+
         vertex_t neighbor(const vertex_t u, const size_t idx) const override { return m_edges[m_neighborhoods[u] + idx].v; }
+
         weight_t weight(const vertex_t u, const size_t idx) const override { return m_edges[m_neighborhoods[u] + idx].w; }
     };
 }

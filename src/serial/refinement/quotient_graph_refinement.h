@@ -50,6 +50,8 @@ namespace HeiProMap {
     class QuotientGraphRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
         explicit QuotientGraphRefinementConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
+        f64 alpha         = 100.0;
+        f64 beta          = 1.0;
     };
 
     class QuotientGraphRefinement final : public ISerialRefiner {
@@ -146,6 +148,9 @@ namespace HeiProMap {
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
                     q_graph_t& q_graph) override {
+            f64 alpha = config->alpha;
+            f64 beta  = std::log(g.get_n());
+
             std::fill_n(active_this_round, m_k, 1);
             std::fill_n(active_next_round, m_k, 0);
 
@@ -200,13 +205,16 @@ namespace HeiProMap {
                         }
                     endfor
 
-
                     // start executing moves based on the TopGain method
                     vertex_mark += 1;
                     moves_size    = 0;
                     best_idx      = 0;
                     curr_qap_gain = 0;
                     max_qap_gain  = 0;
+
+                    f64         steps_since_last_improvement = 0.0;
+                    f64         qap_gain_mean                = 0.0;
+                    f64         qap_gain_var                 = 0.0;
 
                     while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
                         // determine from which block to choose
@@ -248,11 +256,24 @@ namespace HeiProMap {
                         if (curr_qap_gain >= max_qap_gain && partition_weight + vertex_weight <= m_lmax) {
                             best_idx     = moves_size;
                             max_qap_gain = curr_qap_gain;
+
+                            steps_since_last_improvement = 0.0;
+                            qap_gain_mean                = 0.0;
+                            qap_gain_var                 = 0.0;
                         }
 
                         // make move in structures
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                         vertex_used[vertex] = vertex_mark;
+
+                        steps_since_last_improvement += 1.0;
+                        f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / steps_since_last_improvement;
+                        f64 new_qap_gain_var  = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
+
+                        qap_gain_mean = new_qap_gain_mean;
+                        qap_gain_var  = new_qap_gain_var;
+
+                        if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) { break; }
 
                         // we have to push or update the neighbors that were not moved already
                         forall_guiv(g, vertex, i, neighbor)

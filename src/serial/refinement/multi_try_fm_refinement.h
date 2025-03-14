@@ -181,25 +181,28 @@ namespace HeiProMap {
                     weight_t    u_weight = g.weight(u);
 
                     // find all connected partitions to u
-                    block_mark += 1;
-                    partition_t best_id;
+                    partition_t best_v_id;
                     s64         best_qap_delta = -std::numeric_limits<s64>::max();
+
+                    block_mark += 1;
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (v_id != u_id && block_used[v_id] != block_mark && p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
-                                s64 u_qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                                block_used[v_id] = block_mark;
+                            if (v_id == u_id) { continue; }
+                            if (block_used[v_id] == block_mark) { continue; }
+                            if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
 
-                                if (u_qap_delta > best_qap_delta) {
-                                    best_qap_delta = u_qap_delta;
-                                    best_id        = v_id;
-                                }
+                            s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                            block_used[v_id] = block_mark;
+
+                            if (qap_delta > best_qap_delta) {
+                                best_qap_delta = qap_delta;
+                                best_v_id      = v_id;
                             }
                         }
                     endfor
                     if (best_qap_delta != -std::numeric_limits<s64>::max()) {
-                        boundary_vertices.push(u, KWayFMMove(u, u_id, best_id, best_qap_delta));
+                        boundary_vertices.push(u, KWayFMMove(u, u_id, best_v_id, best_qap_delta));
                     }
 
                     // insert all neighbors of u that are boundary into the queue
@@ -211,24 +214,28 @@ namespace HeiProMap {
                             partition_t neighbor_id     = p_manager[neighbor];
                             weight_t    neighbor_weight = g.weight(neighbor);
 
+                            best_qap_delta = -std::numeric_limits<s64>::max();
                             block_mark += 1;
-                            best_qap_delta              = -std::numeric_limits<s64>::max();
+
                             forall_guiv(g, neighbor, j, v)
                                 {
                                     partition_t v_id = p_manager[v];
-                                    if (v_id != neighbor_id && block_used[v_id] != block_mark && p_manager.get_bweight(v_id) + neighbor_weight <= m_lmax) {
-                                        s64 u_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
-                                        block_used[v_id] = block_mark;
+                                    if (v_id == neighbor_id) { continue; }
+                                    if (block_used[v_id] == block_mark) { continue; }
+                                    if (p_manager.get_bweight(v_id) + neighbor_weight > m_lmax) { continue; }
 
-                                        if (u_qap_delta > best_qap_delta) {
-                                            best_qap_delta = u_qap_delta;
-                                            best_id        = v_id;
-                                        }
+                                    s64 u_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
+                                    block_used[v_id] = block_mark;
+
+                                    if (u_qap_delta > best_qap_delta) {
+                                        best_qap_delta = u_qap_delta;
+                                        best_v_id      = v_id;
                                     }
+
                                 }
                             endfor
                             if (best_qap_delta != -std::numeric_limits<s64>::max()) {
-                                boundary_vertices.push(neighbor, KWayFMMove(neighbor, neighbor_id, best_id, best_qap_delta));
+                                boundary_vertices.push(neighbor, KWayFMMove(neighbor, neighbor_id, best_v_id, best_qap_delta));
                             }
                         }
                     endfor
@@ -242,9 +249,9 @@ namespace HeiProMap {
                     s64    curr_qap_gain = 0;
                     s64    max_qap_gain  = 0;
 
-                    f64         steps_since_last_improvement = 0.0;
-                    f64         qap_gain_mean                = 0.0;
-                    f64         qap_gain_var                 = 0.0;
+                    f64 steps_since_last_improvement = 0.0;
+                    f64 qap_gain_mean                = 0.0;
+                    f64 qap_gain_var                 = 0.0;
 
                     METRICS_TIME(sp_queue)
 
@@ -257,7 +264,6 @@ namespace HeiProMap {
                         weight_t    vertex_weight = g.weight(vertex);
                         partition_t move_id       = move.to_move_id;
 
-                        if (!is_connected_to(g, p_manager, vertex, move_id)) { continue; }
                         if (p_manager.get_bweight(move_id) + vertex_weight > m_lmax) { continue; }
 
                         moves[moves_size++] = move;
@@ -293,24 +299,28 @@ namespace HeiProMap {
                                 partition_t neighbor_id     = p_manager[neighbor];
                                 weight_t    neighbor_weight = g.weight(neighbor);
 
+                                best_qap_delta = -std::numeric_limits<s64>::max();
+
                                 block_mark += 1;
-                                best_qap_delta              = -std::numeric_limits<s64>::max();
                                 forall_guiv(g, neighbor, j, v)
                                     {
                                         partition_t v_id = p_manager[v];
-                                        if (v_id != neighbor_id && block_used[v_id] != block_mark && p_manager.get_bweight(v_id) + neighbor_weight <= m_lmax) {
-                                            s64 v_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
-                                            block_used[v_id] = block_mark;
+                                        if (v_id == neighbor_id) { continue; }
+                                        if (block_used[v_id] == block_mark) { continue; }
+                                        if (p_manager.get_bweight(v_id) + neighbor_weight > m_lmax) { continue; }
 
-                                            if (v_qap_delta > best_qap_delta) {
-                                                best_qap_delta = v_qap_delta;
-                                                best_id        = v_id;
-                                            }
+                                        s64 v_qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
+                                        block_used[v_id] = block_mark;
+
+                                        if (v_qap_delta > best_qap_delta) {
+                                            best_qap_delta = v_qap_delta;
+                                            best_v_id      = v_id;
                                         }
+
                                     }
                                 endfor
                                 if (best_qap_delta != -std::numeric_limits<s64>::max()) {
-                                    boundary_vertices.push_update(neighbor, KWayFMMove(neighbor, neighbor_id, best_id, best_qap_delta));
+                                    boundary_vertices.push_update(neighbor, KWayFMMove(neighbor, neighbor_id, best_v_id, best_qap_delta));
                                 }
                             }
                         endfor
@@ -321,7 +331,7 @@ namespace HeiProMap {
 
                     METRICS_TIME(sp_moves)
                     // revert all moves in partitioning manager
-                    for (size_t i                            = 0; i < moves_size; i++) {
+                    for (size_t i = 0; i < moves_size; i++) {
                         vertex_t    vertex        = moves[moves_size - 1 - i].u;
                         weight_t    vertex_weight = g.weight(vertex);
                         partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
