@@ -178,7 +178,7 @@ namespace HeiProMap {
                         best_idx     = moves_size;
                         max_qap_gain = curr_qap_gain;
 
-                        steps_since_last_improvement = 0;
+                        steps_since_last_improvement = 0.0;
                         qap_gain_mean                = 0.0;
                         qap_gain_var                 = 0.0;
                     }
