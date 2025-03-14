@@ -45,7 +45,6 @@
 #include "../coarsening/matching.h"
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
-#include "../rebalance/simple_rebalancer.h"
 #include "../refinement/label_propagation_refinement_Faraj20.h"
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
@@ -59,7 +58,7 @@ namespace HeiProMap {
      * Solver for serial Process Mapping.
      */
     class Solver {
-        algorithm_configuration ac;
+        AlgorithmConfiguration ac;
         RandomEngine            random_engine;
 
         // statistics
@@ -99,7 +98,7 @@ namespace HeiProMap {
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
 
     public:
-        explicit Solver(const algorithm_configuration &t_ac) {
+        explicit Solver(const AlgorithmConfiguration &t_ac) {
             sp = std::chrono::high_resolution_clock::now();
 
             ac            = t_ac;
@@ -225,14 +224,6 @@ namespace HeiProMap {
                 partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config, stat_collect);
             } else {
                 std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-
-            if (ac.rebalancing_algorithm_id == REBALANCING_ALG_SIMPLE) {
-                SimpleRebalancer simple_rebalancer(graphs[0].get_n(), ac.k, lmax);
-                simple_rebalancer.rebalance(ac.simple_rebalancer_configuration, graphs.back(), bv_manager, p_manager, d_oracle, q_graph);
-            } else {
-                std::cerr << "Rebalancing algorithm " << rebalancing_algorithm_to_string(ac.rebalancing_algorithm_id) << " with id " << ac.rebalancing_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 

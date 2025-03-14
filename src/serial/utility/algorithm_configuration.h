@@ -122,7 +122,7 @@ namespace HeiProMap {
         }
     }
 
-    class algorithm_configuration {
+    class AlgorithmConfiguration {
     private:
         std::vector<CommandLineOption> options = {
                 {"--help", "", "Produces the help message", "", "", false},
@@ -239,8 +239,6 @@ namespace HeiProMap {
         std::string rebalancing_algorithm_string;
         REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
 
-        SimpleRebalancerConfiguration simple_rebalancer_configuration;
-
         // refinement algorithms
         LabelPropagationFaraj20Configuration label_propagation_faraj20_config                = LabelPropagationFaraj20Configuration("Label Propagation Faraj20");
         QuotientGraphRefinementFaraj20Configuration quotient_graph_refinement_faraj20_config = QuotientGraphRefinementFaraj20Configuration("Quotient Graph Faraj20");
@@ -256,7 +254,7 @@ namespace HeiProMap {
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
 
 
-        algorithm_configuration() = default;
+        AlgorithmConfiguration() = default;
 
         void set_hierarchy() {
             hierarchy_string = get("--hierarchy");
@@ -408,7 +406,7 @@ namespace HeiProMap {
             }
         }
 
-        algorithm_configuration(int argc, char* argv[]) {
+        AlgorithmConfiguration(int argc, char* argv[]) {
             // read command lines into vector
             std::vector<std::string> args(argv, argv + argc);
 

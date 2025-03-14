@@ -28,7 +28,6 @@
 #include <iostream>
 
 #include "../../src/commons/definitions.h"
-#include "../src/commons/macros.h"
 #include "../src/commons/utils.h"
 #include "../src/serial/datastructures/solver.h"
 #include "../src/serial/utility/algorithm_configuration.h"
@@ -146,7 +145,7 @@ int main(const int argc, char* argv[]) {
                 std::strcpy(argv[i], args[i].c_str());
             }
 
-            algorithm_configuration ac(argc, argv);
+            AlgorithmConfiguration ac(argc, argv);
 
             Solver solver(ac);
             solver.solve();
@@ -155,7 +154,7 @@ int main(const int argc, char* argv[]) {
             delete[] argv;
         }
     } else {
-        algorithm_configuration ac(argc, argv);
+        AlgorithmConfiguration ac(argc, argv);
 
         Solver solver(ac);
         solver.solve();

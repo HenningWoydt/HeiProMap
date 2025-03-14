@@ -15,18 +15,6 @@ include_directories(extern/KaHIP)
 link_directories(extern/KaHIP)
 add_subdirectory(extern/KaHIP)
 
-set(BOOST_REQUESTED_VERSION 1.87)
-find_package(Boost COMPONENTS system program_options heap)
-if(BOOST_FOUND)
-    include_directories(SYSTEM ${BOOST_INCLUDE_DIRS})
-    message(STATUS "Boost Include: ${BOOST_INCLUDE_DIRS}")
-    message(STATUS "Boost Libraries: ${BOOST_LIBRARIES}")
-else()
-    MESSAGE(FATAL_ERROR "
-      Boost not found. Install Boost on your system or
-      add -DKAHYPAR_DOWNLOAD_BOOST=On to the cmake build command.")
-endif()
-
 # Compiler Flags
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -fno-exceptions")
