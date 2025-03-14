@@ -23,9 +23,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  ******************************************************************************/
-#ifndef HEIPROMAP_GRAPH_CSR_ARRAYS_H
-#define HEIPROMAP_GRAPH_CSR_ARRAYS_H
+#ifndef HEIPROMAP_GRAPH_H
+#define HEIPROMAP_GRAPH_H
 
+#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <unistd.h>
@@ -273,9 +274,13 @@ namespace HeiProMap {
             m_neighborhoods = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
             m_edges         = (EdgeVW *) aligned_alloc(64, m_m_64 * sizeof(EdgeVW));
 
-            size_t *vertex_idx  = (size_t *) aligned_alloc(64, m_n_64 * sizeof(size_t));
-            u32    *vertex_mark = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(vertex_mark, m_n_64, 0);
+            struct IdxMark {
+                vertex_t idx;
+                u32 mark;
+            };
+
+            IdxMark* idx_mark = (IdxMark*) aligned_alloc(64, m_n_64 * sizeof(IdxMark));
+            memset(idx_mark, 0, m_n_64 * sizeof(IdxMark));
             u32 mark = 0;
 
             size_t curr_m = 0;
@@ -298,12 +303,12 @@ namespace HeiProMap {
                         // map to the new node range
                         vv = matching.get_n(vv);
 
-                        if (vertex_mark[vv] == mark) {
-                            size_t idx = vertex_idx[vv];
+                        if (idx_mark[vv].mark == mark) {
+                            size_t idx = idx_mark[vv].idx;
                             m_edges[idx].w += ww;
                         } else {
-                            vertex_idx[vv]  = curr_m;
-                            vertex_mark[vv] = mark;
+                            idx_mark[vv].idx  = curr_m;
+                            idx_mark[vv].mark = mark;
                             m_edges[curr_m].v = vv;
                             m_edges[curr_m].w = ww;
                             curr_m += 1;
@@ -331,12 +336,12 @@ namespace HeiProMap {
                         // map to the new node range
                         vv = matching.get_n(vv);
 
-                        if (vertex_mark[vv] == mark) {
-                            size_t idx = vertex_idx[vv];
+                        if (idx_mark[vv].mark == mark) {
+                            size_t idx = idx_mark[vv].idx;
                             m_edges[idx].w += ww;
                         } else {
-                            vertex_idx[vv]  = curr_m;
-                            vertex_mark[vv] = mark;
+                            idx_mark[vv].idx  = curr_m;
+                            idx_mark[vv].mark = mark;
                             m_edges[curr_m].v = vv;
                             m_edges[curr_m].w = ww;
                             curr_m += 1;
@@ -356,12 +361,12 @@ namespace HeiProMap {
                         // map to the new node range
                         vv = matching.get_n(vv);
 
-                        if (vertex_mark[vv] == mark) {
-                            size_t idx = vertex_idx[vv];
+                        if (idx_mark[vv].mark == mark) {
+                            size_t idx = idx_mark[vv].idx;
                             m_edges[idx].w += ww;
                         } else {
-                            vertex_idx[vv]  = curr_m;
-                            vertex_mark[vv] = mark;
+                            idx_mark[vv].idx  = curr_m;
+                            idx_mark[vv].mark = mark;
                             m_edges[curr_m].v = vv;
                             m_edges[curr_m].w = ww;
                             curr_m += 1;
@@ -370,8 +375,7 @@ namespace HeiProMap {
                     m_neighborhoods[new_u + 1] = curr_m;
                 }
             }
-            free(vertex_idx);
-            free(vertex_mark);
+            free(idx_mark);
 
             m_m = curr_m;
         }
@@ -419,4 +423,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_GRAPH_CSR_ARRAYS_H
+#endif //HEIPROMAP_GRAPH_H
