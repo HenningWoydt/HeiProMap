@@ -28,11 +28,9 @@
 #define HEIPROMAP_K_WAY_FM_REFINEMENT_H
 
 #include <queue>
-#include <random>
 
 #include "k_way_fm_refinement_Faraj20.h"
 #include "../../commons/utils.h"
-#include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
@@ -121,8 +119,6 @@ namespace HeiProMap {
             f64 beta  = std::log(g.get_n());
 
             for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
-                auto sp = std::chrono::high_resolution_clock::now();
-
                 heap = std::priority_queue<KWayFMMove>();
 
                 // insert all boundary vertices

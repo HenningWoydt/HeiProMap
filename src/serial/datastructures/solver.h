@@ -93,7 +93,7 @@ namespace HeiProMap {
         KWayFMRefinement k_way_refine;
         MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
         MultiTryFMRefinement multi_try_fm_refinement;
-        HierarchyAwareFMRefinement hierarchy_aware_fm_refinement;
+        HierarchyAwareKWayFMRefinement hierarchy_aware_fm_refinement;
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
@@ -137,7 +137,7 @@ namespace HeiProMap {
             multi_try_fm_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.multi_try_fm_refinement_config, stat_collect);
             two_vertex_lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.two_vertex_label_propagation_config, stat_collect);
             three_vertex_lp_refine.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.three_vertex_label_propagation_config, stat_collect);
-            hierarchy_aware_fm_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.hierarchy_aware_fm_config, stat_collect);
+            hierarchy_aware_fm_refinement.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, ac.hierarchy_aware_k_way_fm_config, stat_collect);
 
             refinements.emplace_back(&qg_refine_faraj20, &ac.quotient_graph_refinement_faraj20_config);
             refinements.emplace_back(&lp_refine_faraj20, &ac.label_propagation_faraj20_config);
@@ -150,7 +150,7 @@ namespace HeiProMap {
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
-            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_fm_config);
+            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_k_way_fm_config);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));

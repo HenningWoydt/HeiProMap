@@ -34,7 +34,7 @@
 #include "../../definitions.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
-#include "../refinement/hierarchy_aware_fm_refinement.h"
+#include "../refinement/hierarchy_aware_k_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
 #include "../refinement/label_propagation_refinement.h"
@@ -260,7 +260,7 @@ namespace HeiProMap {
         QuotientGraphRefinementConfiguration   quotient_graph_refinement_config    = QuotientGraphRefinementConfiguration("Quotient Graph");
         KWayFMRefinementConfiguration          k_way_fm_refinement_config          = KWayFMRefinementConfiguration("K-Way-FM");
         MultiTryFmRefinementConfiguration      multi_try_fm_refinement_config      = MultiTryFmRefinementConfiguration("Multi Try-FM");
-        HierarchyAwareFMConfiguration      hierarchy_aware_fm_config       = HierarchyAwareFMConfiguration("Hierarchy Aware FM");
+        HierarchyAwareKWayFMConfiguration      hierarchy_aware_k_way_fm_config       = HierarchyAwareKWayFMConfiguration("Hierarchy Aware K-Way-FM");
         TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
 
@@ -406,9 +406,9 @@ namespace HeiProMap {
                 multi_try_fm_refinement_config.enabled = get("--refinement-multi-try-fm-enable") == "1";
             }
 
-            // initialize hierarchy aware cycle refinement
+            // initialize hierarchy aware k way fm refinement
             if (use_default || is_set("--refinement-hierarchy-aware-fm-enable")) {
-                hierarchy_aware_fm_config.enabled = get("--refinement-hierarchy-aware-fm-enable") == "1";
+                hierarchy_aware_k_way_fm_config.enabled = get("--refinement-hierarchy-aware-fm-enable") == "1";
             }
 
             // initialize two vertex label propagation
@@ -688,14 +688,14 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = false;
+            quotient_graph_refinement_config.enabled = true;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = true;
+            k_way_fm_refinement_config.enabled = false;
             k_way_fm_refinement_config.max_iteration = 1;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 2;
 
             // enable two vertex label propagation
@@ -709,7 +709,7 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable experimental refinement
-            hierarchy_aware_fm_config.enabled = false;
+            hierarchy_aware_k_way_fm_config.enabled = true;
         }
 
         /**
