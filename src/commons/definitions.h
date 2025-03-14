@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 
 namespace HeiProMap {
     typedef int8_t s8;
@@ -50,6 +51,15 @@ namespace HeiProMap {
     typedef u32 partition_t;
 
     constexpr size_t HEAP_TOMBSTONE = std::numeric_limits<size_t>::max();
+
+    struct CommandLineOption {
+        std::string large_key;
+        std::string small_key;
+        std::string description;
+        std::string default_val;
+        std::string input;
+        bool        is_set;
+    };
 
     /**
      * Struct that holds a vertex and a weight.

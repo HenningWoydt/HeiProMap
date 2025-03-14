@@ -28,7 +28,7 @@
 #define HEIPROMAP_SMALL_STATISTIC_COLLECTOR_H
 
 #ifndef COLLECT_SMALL_METRICS
-#define COLLECT_SMALL_METRICS true
+#define COLLECT_SMALL_METRICS false
 #endif
 
 #if COLLECT_SMALL_METRICS
@@ -37,15 +37,13 @@
 #define SMALL_METRICS(x)
 #endif
 
-#include <string>
-#include <map>
+#include <iomanip>
 #include <iostream>
-#include <iomanip>  // for std::setw, std::setprecision
 #include <map>
 #include <string>
-#include <utility> // for std::pair
+#include <utility>
 
-#include "../definitions.h"
+#include "../commons/definitions.h"
 
 namespace HeiProMap {
 

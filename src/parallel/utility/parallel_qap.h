@@ -28,7 +28,7 @@
 #define HEIPROMAP_PARALLEL_QAP_H
 
 #include "../parallel_definitions_1.h"
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
     weight_t get_qap(p_graph_t &g,

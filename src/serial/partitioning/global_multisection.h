@@ -27,8 +27,7 @@
 #ifndef HEIPROMAP_GLOBAL_MULTISECTION_H
 #define HEIPROMAP_GLOBAL_MULTISECTION_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
 #include "../../commons/utils.h"
 #include "../interfaces/ISerialPartitioner.h"
 #include "interface/kaHIP_interface.h"

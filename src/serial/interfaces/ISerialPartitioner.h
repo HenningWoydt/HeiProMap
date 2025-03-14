@@ -28,7 +28,7 @@
 #define HEIPROMAP_ISERIALPARTITIONER_H
 
 #include "../serial_definitions_1.h"
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
     class ISerialPartitionerConfiguration {

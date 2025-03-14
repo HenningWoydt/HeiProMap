@@ -27,8 +27,8 @@
 #ifndef HEIPROMAP_PARALLEL_DISTANCE_ORACLE_H
 #define HEIPROMAP_PARALLEL_DISTANCE_ORACLE_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../interfaces/IParallelDistanceOracle.h"
 
 namespace HeiProMap {

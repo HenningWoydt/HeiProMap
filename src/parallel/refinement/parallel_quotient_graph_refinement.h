@@ -27,12 +27,12 @@
 #ifndef HEIPROMAP_PARALLEL_QUOTIENT_GRAPH_REFINEMENT_H
 #define HEIPROMAP_PARALLEL_QUOTIENT_GRAPH_REFINEMENT_H
 
-#include <queue>
-#include <omp.h>
 #include <atomic>
+#include <omp.h>
+#include <queue>
 
-#include "../interfaces/IParallelRefiner.h"
 #include "../../serial/datastructures/indexed_max_heap.h"
+#include "../interfaces/IParallelRefiner.h"
 
 namespace HeiProMap {
 

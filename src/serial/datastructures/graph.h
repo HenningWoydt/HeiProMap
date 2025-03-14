@@ -32,7 +32,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../../commons/utils.h"
 #include "../coarsening/matching.h"
 #include "../interfaces/ISerialGraph.h"

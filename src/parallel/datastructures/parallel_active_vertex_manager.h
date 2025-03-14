@@ -30,8 +30,8 @@
 #include <algorithm>
 #include <numeric>
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../../commons/utils.h"
 #include "../interfaces/IParallelActiveVertexManager.h"
 

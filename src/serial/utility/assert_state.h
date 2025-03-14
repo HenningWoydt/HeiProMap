@@ -27,8 +27,7 @@
 #ifndef HEIPROMAP_ASSERT_STATE_H
 #define HEIPROMAP_ASSERT_STATE_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
 #include "../../commons/utils.h"
 #include "../../parallel/parallel_definitions_1.h"
 

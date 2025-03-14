@@ -28,7 +28,7 @@
 #define HEIPROMAP_PARALLEL_HEAVY_EDGE_MATCHER_H
 
 #include "../parallel_definitions_1.h"
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../interfaces/IParallelMatcher.h"
 
 namespace HeiProMap {

@@ -27,8 +27,7 @@
 #ifndef HEIPROMAP_KAFFPA_PARTITIONER_H
 #define HEIPROMAP_KAFFPA_PARTITIONER_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
 #include "../interfaces/ISerialPartitioner.h"
 #include "interface/kaHIP_interface.h"
 

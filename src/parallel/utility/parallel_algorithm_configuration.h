@@ -32,8 +32,7 @@
 #include <vector>
 
 #include "parallel_utils.h"
-#include "../../commons.h"
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../../commons/utils.h"
 #include "../coarsening/parallel_heavy_edge_matcher.h"
 #include "../partitioning/parallel_kaffpa_partitioner.h"

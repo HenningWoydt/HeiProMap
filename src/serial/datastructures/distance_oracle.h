@@ -27,8 +27,8 @@
 #ifndef HEIPROMAP_DISTANCE_ORACLE_H
 #define HEIPROMAP_DISTANCE_ORACLE_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../../commons/utils.h"
 #include "../interfaces/ISerialDistanceOracle.h"
 

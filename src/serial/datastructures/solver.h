@@ -33,8 +33,8 @@
 #include "graph.h"
 #include "partition_manager.h"
 #include "quotient_graph.h"
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/small_statistic_collector.h"
 #include "../../commons/statistic_collector.h"
@@ -262,7 +262,7 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
 
             METRICS(stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));)
-            METRICS(stat_collect.set_partition_stats(get_qap(graphs.back(), av_manager, p_manager, d_oracle), p_manager.get_bweights(), lmax);)
+            METRICS(stat_collect.set_partition_stats(get_qap(graphs.back(), p_manager, d_oracle), p_manager.get_bweights(), lmax);)
         }
 
         void matching(const u64 level) {
@@ -286,7 +286,7 @@ namespace HeiProMap {
             small_stat_collect.add("matching", get_seconds(sp_match, ep_match));
 
             METRICS(stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);)
-            METRICS(stat_collect.set_matching_stats(level, matches_size.back());)
+            METRICS(stat_collect.set_matching_stats(level, matches.back().size());)
         }
 
         void coarsening(const u64 level) {
@@ -300,7 +300,7 @@ namespace HeiProMap {
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back()));
             METRICS(stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);)
-            METRICS(stat_collect.set_coarsening_stats(av_manager.size(), level);)
+            METRICS(stat_collect.set_coarsening_stats(graphs.back().get_n(), level);)
         }
 
         void uncoarsening(const u64 level) {
@@ -316,7 +316,7 @@ namespace HeiProMap {
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
             METRICS(stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);)
-            METRICS(stat_collect.set_uncoarsening_stats(level, av_manager.size());)
+            METRICS(stat_collect.set_uncoarsening_stats(level, graphs.back().get_n());)
         }
 
         void refinement(const u64 level, const u64 max_level) {
@@ -345,7 +345,7 @@ namespace HeiProMap {
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
             METRICS(stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);)
-            METRICS(stat_collect.set_refinement_stats(level, get_qap(graphs.back(), av_manager, p_manager, d_oracle));)
+            METRICS(stat_collect.set_refinement_stats(level, get_qap(graphs.back(), p_manager, d_oracle));)
         }
     };
 }

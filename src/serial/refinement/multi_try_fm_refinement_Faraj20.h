@@ -28,15 +28,11 @@
 #define HEIPROMAP_MULTI_TRY_FM_REFINEMENT_FARAJ20_H
 
 #include <algorithm>
-#include <random>
 
-#include "../datastructures/distance_oracle.h"
+#include "../../commons/utils.h"
 #include "../datastructures/functions.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
-#include "../interfaces/ISerialQuotientGraph.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
-#include "../../commons/utils.h"
 
 namespace HeiProMap {
     class MultiTryFmRefinementFaraj20Configuration final : public ISerialRefinerConfiguration {

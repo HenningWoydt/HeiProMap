@@ -28,10 +28,8 @@
 #define HEIPROMAP_THREE_VERTEX_LABEL_PROPAGATION_REFINEMENT_H
 
 #include <iostream>
-#include <random>
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
 #include "../../commons/utils.h"
 #include "../interfaces/ISerialRefiner.h"
 

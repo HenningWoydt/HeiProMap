@@ -30,9 +30,8 @@
 #include <regex>
 #include <vector>
 
+#include "../../commons/definitions.h"
 #include "../../commons/random_engine.h"
-#include "../../definitions.h"
-#include "../../"
 
 namespace HeiProMap {
     class IParallelGraphRefinerConfiguration {

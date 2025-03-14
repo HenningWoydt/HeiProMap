@@ -27,9 +27,7 @@
 #ifndef HEIPROMAP_PARALLEL_LABEL_PROPAGATION_REFINEMENT_H
 #define HEIPROMAP_PARALLEL_LABEL_PROPAGATION_REFINEMENT_H
 
-#include <queue>
 #include <omp.h>
-#include <atomic>
 
 #include "../interfaces/IParallelRefiner.h"
 

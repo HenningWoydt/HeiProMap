@@ -27,7 +27,7 @@
 #ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
 #define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
 
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../../commons/JSON_utils.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"

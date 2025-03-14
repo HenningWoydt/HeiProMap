@@ -36,7 +36,7 @@
 #include <string>
 #include <vector>
 
-#include "../definitions.h"
+#include "../commons/definitions.h"
 
 namespace HeiProMap {
     /**

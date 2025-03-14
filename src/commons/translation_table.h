@@ -30,7 +30,6 @@
 namespace HeiProMap {
     template<typename T>
     class TranslationTable {
-    private:
         T* m_translation_o_to_n = nullptr;
         T* m_translation_n_to_o = nullptr;
 

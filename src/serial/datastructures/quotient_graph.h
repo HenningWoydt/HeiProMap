@@ -27,7 +27,7 @@
 #ifndef HEIPROMAP_QUOTIENT_GRAPH_H
 #define HEIPROMAP_QUOTIENT_GRAPH_H
 
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../interfaces/ISerialQuotientGraph.h"
 
 namespace HeiProMap {

@@ -35,8 +35,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../interfaces/IParallelGraph.h"
 
 namespace HeiProMap {

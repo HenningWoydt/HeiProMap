@@ -27,7 +27,7 @@
 #ifndef HEIPROMAP_ISERIALGRAPH_H
 #define HEIPROMAP_ISERIALGRAPH_H
 
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
     class ISerialGraph {

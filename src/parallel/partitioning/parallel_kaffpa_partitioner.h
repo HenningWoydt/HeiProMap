@@ -29,7 +29,7 @@
 
 #include "../parallel_definitions_1.h"
 #include "../parallel_definitions_2.h"
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../../commons/translation_table.h"
 #include "../interfaces/IParallelPartitioner.h"
 

@@ -27,7 +27,6 @@
 #ifndef HEIPROMAP_IPARALLELDISTANCEORACLE_H
 #define HEIPROMAP_IPARALLELDISTANCEORACLE_H
 
-#include <regex>
 #include <vector>
 
 namespace HeiProMap {

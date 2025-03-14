@@ -27,8 +27,8 @@
 #include <cstring>
 #include <iostream>
 
-#include "../src/definitions.h"
-#include "../src/macros.h"
+#include "../../src/commons/definitions.h"
+#include "../src/commons/macros.h"
 #include "../src/commons/utils.h"
 #include "../src/serial/datastructures/solver.h"
 #include "../src/serial/utility/algorithm_configuration.h"

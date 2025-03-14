@@ -30,8 +30,8 @@
 #include "distance_oracle.h"
 #include "../serial_definitions_1.h"
 #include "../serial_definitions_2.h"
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 
 namespace HeiProMap {

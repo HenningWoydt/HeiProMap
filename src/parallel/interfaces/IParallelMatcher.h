@@ -28,7 +28,7 @@
 #define HEIPROMAP_IPARALLELMATCHER_H
 
 #include "../parallel_definitions_1.h"
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
     class IParallelMatcherConfiguration {

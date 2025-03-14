@@ -27,8 +27,8 @@
 #ifndef HEIPROMAP_INDEXED_MAX_HEAP_H
 #define HEIPROMAP_INDEXED_MAX_HEAP_H
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 
 namespace HeiProMap {
     /**

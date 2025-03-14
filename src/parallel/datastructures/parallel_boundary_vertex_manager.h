@@ -29,8 +29,8 @@
 
 #include <atomic>
 
-#include "../../definitions.h"
-#include "../../macros.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 #include "../interfaces/IParallelBoundaryVertexManager.h"
 
 namespace HeiProMap {

@@ -29,9 +29,7 @@
 
 #include <vector>
 
-#include "../../definitions.h"
-#include "../../macros.h"
-#include "../../commons/JSON_utils.h"
+#include "../../commons/definitions.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
 #include "../interfaces/ISerialMatcher.h"

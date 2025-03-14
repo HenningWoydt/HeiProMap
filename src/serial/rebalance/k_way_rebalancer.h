@@ -28,13 +28,13 @@
 #define HEIPROMAP_K_WAY_REBALANCER_H
 
 #include <queue>
-#include "../../definitions.h"
+
 #include "../serial_definitions_1.h"
-#include "../../commons/statistic_collector.h"
-#include "../../commons/random_engine.h"
 #include "../serial_definitions_3.h"
+#include "../../commons/definitions.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
-#include "../datastructures/indexed_max_heap.h"
 
 namespace HeiProMap {
 

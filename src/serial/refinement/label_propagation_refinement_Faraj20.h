@@ -27,9 +27,7 @@
 #ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H
 #define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_FARAJ20_H
 
-#include <random>
-
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
 

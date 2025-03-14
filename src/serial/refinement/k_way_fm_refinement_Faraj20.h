@@ -28,10 +28,8 @@
 #define HEIPROMAP_K_WAY_FM_REFINEMENT_FARAJ20_H
 
 #include <algorithm>
-#include <random>
 
 #include "../../commons/utils.h"
-#include "../datastructures/distance_oracle.h"
 #include "../datastructures/functions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"

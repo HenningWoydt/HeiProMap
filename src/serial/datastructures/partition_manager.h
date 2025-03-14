@@ -27,7 +27,7 @@
 #ifndef HEIPROMAP_PARTITION_MANAGER_H
 #define HEIPROMAP_PARTITION_MANAGER_H
 
-#include "../../definitions.h"
+#include "../../commons/definitions.h"
 #include "../interfaces/ISerialPartitionManager.h"
 
 namespace HeiProMap {

@@ -29,12 +29,12 @@
 
 #include <algorithm>
 
+#include "k_way_fm_refinement_Faraj20.h"
+#include "../../commons/utils.h"
 #include "../datastructures/functions.h"
 #include "../interfaces/ISerialRefiner.h"
-#include "../utility/qap.h"
-#include "../../commons/utils.h"
-#include "k_way_fm_refinement_Faraj20.h"
 #include "../rebalance/k_way_rebalancer.h"
+#include "../utility/qap.h"
 
 namespace HeiProMap {
     class HierarchyAwareKWayFMConfiguration final : public ISerialRefinerConfiguration {
