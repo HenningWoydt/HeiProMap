@@ -132,6 +132,10 @@ namespace HeiProMap {
         return (f64)std::chrono::duration_cast<std::chrono::nanoseconds>(ep - sp).count() / 1e9;
     }
 
+    f64 get_seconds(std::chrono::steady_clock::time_point sp, std::chrono::steady_clock::time_point ep) {
+        return (f64)std::chrono::duration_cast<std::chrono::nanoseconds>(ep - sp).count() / 1e9;
+    }
+
     std::string to_string(const std::vector<EdgeVW>& vec) {
         std::string s;
         if (vec.empty()) {

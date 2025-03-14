@@ -335,6 +335,8 @@ namespace HeiProMap {
 
     f64 get_seconds(std::chrono::high_resolution_clock::time_point sp, std::chrono::high_resolution_clock::time_point ep);
 
+    f64 get_seconds(std::chrono::steady_clock::time_point sp, std::chrono::steady_clock::time_point ep);
+
     void counting_sort(std::vector<EdgeUVW> &edges, std::vector<EdgeUVW> &edges_help, std::vector<weight_t> &help, weight_t min_w, weight_t max_w);
 
     size_t own_lower_bound_guaranteed(const std::vector<EdgeVW> &edges, vertex_t v);

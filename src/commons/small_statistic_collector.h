@@ -28,7 +28,7 @@
 #define HEIPROMAP_SMALL_STATISTIC_COLLECTOR_H
 
 #ifndef COLLECT_SMALL_METRICS
-#define COLLECT_SMALL_METRICS true
+#define COLLECT_SMALL_METRICS false
 #endif
 
 #if COLLECT_SMALL_METRICS
@@ -138,8 +138,8 @@ namespace HeiProMap {
         // Helper for printing the "Refinement Stats" table
         void print_refinement_stats() {
             // 1) Calculate totals
-            double totalRefTime  = 0.0;
-            s64    totalQAPDelta = 0;
+            double          totalRefTime  = 0.0;
+            s64             totalQAPDelta = 0;
             for (const auto &kv: refinement_stats) {
                 totalRefTime += kv.second.first;
                 totalQAPDelta += kv.second.second;
@@ -152,9 +152,9 @@ namespace HeiProMap {
 
             // Data rows
             for (const auto &kv: refinement_stats) {
-                const auto &method = kv.first;
-                double time     = kv.second.first;
-                s64    qapDelta = kv.second.second;
+                const auto &method  = kv.first;
+                double     time     = kv.second.first;
+                s64        qapDelta = kv.second.second;
 
                 // Time(s)
                 std::ostringstream time_str;
