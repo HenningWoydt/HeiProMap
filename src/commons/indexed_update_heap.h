@@ -136,7 +136,7 @@ namespace HeiProMap {
         void bubble_up(size_t index) {
             while (index > 0) {
                 size_t parent_index = (index - 1) / 2;
-                if (m_heap[index].qap_delta <= m_heap[parent_index].qap_delta) break;
+                if (m_heap[index] <= m_heap[parent_index]) break;
 
                 swap(index, parent_index);
                 index = parent_index;
@@ -152,10 +152,10 @@ namespace HeiProMap {
                 size_t right_child_index = 2 * index + 2;
                 size_t largest_index     = index;
 
-                if (left_child_index <= last_index && m_heap[left_child_index].qap_delta > m_heap[largest_index].qap_delta) {
+                if (left_child_index <= last_index && m_heap[left_child_index] > m_heap[largest_index]) {
                     largest_index = left_child_index;
                 }
-                if (right_child_index <= last_index && m_heap[right_child_index].qap_delta > m_heap[largest_index].qap_delta) {
+                if (right_child_index <= last_index && m_heap[right_child_index] > m_heap[largest_index]) {
                     largest_index = right_child_index;
                 }
                 if (largest_index == index) break;
