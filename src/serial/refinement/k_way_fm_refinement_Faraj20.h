@@ -43,39 +43,6 @@ namespace HeiProMap {
         f64 beta          = 1.0;
     };
 
-    class KWayFMMove {
-    public:
-        vertex_t u;
-        partition_t u_id;
-        partition_t to_move_id;
-        s64 qap_delta;
-
-        KWayFMMove() = default;
-
-        KWayFMMove(const vertex_t t_u, const partition_t t_u_id, const partition_t t_to_move, const s64 t_qap_delta) {
-            u          = t_u;
-            u_id       = t_u_id;
-            to_move_id = t_to_move;
-            qap_delta  = t_qap_delta;
-        }
-
-        bool operator>(const KWayFMMove& m) const {
-            return qap_delta > m.qap_delta;
-        }
-
-        bool operator>=(const KWayFMMove& m) const {
-            return qap_delta >= m.qap_delta;
-        }
-
-        bool operator<(const KWayFMMove& m) const {
-            return qap_delta < m.qap_delta;
-        }
-
-        bool operator<=(const KWayFMMove& m) const {
-            return qap_delta <= m.qap_delta;
-        }
-    };
-
     class KWayFMMoves {
     private:
         vertex_t m_u;

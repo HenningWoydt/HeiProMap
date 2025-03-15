@@ -58,7 +58,7 @@ namespace HeiProMap {
         std::string description;
         std::string default_val;
         std::string input;
-        bool        is_set;
+        bool is_set;
     };
 
     /**
@@ -146,82 +146,6 @@ namespace HeiProMap {
         }
     };
 
-    class EdgeF64VW {
-    public:
-        vertex_t v;
-        f64 w;
-
-    public:
-        EdgeF64VW() = default;
-
-        EdgeF64VW(const vertex_t v, const f64 w) : v(v), w(w) {}
-
-        bool operator<(const EdgeF64VW& e) const {
-            return w < e.w;
-        }
-
-        bool operator>(const EdgeF64VW& e) const {
-            return w < e.w;
-        }
-    };
-
-    class MovePQ {
-    public:
-        vertex_t p_id;
-        s64 qap_delta;
-
-    public:
-        MovePQ() = default;
-
-        MovePQ(const vertex_t p_id, const s64 qap_delta) : p_id(p_id), qap_delta(qap_delta) {}
-
-        bool operator>(const MovePQ& m) const {
-            return qap_delta > m.qap_delta;
-        }
-
-        bool operator<(const MovePQ& m) const {
-            return qap_delta < m.qap_delta;
-        }
-    };
-
-    class Move {
-    public:
-        vertex_t u;
-        partition_t p_id;
-        s64 qap_delta;
-
-    public:
-        Move() = default;
-
-        Move(const vertex_t t_u, const partition_t p_id, const s64 qap_delta) : u(t_u), p_id(p_id), qap_delta(qap_delta) {}
-
-        bool operator>(const Move& m) const {
-            return qap_delta > m.qap_delta;
-        }
-
-        bool operator<(const Move& m) const {
-            return qap_delta < m.qap_delta;
-        }
-    };
-
-    class MoveQR {
-    public:
-        vertex_t u;
-        s64 qap_delta;
-
-        MoveQR() = default;
-
-        MoveQR(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
-
-        bool operator>(const MoveQR& m) const {
-            return qap_delta > m.qap_delta;
-        }
-
-        bool operator<(const MoveQR& m) const {
-            return qap_delta < m.qap_delta;
-        }
-    };
-
     class Swap {
     public:
         vertex_t u;
@@ -245,12 +169,81 @@ namespace HeiProMap {
         }
     };
 
-    // partitioning algorithms
-    enum PartitioningAlgorithms {
-        GREEDY,
-        KAFFPA_STRONG,
-        KAFFPA_ECO,
-        KAFFPA_FAST
+    class KWayFMMove {
+    public:
+        vertex_t u;
+        partition_t u_id;
+        partition_t to_move_id;
+        s64 qap_delta;
+
+        KWayFMMove() = default;
+
+        KWayFMMove(const vertex_t t_u, const partition_t t_u_id, const partition_t t_to_move, const s64 t_qap_delta) {
+            u          = t_u;
+            u_id       = t_u_id;
+            to_move_id = t_to_move;
+            qap_delta  = t_qap_delta;
+        }
+
+        bool operator>(const KWayFMMove& m) const {
+            return qap_delta > m.qap_delta;
+        }
+
+        bool operator>=(const KWayFMMove& m) const {
+            return qap_delta >= m.qap_delta;
+        }
+
+        bool operator<(const KWayFMMove& m) const {
+            return qap_delta < m.qap_delta;
+        }
+
+        bool operator<=(const KWayFMMove& m) const {
+            return qap_delta <= m.qap_delta;
+        }
+    };
+
+    class SmallKWayFMMove {
+    public:
+        partition_t to_move_id;
+        s64 qap_delta;
+
+        SmallKWayFMMove() = default;
+
+        SmallKWayFMMove(const partition_t t_to_move, const s64 t_qap_delta) {
+            to_move_id = t_to_move;
+            qap_delta  = t_qap_delta;
+        }
+
+        bool operator>(const SmallKWayFMMove& m) const {
+            return qap_delta > m.qap_delta;
+        }
+
+        bool operator>=(const SmallKWayFMMove& m) const {
+            return qap_delta >= m.qap_delta;
+        }
+
+        bool operator<(const SmallKWayFMMove& m) const {
+            return qap_delta < m.qap_delta;
+        }
+
+        bool operator<=(const SmallKWayFMMove& m) const {
+            return qap_delta <= m.qap_delta;
+        }
+    };
+
+    class Move {
+    public:
+        vertex_t u;
+        partition_t u_id;
+        partition_t to_move_id;
+
+        Move() = default;
+
+        Move(const vertex_t t_u, const vertex_t t_u_id, const partition_t t_to_move) {
+            u          = t_u;
+            u_id       = t_u_id;
+            to_move_id = t_to_move;
+        }
     };
 }
 

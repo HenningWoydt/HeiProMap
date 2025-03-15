@@ -677,7 +677,9 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled       = false;
@@ -686,6 +688,7 @@ namespace HeiProMap {
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 2;
+            multi_try_fm_refinement_config.alpha         = 100.0;
 
             // enable two vertex label propagation
             two_vertex_label_propagation_config.enabled       = false;

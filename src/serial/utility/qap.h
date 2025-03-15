@@ -414,6 +414,7 @@ namespace HeiProMap {
                 return get_u_qap_delta_size_7(g, u, old_id, new_id, p_manager, d_oracle);
             case 8:
                 return get_u_qap_delta_size_8(g, u, old_id, new_id, p_manager, d_oracle);
+            default: ;
         }
 
         s64 qap_delta = 0;
