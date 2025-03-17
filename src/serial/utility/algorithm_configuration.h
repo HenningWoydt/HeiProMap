@@ -600,8 +600,12 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = true;
-            label_propagation_config.max_iteration = 25;
+            label_propagation_config.enabled       = false;
+            label_propagation_config.max_iteration = 1;
+
+            // enable k-way fm
+            k_way_fm_refinement_config.enabled       = true;
+            k_way_fm_refinement_config.max_iteration = 1;
         }
 
         void set_eco() {
@@ -649,6 +653,8 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.alpha = 100.0;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled = false;
@@ -656,6 +662,7 @@ namespace HeiProMap {
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 2;
+            multi_try_fm_refinement_config.alpha         = 100.0;
         }
 
         void set_experimental() {
