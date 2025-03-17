@@ -46,6 +46,7 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
 
+        size_t m_max_neighborhood_size = 0;
         weight_t m_graph_weight = 0;
 
         weight_t *m_v_weights     = nullptr;
@@ -167,6 +168,7 @@ namespace HeiProMap {
 
                     ++i;
                     m_neighborhoods[u + 1] = curr_m;
+                    m_max_neighborhood_size = std::max(m_max_neighborhood_size, m_neighborhoods[u + 1] - m_neighborhoods[u]);
                     u += 1;
 
                     if (u + 32 >= m_n) {
@@ -196,6 +198,7 @@ namespace HeiProMap {
 
                     ++i;
                     m_neighborhoods[u + 1] = curr_m;
+                    m_max_neighborhood_size = std::max(m_max_neighborhood_size, m_neighborhoods[u + 1] - m_neighborhoods[u]);
                     u += 1;
 
                     if (u == m_n) {
@@ -245,6 +248,7 @@ namespace HeiProMap {
 
                     ++i;
                     m_neighborhoods[u + 1] = curr_m;
+                    m_max_neighborhood_size = std::max(m_max_neighborhood_size, m_neighborhoods[u + 1] - m_neighborhoods[u]);
                     u += 1;
 
                     if (u == m_n) {
@@ -268,6 +272,7 @@ namespace HeiProMap {
             const vertex_t m_n_64 = round_up_64(m_n + 1);
             const vertex_t m_m_64 = round_up_64(g.get_m() + 1);
 
+            m_max_neighborhood_size = 0;
             m_graph_weight = g.m_graph_weight;
             m_v_weights    = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
 
@@ -315,6 +320,7 @@ namespace HeiProMap {
                         }
                     }
                     m_neighborhoods[new_u + 1] = curr_m;
+                    m_max_neighborhood_size = std::max(m_max_neighborhood_size, m_neighborhoods[new_u + 1] - m_neighborhoods[new_u]);
                 } else if (old_u < matching.get_partner(old_u)) {
                     vertex_t new_u = matching.get_n(old_u);
 
@@ -373,6 +379,7 @@ namespace HeiProMap {
                         }
                     }
                     m_neighborhoods[new_u + 1] = curr_m;
+                    m_max_neighborhood_size = std::max(m_max_neighborhood_size, m_neighborhoods[new_u + 1] - m_neighborhoods[new_u]);
                 }
             }
             free(idx_mark);
