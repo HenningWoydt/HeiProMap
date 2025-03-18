@@ -369,7 +369,6 @@ namespace HeiProMap {
                         partition_t vertex_id  = moves[moves_size - 1 - i].to_move_id;
                         partition_t move_id    = moves[moves_size - 1 - i].u_id;
 
-                        vertex_used[vertex] = vertex_mark + 1;
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                     }
 
@@ -380,7 +379,6 @@ namespace HeiProMap {
                         partition_t vertex_id  = moves[i].u_id;
                         partition_t move_id    = moves[i].to_move_id;
 
-                        vertex_used[vertex] = vertex_mark;
                         bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                         q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
