@@ -75,6 +75,7 @@ namespace HeiProMap {
         METRICS(std::vector<std::vector<f64>> iteration_time_get_boundary;)
         METRICS(std::vector<std::vector<f64>> iteration_time_initialize;)
         METRICS(std::vector<std::vector<f64>> iteration_time_queue;)
+        METRICS(std::vector<std::vector<f64>> iteration_time_queue_updates;)
         METRICS(std::vector<std::vector<f64>> iteration_time_moves;)
         METRICS(std::vector<std::vector<s64>> iteration_qap_delta;)
         METRICS(std::vector<std::vector<s64>> iteration_successfull_queue;)
@@ -143,6 +144,7 @@ namespace HeiProMap {
             METRICS(iteration_time_get_boundary.emplace_back();)
             METRICS(iteration_time_initialize.emplace_back();)
             METRICS(iteration_time_queue.emplace_back();)
+            METRICS(iteration_time_queue_updates.emplace_back();)
             METRICS(iteration_time_moves.emplace_back();)
             METRICS(iteration_qap_delta.emplace_back();)
             METRICS(iteration_successfull_queue.emplace_back();)
@@ -159,6 +161,7 @@ namespace HeiProMap {
                 METRICS(iteration_time_get_boundary.back().push_back(0.0);)
                 METRICS(iteration_time_initialize.back().push_back(0.0);)
                 METRICS(iteration_time_queue.back().push_back(0.0);)
+                METRICS(iteration_time_queue_updates.back().push_back(0.0);)
                 METRICS(iteration_time_moves.back().push_back(0.0);)
                 METRICS(iteration_qap_delta.back().push_back(0);)
                 METRICS(iteration_successfull_queue.back().push_back(0);)
@@ -252,6 +255,7 @@ namespace HeiProMap {
                                     }
                                 }
                             endfor
+
                             best_initial_qap = std::max(best_initial_qap, best_qap_delta);
                             if (best_qap_delta != -std::numeric_limits<s64>::max()) {
                                 heap.push(neighbor, best_v_id, best_qap_delta);
@@ -311,6 +315,7 @@ namespace HeiProMap {
                         if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) { break; }
 
                         // we have to push or update the neighbors that were not moved already
+                        METRICS_TIME(sp_queue_update)
                         forall_guiv(g, vertex, i, neighbor)
                             {
                                 if (vertex_used[neighbor] == vertex_mark) { continue; }
@@ -338,11 +343,15 @@ namespace HeiProMap {
                                         }
                                     }
                                 endfor
+                            
                                 if (best_qap_delta != -std::numeric_limits<s64>::max()) {
                                     heap.push_update(neighbor, best_v_id, best_qap_delta);
                                 }
                             }
                         endfor
+                        METRICS_TIME(ep_queue_update)
+                        METRICS(iteration_time_queue_updates.back().back() += get_seconds(sp_queue_update, ep_queue_update);)
+                        METRICS(iteration_time_queue.back().back() -= get_seconds(sp_queue_update, ep_queue_update);)
                     }
 
                     METRICS_TIME(ep_queue)
@@ -352,15 +361,6 @@ namespace HeiProMap {
                     METRICS(iteration_time_successfull_queue.back().back() += (best_idx > 0) * get_seconds(sp_queue, ep_queue);)
                     METRICS(iteration_time_unsuccessfull_queue.back().back() += (best_idx == 0) * get_seconds(sp_queue, ep_queue);)
 
-                    /*
-                    if (best_idx == 0) {
-                        std::cout << "unsuccessful " << best_initial_qap << std::endl;
-                    }
-                    if (best_idx > 0) {
-                        std::cout << "  successful " << best_initial_qap << std::endl;
-                    }
-                    */
-
                     METRICS_TIME(sp_moves)
                     // revert all moves in partitioning manager
                     for (size_t i = 0; i < moves_size; i++) {
@@ -369,6 +369,7 @@ namespace HeiProMap {
                         partition_t vertex_id  = moves[moves_size - 1 - i].to_move_id;
                         partition_t move_id    = moves[moves_size - 1 - i].u_id;
 
+                        vertex_used[vertex] = vertex_mark + 1;
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                     }
 
@@ -379,6 +380,7 @@ namespace HeiProMap {
                         partition_t vertex_id  = moves[i].u_id;
                         partition_t move_id    = moves[i].to_move_id;
 
+                        vertex_used[vertex] = vertex_mark;
                         bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                         q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                         p_manager.move(vertex, vertex_weight, vertex_id, move_id);
@@ -403,6 +405,7 @@ namespace HeiProMap {
             std::vector<f64> level_time_get_boundary(iteration_time.size(), 0.0);
             std::vector<f64> level_time_initialize(iteration_time.size(), 0.0);
             std::vector<f64> level_time_queue(iteration_time.size(), 0.0);
+            std::vector<f64> level_time_queue_updates(iteration_time.size(), 0.0);
             std::vector<f64> level_time_moves(iteration_time.size(), 0.0);
             std::vector<s64> level_qap_delta(iteration_time.size(), 0);
             std::vector<s64> level_successfull_queue(iteration_time.size(), 0);
@@ -415,6 +418,7 @@ namespace HeiProMap {
                 level_time_get_boundary[i]        = sum<f64>(iteration_time_get_boundary[i]);
                 level_time_initialize[i]          = sum<f64>(iteration_time_initialize[i]);
                 level_time_queue[i]               = sum<f64>(iteration_time_queue[i]);
+                level_time_queue_updates[i]       = sum<f64>(iteration_time_queue_updates[i]);
                 level_time_moves[i]               = sum<f64>(iteration_time_moves[i]);
                 level_qap_delta[i]                = sum<s64>(iteration_qap_delta[i]);
                 level_successfull_queue[i]        = sum<s64>(iteration_successfull_queue[i]);
@@ -427,6 +431,7 @@ namespace HeiProMap {
             f64 global_time_get_boundary        = sum<f64>(level_time_get_boundary);
             f64 global_time_initialize          = sum<f64>(level_time_initialize);
             f64 global_time_queue               = sum<f64>(level_time_queue);
+            f64 global_time_queue_updates       = sum<f64>(level_time_queue_updates);
             f64 global_time_moves               = sum<f64>(level_time_moves);
             s64 global_qap_delta                = sum<s64>(level_qap_delta);
             s64 global_successfull_queue        = sum<s64>(level_successfull_queue);
@@ -438,6 +443,7 @@ namespace HeiProMap {
             stats += to_JSON_MACRO(global_time_get_boundary);
             stats += to_JSON_MACRO(global_time_initialize);
             stats += to_JSON_MACRO(global_time_queue);
+            stats += to_JSON_MACRO(global_time_queue_updates);
             stats += to_JSON_MACRO(global_time_moves);
             stats += to_JSON_MACRO(global_qap_delta);
             stats += to_JSON_MACRO(global_successfull_queue);
@@ -448,6 +454,7 @@ namespace HeiProMap {
             stats += to_JSON_MACRO(level_time_get_boundary);
             stats += to_JSON_MACRO(level_time_initialize);
             stats += to_JSON_MACRO(level_time_queue);
+            stats += to_JSON_MACRO(level_time_queue_updates);
             stats += to_JSON_MACRO(level_time_moves);
             stats += to_JSON_MACRO(level_qap_delta);
             stats += to_JSON_MACRO(level_successfull_queue);
@@ -458,6 +465,7 @@ namespace HeiProMap {
             stats += to_JSON_MACRO(iteration_time_get_boundary);
             stats += to_JSON_MACRO(iteration_time_initialize);
             stats += to_JSON_MACRO(iteration_time_queue);
+            stats += to_JSON_MACRO(iteration_time_queue_updates);
             stats += to_JSON_MACRO(iteration_time_moves);
             stats += to_JSON_MACRO(iteration_qap_delta);
             stats += to_JSON_MACRO(iteration_successfull_queue);
