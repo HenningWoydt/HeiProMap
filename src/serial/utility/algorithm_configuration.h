@@ -601,16 +601,32 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
+            global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
             label_propagation_config.enabled       = false;
             label_propagation_config.max_iteration = 1;
 
+            // enable multi-try fm
+            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.max_iteration = 2;
+            multi_try_fm_refinement_config.alpha         = 100.0;
+
+            // enable quotient graph refinement
+            quotient_graph_refinement_config.enabled       = false;
+            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.alpha         = 100.0;
+
             // enable k-way fm
             k_way_fm_refinement_config.enabled       = true;
             k_way_fm_refinement_config.max_iteration = 1;
+            k_way_fm_refinement_config.alpha         = 100.0;
+
+            // enable experimental refinement
+            hierarchy_aware_k_way_fm_config.enabled       = true;
+            hierarchy_aware_k_way_fm_config.max_iteration = 1;
+            hierarchy_aware_k_way_fm_config.alpha         = 100;
         }
 
         void set_eco() {
@@ -657,9 +673,9 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled       = true;
             quotient_graph_refinement_config.max_iteration = 1;
-            quotient_graph_refinement_config.alpha = 100.0;
+            quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled = false;
