@@ -712,9 +712,10 @@ namespace HeiProMap {
             // enable k-way fm
             k_way_fm_refinement_config.enabled       = false;
             k_way_fm_refinement_config.max_iteration = 1;
+            k_way_fm_refinement_config.alpha         = 100.0;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = true;
+            multi_try_fm_refinement_config.enabled       = false;
             multi_try_fm_refinement_config.max_iteration = 2;
             multi_try_fm_refinement_config.alpha         = 100.0;
 
@@ -729,9 +730,9 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable experimental refinement
-            hierarchy_aware_k_way_fm_config.enabled       = true;
+            hierarchy_aware_k_way_fm_config.enabled       = false;
             hierarchy_aware_k_way_fm_config.max_iteration = 1;
-            hierarchy_aware_k_way_fm_config.alpha         = 100;
+            hierarchy_aware_k_way_fm_config.alpha         = 100.0;
         }
 
         /**
