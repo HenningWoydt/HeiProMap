@@ -40,7 +40,6 @@ namespace HeiProMap {
     class HierarchyAwareKWayFMConfiguration final : public ISerialRefinerConfiguration {
     public:
         explicit HierarchyAwareKWayFMConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
-
         u64 max_iteration = 1; // how many iterations to run the algorithm at most
         f64 alpha         = 10.0;
         f64 beta          = 1.0;
@@ -205,9 +204,7 @@ namespace HeiProMap {
                     if (vertex_used[vertex] == vertex_marker) { continue; }
                     if (islands_weight[move_island_id] + vertex_weight > island_lmax) { continue; }
 
-                    bool is_connected_move_id;
-                    s64 temp_qap_delta = get_u_qap_delta_and_is_connected_to(g, vertex, vertex_id, move_id, is_connected_move_id, p_manager, d_oracle);
-                    if (!is_connected_move_id) { continue; }
+                    s64 temp_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);
                     if (temp_qap_delta != move.qap_delta) { continue; }
 
                     moves[moves_size++] = Move(vertex, vertex_id, move_id);
@@ -287,10 +284,7 @@ namespace HeiProMap {
                     p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 }
 
-                // now we have to rebalance the actual blocks and spend at most qap_gain to do so
-                // if (level == 0) {
-                    k_way_rebalancer.rebalance(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph);
-                // }
+                k_way_rebalancer.rebalance(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph);
             }
         }
 

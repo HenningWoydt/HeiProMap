@@ -165,9 +165,7 @@ namespace HeiProMap {
                     if (vertex_used[vertex] == vertex_marker) { continue; }
                     if (p_manager.get_bweight(move_id) + vertex_weight > m_lmax) { continue; }
 
-                    bool is_connected_move_id;
-                    s64 temp_qap_delta = get_u_qap_delta_and_is_connected_to(g, vertex, vertex_id, move_id, is_connected_move_id, p_manager, d_oracle);
-                    if (!is_connected_move_id) { continue; }
+                    s64 temp_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);
                     if (temp_qap_delta != move.qap_delta) { continue; }
 
                     moves[moves_size++] = Move(vertex, vertex_id, move_id);
