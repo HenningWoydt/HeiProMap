@@ -62,13 +62,14 @@ int main(const int argc, char* argv[]) {
                     {"--hierarchy", "4:8:6"},
                     {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "experimental"},
+                    {"--config", "fastest"},
                     {"--seed", "0"},
 
                     // coarsening
                     // {"--coarsening-algorithm", "heavy-matching"},
                     // {"--coarsening-algorithm", "greedy-matching"},
                     {"--coarsening-algorithm", "global-paths"},
+                    // {"--coarsening-algorithm", "random-matching"},
 
                     // coarsening - greedy configuration
                     {"--coarsening-algorithm-greedy-matching-pendant-first", "0"},

@@ -269,7 +269,6 @@ namespace HeiProMap {
 
         void initialize(const Graph64& g,
                         Matching& matching) {
-            matching.set_partners();
             matching.set_translation();
 
             m_n = matching.get_n_coarse_nodes();

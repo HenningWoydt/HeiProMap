@@ -129,7 +129,7 @@ namespace HeiProMap {
     public:
         EdgeUVW() = default;
 
-        EdgeUVW(const vertex_t u, const vertex_t v, const f64 w) : u(u), v(v), w(w) {}
+        EdgeUVW(const vertex_t u, const vertex_t v, const f32 w) : u(u), v(v), w(w) {}
 
         bool operator<(const EdgeUVW& e) const {
             return w < e.w;

@@ -29,11 +29,13 @@
 
 #include "datastructures/distance_oracle.h"
 #include "datastructures/graph.h"
+#include "datastructures/graph_split.h"
 #include "datastructures/graph_64.h"
+#include "datastructures/graph_split_64.h"
 
 namespace HeiProMap {
-    typedef Graph               graph_t;
-    typedef DistanceOracle      d_oracle_t;
+    typedef GraphSplit graph_t;
+    typedef DistanceOracle d_oracle_t;
 
     // Macro to iterate over the neighborhood of vertex u of a graph
 #define forall_guivw(g, u, i, v, w) for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.weight(u, i);

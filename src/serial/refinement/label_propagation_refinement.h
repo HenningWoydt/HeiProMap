@@ -257,40 +257,6 @@ namespace HeiProMap {
                 global_n_0gain_moves += temp_n_0gain_moves;
 #endif
             }
-
-#if COLLECT_METRICS
-            std::string stats = "{ \n";
-            f64 global_qap_delta_per_s = (f64) global_qap_delta / global_time;
-            f64 level_qap_delta_per_s = (f64) level_qap_delta / level_time;
-            stats += to_JSON_MACRO(global_time);
-            stats += to_JSON_MACRO(global_time_get_boundary);
-            stats += to_JSON_MACRO(global_time_iterate);
-            stats += to_JSON_MACRO(global_qap_delta);
-            stats += to_JSON_MACRO(global_qap_delta_per_s);
-            stats += to_JSON_MACRO(global_n_pos_moves);
-            stats += to_JSON_MACRO(global_n_0gain_moves);
-            stats += to_JSON_MACRO(level_time);
-            stats += to_JSON_MACRO(level_time_get_boundary);
-            stats += to_JSON_MACRO(level_time_iterate);
-            stats += to_JSON_MACRO(level_qap_delta);
-            stats += to_JSON_MACRO(level_qap_delta_per_s);
-            stats += to_JSON_MACRO(level_n_pos_moves);
-            stats += to_JSON_MACRO(level_n_0gain_moves);
-            stats += to_JSON_MACRO(iteration_time);
-            stats += to_JSON_MACRO(iteration_time_get_boundary);
-            stats += to_JSON_MACRO(iteration_time_iterate);
-            stats += to_JSON_MACRO(iteration_qap_delta);
-            stats += to_JSON_MACRO(iteration_n_pos_moves);
-            stats += to_JSON_MACRO(iteration_n_0gain_moves);
-
-            stats.pop_back();
-            stats.pop_back();
-            stats += "\n}";
-            JSONString json_stats;
-            json_stats.s       = stats;
-            std::string method = "Label Propagation";
-            m_stat_collector->add_refinement_method_stats(level, method, json_stats);
-#endif
         }
 
         JSONString get_stats() override { return {}; };

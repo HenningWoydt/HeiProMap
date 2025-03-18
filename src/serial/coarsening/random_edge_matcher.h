@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_HEAVY_EDGE_MATCHER_H
-#define HEIPROMAP_HEAVY_EDGE_MATCHER_H
+#ifndef HEIPROMAP_RANDOM_EDGE_MATCHER_H
+#define HEIPROMAP_RANDOM_EDGE_MATCHER_H
 
 #include <vector>
 
@@ -35,26 +35,25 @@
 #include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    class HeavyEdgeMatcherConfiguration final : public ISerialMatcherConfiguration {
+    class RandomEdgeMatcherConfiguration final : public ISerialMatcherConfiguration {
     public:
-        bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
-    class HeavyEdgeMatcher final : public ISerialMatcher {
+    class RandomEdgeMatcher final : public ISerialMatcher {
         vertex_t m_n     = 0;
         vertex_t m_m     = 0;
         partition_t m_k  = 0;
         weight_t m_l_max = 0;
 
-        const HeavyEdgeMatcherConfiguration* config = nullptr;
-        RandomEngine* random_engine                 = nullptr;
-        StatisticCollector* m_stat_collector        = nullptr;
+        const RandomEdgeMatcherConfiguration* config = nullptr;
+        RandomEngine* random_engine                  = nullptr;
+        StatisticCollector* m_stat_collector         = nullptr;
 
         u32 mark = 0;
         std::vector<u32> used;
 
     public:
-        HeavyEdgeMatcher() = default;
+        RandomEdgeMatcher() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -68,7 +67,7 @@ namespace HeiProMap {
             m_k     = t_k;
             m_l_max = t_l_max;
 
-            config           = dynamic_cast<const HeavyEdgeMatcherConfiguration*>(&i_config);
+            config           = dynamic_cast<const RandomEdgeMatcherConfiguration*>(&i_config);
             random_engine    = &t_random_engine;
             m_stat_collector = &t_stat_collect;
 
@@ -81,37 +80,13 @@ namespace HeiProMap {
                    Matching& matching) override {
             mark += 1;
 
-            if (config->match_pendant_vertices_first) {
-                // first check vertices with degree 1
-                forall_gu(g, u)
-                    {
-                        if (used[u] == mark) { continue; }
-                        if (g.size(u) != 1) { continue; }
-
-                        vertex_t v = g.neighbor(u, 0);
-
-                        if (used[v] == mark) { continue; }
-
-                        weight_t u_w = g.weight(u);
-                        weight_t v_w = g.weight(v);
-
-                        if (u_w + v_w > m_l_max) { continue; }
-
-                        matching.add(u, v);
-                    }
-                endfor
-            }
-
-            // check all other vertices
             forall_gu(g, u)
                 {
                     if (used[u] == mark) { continue; }
 
-                    weight_t u_w        = g.weight(u);
-                    vertex_t best_v     = u;
-                    weight_t max_weight = 0;
+                    weight_t u_w = g.weight(u);
 
-                    forall_guivw(g, u, j, v, w)
+                    forall_guiv(g, u, j, v)
                         {
                             if (used[v] == mark) { continue; }
 
@@ -119,19 +94,13 @@ namespace HeiProMap {
 
                             if (u_w + v_w > m_l_max) { continue; }
 
-                            if (w > max_weight) {
-                                best_v     = v;
-                                max_weight = w;
-                            }
+                            used[u] = mark;
+                            used[v] = mark;
+
+                            matching.add(u, v);
+                            break;
                         }
                     endfor
-
-                    if (best_v != u) {
-                        used[u]      = mark;
-                        used[best_v] = mark;
-
-                        matching.add(u, best_v);
-                    }
                 }
             endfor
 
@@ -165,4 +134,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_HEAVY_EDGE_MATCHER_H
+#endif //HEIPROMAP_RANDOM_EDGE_MATCHER_H

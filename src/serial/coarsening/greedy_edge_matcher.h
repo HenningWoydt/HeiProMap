@@ -184,6 +184,10 @@ namespace HeiProMap {
             }
 #endif
         }
+
+        JSONString get_stats() override {
+            return {};
+        }
     };
 }
 

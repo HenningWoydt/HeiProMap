@@ -48,6 +48,7 @@ namespace HeiProMap {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GREEDY_MATCHING,
         COARSENING_ALG_HEAVY_MATCHING,
+        COARSENING_ALG_RANDOM_MATCHING,
         COARSENING_ALG_GLOBAL_PATHS,
     };
 
@@ -55,6 +56,7 @@ namespace HeiProMap {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
         if (str == "greedy-matching") return COARSENING_ALG_GREEDY_MATCHING;
         if (str == "heavy-matching") return COARSENING_ALG_HEAVY_MATCHING;
+        if (str == "random-matching") return COARSENING_ALG_RANDOM_MATCHING;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
         return COARSENING_ALG_UNDEFINED;
     }
@@ -67,6 +69,8 @@ namespace HeiProMap {
             return "greedy-matching";
         case COARSENING_ALG_HEAVY_MATCHING:
             return "heavy-matching";
+        case COARSENING_ALG_RANDOM_MATCHING:
+            return "random-matching";
         case COARSENING_ALG_GLOBAL_PATHS:
             return "global-paths";
         default:
@@ -136,7 +140,7 @@ namespace HeiProMap {
                 {"--seed", "", "Seed for diversifying results.", "", "", false},
 
                 /** Coarsening */
-                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, global-paths}.", "global-paths", "", false},
+                {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, random-matching, global-paths}.", "global-paths", "", false},
 
                 // Coarsening global-path
                 {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
@@ -227,6 +231,7 @@ namespace HeiProMap {
         GreedyEdgeMatcherConfiguration greedy_edge_matcher_config;
         HeavyEdgeMatcherConfiguration heavy_edge_matcher_config;
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
+        RandomEdgeMatcherConfiguration random_edge_matcher_config;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;

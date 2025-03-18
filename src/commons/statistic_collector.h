@@ -60,7 +60,7 @@ namespace HeiProMap {
         std::vector<f64> matching_time      = {0};
         std::vector<vertex_t> matching_size = {0};
         vertex_t total_matching_size        = 0;
-        std::vector<JSONString> matching_method_stats;
+        JSONString matching_method_stats;
 
         // coarsening
         f64 total_coarsening_time = 0.0;
@@ -74,7 +74,7 @@ namespace HeiProMap {
 
         // refinement
         f64 total_refinement_time = 0.0;
-        std::vector<std::map<std::string, JSONString>> refinement_method_stats;
+        std::map<std::string, JSONString> refinement_method_stats;
         std::vector<f64> refinement_time    = {0.0};
         std::vector<u64> refinement_end_qap = {0};
 
@@ -153,18 +153,12 @@ namespace HeiProMap {
             refinement_end_qap[level] = objective;
         }
 
-        void add_refinement_method_stats(const u64 level, const std::string& method, const JSONString& stats) {
-            if (level + 1  > refinement_method_stats.size()) {
-                refinement_method_stats.resize(level + 1, std::map<std::string, JSONString>());
-            }
-            refinement_method_stats[level].emplace(method, stats);
+        void add_refinement_method_stats(const std::string& method, const JSONString& stats) {
+            refinement_method_stats.emplace(method, stats);
         }
 
-        void add_matching_method_stats(const u64 level, const JSONString& stats) {
-            if (level + 1  > matching_method_stats.size()) {
-                matching_method_stats.resize(level + 1);
-            }
-            matching_method_stats[level] = stats;
+        void add_matching_method_stats(const JSONString& stats) {
+            matching_method_stats = stats;
         }
 
         void set_partition_time(const f64 time) { total_partition_time = time; }

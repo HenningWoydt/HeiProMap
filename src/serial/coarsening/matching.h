@@ -56,6 +56,7 @@ namespace HeiProMap {
             matches_size = 0;
 
             partner = (vertex_t*)aligned_alloc(64, n_64 * sizeof(vertex_t));
+            std::iota(partner, partner + n_64, 0);
 
             tt.reserve(n, n);
         }
@@ -87,6 +88,8 @@ namespace HeiProMap {
         void add(vertex_t u, vertex_t v) {
             ASSERT(matches_size < (m_n / 2));
             matches[matches_size++] = {u, v};
+            partner[u]  = v;
+            partner[v]  = u;
         }
 
         EdgeUV operator[](size_t i) const {
@@ -97,16 +100,6 @@ namespace HeiProMap {
         size_t size() const { return matches_size; }
 
         vertex_t get_n() const { return m_n; }
-
-        void set_partners() {
-            std::iota(partner, partner + m_n, 0);
-
-            for (size_t i = 0; i < matches_size; ++i) {
-                auto [u, v] = matches[i];
-                partner[u]  = v;
-                partner[v]  = u;
-            }
-        }
 
         void clear() {
             matches_size = 0;

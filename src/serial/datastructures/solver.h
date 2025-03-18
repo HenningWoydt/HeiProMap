@@ -43,6 +43,7 @@
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../coarsening/matching.h"
+#include "../coarsening/random_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../refinement/label_propagation_refinement_Faraj20.h"
@@ -59,46 +60,47 @@ namespace HeiProMap {
      */
     class Solver {
         AlgorithmConfiguration ac;
-        RandomEngine            random_engine;
+        RandomEngine random_engine;
 
         // statistics
-        StatisticCollector                             stat_collect;
-        SmallStatisticCollector                        small_stat_collect;
-        s64                                            initial_qap = 0;
+        StatisticCollector stat_collect;
+        SmallStatisticCollector small_stat_collect;
+        s64 initial_qap = 0;
         std::chrono::high_resolution_clock::time_point sp;
 
-        std::vector<graph_t>  graphs;
-        PartitionManager      p_manager;
+        std::vector<graph_t> graphs;
+        PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph         q_graph;
-        DistanceOracle        d_oracle;
+        QuotientGraph q_graph;
+        DistanceOracle d_oracle;
 
         // balance
         weight_t lmax = 0;
 
         // matching
-        std::vector<Matching>      matches;
-        GreedyEdgeMatcher          ge_matcher;
-        HeavyEdgeMatcher           he_matcher;
+        std::vector<Matching> matches;
+        GreedyEdgeMatcher ge_matcher;
+        HeavyEdgeMatcher he_matcher;
+        RandomEdgeMatcher rnd_matcher;
         GlobalPathAlgorithmMatcher gpa_matcher;
 
         // refinement
-        LabelPropagationRefinementFaraj20     lp_refine_faraj20;
-        LabelPropagationRefinement            lp_refine;
-        TwoVertexLabelPropagationRefinement   two_vertex_lp_refine;
+        LabelPropagationRefinementFaraj20 lp_refine_faraj20;
+        LabelPropagationRefinement lp_refine;
+        TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
         ThreeVertexLabelPropagationRefinement three_vertex_lp_refine;
-        QuotientGraphRefinementFaraj20        qg_refine_faraj20;
-        QuotientGraphRefinement               qg_refine;
-        KWayFMRefinementFaraj20               k_way_refine_faraj20;
-        KWayFMRefinement                      k_way_refine;
-        MultiTryFMRefinementFaraj20           multi_try_fm_refinement_faraj20;
-        MultiTryFMRefinement                  multi_try_fm_refinement;
-        HierarchyAwareKWayFMRefinement        hierarchy_aware_fm_refinement;
+        QuotientGraphRefinementFaraj20 qg_refine_faraj20;
+        QuotientGraphRefinement qg_refine;
+        KWayFMRefinementFaraj20 k_way_refine_faraj20;
+        KWayFMRefinement k_way_refine;
+        MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
+        MultiTryFMRefinement multi_try_fm_refinement;
+        HierarchyAwareKWayFMRefinement hierarchy_aware_fm_refinement;
 
-        std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
+        std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
     public:
-        explicit Solver(const AlgorithmConfiguration &t_ac) {
+        explicit Solver(const AlgorithmConfiguration& t_ac) {
             sp = std::chrono::high_resolution_clock::now();
 
             ac            = t_ac;
@@ -111,7 +113,7 @@ namespace HeiProMap {
 
             const auto sp_io = std::chrono::high_resolution_clock::now();
             // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].weight() / (f64) ac.k));
+            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].weight() / (f64)ac.k));
 
             // manager
             p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
@@ -125,6 +127,7 @@ namespace HeiProMap {
             // matching
             ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
             he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
+            rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config, stat_collect);
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config, stat_collect);
 
             // refinement
@@ -141,7 +144,7 @@ namespace HeiProMap {
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_k_way_fm_config);
 
-            for (auto &[refiner, config]: refinements) {
+            for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
                 }
@@ -163,13 +166,13 @@ namespace HeiProMap {
             METRICS(stat_file << stat_collect.to_JSON();)
 
             std::vector<partition_t> p(graphs.back().get_n());
-            for (vertex_t            u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
+            for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
             write_partition(p, ac.mapping_out);
 
             small_stat_collect.print();
 
-            const auto ep       = std::chrono::high_resolution_clock::now();
-            f64        duration = get_seconds(sp, ep);
+            const auto ep = std::chrono::high_resolution_clock::now();
+            f64 duration  = get_seconds(sp, ep);
 
             std::cout << "Total time   : " << duration << std::endl;
             std::cout << "Initial QAP  : " << initial_qap << std::endl;
@@ -206,9 +209,10 @@ namespace HeiProMap {
                 refinement(level, max_level);
             }
 
-            for (auto [refiner, config]: refinements) {
+            METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
+            for (auto [refiner, config] : refinements) {
                 if (config->enabled) {
-                    METRICS(stat_collect.add_refinement_method_stats(0, config->name, refiner->get_stats());)
+                    METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
                 }
             }
         }
@@ -266,6 +270,8 @@ namespace HeiProMap {
                 ge_matcher.match(level, graphs.back(), matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
                 he_matcher.match(level, graphs.back(), matches.back());
+            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
+                rnd_matcher.match(level, graphs.back(), matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(level, graphs.back(), matches.back());
             } else {
@@ -314,15 +320,15 @@ namespace HeiProMap {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
-            for (auto [refiner, config]: refinements) {
+            for (auto [refiner, config] : refinements) {
                 if (config->enabled) {
                     const auto sp = std::chrono::high_resolution_clock::now();
 
                     refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
 
-                    const auto        ep        = std::chrono::high_resolution_clock::now();
+                    const auto ep = std::chrono::high_resolution_clock::now();
                     SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
-                    s64               qap_delta = 0;
+                    s64 qap_delta = 0;
                     SMALL_METRICS(qap_delta = qap_before - qap_after;)
 
                     small_stat_collect.add_refinement(config->name, get_seconds(sp, ep), qap_delta);
