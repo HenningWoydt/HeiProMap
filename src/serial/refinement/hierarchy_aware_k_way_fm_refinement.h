@@ -72,6 +72,9 @@ namespace HeiProMap {
         // IndexedMaxHeap<KWayFMMove> heap;
         std::priority_queue<KWayFMMove> heap;
 
+        Move* moves       = nullptr;
+        size_t moves_size = 0;
+
         KWayRebalancer k_way_rebalancer;
 
         RandomEngine* random_engine                     = nullptr;
@@ -84,6 +87,7 @@ namespace HeiProMap {
         ~HierarchyAwareKWayFMRefinement() override {
             free(vertex_used);
             free(block_used);
+            free(moves);
         }
 
         void initialize(const vertex_t t_n,
@@ -116,6 +120,9 @@ namespace HeiProMap {
             block_used = (u32*)aligned_alloc(64, t_k_64 * sizeof(u32));
             std::fill_n(block_used, t_k_64, 0);
             block_marker = 0;
+
+            moves      = (Move*)aligned_alloc(64, t_n_64 * sizeof(Move));
+            moves_size = 0;
 
             k_way_rebalancer.initialize(t_n, t_m, t_k, t_lmax, t_hierarchy, t_distance, t_random_engine, t_stat_collect);
         }
@@ -174,7 +181,7 @@ namespace HeiProMap {
                 endfor
 
                 // start moving the vertices on the blocks on the island
-                std::vector<KWayFMMove> moves;
+                moves_size        = 0;
                 size_t best_idx   = 0;
                 s64 max_qap_gain  = 0;
                 s64 curr_qap_gain = 0;
@@ -203,10 +210,10 @@ namespace HeiProMap {
                     if (!is_connected_move_id) { continue; }
                     if (temp_qap_delta != move.qap_delta) { continue; }
 
-                    moves.push_back(move);
+                    moves[moves_size++] = Move(vertex, vertex_id, move_id);
                     curr_qap_gain += move.qap_delta;
                     if (curr_qap_gain > max_qap_gain) {
-                        best_idx     = moves.size();
+                        best_idx     = moves_size;
                         max_qap_gain = curr_qap_gain;
 
                         steps_since_last_improvement = 0.0;
@@ -259,11 +266,11 @@ namespace HeiProMap {
                 }
 
                 // revert all moves in partitioning manager
-                for (size_t i = 0; i < moves.size(); i++) {
-                    vertex_t vertex        = moves[moves.size() - 1 - i].u;
+                for (size_t i = 0; i < moves_size; i++) {
+                    vertex_t vertex        = moves[moves_size - 1 - i].u;
                     weight_t vertex_weight = g.weight(vertex);
-                    partition_t vertex_id  = moves[moves.size() - 1 - i].to_move_id;
-                    partition_t move_id    = moves[moves.size() - 1 - i].u_id;
+                    partition_t vertex_id  = moves[moves_size - 1 - i].to_move_id;
+                    partition_t move_id    = moves[moves_size - 1 - i].u_id;
 
                     p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 }
@@ -281,9 +288,9 @@ namespace HeiProMap {
                 }
 
                 // now we have to rebalance the actual blocks and spend at most qap_gain to do so
-                if (level == 0) {
+                // if (level == 0) {
                     k_way_rebalancer.rebalance(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph);
-                }
+                // }
             }
         }
 
