@@ -624,9 +624,9 @@ namespace HeiProMap {
             k_way_fm_refinement_config.alpha         = 100.0;
 
             // enable experimental refinement
-            hierarchy_aware_k_way_fm_config.enabled       = true;
+            hierarchy_aware_k_way_fm_config.enabled       = false;
             hierarchy_aware_k_way_fm_config.max_iteration = 1;
-            hierarchy_aware_k_way_fm_config.alpha         = 100;
+            hierarchy_aware_k_way_fm_config.alpha         = 100.0;
         }
 
         void set_eco() {
