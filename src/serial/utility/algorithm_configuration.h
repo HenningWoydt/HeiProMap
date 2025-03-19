@@ -635,7 +635,7 @@ namespace HeiProMap {
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.random_level = 0;
 
             // set multisection
             partitioning_algorithm_string          = "multisection";
@@ -660,7 +660,7 @@ namespace HeiProMap {
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.random_level = 0;
 
             // set multisection
             partitioning_algorithm_string          = "multisection";
