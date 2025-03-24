@@ -197,7 +197,7 @@ namespace HeiProMap {
                 {"--refinement-multi-try-fm-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "1", "", false},
 
                 // Refinement Hierarchy Aware Cycles
-                {"--refinement-hierarchy-aware-fm-enable", "", "Enables the Hierarchy Aware FM refinement.", "0", "", false},
+                {"--refinement-hierarchy-aware-multi-way-fm-enable", "", "Enables the Hierarchy Aware Multi-Way FM refinement.", "0", "", false},
 
                 // Refinement Two Vertex Label Propagation
                 {"--refinement-two-vertex-label-propagation-enable", "", "Enables Label Propagation with two vertices.", "0", "", false},
@@ -258,7 +258,7 @@ namespace HeiProMap {
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
         FlowBasedRefinementConfiguration flow_based_refinement_config                  = FlowBasedRefinementConfiguration("Flow Based");
 
-        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_k_way_fm_config = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
+        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
 
         AlgorithmConfiguration() = default;
 
@@ -402,8 +402,8 @@ namespace HeiProMap {
             }
 
             // initialize hierarchy aware k way fm refinement
-            if (use_default || is_set("--refinement-hierarchy-aware-fm-enable")) {
-                hierarchy_aware_k_way_fm_config.enabled = get("--refinement-hierarchy-aware-fm-enable") == "1";
+            if (use_default || is_set("--refinement-hierarchy-aware-multi-way-fm-enable")) {
+                hierarchy_aware_multi_way_fm_config.enabled = get("--refinement-hierarchy-aware-multi-way-fm-enable") == "1";
             }
 
             // initialize two vertex label propagation
@@ -625,9 +625,9 @@ namespace HeiProMap {
             k_way_fm_refinement_config.alpha         = 100.0;
 
             // enable experimental refinement
-            hierarchy_aware_k_way_fm_config.enabled       = false;
-            hierarchy_aware_k_way_fm_config.max_iteration = 1;
-            hierarchy_aware_k_way_fm_config.alpha         = 100.0;
+            hierarchy_aware_multi_way_fm_config.enabled       = false;
+            hierarchy_aware_multi_way_fm_config.max_iteration = 1;
+            hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
         }
 
         void set_eco() {
@@ -731,9 +731,9 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_k_way_fm_config.enabled       = true;
-            hierarchy_aware_k_way_fm_config.max_iteration = 10;
-            hierarchy_aware_k_way_fm_config.alpha         = 100.0;
+            hierarchy_aware_multi_way_fm_config.enabled       = true;
+            hierarchy_aware_multi_way_fm_config.max_iteration = 1;
+            hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = false;

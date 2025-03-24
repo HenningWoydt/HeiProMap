@@ -152,7 +152,7 @@ namespace HeiProMap {
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
 
-            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_k_way_fm_config);
+            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
