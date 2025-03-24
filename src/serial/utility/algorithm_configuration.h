@@ -34,7 +34,7 @@
 #include "../../commons/utils.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
-#include "../refinement/hierarchy_aware_k_way_fm_refinement.h"
+#include "../refinement/hierarchy_aware_multi_way_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
 #include "../refinement/k_way_fm_refinement_Faraj20.h"
 #include "../refinement/label_propagation_refinement.h"
@@ -254,10 +254,11 @@ namespace HeiProMap {
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config          = QuotientGraphRefinementConfiguration("Quotient Graph");
         KWayFMRefinementConfiguration k_way_fm_refinement_config                       = KWayFMRefinementConfiguration("K-Way-FM");
         MultiTryFmRefinementConfiguration multi_try_fm_refinement_config               = MultiTryFmRefinementConfiguration("Multi Try-FM");
-        HierarchyAwareKWayFMConfiguration hierarchy_aware_k_way_fm_config              = HierarchyAwareKWayFMConfiguration("Hierarchy Aware K-Way-FM");
         TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config     = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
+        FlowBasedRefinementConfiguration flow_based_refinement_config                  = FlowBasedRefinementConfiguration("Flow Based");
 
+        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_k_way_fm_config = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
 
         AlgorithmConfiguration() = default;
 
@@ -669,7 +670,7 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = false;
+            label_propagation_config.enabled       = true;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
@@ -678,7 +679,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
+            k_way_fm_refinement_config.enabled = true;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
@@ -692,7 +693,7 @@ namespace HeiProMap {
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.random_level = 0;
 
             // set multisection
             partitioning_algorithm_string          = "multisection";
@@ -705,8 +706,8 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = false;
-            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
@@ -729,10 +730,13 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.max_iteration = 2;
             three_vertex_label_propagation_config.last_n_levels = 2;
 
-            // enable experimental refinement
-            hierarchy_aware_k_way_fm_config.enabled       = false;
-            hierarchy_aware_k_way_fm_config.max_iteration = 1;
+            // enable hierarchy aware k-way fm refinement
+            hierarchy_aware_k_way_fm_config.enabled       = true;
+            hierarchy_aware_k_way_fm_config.max_iteration = 10;
             hierarchy_aware_k_way_fm_config.alpha         = 100.0;
+
+            // enable flow based refinement
+            flow_based_refinement_config.enabled = false;
         }
 
         /**

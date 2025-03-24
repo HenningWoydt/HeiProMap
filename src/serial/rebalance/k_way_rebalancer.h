@@ -45,6 +45,9 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
 
+        u32* vertex_used = nullptr;
+        u32 vertex_mark  = 0;
+
         u32* block_used  = nullptr;
         u32 block_marker = 0;
 
@@ -69,7 +72,12 @@ namespace HeiProMap {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
+            vertex_t t_n_64 = round_up_64(t_n);
             vertex_t t_k_64 = round_up_64(t_k);
+
+            vertex_used = (u32*)aligned_alloc(64, sizeof(u32) * t_n_64);
+            std::fill_n(vertex_used, t_n_64, 0);
+            vertex_mark = 0;
 
             block_used = (u32*)aligned_alloc(64, t_k_64 * sizeof(u32));
             std::fill_n(block_used, t_k_64, 0);
@@ -86,97 +94,98 @@ namespace HeiProMap {
                        bv_manager_t& bv_manager,
                        p_manager_t& p_manager,
                        q_graph_t& q_graph) {
-            if (!p_manager.is_overloaded()) {
-                return;
-            }
+            while (p_manager.is_overloaded()) {
+                std::vector<std::priority_queue<KWayFMMove>> heaps(m_k);
 
-            std::vector<std::priority_queue<KWayFMMove>> heaps(m_k);
-
-            // for each overloaded block collect the boundary vertices
-            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                forall_bv_id_iu(bv_manager, u_id, i, u)
-                    {
-                        weight_t u_weight = g.weight(u);
-
-                        block_marker += 1;
-                        forall_guiv(g, u, j, v)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (v_id == u_id) { continue; }
-                                if (block_used[v_id] == block_marker) { continue; }
-                                if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
-
-                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                                heaps[u_id].emplace(u, u_id, v_id, qap_delta);
-                                block_used[v_id] = block_marker;
-                            }
-                        endfor
-                    }
-                endfor
-            }
-
-            // make a move from the highest overloaded block
-            while (true) {
-                if (!p_manager.is_overloaded()) { break; }
-
-                partition_t o_id  = std::numeric_limits<partition_t>::max();
-                weight_t o_weight = -std::numeric_limits<weight_t>::max();
-
-                for (partition_t id = 0; id < m_k; ++id) {
-                    if (p_manager.get_bweight(id) > m_lmax && p_manager.get_bweight(id) > o_weight) {
-                        o_id     = id;
-                        o_weight = p_manager.get_bweight(id);
-                    }
-                }
-
-                while (!heaps[o_id].empty()) {
-                    const KWayFMMove move = heaps[o_id].top();
-                    heaps[o_id].pop();
-
-                    vertex_t vertex        = move.u;
-                    partition_t vertex_id  = p_manager[vertex];
-                    weight_t vertex_weight = g.weight(vertex);
-                    partition_t move_id    = move.to_move_id;
-
-                    if (vertex_id != move.u_id) { continue; }
-                    if (!bv_manager.is_boundary(vertex)) { continue; }
-
-                    bool is_connected_move_id;
-                    s64 temp_qap_delta = get_u_qap_delta_and_is_connected_to(g, vertex, vertex_id, move_id, is_connected_move_id, p_manager, d_oracle);
-                    if (!is_connected_move_id) { continue; }
-                    if (temp_qap_delta != move.qap_delta) { continue; }
-
-                    // make move in structures
-                    bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
-                    q_graph.move(g, p_manager, vertex, vertex_id, move_id);
-                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
-
-                    if (!p_manager.is_overloaded()) { break; }
-
-                    // we have to push or update the neighbors that were not moved already
-                    forall_guiv(g, vertex, i, neighbor)
+                // for each block collect the boundary vertices
+                for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                    forall_bv_id_iu(bv_manager, u_id, i, u)
                         {
-                            if (!bv_manager.is_boundary(neighbor)) { continue; }
-
-                            partition_t neighbor_id  = p_manager[neighbor];
-                            weight_t neighbor_weight = g.weight(neighbor);
+                            weight_t u_weight = g.weight(u);
 
                             block_marker += 1;
-                            forall_guiv(g, neighbor, j, v)
+                            forall_guiv(g, u, j, v)
                                 {
                                     partition_t v_id = p_manager[v];
-                                    if (v_id == neighbor_id) { continue; }
+                                    if (v_id == u_id) { continue; }
                                     if (block_used[v_id] == block_marker) { continue; }
-                                    if (p_manager.get_bweight(v_id) + neighbor_weight > m_lmax) { continue; }
+                                    if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
 
-                                    s64 qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
-                                    heaps[neighbor_id].emplace(neighbor, neighbor_id, v_id, qap_delta);
+                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                    heaps[u_id].emplace(u, u_id, v_id, qap_delta);
                                     block_used[v_id] = block_marker;
                                 }
                             endfor
                         }
                     endfor
-                    break;
+                }
+
+                vertex_mark += 1;
+                while (p_manager.is_overloaded()) {
+                    // determine the most overloaded block
+                    partition_t o_id  = std::numeric_limits<partition_t>::max();
+                    weight_t o_weight = -std::numeric_limits<weight_t>::max();
+
+                    for (partition_t id = 0; id < m_k; ++id) {
+                        if (p_manager.get_bweight(id) > m_lmax && p_manager.get_bweight(id) > o_weight && !heaps[id].empty()) {
+                            o_id     = id;
+                            o_weight = p_manager.get_bweight(id);
+                        }
+                    }
+
+                    if (o_weight == -std::numeric_limits<weight_t>::max()) {
+                        break;
+                    }
+
+                    while (!heaps[o_id].empty()) {
+                        const KWayFMMove move = heaps[o_id].top();
+                        heaps[o_id].pop();
+
+                        vertex_t vertex        = move.u;
+                        partition_t vertex_id  = p_manager[vertex];
+                        weight_t vertex_weight = g.weight(vertex);
+                        partition_t move_id    = move.to_move_id;
+
+                        if (vertex_used[vertex] == vertex_mark) { continue; }
+                        if (vertex_id != move.u_id) { continue; }
+                        if (!bv_manager.is_boundary(vertex)) { continue; }
+
+                        bool is_connected_move_id;
+                        s64 temp_qap_delta = get_u_qap_delta_and_is_connected_to(g, vertex, vertex_id, move_id, is_connected_move_id, p_manager, d_oracle);
+                        if (!is_connected_move_id) { continue; }
+                        if (temp_qap_delta != move.qap_delta) { continue; }
+
+                        // make move in structures
+                        vertex_used[vertex] = vertex_mark;
+                        bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                        q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                        p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+
+                        // we have to push or update the neighbors
+                        forall_guiv(g, vertex, i, neighbor)
+                            {
+                                if (vertex_used[neighbor] == vertex_mark) { continue; }
+                                if (!bv_manager.is_boundary(neighbor)) { continue; }
+
+                                partition_t neighbor_id  = p_manager[neighbor];
+                                weight_t neighbor_weight = g.weight(neighbor);
+
+                                block_marker += 1;
+                                forall_guiv(g, neighbor, j, v)
+                                    {
+                                        partition_t v_id = p_manager[v];
+                                        if (v_id == neighbor_id) { continue; }
+                                        if (block_used[v_id] == block_marker) { continue; }
+                                        if (p_manager.get_bweight(v_id) + neighbor_weight > m_lmax) { continue; }
+
+                                        s64 qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
+                                        heaps[neighbor_id].emplace(neighbor, neighbor_id, v_id, qap_delta);
+                                        block_used[v_id] = block_marker;
+                                    }
+                                endfor
+                            }
+                        endfor
+                    }
                 }
             }
         }

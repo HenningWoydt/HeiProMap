@@ -34,23 +34,21 @@
 namespace HeiProMap {
     class RandomEngine {
     public:
-        u64 m_seed = 0;
-
+        std::uniform_int_distribution<int> dis_int;
+        std::uniform_real_distribution<float> dis_float;
         std::mt19937 gen;
-        std::uniform_real_distribution<float> dis;
 
         RandomEngine() = default;
 
         explicit RandomEngine(const u64 t_seed) {
-            m_seed = t_seed;
-
-            gen.seed(m_seed);
-            dis = std::uniform_real_distribution<f32>(0.0f, 1.0f);
+            gen.seed(t_seed);
+            dis_float = std::uniform_real_distribution<f32>(0.0f, 1.0f);
+            dis_int = std::uniform_int_distribution<int>(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
         }
 
-        f32 get_f32() { return dis(gen); }
+        f32 get_f32() { return dis_float(gen); }
 
-        int get_int() { return dis(gen); }
+        int get_int() { return dis_int(gen); }
     };
 }
 

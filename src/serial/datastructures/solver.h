@@ -46,10 +46,12 @@
 #include "../coarsening/random_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
+#include "../refinement/flow_based_refinement.h"
 #include "../refinement/label_propagation_refinement_Faraj20.h"
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
-#include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
+#include "../refinement/two_vertex_label_propagation_refinement.h"
+#include "../refinement/pertubation.h"
 #include "../utility/algorithm_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
@@ -66,6 +68,7 @@ namespace HeiProMap {
         StatisticCollector stat_collect;
         SmallStatisticCollector small_stat_collect;
         s64 initial_qap = 0;
+        weight_t initial_max_block_weight = 0;
         std::chrono::high_resolution_clock::time_point sp;
 
         std::vector<graph_t> graphs;
@@ -86,16 +89,21 @@ namespace HeiProMap {
 
         // refinement
         LabelPropagationRefinementFaraj20 lp_refine_faraj20;
+        QuotientGraphRefinementFaraj20 qg_refine_faraj20;
+        KWayFMRefinementFaraj20 k_way_refine_faraj20;
+        MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
+
         LabelPropagationRefinement lp_refine;
         TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
         ThreeVertexLabelPropagationRefinement three_vertex_lp_refine;
-        QuotientGraphRefinementFaraj20 qg_refine_faraj20;
         QuotientGraphRefinement qg_refine;
-        KWayFMRefinementFaraj20 k_way_refine_faraj20;
         KWayFMRefinement k_way_refine;
-        MultiTryFMRefinementFaraj20 multi_try_fm_refinement_faraj20;
         MultiTryFMRefinement multi_try_fm_refinement;
-        HierarchyAwareKWayFMRefinement hierarchy_aware_fm_refinement;
+        FlowBasedRefinement flow_based_refinement;
+
+        HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
+
+        Pertubation pertubation;
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
@@ -142,6 +150,8 @@ namespace HeiProMap {
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
+            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
+
             refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_k_way_fm_config);
 
             for (auto& [refiner, config] : refinements) {
@@ -149,6 +159,8 @@ namespace HeiProMap {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
                 }
             }
+
+            pertubation.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, stat_collect);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));
@@ -174,11 +186,14 @@ namespace HeiProMap {
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration  = get_seconds(sp, ep);
 
-            std::cout << "Total time   : " << duration << std::endl;
-            std::cout << "Initial QAP  : " << initial_qap << std::endl;
-            std::cout << "Final QAP    : " << qap << std::endl;
-            std::cout << "Lmax         : " << lmax << std::endl;
-            std::cout << "max block w  : " << max(p_manager.get_bweights()) << std::endl;
+            std::cout << "Total time        : " << duration << std::endl;
+            std::cout << "#Nodes            : " << graphs.back().get_n() << std::endl;
+            std::cout << "#Edges            : " << graphs.back().get_m() << std::endl;
+            std::cout << "Lmax              : " << lmax << std::endl;
+            std::cout << "Init. QAP         : " << initial_qap << std::endl;
+            std::cout << "Init. max block w : " << initial_max_block_weight << std::endl;
+            std::cout << "Final QAP         : " << qap << std::endl;
+            std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
 
             return p;
         }
@@ -188,7 +203,7 @@ namespace HeiProMap {
             u64 level     = 0;
             u64 max_level = 0;
 
-            while (graphs.back().get_n() > ac.k * 64) {
+            while (graphs.back().get_n() > ac.k * 16) {
                 matching(level);
                 if (matches.back().size() == 0) {
                     matches.pop_back();
@@ -250,6 +265,7 @@ namespace HeiProMap {
             endfor
 
             initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
+            initial_max_block_weight = max(p_manager.get_bweights());
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("partition", get_seconds(sp_partition, ep_partition));
@@ -320,6 +336,11 @@ namespace HeiProMap {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
+            // s64 qap_1 = get_qap(graphs.back(), p_manager, d_oracle);
+            // pertubation.pertubate(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
+            // s64 qap_2 = get_qap(graphs.back(), p_manager, d_oracle);
+            // std::cout << qap_2 - qap_1 << " " << qap_2 << std::endl;
+
             for (auto [refiner, config] : refinements) {
                 if (config->enabled) {
                     const auto sp = std::chrono::high_resolution_clock::now();

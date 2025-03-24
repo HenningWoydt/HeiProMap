@@ -287,7 +287,7 @@ namespace HeiProMap {
                         stack[idx]->imbalance       = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, stack[idx]->total_weight, k_rem_vec[l - 1 - stack[idx]->identifier.size()], l - stack[idx]->identifier.size());
                         stack[idx]->suppress_output = true;
                         stack[idx]->seed            = t_random_engine.get_int();
-                        stack[idx]->mode            = FAST;
+                        stack[idx]->mode            = mode;
                     }
                 }
                 free_items.push_back(item);

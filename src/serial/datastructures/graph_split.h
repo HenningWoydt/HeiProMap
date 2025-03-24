@@ -296,9 +296,9 @@ namespace HeiProMap {
             m_neighborhoods[0] = 0;
             for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
                 vertex_t old_v = matching.get_partner(old_u);
-                vertex_t new_u = matching.get_n(old_u);
 
                 if (old_u > old_v) { continue; }
+                vertex_t new_u = matching.get_n(old_u);
 
                 mark += 1;
 
