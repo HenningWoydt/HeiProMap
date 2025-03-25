@@ -731,12 +731,13 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.last_n_levels = 2;
 
             // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_multi_way_fm_config.enabled       = true;
+            hierarchy_aware_multi_way_fm_config.enabled       = false;
             hierarchy_aware_multi_way_fm_config.max_iteration = 1;
             hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.enabled = true;
+            flow_based_refinement_config.max_iteration = 10;
         }
 
         /**

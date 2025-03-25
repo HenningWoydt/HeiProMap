@@ -28,10 +28,7 @@
 #define HEIPROMAP_SERIAL_DEFINITIONS_1_H
 
 #include "datastructures/distance_oracle.h"
-#include "datastructures/graph.h"
 #include "datastructures/graph_split.h"
-#include "datastructures/graph_64.h"
-#include "datastructures/graph_split_64.h"
 
 namespace HeiProMap {
     typedef GraphSplit graph_t;

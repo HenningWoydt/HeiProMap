@@ -160,8 +160,8 @@ namespace HeiProMap {
             if (!u_was_boundary && m_n_boundary_edges[u] > 0) { emplace_in_complete(u); }
         }
 
-        void uncontract(const graph_t &g,
-                        const p_manager_t &p_manager) override {
+        void compute_from_scratch(const graph_t &g,
+                                  const p_manager_t &p_manager) override {
             // compute all from scratch
             std::fill_n(m_n_boundary_edges, m_n, 0);
             std::fill_n(m_boundaries_size, m_k, 0);

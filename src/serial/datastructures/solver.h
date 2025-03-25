@@ -30,7 +30,6 @@
 #include <cmath>
 
 #include "boundary_vertex_manger.h"
-#include "graph.h"
 #include "partition_manager.h"
 #include "quotient_graph.h"
 #include "../../commons/definitions.h"
@@ -144,13 +143,13 @@ namespace HeiProMap {
             refinements.emplace_back(&k_way_refine_faraj20, &ac.k_way_fm_refinement_faraj20_config);
             refinements.emplace_back(&multi_try_fm_refinement_faraj20, &ac.multi_try_fm_refinement_faraj20_config);
 
+            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
             refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
 
             refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
 
@@ -320,7 +319,7 @@ namespace HeiProMap {
             const auto sp_uncoarse = std::chrono::high_resolution_clock::now();
 
             p_manager.uncontract(matches.back());
-            bv_manager.uncontract(graphs[graphs.size() - 2], p_manager);
+            bv_manager.compute_from_scratch(graphs[graphs.size() - 2], p_manager);
             graphs.pop_back(); // this is doing uncontraction
             matches.pop_back();
 

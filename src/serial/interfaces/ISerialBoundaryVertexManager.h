@@ -43,7 +43,7 @@ namespace HeiProMap {
         virtual bool is_boundary(vertex_t u) const = 0;
         virtual void add(vertex_t u, partition_t id) = 0;
         virtual void move(const graph_t& g, const p_manager_t& p_manager, vertex_t u, partition_t old_id, partition_t new_id) = 0;
-        virtual void uncontract(const graph_t& g, const p_manager_t& p_manager) = 0;
+        virtual void compute_from_scratch(const graph_t& g, const p_manager_t& p_manager) = 0;
     };
 }
 
