@@ -34,21 +34,27 @@
 namespace HeiProMap {
     class RandomEngine {
     public:
-        std::uniform_int_distribution<int> dis_int;
-        std::uniform_real_distribution<float> dis_float;
+        std::uniform_int_distribution<s32> dis_s32;
+        std::uniform_real_distribution<f32> dis_f32;
+        std::uniform_real_distribution<f64> dis_f64;
         std::mt19937 gen;
 
         RandomEngine() = default;
 
         explicit RandomEngine(const u64 t_seed) {
             gen.seed(t_seed);
-            dis_float = std::uniform_real_distribution<f32>(0.0f, 1.0f);
-            dis_int = std::uniform_int_distribution<int>(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+            dis_f32 = std::uniform_real_distribution<f32>(0.0f, 1.0f);
+            dis_f64 = std::uniform_real_distribution<f64>(0.0, 1.0);
+            dis_s32 = std::uniform_int_distribution<s32>(std::numeric_limits<s32>::min(), std::numeric_limits<s32>::max());
         }
 
-        f32 get_f32() { return dis_float(gen); }
+        f32 get_f32() { return dis_f32(gen); }
+        f32 get_f32(const f32 low, const f32 high) { return low + dis_f32(gen) * (high - low); }
 
-        int get_int() { return dis_int(gen); }
+        f64 get_f64() { return dis_f64(gen); }
+        f64 get_f64(const f64 low, const f64 high) { return low + dis_f64(gen) * (high - low); }
+
+        s32 get_s32() { return dis_s32(gen); }
     };
 }
 

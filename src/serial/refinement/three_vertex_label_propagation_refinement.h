@@ -45,6 +45,7 @@ namespace HeiProMap {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
         partition_t m_k = 0;
+        f64 m_imbalance = 0.0;
         weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
@@ -91,6 +92,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
+                        const f64 t_imbalance,
                         const weight_t t_lmax,
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
@@ -101,6 +103,7 @@ namespace HeiProMap {
             m_m         = t_m;
             m_k         = t_k;
             m_lmax      = t_lmax;
+            m_imbalance = t_imbalance;
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 

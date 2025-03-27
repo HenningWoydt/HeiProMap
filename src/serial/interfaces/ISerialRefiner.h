@@ -50,6 +50,7 @@ namespace HeiProMap {
         virtual void initialize(vertex_t t_n,
                                 vertex_t t_m,
                                 partition_t t_k,
+                                f64 t_imbalance,
                                 weight_t t_lmax,
                                 const std::vector<partition_t>& t_hierarchy,
                                 const std::vector<weight_t>& t_distance,

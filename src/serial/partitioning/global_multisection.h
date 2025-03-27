@@ -193,7 +193,7 @@ namespace HeiProMap {
             first_graph->nparts          = (int)hierarchy.back();
             first_graph->imbalance       = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, first_graph->total_weight, k_rem_vec[l - 1], l);
             first_graph->suppress_output = true;
-            first_graph->seed            = t_random_engine.get_int();
+            first_graph->seed            = t_random_engine.get_s32();
             first_graph->mode            = mode;
 
             // initialize stack;
@@ -286,7 +286,7 @@ namespace HeiProMap {
                         stack[idx]->nparts          = (int)hierarchy[l - 1 - stack[idx]->identifier.size()];
                         stack[idx]->imbalance       = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, stack[idx]->total_weight, k_rem_vec[l - 1 - stack[idx]->identifier.size()], l - stack[idx]->identifier.size());
                         stack[idx]->suppress_output = true;
-                        stack[idx]->seed            = t_random_engine.get_int();
+                        stack[idx]->seed            = t_random_engine.get_s32();
                         stack[idx]->mode            = mode;
                     }
                 }

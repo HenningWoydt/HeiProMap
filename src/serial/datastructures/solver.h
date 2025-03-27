@@ -143,19 +143,19 @@ namespace HeiProMap {
             refinements.emplace_back(&k_way_refine_faraj20, &ac.k_way_fm_refinement_faraj20_config);
             refinements.emplace_back(&multi_try_fm_refinement_faraj20, &ac.multi_try_fm_refinement_faraj20_config);
 
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
             refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
+            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
 
             refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
+                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
                 }
             }
 

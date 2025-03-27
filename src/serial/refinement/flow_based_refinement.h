@@ -33,9 +33,9 @@
 
 #include "quotient_graph_refinement.h"
 #include "../../commons/indexed_update_heap.h"
-#include "../../commons/utils.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
+#include "../../commons/utils.h"
 #include "../datastructures/functions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
@@ -43,11 +43,17 @@
 namespace HeiProMap {
     class FlowNetwork {
         Graph<weight_t, weight_t, weight_t> g;
-        partition_t                         s_id;
-        partition_t                         t_id;
+        partition_t s_id;
+        partition_t t_id;
 
     public:
-        explicit FlowNetwork(size_t t_n) : g(Graph<weight_t, weight_t, weight_t>(t_n, 100)) {
+        FlowNetwork() : g(Graph<weight_t, weight_t, weight_t>(0, 0)) {
+            s_id = 0;
+            t_id = 0;
+        }
+
+        void initialize(size_t t_n) {
+            g.reset();
             g.add_node(t_n);
             s_id = 0;
             t_id = 0;
@@ -81,55 +87,64 @@ namespace HeiProMap {
 
     class FlowBasedRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit FlowBasedRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
-
-        u64 max_iteration = 1;
+        explicit FlowBasedRefinementConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
+        u64 max_global_iteration = 1;
+        u64 max_local_iteration  = 3;
+        f64 alpha                = 2.0;
+        f64 alpha_upper_bound    = 8.0;
+        f64 alpha_modifier       = 2.0;
     };
 
     class FlowBasedRefinement final : public ISerialRefiner {
-        vertex_t                 m_n    = 0;
-        vertex_t                 m_m    = 0;
-        partition_t              m_k    = 0;
-        weight_t                 m_lmax = 0;
+        vertex_t m_n    = 0;
+        vertex_t m_m    = 0;
+        partition_t m_k = 0;
+        f64 m_imbalance = 0.0;
+        weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
+        std::vector<weight_t> m_distance;
 
         // active block scheduling
-        u8         *active_this_round = nullptr;
-        u8         *active_next_round = nullptr;
-        PairWeight *pairs             = nullptr;
-        size_t     pairs_size         = 0;
+        u8* active_this_round = nullptr;
+        u8* active_next_round = nullptr;
+        PairWeight* pairs     = nullptr;
+        size_t pairs_size     = 0;
 
         // array for boundary vertices
-        vertex_t *left_boundary     = nullptr;
-        size_t   left_boundary_size = 0;
+        vertex_t* left_boundary   = nullptr;
+        size_t left_boundary_size = 0;
 
-        vertex_t *right_boundary     = nullptr;
-        size_t   right_boundary_size = 0;
+        vertex_t* right_boundary   = nullptr;
+        size_t right_boundary_size = 0;
 
         // array for regions
-        vertex_t *left_region     = nullptr;
-        size_t   left_region_size = 0;
+        vertex_t* left_region   = nullptr;
+        size_t left_region_size = 0;
 
-        vertex_t *right_region     = nullptr;
-        size_t   right_region_size = 0;
+        vertex_t* right_region   = nullptr;
+        size_t right_region_size = 0;
 
-        u32 *is_region     = nullptr;
+        u32* is_region     = nullptr;
         u32 is_region_mark = 0;
 
-        u32 *seen     = nullptr;
+        vertex_t* queue   = nullptr;
+        size_t queue_size = 0;
+
+        u32* seen     = nullptr;
         u32 seen_mark = 0;
 
         // array for penalties
-        weight_t *left_penalties  = nullptr;
-        weight_t *right_penalties = nullptr;
+        weight_t* left_penalties  = nullptr;
+        weight_t* right_penalties = nullptr;
 
         //Translation Table for mapping
         TranslationTable<vertex_t> translation_table;
 
-        RandomEngine                           *random_engine    = nullptr;
-        const FlowBasedRefinementConfiguration *config           = nullptr;
-        StatisticCollector                     *m_stat_collector = nullptr;
+        FlowNetwork flow_network;
+
+        RandomEngine* random_engine                    = nullptr;
+        const FlowBasedRefinementConfiguration* config = nullptr;
+        StatisticCollector* m_stat_collector           = nullptr;
 
     public:
         FlowBasedRefinement() = default;
@@ -144,6 +159,7 @@ namespace HeiProMap {
             free(left_region);
             free(right_region);
             free(is_region);
+            free(queue);
             free(seen);
 
             free(left_penalties);
@@ -153,70 +169,75 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
+                        const f64 t_imbalance,
                         const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
-                        const ISerialRefinerConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) override {
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        RandomEngine& t_random_engine,
+                        const ISerialRefinerConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
             m_lmax      = t_lmax;
+            m_imbalance = t_imbalance;
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
             random_engine    = &t_random_engine;
-            config           = dynamic_cast<const FlowBasedRefinementConfiguration *>(&i_config);
+            config           = dynamic_cast<const FlowBasedRefinementConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
-            vertex_t    m_n_64     = round_up_64(m_n);
+            vertex_t m_n_64        = round_up_64(m_n);
             partition_t m_k_64     = round_up_64(m_k);
             partition_t m_k_m_k_64 = round_up_64(m_k * m_k);
 
             // active block scheduling
-            active_this_round = (u8 *) aligned_alloc(64, m_k_64 * sizeof(u8));
-            active_next_round = (u8 *) aligned_alloc(64, m_k_64 * sizeof(u8));
-            pairs             = (PairWeight *) aligned_alloc(64, m_k_m_k_64 * sizeof(PairWeight));
+            active_this_round = (u8*)aligned_alloc(64, m_k_64 * sizeof(u8));
+            active_next_round = (u8*)aligned_alloc(64, m_k_64 * sizeof(u8));
+            pairs             = (PairWeight*)aligned_alloc(64, m_k_m_k_64 * sizeof(PairWeight));
             pairs_size        = 0;
 
-            left_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            left_boundary      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             left_boundary_size = 0;
 
-            right_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            right_boundary      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             right_boundary_size = 0;
 
-            left_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            left_region      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             left_region_size = 0;
 
-            right_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            right_region      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             right_region_size = 0;
 
-            is_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
+            is_region = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(is_region, m_n_64, 0);
             is_region_mark = 0;
 
-            seen = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
+            queue      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            queue_size = 0;
+
+            seen = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(seen, m_n_64, 0);
             seen_mark = 0;
 
-            left_penalties  = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
-            right_penalties = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            left_penalties  = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            right_penalties = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
 
             translation_table.reserve(m_n_64, m_n_64);
         }
 
         void refine(const u64 level,
                     const u64 max_level,
-                    const graph_t &g,
-                    const d_oracle_t &d_oracle,
-                    bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                    const graph_t& g,
+                    const d_oracle_t& d_oracle,
+                    bv_manager_t& bv_manager,
+                    p_manager_t& p_manager,
+                    q_graph_t& q_graph) override {
             std::fill_n(active_this_round, m_k, 1);
             std::fill_n(active_next_round, m_k, 0);
 
-            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+            for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                 // determine all pairs in the quotient graph
                 pairs_size = 0;
                 for (partition_t u_id = 0; u_id < m_k; ++u_id) {
@@ -228,9 +249,7 @@ namespace HeiProMap {
                 }
                 std::sort(pairs, pairs + pairs_size, std::greater<>());
 
-                if(pairs_size == 0){
-                    return;
-                }
+                if (pairs_size == 0) { return; }
 
                 for (size_t i = 0; i < pairs_size; ++i) {
                     partition_t left_id  = pairs[i].id1;
@@ -245,74 +264,90 @@ namespace HeiProMap {
 
         void refine_blocks(const u64 level,
                            const u64 max_level,
-                           const graph_t &g,
-                           const d_oracle_t &d_oracle,
-                           bv_manager_t &bv_manager,
-                           p_manager_t &p_manager,
-                           q_graph_t &q_graph,
+                           const graph_t& g,
+                           const d_oracle_t& d_oracle,
+                           bv_manager_t& bv_manager,
+                           p_manager_t& p_manager,
+                           q_graph_t& q_graph,
                            partition_t left_id,
                            partition_t right_id) {
             ASSERT(left_id != right_id);
 
-            double alpha = 1;
+            f64 alpha             = config->alpha;
+            f64 alpha_upper_bound = config->alpha_upper_bound;
+            f64 alpha_modifier    = config->alpha_modifier;
 
-            u64 iteration = 0;
-            while (iteration < 2) {
+            u64 max_local_iteration = config->max_local_iteration;
+            u64 iteration           = 0;
+            while (iteration < max_local_iteration) {
                 iteration += 1;
                 // get boundary vertices
                 determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
 
                 // calc max weight for each bfs
-                weight_t left_max_weight  = (weight_t) ((double) m_lmax - (double) p_manager.get_bweight(right_id)) * (1.0 + alpha);
-                weight_t right_max_weight = (weight_t) ((double) m_lmax - (double) p_manager.get_bweight(left_id))  * (1.0 + alpha);
+                weight_t lmax             = std::ceil((1.0 + m_imbalance * alpha) * ((f64)g.weight() / (f64)m_k));
+                weight_t left_max_weight  = lmax - p_manager.get_bweight(right_id);
+                weight_t right_max_weight = lmax - p_manager.get_bweight(left_id);
 
                 // get both regions
                 determine_regions(g, p_manager, left_id, left_max_weight, right_id, right_max_weight);
 
                 if (left_region_size + right_region_size == 0) {
-                    alpha *= 2;
+                    // if both regions are empty, increase their sizes
+                    if (alpha == alpha_upper_bound) {
+                        // the regions will not change next iteration, so just return
+                        return;
+                    }
+                    // alpha = std::min(random_engine->get_f64(1.5, 2.0) * alpha, alpha_upper_bound);
+                    alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
+                    continue;
                 }
 
                 // determine penalties for all vertices
                 determine_penalties(g, p_manager, d_oracle, left_id, right_id);
 
                 // build a translation table from graph to flow network
-                translation_table.reserve(g.get_n(), g.get_n());
-                vertex_t    new_u = 0;
-                for (size_t i     = 0; i < left_region_size; ++i) { translation_table.add(left_region[i], new_u++); }
-                for (size_t i     = 0; i < right_region_size; ++i) { translation_table.add(right_region[i], new_u++); }
+                vertex_t new_u = 0;
+                for (size_t i = 0; i < left_region_size; ++i) { translation_table.add(left_region[i], new_u++); }
+                for (size_t i = 0; i < right_region_size; ++i) { translation_table.add(right_region[i], new_u++); }
 
                 // build flownetwork
-                FlowNetwork flow_network = build_flow_network(g, d_oracle, left_id, right_id);
+                build_flow_network(g, d_oracle, left_id, right_id);
 
                 // solve the flow network
                 flow_network.solve();
 
                 // check if it is a valid cut
-                if(!valid_cut(g, p_manager, flow_network, left_id, right_id)){
-                    alpha /= 2;
+                if (!valid_cut(g, p_manager, flow_network, left_id, right_id)) {
+                    // alpha = std::min(alpha / random_engine->get_f64(1.5, 2.0), alpha_upper_bound);
+                    alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
                 }
-                alpha *= 2;
+
+                // check if the cut actually changes the partition
+                if (!cut_changes_partition(flow_network, left_id, right_id)) {
+                    // cut is valid, but does not change anything
+                    return;
+                }
+
+                // cut is valid and changes the partition, increase alpha
+                // alpha = std::min(random_engine->get_f64(1.5, 2.0) * alpha, alpha_upper_bound);
+                alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                bool boundary_changed = change_boundary(g, bv_manager, p_manager, q_graph, flow_network, left_id, right_id);
+                change_boundary(g, bv_manager, p_manager, q_graph, flow_network, left_id, right_id);
                 HEAVYASSERT(assert_state_after_partitioning(g, p_manager, bv_manager, q_graph, m_k));
 
-                if (boundary_changed) {
-                    active_next_round[left_id]  = 1;
-                    active_next_round[right_id] = 1;
-                }
+                active_next_round[left_id]  = 1;
+                active_next_round[right_id] = 1;
             }
         }
 
-        void determine_boundary_vertices(const graph_t &g,
-                                         const bv_manager_t &bv_manager,
-                                         const p_manager_t &p_manager,
+        void determine_boundary_vertices(const graph_t& g,
+                                         const bv_manager_t& bv_manager,
+                                         const p_manager_t& p_manager,
                                          partition_t left_id,
                                          partition_t right_id) {
-
-
             left_boundary_size = 0;
             forall_bv_id_iu(bv_manager, left_id, i, u)
                 {
@@ -344,28 +379,32 @@ namespace HeiProMap {
             endfor
         }
 
-        void determine_regions(const graph_t &g,
-                               const p_manager_t &p_manager,
+        void determine_regions(const graph_t& g,
+                               const p_manager_t& p_manager,
                                partition_t left_id,
                                weight_t left_max_weight,
                                partition_t right_id,
                                weight_t right_max_weight) {
-            std::deque<vertex_t> queue;
             is_region_mark += 1;
-            seen_mark += 1;
+            seen_mark += 2;
+            // seen[u] == seen_mark     means u is processed
+            // seen[u] == seen_mark - 1 means u is in the queue
 
             weight_t left_curr_weight = 0;
 
+            queue_size = 0;
             for (size_t i = 0; i < left_boundary_size; ++i) {
-                queue.push_back(left_boundary[i]);
+                vertex_t u          = left_boundary[i];
+                queue[queue_size++] = u;
+                seen[u]             = seen_mark - 1;
             }
 
+            size_t queue_idx = 0;
             left_region_size = 0;
-            while (!queue.empty()) {
-                vertex_t u = queue.front();
-                queue.pop_front();
+            while (queue_idx < queue_size) {
+                vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
-                seen[u] = seen_mark;
+
                 if (left_curr_weight + g.weight(u) <= left_max_weight) {
                     left_region[left_region_size++] = u;
                     is_region[u]                    = is_region_mark;
@@ -373,26 +412,31 @@ namespace HeiProMap {
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (v_id == left_id && seen[v] != seen_mark) {
-                                queue.push_back(v);
+                            if (v_id == left_id && seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                                queue[queue_size++] = v;
+                                seen[v]             = seen_mark - 1;
                             }
                         }
                     endfor
                 }
+                seen[u] = seen_mark;
             }
 
             weight_t right_curr_weight = 0;
 
+            queue_size = 0;
             for (size_t i = 0; i < right_boundary_size; ++i) {
-                queue.push_back(right_boundary[i]);
+                vertex_t u          = right_boundary[i];
+                queue[queue_size++] = u;
+                seen[u]             = seen_mark - 1;
             }
 
             right_region_size = 0;
-            while (!queue.empty()) {
-                vertex_t u = queue.front();
-                queue.pop_front();
+            queue_idx         = 0;
+            while (queue_idx < queue_size) {
+                vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
-                seen[u] = seen_mark;
+
                 if (right_curr_weight + g.weight(u) <= right_max_weight) {
                     right_region[right_region_size++] = u;
                     is_region[u]                      = is_region_mark;
@@ -400,22 +444,24 @@ namespace HeiProMap {
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (v_id == right_id && seen[v] != seen_mark) {
-                                queue.push_back(v);
+                            if (v_id == right_id && seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                                queue[queue_size++] = v;
+                                seen[v]             = seen_mark - 1;
                             }
                         }
                     endfor
                 }
+                seen[u] = seen_mark;
             }
         }
 
-        void determine_penalties(const graph_t &g,
-                                 const p_manager_t &p_manager,
-                                 const d_oracle_t &d_oracle,
+        void determine_penalties(const graph_t& g,
+                                 const p_manager_t& p_manager,
+                                 const d_oracle_t& d_oracle,
                                  partition_t left_id,
                                  partition_t right_id) {
             for (size_t j = 0; j < left_region_size; ++j) {
-                vertex_t u = left_region[j];
+                vertex_t u         = left_region[j];
                 left_penalties[u]  = 0;
                 right_penalties[u] = 0;
                 forall_guivw(g, u, i, v, w)
@@ -446,15 +492,15 @@ namespace HeiProMap {
             }
         }
 
-        FlowNetwork build_flow_network(const graph_t &g,
-                                       const d_oracle_t &d_oracle,
-                                       partition_t left_id,
-                                       partition_t right_id) {
+        void build_flow_network(const graph_t& g,
+                                const d_oracle_t& d_oracle,
+                                partition_t left_id,
+                                partition_t right_id) {
             weight_t distance = d_oracle.get(left_id, right_id);
 
             // build flownetwork
-            size_t      n = left_region_size + right_region_size;
-            FlowNetwork flow_network(n);
+            size_t n = left_region_size + right_region_size;
+            flow_network.initialize(n);
             flow_network.set_s_t_vertex(left_id, right_id);
 
             for (size_t j = 0; j < left_region_size; ++j) {
@@ -503,30 +549,28 @@ namespace HeiProMap {
                 if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
                 if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
             }
-
-            return flow_network;
         }
 
-        bool valid_cut(const graph_t &g,
-                       p_manager_t &p_manager,
-                       FlowNetwork &flow_network,
+        bool valid_cut(const graph_t& g,
+                       p_manager_t& p_manager,
+                       FlowNetwork& flow_network,
                        partition_t left_id,
                        partition_t right_id) {
-            weight_t left_weight = p_manager.get_bweight(left_id);
+            weight_t left_weight  = p_manager.get_bweight(left_id);
             weight_t right_weight = p_manager.get_bweight(right_id);
             for (size_t j = 0; j < left_region_size; ++j) {
-                vertex_t u     = left_region[j];
+                vertex_t u        = left_region[j];
                 weight_t u_weight = g.weight(u);
-                vertex_t new_u = translation_table.get_n(u);
+                vertex_t new_u    = translation_table.get_n(u);
                 if (flow_network.get(new_u) == right_id) {
                     left_weight -= u_weight;
                     right_weight += u_weight;
                 }
             }
             for (size_t j = 0; j < right_region_size; ++j) {
-                vertex_t u     = right_region[j];
+                vertex_t u        = right_region[j];
                 weight_t u_weight = g.weight(u);
-                vertex_t new_u = translation_table.get_n(u);
+                vertex_t new_u    = translation_table.get_n(u);
                 if (flow_network.get(new_u) == left_id) {
                     right_weight -= u_weight;
                     left_weight += u_weight;
@@ -536,15 +580,34 @@ namespace HeiProMap {
             return left_weight <= m_lmax && right_weight <= m_lmax;
         }
 
-        bool change_boundary(const graph_t &g,
-                             bv_manager_t &bv_manager,
-                             p_manager_t &p_manager,
-                             q_graph_t &q_graph,
-                             FlowNetwork &flow_network,
+        bool cut_changes_partition(FlowNetwork& flow_network,
+                                   partition_t left_id,
+                                   partition_t right_id) {
+            for (size_t j = 0; j < left_region_size; ++j) {
+                vertex_t u     = left_region[j];
+                vertex_t new_u = translation_table.get_n(u);
+                if (flow_network.get(new_u) == right_id) {
+                    return true;
+                }
+            }
+            for (size_t j = 0; j < right_region_size; ++j) {
+                vertex_t u     = right_region[j];
+                vertex_t new_u = translation_table.get_n(u);
+                if (flow_network.get(new_u) == left_id) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        void change_boundary(const graph_t& g,
+                             bv_manager_t& bv_manager,
+                             p_manager_t& p_manager,
+                             q_graph_t& q_graph,
+                             FlowNetwork& flow_network,
                              partition_t left_id,
                              partition_t right_id) {
-            bool boundary_changed = false;
-
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
@@ -565,7 +628,6 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, u, left_id, right_id);
                     p_manager.move(u, g.weight(u), left_id, right_id);
-                    boundary_changed = true;
                 }
             }
             for (size_t j = 0; j < right_region_size; ++j) {
@@ -588,10 +650,8 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, u, right_id, left_id);
                     p_manager.move(u, g.weight(u), right_id, left_id);
-                    boundary_changed = true;
                 }
             }
-            return boundary_changed;
         }
 
         JSONString get_stats() override {

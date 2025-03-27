@@ -193,7 +193,7 @@ namespace HeiProMap {
             // write_graph(n, m/2, v_weights, adj_ptr, e_weights, adj, file_path);
 
             // execute kaffpa
-            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int) hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, t_random_engine.get_int(), &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
+            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int) hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, t_random_engine.get_s32(), &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
 
             // first read partition
             for (int new_u = 0; new_u < n; ++new_u) {
