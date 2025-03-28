@@ -217,6 +217,12 @@ namespace HeiProMap {
             max_level = level - 1;
             partition();
 
+            ASSERT(max(p_manager.get_bweights()) <= lmax);
+            if(p_manager.is_overloaded()){
+                print(p_manager.get_bweights());
+                std::cout << max(p_manager.get_bweights()) << std::endl;
+            }
+
             while (level > 0) {
                 level -= 1;
                 uncoarsening(level);
