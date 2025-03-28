@@ -39,7 +39,7 @@ namespace HeiProMap {
         vertex_t    m_n = 0;
         partition_t m_k = 0;
 
-        vertex_t m_n_boundary = 0;
+        vertex_t m_n_boundary        = 0;
         vertex_t *m_n_boundary_edges = nullptr;
 
         vertex_t **m_boundaries     = nullptr;
@@ -48,7 +48,7 @@ namespace HeiProMap {
 
         vertex_t *m_complete_boundary            = nullptr;
         size_t   *m_complete_boundary_vertex_idx = nullptr;
-        size_t m_complete_boundary_size = 0;
+        size_t   m_complete_boundary_size        = 0;
 
     public:
         ~BoundaryVertexManager() override {
@@ -109,6 +109,32 @@ namespace HeiProMap {
                 m_complete_boundary_size += 1;
             }
             m_n_boundary_edges[u] += 1;
+        }
+
+        void add_new(const graph_t &g,
+                     const p_manager_t &p_manager,
+                     const vertex_t u,
+                     const partition_t id) {
+            u64 n_neighbors = 0;
+            forall_guiv(g, u, i, v)
+                {
+                    partition_t v_id = p_manager[v];
+                    if(v_id != id){
+                        n_neighbors += 1;
+                        add(v, v_id);
+                    }
+                }
+            endfor
+            if(n_neighbors > 0) {
+                m_n_boundary += 1;
+                m_n_boundary_edges[u] = n_neighbors;
+                m_boundaries[id][m_boundaries_size[id]++] = u;
+                m_vertex_idx[u]                           = m_boundaries_size[id] - 1;
+
+                m_complete_boundary[m_complete_boundary_size] = u;
+                m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
+                m_complete_boundary_size += 1;
+            }
         }
 
         void move(const graph_t &g,

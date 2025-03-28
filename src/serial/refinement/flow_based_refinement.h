@@ -29,7 +29,7 @@
 
 #include <algorithm>
 
-#include "../../extern/maxflow-v3.01.src/graph.h"
+#include "../../extern/maxflow-v3.04.src/graph.h"
 
 #include "quotient_graph_refinement.h"
 #include "../../commons/indexed_update_heap.h"
@@ -268,6 +268,8 @@ namespace HeiProMap {
 
                 std::swap(active_this_round, active_next_round);
                 std::fill_n(active_next_round, m_k, 0);
+
+                HEAVYASSERT(assert_state_after_partitioning(g, p_manager, bv_manager, q_graph, m_k));
             }
         }
 
@@ -345,7 +347,6 @@ namespace HeiProMap {
 
                 // make the changes
                 change_boundary(g, bv_manager, p_manager, q_graph, left_id, right_id);
-                HEAVYASSERT(assert_state_after_partitioning(g, p_manager, bv_manager, q_graph, m_k));
 
                 active_next_round[left_id]  = 1;
                 active_next_round[right_id] = 1;
@@ -634,15 +635,7 @@ namespace HeiProMap {
                     if (bv_manager.is_boundary(u)) {
                         bv_manager.move(g, p_manager, u, left_id, right_id);
                     } else {
-                        forall_guiv(g, u, i, v)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (v_id != left_id) {
-                                    bv_manager.add(u, left_id);
-                                    bv_manager.add(v, v_id);
-                                }
-                            }
-                        endfor
+                        bv_manager.add_new(g, p_manager, u, right_id);
                     }
 
                     q_graph.move(g, p_manager, u, left_id, right_id);
@@ -656,15 +649,7 @@ namespace HeiProMap {
                     if (bv_manager.is_boundary(u)) {
                         bv_manager.move(g, p_manager, u, right_id, left_id);
                     } else {
-                        forall_guiv(g, u, i, v)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (v_id != right_id) {
-                                    bv_manager.add(u, right_id);
-                                    bv_manager.add(v, v_id);
-                                }
-                            }
-                        endfor
+                        bv_manager.add_new(g, p_manager, u, left_id);
                     }
 
                     q_graph.move(g, p_manager, u, right_id, left_id);
