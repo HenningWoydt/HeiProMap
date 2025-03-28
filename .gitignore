@@ -12,7 +12,4 @@ data/
 !data/test
 
 extern/KaHIP/
-
-extern/mt_kahypar_local/
-
-external_tools/googletest/
+extern/maxflow-v3.04.src
