@@ -295,8 +295,8 @@ namespace HeiProMap {
                 }
             }
 
-            std::cout << lmax << " left : " << left_non_region_weight << " + " << best_closure_weight << " = " << left_non_region_weight + best_closure_weight << std::endl;
-            std::cout << lmax << " right: " << right_non_region_weight << " + " << total_weight - best_closure_weight << " = " << right_non_region_weight + (total_weight - best_closure_weight) << std::endl;
+            // std::cout << lmax << " left : " << left_non_region_weight << " + " << best_closure_weight << " = " << left_non_region_weight + best_closure_weight << std::endl;
+            // std::cout << lmax << " right: " << right_non_region_weight << " + " << total_weight - best_closure_weight << " = " << right_non_region_weight + (total_weight - best_closure_weight) << std::endl;
 
             is_left.clear();
             is_left.resize(n, 0);
@@ -384,6 +384,13 @@ namespace HeiProMap {
             g.maxflow();
         }
 
+        void get_cut(std::vector<u8> &is_left) {
+            is_left.resize(n - 2);
+            for (vertex_t u = 0; u < n - 2; ++u) {
+                is_left[u] = get(u) == s_id;
+            }
+        }
+
         partition_t get(vertex_t u) {
             return g.what_segment(u) == Graph<weight_t, weight_t, weight_t>::SOURCE ? s_id : t_id;
         }
@@ -411,11 +418,12 @@ namespace HeiProMap {
     public:
         explicit FlowBasedRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
 
-        u64 max_global_iteration = 1;
-        u64 max_local_iteration  = 3;
-        f64 alpha                = 2.0;
-        f64 alpha_upper_bound    = 8.0;
-        f64 alpha_modifier       = 2.0;
+        u64  max_global_iteration  = 1;
+        u64  max_local_iteration   = 3;
+        f64  alpha                 = 2.0;
+        f64  alpha_upper_bound     = 8.0;
+        f64  alpha_modifier        = 2.0;
+        bool use_closed_vertex_set = true;
     };
 
     class FlowBasedRefinement final : public ISerialRefiner {
@@ -655,32 +663,44 @@ namespace HeiProMap {
                 // solve the flow network
                 flow_network.solve();
 
-                // build residual network
-                flow_network.build_residual_network(residual_flow_network);
-
-                // build scc graph
-                scc_graph.initialize(residual_flow_network, g, translation_table);
-
-                // reduce the scc graph
-                scc_graph.reduce();
-
-                // determine best balanced min cut
-                weight_t        left_non_region_weight  = p_manager.get_bweight(left_id) - left_region_weight;
-                weight_t        right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
                 std::vector<u8> is_left;
-                bool            closure_found           = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, 10, *random_engine, is_left);
+                if (config->use_closed_vertex_set) {
 
-                if (!closure_found) {
-                    alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
-                    std::cout << "no closure found" << std::endl;
-                    continue;
+                    // build residual network
+                    flow_network.build_residual_network(residual_flow_network);
+
+                    // build scc graph
+                    scc_graph.initialize(residual_flow_network, g, translation_table);
+
+                    // reduce the scc graph
+                    scc_graph.reduce();
+
+                    // determine best balanced min cut
+                    weight_t left_non_region_weight  = p_manager.get_bweight(left_id) - left_region_weight;
+                    weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
+                    bool     closure_found           = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, 10, *random_engine, is_left);
+
+                    if (!closure_found) {
+                        alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
+                        // std::cout << "no closure found" << std::endl;
+                        continue;
+                    }
+                } else {
+                    // simply use the first cut found
+                    flow_network.get_cut(is_left);
+
+                    if(!cut_is_valid(g, p_manager, left_id, right_id, is_left)){
+                        alpha = std::max(alpha_modifier / alpha, 1.0);
+                        // std::cout << "no valid cut found" << std::endl;
+                        continue;
+                    }
                 }
 
                 // check if the cut actually changes the partition
                 if (!cut_changes_partition(is_left)) {
                     // cut is valid, but does not change anything
                     alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
-                    std::cout << "no change" << std::endl;
+                    // std::cout << "no change" << std::endl;
                     continue;
                 }
 
@@ -691,12 +711,12 @@ namespace HeiProMap {
                 // make the changes
                 change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
 
-                std::cout << left_id << " " << p_manager.get_bweight(left_id) << std::endl;
-                std::cout << right_id << " " << p_manager.get_bweight(right_id) << std::endl;
-                for(partition_t id = 0; id < m_k; ++id){
-                    if(p_manager.get_bweight(id) > m_lmax) { std::cout << id << " - " << p_manager.get_bweight(id) << " | "; }
-                }
-                std::cout << std::endl;
+                // std::cout << left_id << " " << p_manager.get_bweight(left_id) << std::endl;
+                // std::cout << right_id << " " << p_manager.get_bweight(right_id) << std::endl;
+                // for (partition_t id = 0; id < m_k; ++id) {
+                //     if (p_manager.get_bweight(id) > m_lmax) { std::cout << id << " - " << p_manager.get_bweight(id) << " | "; }
+                // }
+                // std::cout << std::endl;
                 ASSERT(max(p_manager.get_bweights()) <= m_lmax);
 
                 active_next_round[left_id]  = 1;
@@ -926,6 +946,36 @@ namespace HeiProMap {
                 if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
                 if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
             }
+        }
+
+        bool cut_is_valid(const graph_t &g,
+                          const p_manager_t &p_manager,
+                          partition_t left_id,
+                          partition_t right_id,
+                          std::vector<u8> &is_left) {
+            weight_t    left_weight  = p_manager.get_bweight(left_id);
+            weight_t    right_weight = p_manager.get_bweight(right_id);
+            for (size_t j            = 0; j < left_region_size; ++j) {
+                vertex_t u        = left_region[j];
+                weight_t u_weight = g.weight(u);
+                vertex_t new_u    = translation_table.get_n(u);
+                if (is_left[new_u] == 0) {
+                    left_weight -= u_weight;
+                    right_weight += u_weight;
+                }
+            }
+
+            for (size_t j = 0; j < right_region_size; ++j) {
+                vertex_t u        = right_region[j];
+                weight_t u_weight = g.weight(u);
+                vertex_t new_u    = translation_table.get_n(u);
+                if (is_left[new_u] == 1) {
+                    right_weight -= u_weight;
+                    left_weight += u_weight;
+                }
+            }
+
+            return left_weight <= m_lmax && right_weight <= m_lmax;
         }
 
         bool cut_changes_partition(std::vector<u8> &is_left) {

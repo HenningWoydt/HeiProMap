@@ -706,12 +706,12 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = false;
+            quotient_graph_refinement_config.enabled       = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled       = false;
+            k_way_fm_refinement_config.enabled       = true;
             k_way_fm_refinement_config.max_iteration = 1;
             k_way_fm_refinement_config.alpha         = 100.0;
 
@@ -737,11 +737,12 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 5;
-            flow_based_refinement_config.max_local_iteration = 20;
+            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.max_local_iteration = 2;
             flow_based_refinement_config.alpha = 2.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
-            flow_based_refinement_config.alpha_modifier = 1.1;
+            flow_based_refinement_config.alpha_modifier = 2.0;
+            flow_based_refinement_config.use_closed_vertex_set = false;
         }
 
         /**
