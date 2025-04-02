@@ -400,7 +400,7 @@ namespace HeiProMap {
 
             int                                         n_edges = g.get_arc_num();
             Graph<weight_t, weight_t, weight_t>::arc_id arc     = g.get_first_arc();
-            int                                         u, v;
+            unsigned int                                         u, v;
             for (int                                    i       = 0; i < n_edges; ++i) {
                 g.get_arc_ends(arc, u, v);
                 weight_t w = g.get_rcap(arc);

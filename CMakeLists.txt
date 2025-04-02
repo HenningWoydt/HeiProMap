@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.16)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
 
 project(HeiProMap)
@@ -35,50 +35,20 @@ file(GLOB_RECURSE HEADERS_SERIAL CONFIGURE_DEPENDS "src/serial/*.h")
 file(GLOB_RECURSE SOURCES_PARALLEL CONFIGURE_DEPENDS "src/parallel/*.cpp")
 file(GLOB_RECURSE HEADERS_PARALLEL CONFIGURE_DEPENDS "src/parallel/*.h")
 
-# Find all serial test files
-file(GLOB_RECURSE Test_SOURCES_SERIAL CONFIGURE_DEPENDS "tests/serial/*.cpp")
-file(GLOB_RECURSE Test_HEADERS_SERIAL CONFIGURE_DEPENDS "tests/serial/*.h")
-
-# Find all parallel test files
-file(GLOB_RECURSE Test_SOURCES_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.cpp")
-file(GLOB_RECURSE Test_HEADERS_PARALLEL CONFIGURE_DEPENDS "tests/parallel/*.h")
-
 # Find all maxflow files
 file(GLOB_RECURSE MAXFLOW_SOURCES CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.cpp")
 file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.h")
 
 add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
-# add_executable(MtHeiProMapRefinement application/MtHeiProMapRefinement.cpp ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)
 if (OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found")
     target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
-    # target_link_libraries(MtHeiProMapRefinement OpenMP::OpenMP_CXX)
 endif ()
 
 # Link KaHIP library
 target_link_libraries(HeiProMap kahip_static)
 target_link_libraries(MtHeiProMap kahip_static)
-# target_link_libraries(MtHeiProMapRefinement kahip)
-
-# add_subdirectory(external_tools/googletest)
-# include(gmock)
-# enable_testing()
-
-# Test executable
-# add_executable(HeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL})
-# add_executable(MtHeiProMap_gtest ${HEADERS_INTERFACE} ${SOURCES_INTERFACE} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${Test_HEADERS_SERIAL} ${Test_SOURCES_SERIAL} ${Test_HEADERS_PARALLEL} ${Test_SOURCES_PARALLEL})
-
-# Link OpenMP library
-# find_package(OpenMP REQUIRED)
-# if (OpenMP_CXX_FOUND)
-    # message(STATUS "OpenMP found")
-    # target_link_libraries(MtHeiProMap_gtest OpenMP::OpenMP_CXX)
-# endif ()
-
-# Link to Google Test
-# target_link_libraries(HeiProMap_gtest gtest gtest_main)
-# target_link_libraries(MtHeiProMap_gtest gtest gtest_main)
