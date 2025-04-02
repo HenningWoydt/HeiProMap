@@ -94,6 +94,10 @@ namespace HeiProMap {
             return m_h_mtx_copy[u_id * m_k + v_id];
         }
 
+        bool last_level_pair(partition_t u_id, partition_t v_id) const {
+            return (u_id / m_hierarchy[0]) == (v_id / m_hierarchy[0]);
+        }
+
     private:
         void determine_loc(partition_t u_id,
                            std::vector<partition_t>& u_loc) const {

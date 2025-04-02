@@ -711,7 +711,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled       = true;
+            k_way_fm_refinement_config.enabled       = false;
             k_way_fm_refinement_config.max_iteration = 1;
             k_way_fm_refinement_config.alpha         = 100.0;
 
@@ -736,7 +736,7 @@ namespace HeiProMap {
             hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled = true;
+            flow_based_refinement_config.enabled = false;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 2;
             flow_based_refinement_config.alpha = 2.0;
