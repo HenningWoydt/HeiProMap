@@ -751,7 +751,7 @@ namespace HeiProMap {
             flow_based_refinement_config.alpha = 2.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = false;
+            flow_based_refinement_config.use_closed_vertex_set = true;
         }
 
         /**

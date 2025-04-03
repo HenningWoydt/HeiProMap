@@ -313,13 +313,12 @@ namespace HeiProMap {
                 weight_t vertex_weight    = g.weight(vertex);
                 partition_t vertex_id     = choose_u ? u_id : v_id;
                 partition_t move_id       = choose_u ? v_id : u_id;
-                weight_t partition_weight = p_manager.get_bweight(move_id);
                 boundary_vertices.pop();
 
                 // move the vertex
                 moves[moves_size++] = vertex;
                 curr_qap_gain += qap_delta;
-                if (curr_qap_gain >= max_qap_gain && partition_weight + vertex_weight <= m_lmax) {
+                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= m_lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= m_lmax) {
                     best_idx     = moves_size;
                     max_qap_gain = curr_qap_gain;
 
@@ -510,13 +509,12 @@ namespace HeiProMap {
                 weight_t vertex_weight    = g.weight(vertex);
                 partition_t vertex_id     = choose_u ? u_id : v_id;
                 partition_t move_id       = choose_u ? v_id : u_id;
-                weight_t partition_weight = p_manager.get_bweight(move_id);
                 boundary_vertices.pop();
 
                 // move the vertex
                 moves[moves_size++] = vertex;
                 curr_edge_cut_gain += edge_cut_delta;
-                if (curr_edge_cut_gain >= max_edge_cut_gain && partition_weight + vertex_weight <= m_lmax) {
+                if (curr_edge_cut_gain >= max_edge_cut_gain && p_manager.get_bweight(move_id) + vertex_weight <= m_lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= m_lmax) {
                     best_idx          = moves_size;
                     max_edge_cut_gain = curr_edge_cut_gain;
 
