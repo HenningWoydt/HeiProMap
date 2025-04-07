@@ -726,14 +726,14 @@ namespace HeiProMap {
 
                     if (cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
                         // make the changes
-                        // change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
-                        // HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+                        std::vector<u8> changed = change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
 
-                        // qap_normal_calculated = true;
-                        // qap_normal_change     = get_qap(g, p_manager, d_oracle);
+                        qap_normal_calculated = true;
+                        qap_normal_change     = get_qap(g, p_manager, d_oracle);
 
-                        // change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
-                        // HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+                        change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
                     }
 #endif
 
@@ -1111,13 +1111,15 @@ namespace HeiProMap {
             return false;
         }
 
-        void change_boundary(const graph_t& g,
+        std::vector<u8> change_boundary(const graph_t& g,
                              bv_manager_t& bv_manager,
                              p_manager_t& p_manager,
                              q_graph_t& q_graph,
                              std::vector<u8>& is_left,
                              partition_t left_id,
                              partition_t right_id) {
+            std::vector<u8> changed(is_left.size(), 0);
+
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
@@ -1126,6 +1128,7 @@ namespace HeiProMap {
                 ASSERT(new_u < left_region_size + right_region_size);
 
                 if (is_left[new_u] == 0) {
+                    changed[new_u] = 1;
                     if (bv_manager.is_boundary(u)) {
                         bv_manager.move(g, p_manager, u, left_id, right_id);
                     } else {
@@ -1144,6 +1147,7 @@ namespace HeiProMap {
                 ASSERT(new_u < left_region_size + right_region_size);
 
                 if (is_left[new_u] == 1) {
+                    changed[new_u] = 1;
                     if (bv_manager.is_boundary(u)) {
                         bv_manager.move(g, p_manager, u, right_id, left_id);
                     } else {
@@ -1154,6 +1158,22 @@ namespace HeiProMap {
                     p_manager.move(u, g.weight(u), right_id, left_id);
                 }
             }
+            return changed;
+        }
+
+        void revert_boundary(const graph_t& g,
+                                        bv_manager_t& bv_manager,
+                                        p_manager_t& p_manager,
+                                        q_graph_t& q_graph,
+                                        std::vector<u8>& changed,
+                                        partition_t left_id,
+                                        partition_t right_id) {
+            for(vertex_t new_u = 0; new_u < left_region_size + right_region_size; ++new_u){
+                if(changed[new_u] == 0) { continue; }
+
+                vertex_t old_u = translation_table.get_o(new_u);
+            }
+
         }
 
         JSONString get_stats() override {
