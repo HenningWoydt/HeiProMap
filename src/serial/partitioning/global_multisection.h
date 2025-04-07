@@ -81,6 +81,8 @@ namespace HeiProMap {
         bool suppress_output = true;
         int seed             = 0;
         int mode             = 0;
+        int edge_cut_temp    = 0;
+        int* part_temp       = nullptr;
         int edge_cut         = 0;
         int* part            = nullptr;
 
@@ -94,6 +96,7 @@ namespace HeiProMap {
             free(xadj);
             free(adjcwgt);
             free(adjncy);
+            free(part_temp);
             free(part);
         }
     };
@@ -205,7 +208,14 @@ namespace HeiProMap {
                 stack.pop_back(); // remove top item
 
                 // TIME_POINT(sp_kaffpa);
-                kaffpa(&item->n, item->vwgt, item->xadj, item->adjcwgt, item->adjncy, &item->nparts, &item->imbalance, item->suppress_output, item->seed, item->mode, &item->edge_cut, item->part);
+                item->edge_cut = std::numeric_limits<int>::max();
+                for (int i = 0; i < 1; ++i) {
+                    kaffpa(&item->n, item->vwgt, item->xadj, item->adjcwgt, item->adjncy, &item->nparts, &item->imbalance, item->suppress_output, item->seed + i, item->mode, &item->edge_cut_temp, item->part_temp);
+                    if (item->edge_cut_temp < item->edge_cut) {
+                        item->edge_cut = item->edge_cut_temp;
+                        std::swap(item->part_temp, item->part);
+                    }
+                }
                 // TIME_POINT(ep_kaffpa);
 #if COLLECT_METRICS
                 // time_kaffpa += get_seconds(sp_kaffpa, ep_kaffpa);
@@ -292,8 +302,6 @@ namespace HeiProMap {
                 }
                 free_items.push_back(item);
             }
-
-
         }
 
         /**
@@ -310,12 +318,13 @@ namespace HeiProMap {
                 int m_64 = round_up_64(m);
 
                 // if no items are available, then create a new one
-                Item* new_item    = new Item();
-                new_item->vwgt    = (int*)aligned_alloc(64, n_64 * sizeof(int));
-                new_item->xadj    = (int*)aligned_alloc(64, n_64 * sizeof(int));
-                new_item->adjcwgt = (int*)aligned_alloc(64, m_64 * sizeof(int));
-                new_item->adjncy  = (int*)aligned_alloc(64, m_64 * sizeof(int));
-                new_item->part    = (int*)aligned_alloc(64, n_64 * sizeof(int));
+                Item* new_item      = new Item();
+                new_item->vwgt      = (int*)aligned_alloc(64, n_64 * sizeof(int));
+                new_item->xadj      = (int*)aligned_alloc(64, n_64 * sizeof(int));
+                new_item->adjcwgt   = (int*)aligned_alloc(64, m_64 * sizeof(int));
+                new_item->adjncy    = (int*)aligned_alloc(64, m_64 * sizeof(int));
+                new_item->part_temp = (int*)aligned_alloc(64, n_64 * sizeof(int));
+                new_item->part      = (int*)aligned_alloc(64, n_64 * sizeof(int));
 
                 return new_item;
             } else {

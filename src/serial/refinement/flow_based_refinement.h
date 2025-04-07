@@ -50,38 +50,39 @@ namespace HeiProMap {
     public:
         ResidualFlowNetwork() = default;
 
-        void initialize(vertex_t t_n, vertex_t t_source, vertex_t t_target) {
+        void initialize(vertex_t t_n) {
             n      = t_n;
-            source = t_source;
-            target = t_target;
-            for (size_t i = 0; i < std::min((size_t)n, edges.size()); ++i) { edges[i].clear(); }
-            if (n > edges.size()) { edges.resize(n); }
+            source = n;
+            target = n + 1;
+            edges.clear();
+            edges.resize(n + 2);
         }
 
         void add_directed_edge(vertex_t u, vertex_t v, weight_t w) {
             edges[u].emplace_back(v, w);
         }
 
+        void add_edge_to_source(vertex_t u, weight_t w) {
+            edges[u].emplace_back(source, w);
+        }
+
+        void add_edge_to_target(vertex_t u, weight_t w) {
+            edges[u].emplace_back(target, w);
+        }
+
+        void add_edge_from_source(vertex_t u, weight_t w) {
+            edges[source].emplace_back(u, w);
+        }
+
+        void add_edge_from_target(vertex_t u, weight_t w) {
+            edges[target].emplace_back(u, w);
+        }
+
         vertex_t get_n() const { return n; }
-
         vertex_t get_source() const { return source; }
-
         vertex_t get_target() const { return target; }
 
         const std::vector<EdgeVW>& operator[](vertex_t i) const { return edges[i]; }
-
-        void print() {
-            std::cout << "ResidualFlowNetwork" << std::endl;
-            std::cout << "Source " << source << std::endl;
-            std::cout << "Target " << target << std::endl;
-            for (vertex_t u = 0; u < n; ++u) {
-                std::cout << u << " : ";
-                for (auto [v, w] : edges[u]) {
-                    std::cout << "(" << v << ", " << w << ") ";
-                }
-                std::cout << std::endl;
-            }
-        }
     };
 
     class SCCGraph {
@@ -115,7 +116,7 @@ namespace HeiProMap {
         void initialize(const ResidualFlowNetwork& residual_flow_network,
                         const graph_t& g,
                         const TranslationTable<vertex_t>& tt) {
-            n      = residual_flow_network.get_n();
+            n      = residual_flow_network.get_n() + 2;
             source = residual_flow_network.get_source();
             target = residual_flow_network.get_target();
 
@@ -134,11 +135,11 @@ namespace HeiProMap {
             }
 
             // clear old edges
-            for (size_t i = 0; i < std::min((size_t)current_scc, edges.size()); ++i) { edges[i].clear(); }
-            if (current_scc > edges.size()) { edges.resize(current_scc); }
+            edges.clear();
+            edges.resize(current_scc);
 
-            for (size_t i = 0; i < std::min((size_t)current_scc, rev_edges.size()); ++i) { rev_edges[i].clear(); }
-            if (current_scc > rev_edges.size()) { rev_edges.resize(current_scc); }
+            rev_edges.clear();
+            rev_edges.resize(current_scc);
 
             // build the graph and the reversed graph
             for (vertex_t u = 0; u < n; ++u) {
@@ -152,8 +153,7 @@ namespace HeiProMap {
             }
 
             // make each edge list unique
-            for (vertex_t u = 0; u < n; ++u) {
-                vertex_t scc_u = scc_id[u];
+            for (vertex_t scc_u = 0; scc_u < current_scc; ++scc_u) {
                 std::sort(edges[scc_u].begin(), edges[scc_u].end());
                 edges[scc_u].erase(unique(edges[scc_u].begin(), edges[scc_u].end()), edges[scc_u].end());
             }
@@ -179,19 +179,26 @@ namespace HeiProMap {
         void reduce() {
             std::vector<vertex_t> curr;
             std::vector<vertex_t> next;
+            std::vector<u8> seen(current_scc, 0);
 
             scc_s_successors.clear();
             next.push_back(scc_source);
+            seen[scc_source] = 1;
             while (!next.empty()) {
                 curr.swap(next);
                 next.clear();
 
                 while (!curr.empty()) {
-                    vertex_t u = curr.back();
+                    vertex_t scc_u = curr.back();
                     curr.pop_back();
-                    scc_s_successors.push_back(u);
+                    scc_s_successors.push_back(scc_u);
 
-                    for (vertex_t scc : edges[u]) { next.push_back(scc); }
+                    for (vertex_t scc_v : edges[scc_u]) {
+                        if (seen[scc_v] == 1 || seen[scc_v] == 2) { continue; }
+                        next.push_back(scc_v);
+                        seen[scc_v] = 1;
+                    }
+                    seen[scc_u] = 2;
                 }
             }
 
@@ -200,23 +207,34 @@ namespace HeiProMap {
 
             curr.clear();
             next.clear();
+            seen.clear();
+            seen.resize(current_scc, 0);
             scc_t_predecessors.clear();
             next.push_back(scc_target);
+            seen[scc_target] = 1;
             while (!next.empty()) {
                 curr.swap(next);
                 next.clear();
 
                 while (!curr.empty()) {
-                    vertex_t u = curr.back();
+                    vertex_t scc_u = curr.back();
                     curr.pop_back();
-                    scc_t_predecessors.push_back(u);
+                    scc_t_predecessors.push_back(scc_u);
 
-                    for (vertex_t scc : rev_edges[u]) { next.push_back(scc); }
+                    for (vertex_t scc_v : rev_edges[scc_u]) {
+                        if (seen[scc_v] == 1 || seen[scc_v] == 2) { continue; }
+                        next.push_back(scc_v);
+                        seen[scc_v] = 1;
+                    }
+                    seen[scc_u] = 2;
                 }
             }
 
             scc_t_pred_weight = 0;
             for (vertex_t scc : scc_t_predecessors) { scc_t_pred_weight += scc_weight[scc]; }
+
+            ASSERT(no_duplicates(scc_s_successors));
+            ASSERT(no_duplicates(scc_t_predecessors));
         }
 
         bool find_best_closure(weight_t left_non_region_weight,
@@ -278,6 +296,8 @@ namespace HeiProMap {
 
                 weight_t complement_weight = scc_t_pred_weight;
 
+                if (right_non_region_weight + complement_weight > lmax) { return false; }
+
                 if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
                     weight_t diff = std::abs((both_region_weight / 2) - (left_non_region_weight + closure_weight));
                     if (diff < best_diff) {
@@ -294,6 +314,8 @@ namespace HeiProMap {
                     closure_weight -= scc_weight[u];
                     complement_weight += scc_weight[u];
 
+                    if (left_non_region_weight + closure_weight > lmax) { break; }
+
                     if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
                         weight_t diff = std::abs((both_region_weight / 2) - (left_non_region_weight + closure_weight));
                         if (diff < best_diff) {
@@ -305,8 +327,8 @@ namespace HeiProMap {
                 }
             }
 
-            is_left.resize(n);
-            for (vertex_t u = 0; u < n; ++u) { is_left[u] = best_closure[scc_id[u]]; }
+            is_left.resize(n - 2);
+            for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
 
             return closure_found;
         }
@@ -359,52 +381,69 @@ namespace HeiProMap {
     class FlowNetwork {
         vertex_t n;
         Graph<weight_t, weight_t, weight_t> g;
-        partition_t s_id;
-        partition_t t_id;
         vertex_t source;
         vertex_t target;
-
-        std::vector<std::vector<EdgeVW>> adj;
 
     public:
         FlowNetwork() : g(Graph<weight_t, weight_t, weight_t>(0, 0)) {
             n      = 0;
-            s_id   = 0;
-            t_id   = 0;
             source = 0;
             target = 0;
         }
 
-        void initialize(size_t t_n, partition_t t_s_id, partition_t t_t_id) {
-            n = t_n + 2;
+        void initialize(size_t t_n) {
+            n = t_n;
             g.reset();
-            g.add_node(n);
-            s_id   = t_s_id;
-            t_id   = t_t_id;
-            source = n - 2;
-            target = n - 1;
-
-            adj.clear();
-            adj.resize(n);
+            g.add_node(n + 2);
+            source = n;
+            target = n + 1;
         }
 
         void add(vertex_t u, vertex_t v, weight_t w) {
+            ASSERT(u < n);
+            ASSERT(v < n);
+            ASSERT(w >= 0);
             g.add_edge(u, v, w, w);
-
-            adj[u].emplace_back(v, w);
-            adj[v].emplace_back(u, w);
         }
 
         void add_s_edge(vertex_t v, weight_t w) {
+            ASSERT(v < n);
+            ASSERT(w >= 0);
             g.add_edge(source, v, w, 0);
-
-            adj[source].emplace_back(v, w);
         }
 
         void add_t_edge(vertex_t v, weight_t w) {
+            ASSERT(v < n);
+            ASSERT(w >= 0);
             g.add_edge(v, target, w, 0);
+        }
 
-            adj[v].emplace_back(target, w);
+        void build_residual_network(ResidualFlowNetwork& residual_g) {
+            residual_g.initialize(n);
+
+            int n_edges                                     = g.get_arc_num();
+            Graph<weight_t, weight_t, weight_t>::arc_id arc = g.get_first_arc();
+            unsigned int u, v;
+            for (int i = 0; i < n_edges; ++i) {
+                g.get_arc_ends(arc, u, v);
+                weight_t w = g.get_rcap(arc);
+
+                if (w > 0) {
+                    if (u == source) {
+                        residual_g.add_edge_from_source(v, w);
+                    } else if (v == source) {
+                        residual_g.add_edge_to_source(u, w);
+                    } else if (u == target) {
+                        residual_g.add_edge_from_target(v, w);
+                    } else if (v == target) {
+                        residual_g.add_edge_to_target(u, w);
+                    } else {
+                        residual_g.add_directed_edge(u, v, w);
+                    }
+                }
+
+                arc = g.get_next_arc(arc);
+            }
         }
 
         void solve() {
@@ -416,44 +455,9 @@ namespace HeiProMap {
         }
 
         void get_cut(std::vector<u8>& is_left) {
-            is_left.resize(n - 2);
-            for (vertex_t u = 0; u < n - 2; ++u) {
-                is_left[u] = get(u) == s_id;
-            }
-        }
-
-        partition_t get(vertex_t u) {
-            return g.what_segment(u) == Graph<weight_t, weight_t, weight_t>::SOURCE ? s_id : t_id;
-        }
-
-        void build_residual_network(ResidualFlowNetwork& residual_g) {
-            residual_g.initialize(n, source, target);
-
-            int n_edges                                     = g.get_arc_num();
-            Graph<weight_t, weight_t, weight_t>::arc_id arc = g.get_first_arc();
-            unsigned int u, v;
-            for (int i = 0; i < n_edges; ++i) {
-                g.get_arc_ends(arc, u, v);
-                weight_t w = g.get_rcap(arc);
-
-                if (w > 0) {
-                    residual_g.add_directed_edge(u, v, w);
-                }
-
-                arc = g.get_next_arc(arc);
-            }
-        }
-
-        void print() {
-            std::cout << "Flow Network" << std::endl;
-            std::cout << "Source: " << source << std::endl;
-            std::cout << "Target: " << target << std::endl;
+            is_left.resize(n);
             for (vertex_t u = 0; u < n; ++u) {
-                std::cout << u << " " << get(u) << " : ";
-                for (auto [v, w] : adj[u]) {
-                    std::cout << "(" << v << ", " << w << "), ";
-                }
-                std::cout << std::endl;
+                is_left[u] = g.what_segment(u) == Graph<weight_t, weight_t, weight_t>::SOURCE;
             }
         }
     };
@@ -644,8 +648,6 @@ namespace HeiProMap {
 
                 std::swap(active_this_round, active_next_round);
                 std::fill_n(active_next_round, m_k, 0);
-
-                HEAVYASSERT(assert_state_after_partitioning(g, p_manager, bv_manager, q_graph, m_k));
             }
         }
 
@@ -706,10 +708,29 @@ namespace HeiProMap {
                 // solve the flow network
                 flow_network.solve();
 
+                bool qap_normal_calculated = false;
+                weight_t qap_normal_change;
                 std::vector<u8> is_left;
                 if (config->use_closed_vertex_set) {
+#if HEAVYASSERT_ENABLED
+                    // get the first cut for comparison
+                    flow_network.get_cut(is_left);
+
+                    if (cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
+                        // make the changes
+                        // change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                        // HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+
+                        // qap_normal_calculated = true;
+                        // qap_normal_change     = get_qap(g, p_manager, d_oracle);
+
+                        // change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                        // HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+                    }
+#endif
+
                     // build residual network
-                    flow_network.build_residual_network(residual_flow_network);
+                    build_residual_flow_network();
 
                     // build scc graph
                     scc_graph.initialize(residual_flow_network, g, translation_table);
@@ -724,7 +745,7 @@ namespace HeiProMap {
                     bool closure_found               = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, both_region_weight, m_lmax, 10, *random_engine, is_left);
 
                     if (!closure_found) {
-                        alpha = std::max(alpha_modifier / alpha, 1.0);
+                        alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
                 } else {
@@ -732,7 +753,7 @@ namespace HeiProMap {
                     flow_network.get_cut(is_left);
 
                     if (!cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
-                        alpha = std::max(alpha_modifier / alpha, 1.0);
+                        alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
                 }
@@ -740,7 +761,7 @@ namespace HeiProMap {
                 // check if the cut actually changes the partition
                 if (!cut_changes_partition(is_left)) {
                     // cut is valid, but does not change anything
-                    alpha = std::max(alpha_modifier / alpha, 1.0);
+                    alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
                 }
 
@@ -749,7 +770,18 @@ namespace HeiProMap {
 
                 // make the changes
                 change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
 
+#if HEAVYASSERT_ENABLED
+                if (qap_normal_calculated) {
+                    weight_t qap_closure_change = get_qap(g, p_manager, d_oracle);
+                    if (qap_normal_change != qap_closure_change) {
+                        std::cout << "Normal change: " << qap_normal_change << std::endl;
+                        std::cout << "Closure change: " << qap_closure_change << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
+                }
+#endif
                 active_next_round[left_id]  = 1;
                 active_next_round[right_id] = 1;
             }
@@ -810,6 +842,7 @@ namespace HeiProMap {
             queue_size = 0;
             for (size_t i = 0; i < left_boundary_size; ++i) {
                 vertex_t u          = left_boundary[i];
+                ASSERT(p_manager[u] == left_id);
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
                 bfs_level[u]        = 0;
@@ -827,10 +860,10 @@ namespace HeiProMap {
                     left_curr_weight += g.weight(u);
                     forall_guiv(g, u, i, v)
                         {
-                            bfs_level[v] = std::min(bfs_level[v], bfs_level[u] + 1);
-
                             partition_t v_id = p_manager[v];
-                            if (v_id == left_id && seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                            if (v_id != left_id) { continue; }
+
+                            if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue[queue_size++] = v;
                                 seen[v]             = seen_mark - 1;
                                 bfs_level[v]        = bfs_level[u] + 1;
@@ -847,6 +880,7 @@ namespace HeiProMap {
             queue_size = 0;
             for (size_t i = 0; i < right_boundary_size; ++i) {
                 vertex_t u          = right_boundary[i];
+                ASSERT(p_manager[u] == right_id);
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
                 bfs_level[u]        = 0;
@@ -865,7 +899,9 @@ namespace HeiProMap {
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (v_id == right_id && seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                            if (v_id != right_id) { continue; }
+
+                            if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue[queue_size++] = v;
                                 seen[v]             = seen_mark - 1;
                                 bfs_level[v]        = bfs_level[u] + 1;
@@ -923,7 +959,7 @@ namespace HeiProMap {
 
             // build flownetwork
             size_t n = left_region_size + right_region_size;
-            flow_network.initialize(n, left_id, right_id);
+            flow_network.initialize(n);
 
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u = left_region[j];
@@ -978,6 +1014,11 @@ namespace HeiProMap {
                 if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
                 if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
             }
+        }
+
+        void build_residual_flow_network() {
+            vertex_t n = left_region_size + right_region_size;
+            residual_flow_network.initialize(n);
         }
 
         bool cut_is_valid(const graph_t& g,
@@ -1039,6 +1080,10 @@ namespace HeiProMap {
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
+
+                ASSERT(is_left_region[u] == is_region_mark);
+                ASSERT(new_u < left_region_size + right_region_size);
+
                 if (is_left[new_u] == 0) {
                     if (bv_manager.is_boundary(u)) {
                         bv_manager.move(g, p_manager, u, left_id, right_id);
@@ -1053,6 +1098,10 @@ namespace HeiProMap {
             for (size_t j = 0; j < right_region_size; ++j) {
                 vertex_t u     = right_region[j];
                 vertex_t new_u = translation_table.get_n(u);
+
+                ASSERT(is_right_region[u] == is_region_mark);
+                ASSERT(new_u < left_region_size + right_region_size);
+
                 if (is_left[new_u] == 1) {
                     if (bv_manager.is_boundary(u)) {
                         bv_manager.move(g, p_manager, u, right_id, left_id);

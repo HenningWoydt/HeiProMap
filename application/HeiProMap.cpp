@@ -38,18 +38,18 @@ int main(const int argc, char* argv[]) {
     if (argc == 1) {
         {
             std::vector<std::pair<std::string, std::string>> input = {
-                    // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
-                    // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
-                    // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
+                    {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
+                    {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
+                    {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
                     // {"--graph", "../data/dimacs10_matrix/af_shell10.graph"},
                     // {"--mapping", "../data/out/partition/af_shell10.txt"},
                     // {"--statistics", "../data/out/statistics/af_shell10.JSON"},
                     // {"--graph", "../data/training/PGPgiantcompo.graph"},
                     // {"--mapping", "../data/out/partition/PGPgiantcompo.txt"},
                     // {"--statistics", "../data/out/statistics/PGPgiantcompo.JSON"},
-                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
-                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
+                    // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
                     // {"--graph", "../data/training/598a.graph"},
                     // {"--mapping", "../data/out/partition/598a.txt"},
                     // {"--statistics", "../data/out/statistics/598a.JSON"},

@@ -146,6 +146,32 @@ namespace HeiProMap {
         }
     };
 
+    class EdgeUVWeight {
+    public:
+        vertex_t u;
+        vertex_t v;
+        weight_t w;
+
+    public:
+        EdgeUVWeight() = default;
+
+        EdgeUVWeight(const vertex_t u, const vertex_t v, const weight_t w) : u(u), v(v), w(w) {}
+
+        bool operator<(const EdgeUVWeight& e) const {
+            return w < e.w;
+        }
+
+        bool operator>(const EdgeUVWeight& e) const {
+            return w > e.w;
+        }
+
+        bool operator==(const EdgeUVWeight& e) const {
+            bool a = u == e.u && v == e.v && w == e.w;
+            bool b = v == e.u && u == e.v && w == e.w;
+            return a || b;
+        }
+    };
+
     class Swap {
     public:
         vertex_t u;

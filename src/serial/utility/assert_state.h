@@ -32,7 +32,7 @@
 #include "../../parallel/parallel_definitions_1.h"
 
 namespace HeiProMap {
-    bool assert_no_self_loops(const  graph_t& g) {
+    bool assert_no_self_loops(const graph_t& g) {
         forall_gu(g, u)
             {
                 for (size_t i = 0; i < g.size(u); ++i) {
@@ -45,7 +45,7 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_no_double_edges(const  graph_t& g) {
+    bool assert_no_double_edges(const graph_t& g) {
         std::vector<vertex_t> manual;
         forall_gu(g, u)
             {
@@ -175,6 +175,16 @@ namespace HeiProMap {
         return true;
     }
 
+    bool assert_correct_boundary(const graph_t& g,
+                                 const p_manager_t& p_manager,
+                                 const bv_manager_t& bv_manager,
+                                 const partition_t k) {
+        ASSERT(assert_n_boundary_vertices(g, p_manager, bv_manager));
+        ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager));
+        ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
+        return true;
+    }
+
     bool assert_correct_quotient_graph(const graph_t& g,
                                        const p_manager_t& p_manager,
                                        const q_graph_t& q_graph,
@@ -225,16 +235,16 @@ namespace HeiProMap {
         ASSERT(assert_no_double_edges(g));
 
         // check the correct block weights
-        ASSERT(assert_bweights(g,  p_manager, k));
+        ASSERT(assert_bweights(g, p_manager, k));
 
         // check the correct number of partitions
-        ASSERT(assert_n_boundary_vertices(g,  p_manager, bv_manager));
+        ASSERT(assert_n_boundary_vertices(g, p_manager, bv_manager));
 
         // check the right vertices are boundary
-        ASSERT(assert_correct_vertices_boundary(g,  p_manager, bv_manager));
+        ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager));
 
         // check the right vertices are boundary per block
-        ASSERT(assert_correct_vertices_boundary_per_block(g,  p_manager, bv_manager, k));
+        ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
 
         // check the correct quotient graph
         ASSERT(assert_correct_quotient_graph(g, p_manager, q_graph, k));

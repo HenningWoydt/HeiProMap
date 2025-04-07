@@ -351,6 +351,7 @@ namespace HeiProMap {
                     const auto sp = std::chrono::high_resolution_clock::now();
 
                     refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
+                    HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
 
                     const auto ep = std::chrono::high_resolution_clock::now();
                     SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
