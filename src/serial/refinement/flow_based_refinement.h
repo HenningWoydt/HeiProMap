@@ -98,9 +98,7 @@ namespace HeiProMap {
         weight_t total_weight = 0;
 
         std::vector<vertex_t> scc_s_successors;
-        weight_t scc_s_succ_weight = 0;
         std::vector<vertex_t> scc_t_predecessors;
-        weight_t scc_t_pred_weight = 0;
 
         static constexpr vertex_t UNVISITED = std::numeric_limits<vertex_t>::max();
         std::vector<vertex_t> index;
@@ -202,9 +200,6 @@ namespace HeiProMap {
                 }
             }
 
-            scc_s_succ_weight = 0;
-            for (vertex_t scc : scc_s_successors) { scc_s_succ_weight += scc_weight[scc]; }
-
             curr.clear();
             next.clear();
             seen.clear();
@@ -230,9 +225,6 @@ namespace HeiProMap {
                 }
             }
 
-            scc_t_pred_weight = 0;
-            for (vertex_t scc : scc_t_predecessors) { scc_t_pred_weight += scc_weight[scc]; }
-
             ASSERT(no_duplicates(scc_s_successors));
             ASSERT(no_duplicates(scc_t_predecessors));
         }
@@ -250,75 +242,90 @@ namespace HeiProMap {
 
             // determine which sccs do not have to be considered
             std::vector<u8> is_active(current_scc, 1);
-            for (vertex_t scc : scc_s_successors) { is_active[scc] = 0; }
-            for (vertex_t scc : scc_t_predecessors) { is_active[scc] = 0; }
+            for (vertex_t scc_u : scc_s_successors) { is_active[scc_u] = 0; }
+            for (vertex_t scc_u : scc_t_predecessors) { is_active[scc_u] = 0; }
 
             for (size_t i = 0; i < repeats; ++i) {
                 // determine in degree of each vertex
                 std::vector<vertex_t> in_deg(current_scc, 0);
-                for (vertex_t scc = 0; scc < current_scc; ++scc) {
-                    for (vertex_t scc_n : edges[scc]) { in_deg[scc_n] += 1; }
+                for (vertex_t scc_u = 0; scc_u < current_scc; ++scc_u) {
+                    for (vertex_t scc_v : edges[scc_u]) { in_deg[scc_v] += 1; }
                 }
 
                 // push roots into stack
                 std::vector<vertex_t> stack;
-                for (vertex_t scc = 0; scc < current_scc; ++scc) {
-                    if (in_deg[scc] > 0) { stack.push_back(scc); }
+                for (vertex_t scc_u = 0; scc_u < current_scc; ++scc_u) {
+                    if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
                 }
                 std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
 
                 // determine the random topological order
                 std::vector<vertex_t> topo_order;
                 while (!stack.empty()) {
-                    vertex_t u = stack.back();
+                    vertex_t scc_u = stack.back();
                     stack.pop_back();
 
-                    topo_order.push_back(u);
+                    topo_order.push_back(scc_u);
 
-                    for (vertex_t scc : edges[u]) {
-                        in_deg[scc] -= 1;
-                        if (in_deg[scc] == 0) { stack.push_back(scc); }
+                    for (vertex_t scc_v : edges[scc_u]) {
+                        in_deg[scc_v] -= 1;
+                        if (in_deg[scc_v] == 0) { stack.push_back(scc_v); }
                     }
                     std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
                 }
 
                 // go through the order and determine the best closure
-                weight_t closure_weight = scc_s_succ_weight;
+                weight_t closure_weight = 0;
                 std::vector<u8> in_closure(current_scc, 0);
-                for (vertex_t scc : scc_s_successors) { in_closure[scc] = 1; }
-
-                for (vertex_t u : topo_order) {
-                    if (is_active[u] == 0) { continue; }
-
-                    in_closure[u] = 1;
-                    closure_weight += scc_weight[u];
+                for (vertex_t scc_u : scc_s_successors)  {
+                    in_closure[scc_u] = 1;
+                    closure_weight += scc_weight[scc_u];
                 }
 
-                weight_t complement_weight = scc_t_pred_weight;
+                for (vertex_t scc_u : topo_order) {
+                    if (is_active[scc_u] == 0) { continue; }
+
+                    in_closure[scc_u] = 1;
+                    closure_weight += scc_weight[scc_u];
+                }
+
+                weight_t complement_weight = 0;
+                for (vertex_t scc_u : scc_t_predecessors)  {
+                    in_closure[scc_u] = 0;
+                    complement_weight += scc_weight[scc_u];
+                }
+
 
                 if (right_non_region_weight + complement_weight > lmax) { return false; }
 
                 if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
                     weight_t diff = std::abs((both_region_weight / 2) - (left_non_region_weight + closure_weight));
                     if (diff < best_diff) {
+                        // std::cout << lmax << " " << left_non_region_weight << " " << closure_weight << " " << right_non_region_weight << " " << complement_weight << std::endl;
+                        // HeiProMap::print(best_closure);
+                        // HeiProMap::print(scc_weight);
+                        // HeiProMap::print(is_active);
+                        // HeiProMap::print(topo_order);
                         closure_found = true;
                         best_diff     = diff;
                         best_closure  = in_closure;
                     }
                 }
 
-                for (vertex_t u : topo_order) {
-                    if (is_active[u] == 0) { continue; }
+                for (vertex_t scc_u : topo_order) {
+                    if (is_active[scc_u] == 0) { continue; }
 
-                    in_closure[u] = 0;
-                    closure_weight -= scc_weight[u];
-                    complement_weight += scc_weight[u];
+                    in_closure[scc_u] = 0;
+                    closure_weight -= scc_weight[scc_u];
+                    complement_weight += scc_weight[scc_u];
 
                     if (left_non_region_weight + closure_weight > lmax) { break; }
 
                     if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
                         weight_t diff = std::abs((both_region_weight / 2) - (left_non_region_weight + closure_weight));
                         if (diff < best_diff) {
+                            // std::cout << lmax << " " << left_non_region_weight << " " << closure_weight << " " << right_non_region_weight << " " << complement_weight << std::endl;
+                            // HeiProMap::print(best_closure);
                             closure_found = true;
                             best_diff     = diff;
                             best_closure  = in_closure;
@@ -670,6 +677,7 @@ namespace HeiProMap {
             u64 max_local_iteration = config->max_local_iteration;
             u64 iteration           = 0;
             while (iteration < max_local_iteration) {
+                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 iteration += 1;
                 // get boundary vertices
                 determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
@@ -748,6 +756,32 @@ namespace HeiProMap {
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
+
+                    /*
+                    weight_t sum_left = 0;
+                    weight_t sum_right = 0;
+                    std::stringstream ss;
+                    for(vertex_t new_u = 0; new_u < left_region_size + right_region_size; ++new_u){
+                        vertex_t old_u = translation_table.get_o(new_u);
+                        weight_t w = g.weight(old_u);
+
+                        if(is_left[new_u] == 1){
+                            sum_left += w;
+                        } else{
+                            sum_right += w;
+                        }
+
+                        ss << new_u << " " << old_u << " " << w << " " << +is_left[new_u] << " " << sum_left << " " << sum_right << std::endl;
+                    }
+                    ss << left_non_region_weight << " + " << sum_left << " = " << left_non_region_weight + sum_left << std::endl;
+                    ss << right_non_region_weight << " + " << sum_right << " = " << right_non_region_weight + sum_right << std::endl;
+                    if(left_non_region_weight + sum_left > m_lmax || right_non_region_weight + sum_right > m_lmax){
+                        std::cout << ss.str() << std::endl;
+                        exit(1);
+                    }
+                     */
+
+
                 } else {
                     // simply use the first cut found
                     flow_network.get_cut(is_left);
@@ -769,7 +803,14 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
+                for(partition_t id = 0; id < m_k; ++id){
+                    if(p_manager.get_bweight(id) > m_lmax){
+                        std::cout << id << " " << p_manager.get_bweight(id) << " " << left_id << " " << right_id << std::endl;
+                    }
+                }
+                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
 
 #if HEAVYASSERT_ENABLED
