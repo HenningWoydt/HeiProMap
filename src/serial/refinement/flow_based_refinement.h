@@ -871,9 +871,11 @@ namespace HeiProMap {
 
             u64 max_local_iteration = config->max_local_iteration;
             u64 iteration           = 0;
+
             while (iteration < max_local_iteration) {
                 ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 iteration += 1;
+
                 // get boundary vertices
                 determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
 
@@ -889,10 +891,7 @@ namespace HeiProMap {
 
                 if (left_region_size + right_region_size == 0) {
                     // if both regions are empty, increase their sizes
-                    if (alpha == alpha_upper_bound) {
-                        // the regions will not change next iteration, so just return
-                        return;
-                    }
+                    if (alpha == alpha_upper_bound) { return; }
                     alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
                     continue;
                 }
@@ -980,6 +979,7 @@ namespace HeiProMap {
 #endif
 
                     if (!closure_found) {
+                        if (alpha == 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
@@ -988,6 +988,7 @@ namespace HeiProMap {
                     flow_network.get_cut(is_left);
 
                     if (!cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
+                        if (alpha == 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
@@ -996,6 +997,7 @@ namespace HeiProMap {
                 // check if the cut actually changes the partition
                 if (!cut_changes_partition(is_left)) {
                     // cut is valid, but does not change anything
+                    if (alpha == 1.0) { return; }
                     alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
                 }
@@ -1004,13 +1006,7 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                for (partition_t id = 0; id < m_k; ++id) {
-                    if (p_manager.get_bweight(id) > m_lmax) {
-                        // std::cout << id << " " << p_manager.get_bweight(id) << " " << left_id << " " << right_id << std::endl;
-                    }
-                }
                 ASSERT(max(p_manager.get_bweights()) <= m_lmax);
-                // weight_t qap = get_qap(g, p_manager, d_oracle);
                 change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
                 ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
