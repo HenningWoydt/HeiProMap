@@ -95,6 +95,10 @@ namespace HeiProMap {
                 }
             endfor
         }
+
+        void reset(){
+            std::fill_n(m_adj_mtx, m_k * m_k, 0);
+        }
     };
 }
 

@@ -50,10 +50,10 @@
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
-#include "../refinement/pertubation.h"
 #include "../utility/algorithm_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
+#include "../refinement/zero_gain_perturbator.h"
 
 namespace HeiProMap {
     /**
@@ -102,8 +102,6 @@ namespace HeiProMap {
 
         HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
 
-        Pertubation pertubation;
-
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
     public:
@@ -143,9 +141,9 @@ namespace HeiProMap {
             refinements.emplace_back(&k_way_refine_faraj20, &ac.k_way_fm_refinement_faraj20_config);
             refinements.emplace_back(&multi_try_fm_refinement_faraj20, &ac.multi_try_fm_refinement_faraj20_config);
 
-            refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
             refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
+            refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
@@ -158,8 +156,6 @@ namespace HeiProMap {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
                 }
             }
-
-            pertubation.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine, stat_collect);
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));
@@ -199,62 +195,76 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64 level     = 0;
-            u64 max_level = 0;
+            u64 n_v_cycle = 1;
+            for(u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
 
-            while (graphs.back().get_n() > ac.k * 16) {
-                matching(level);
-                if (matches.back().size() == 0) {
-                    matches.pop_back();
-                    break;
+                u64 level     = 0;
+                u64 max_level = 0;
+
+                u64 mult = 16;
+                if(v_cycle > 1) { mult = 1; }
+
+                while (graphs.back().get_n() > ac.k * mult) {
+                    matching(level);
+                    if (matches.back().size() == 0) {
+                        matches.pop_back();
+                        break;
+                    }
+
+                    coarsening(level);
+
+                    level += 1;
                 }
 
-                coarsening(level);
+                max_level = level - 1;
+                partition(v_cycle);
 
-                level += 1;
-            }
+                ASSERT(max(p_manager.get_bweights()) <= lmax);
+                if (p_manager.is_overloaded()) {
+                    print(p_manager.get_bweights());
+                    std::cout << max(p_manager.get_bweights()) << std::endl;
+                }
 
-            max_level = level - 1;
-            partition();
+                while (level > 0) {
+                    level -= 1;
+                    uncoarsening(level);
+                    refinement(level, max_level);
+                }
 
-            ASSERT(max(p_manager.get_bweights()) <= lmax);
-            if(p_manager.is_overloaded()){
-                print(p_manager.get_bweights());
-                std::cout << max(p_manager.get_bweights()) << std::endl;
-            }
-
-            while (level > 0) {
-                level -= 1;
-                uncoarsening(level);
-                refinement(level, max_level);
-            }
-
-            METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
-            for (auto [refiner, config] : refinements) {
-                if (config->enabled) {
-                    METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
+                METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
+                for (auto [refiner, config]: refinements) {
+                    if (config->enabled) {
+                        METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
+                    }
                 }
             }
         }
 
-        void partition() {
+        void partition(u64 v_cycle) {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
-                KaffpaPartitioner partitioner;
-                partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config, stat_collect);
-            } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
-                GlobalMultisectionPartitioner partitioner;
-                partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config, stat_collect);
-            } else {
-                std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
-                exit(EXIT_FAILURE);
+            if(v_cycle == 0) {
+                if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
+                    KaffpaPartitioner partitioner;
+                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config, stat_collect);
+                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
+                    GlobalMultisectionPartitioner partitioner;
+                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config, stat_collect);
+                } else {
+                    std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
             }
 
             // initialize boundary vertices and quotient graph
+            p_manager.reset_weights();
+            bv_manager.reset();
+            q_graph.reset();
             forall_gu(graphs.back(), u)
                 {
                     const partition_t u_id = p_manager[u];
+                    const weight_t u_w = graphs.back().weight(u);
+                    p_manager.set(u, u_w, u_id);
 
                     forall_guivw(graphs.back(), u, i, v, w)
                         {
@@ -288,13 +298,13 @@ namespace HeiProMap {
             matches.back().initialize(graphs.back().get_n());
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), matches.back());
+                ge_matcher.match(level, graphs.back(), p_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(level, graphs.back(), matches.back());
+                he_matcher.match(level, graphs.back(), p_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
-                rnd_matcher.match(level, graphs.back(), matches.back());
+                rnd_matcher.match(level, graphs.back(), p_manager, matches.back());
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), matches.back());
+                gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -312,6 +322,7 @@ namespace HeiProMap {
 
             graphs.emplace_back(); // coarse the graph
             graphs.back().initialize(graphs[graphs.size() - 2], matches.back());
+            p_manager.contract(matches.back());
 
             const auto ep_coarse = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("coarsening", get_seconds(sp_coarse, ep_coarse));
@@ -346,10 +357,13 @@ namespace HeiProMap {
             // s64 qap_2 = get_qap(graphs.back(), p_manager, d_oracle);
             // std::cout << qap_2 - qap_1 << " " << qap_2 << std::endl;
 
+            ZeroGainPerturbator perturbator;
+
             for (auto [refiner, config] : refinements) {
                 if (config->enabled) {
                     const auto sp = std::chrono::high_resolution_clock::now();
 
+                    // perturbator.perturbate(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph, lmax, random_engine);
                     refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
                     HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
 

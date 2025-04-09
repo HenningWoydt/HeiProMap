@@ -83,6 +83,7 @@ namespace HeiProMap {
 
         void match(const size_t level,
                    const graph_t &g,
+                   p_manager_t& p_manager,
                    Matching &matching) override {
             mark += 1;
             edges.clear();

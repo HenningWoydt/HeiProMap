@@ -220,6 +220,13 @@ namespace HeiProMap {
             endfor
         }
 
+        void reset(){
+            std::fill_n(m_n_boundary_edges, m_n, 0);
+            std::fill_n(m_boundaries_size, m_k, 0);
+            m_complete_boundary_size = 0;
+            m_n_boundary             = 0;
+        }
+
     private:
         void remove_from_complete(const vertex_t u) {
             vertex_t last_vertex = m_complete_boundary[m_complete_boundary_size - 1];

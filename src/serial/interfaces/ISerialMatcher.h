@@ -52,6 +52,7 @@ namespace HeiProMap {
 
         virtual void match(size_t level,
                            const graph_t& g,
+                           p_manager_t& p_manager,
                            Matching &matching) = 0;
 
         virtual JSONString get_stats() = 0;

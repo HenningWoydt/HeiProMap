@@ -725,19 +725,19 @@ namespace HeiProMap {
             k_way_fm_refinement_config.alpha         = 100.0;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 2;
             multi_try_fm_refinement_config.alpha         = 100.0;
 
             // enable two vertex label propagation
             two_vertex_label_propagation_config.enabled       = false;
             two_vertex_label_propagation_config.max_iteration = 25;
-            two_vertex_label_propagation_config.last_n_levels = 4;
+            two_vertex_label_propagation_config.last_n_levels = 10;
 
             // enable three vertex label propagation
             three_vertex_label_propagation_config.enabled       = false;
-            three_vertex_label_propagation_config.max_iteration = 2;
-            three_vertex_label_propagation_config.last_n_levels = 2;
+            three_vertex_label_propagation_config.max_iteration = 1;
+            three_vertex_label_propagation_config.last_n_levels = 10;
 
             // enable hierarchy aware k-way fm refinement
             hierarchy_aware_multi_way_fm_config.enabled       = false;
@@ -746,13 +746,13 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 2;
-            flow_based_refinement_config.max_local_iteration = 10;
-            flow_based_refinement_config.alpha = 2.0;
+            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.max_local_iteration = 5;
+            flow_based_refinement_config.alpha = 4.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 10;
+            flow_based_refinement_config.closed_vertex_sets_repeats = 100;
         }
 
         /**
