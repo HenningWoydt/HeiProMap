@@ -259,6 +259,7 @@ namespace HeiProMap {
         FlowBasedRefinementConfiguration flow_based_refinement_config                  = FlowBasedRefinementConfiguration("Flow Based");
 
         HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
+        HierarchyAwareMultiTryMultiWayFMConfiguration hierarchy_aware_multi_try_multi_way_fm_config = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
 
         AlgorithmConfiguration() = default;
 
@@ -740,12 +741,17 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.last_n_levels = 10;
 
             // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_multi_way_fm_config.enabled       = false;
+            hierarchy_aware_multi_way_fm_config.enabled       = true;
             hierarchy_aware_multi_way_fm_config.max_iteration = 1;
             hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
 
+            // enable hierarchy aware multi try multi way fm refinement
+            hierarchy_aware_multi_try_multi_way_fm_config.enabled = true;
+            hierarchy_aware_multi_try_multi_way_fm_config.max_iteration = 1;
+            hierarchy_aware_multi_try_multi_way_fm_config.alpha = 100.0;
+
             // enable flow based refinement
-            flow_based_refinement_config.enabled = true;
+            flow_based_refinement_config.enabled = false;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 4.0;

@@ -193,6 +193,7 @@ namespace HeiProMap {
                 for (size_t ii = 0; ii < curr_boundary_size; ++ii) {
                     vertex_t u = curr_boundary[ii];
                     if (vertex_used[u] == vertex_mark) { continue; }
+                    if (!bv_manager.is_boundary(u)) { continue; }
 
                     METRICS_TIME(sp_initialize)
 

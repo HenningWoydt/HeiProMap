@@ -46,6 +46,7 @@
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
 #include "../refinement/label_propagation_refinement_Faraj20.h"
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
@@ -101,6 +102,7 @@ namespace HeiProMap {
         FlowBasedRefinement flow_based_refinement;
 
         HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
+        HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
@@ -144,12 +146,12 @@ namespace HeiProMap {
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
             refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
-
             refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
+            refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
+            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
+            refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
