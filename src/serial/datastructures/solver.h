@@ -67,7 +67,7 @@ namespace HeiProMap {
         // statistics
         StatisticCollector stat_collect;
         SmallStatisticCollector small_stat_collect;
-        s64 initial_qap = 0;
+        s64 initial_qap                   = 0;
         weight_t initial_max_block_weight = 0;
         std::chrono::high_resolution_clock::time_point sp;
 
@@ -143,13 +143,13 @@ namespace HeiProMap {
             refinements.emplace_back(&k_way_refine_faraj20, &ac.k_way_fm_refinement_faraj20_config);
             refinements.emplace_back(&multi_try_fm_refinement_faraj20, &ac.multi_try_fm_refinement_faraj20_config);
 
+            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
+            refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
             refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
-            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
-            refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
             refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
 
@@ -198,13 +198,12 @@ namespace HeiProMap {
     private:
         void internal_solve() {
             u64 n_v_cycle = 1;
-            for(u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
-
+            for (u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
 
                 u64 mult = 16;
-                if(v_cycle > 1) { mult = 1; }
+                if (v_cycle > 1) { mult = 1; }
 
                 while (graphs.back().get_n() > ac.k * mult) {
                     matching(level);
@@ -221,6 +220,8 @@ namespace HeiProMap {
                 max_level = level - 1;
                 partition(v_cycle);
 
+                std::cout << initial_qap << std::endl;
+
                 ASSERT(max(p_manager.get_bweights()) <= lmax);
                 if (p_manager.is_overloaded()) {
                     print(p_manager.get_bweights());
@@ -234,7 +235,7 @@ namespace HeiProMap {
                 }
 
                 METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
-                for (auto [refiner, config]: refinements) {
+                for (auto [refiner, config] : refinements) {
                     if (config->enabled) {
                         METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
                     }
@@ -242,47 +243,129 @@ namespace HeiProMap {
             }
         }
 
+        void internal_solve_full_f_cycle() {
+            u64 level     = 0;
+            u64 max_level = 0;
+
+            u64 mult = 16;
+
+            while (graphs.back().get_n() > ac.k * mult) {
+                matching(level);
+                if (matches.back().size() == 0) {
+                    matches.pop_back();
+                    break;
+                }
+
+                coarsening(level);
+
+                level += 1;
+            }
+
+            max_level = level - 1;
+            partition(0);
+            std::cout << "initial_qap = " << initial_qap << std::endl;
+
+            while (level > 0) {
+                level -= 1;
+                uncoarsening(level);
+                refinement(level, max_level);
+            }
+
+            ASSERT(max(p_manager.get_bweights()) <= lmax);
+            if (p_manager.is_overloaded()) {
+                print(p_manager.get_bweights());
+                std::cout << max(p_manager.get_bweights()) << std::endl;
+            }
+
+            std::cout << "qap_after first v_cycle = " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
+
+            for (size_t j = 0; j < max_level; ++j) {
+                while (graphs.back().get_n() > ac.k) {
+                    matching(level);
+                    if (matches.back().size() == 0) {
+                        matches.pop_back();
+                        break;
+                    }
+
+                    coarsening(level);
+
+                    level += 1;
+                }
+
+                max_level = level;
+                partition(1);
+
+                std::cout << "coarsed to level " << level << "/" <<max_level << " qap = " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
+
+                while (level > max_level - 1 -j) {
+                    level -= 1;
+                    uncoarsening(level);
+                    refinement(level, max_level);
+                }
+
+                std::cout << "uncoarsed to level " << level << "/" <<max_level << " qap = " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
+            }
+
+            while (level > 0) {
+                level -= 1;
+                uncoarsening(level);
+                refinement(level, max_level);
+            }
+
+            METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
+            for (auto [refiner, config] : refinements) {
+                if (config->enabled) {
+                    METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
+                }
+            }
+        }
+
         void partition(u64 v_cycle) {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            if(v_cycle == 0) {
-                if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
-                    KaffpaPartitioner partitioner;
-                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config, stat_collect);
-                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
-                    GlobalMultisectionPartitioner partitioner;
-                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config, stat_collect);
-                } else {
-                    std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
-                    exit(EXIT_FAILURE);
+            std::cout << "curr qap " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
+            for (u64 iteration = 0; iteration < 1; ++iteration) {
+                if (v_cycle == 0) {
+                    if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
+                        KaffpaPartitioner partitioner;
+                        partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config, stat_collect);
+                    } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
+                        GlobalMultisectionPartitioner partitioner;
+                        partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config, stat_collect);
+                    } else {
+                        std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
                 }
-            }
 
-            // initialize boundary vertices and quotient graph
-            p_manager.reset_weights();
-            bv_manager.reset();
-            q_graph.reset();
-            forall_gu(graphs.back(), u)
-                {
-                    const partition_t u_id = p_manager[u];
-                    const weight_t u_w = graphs.back().weight(u);
-                    p_manager.set(u, u_w, u_id);
+                // initialize boundary vertices and quotient graph
+                p_manager.reset_weights();
+                bv_manager.reset();
+                q_graph.reset();
+                forall_gu(graphs.back(), u)
+                    {
+                        const partition_t u_id = p_manager[u];
+                        const weight_t u_w     = graphs.back().weight(u);
+                        p_manager.set(u, u_w, u_id);
 
-                    forall_guivw(graphs.back(), u, i, v, w)
-                        {
-                            const partition_t v_id = p_manager[v];
+                        forall_guivw(graphs.back(), u, i, v, w)
+                            {
+                                const partition_t v_id = p_manager[v];
 
-                            if (u_id != v_id) {
-                                bv_manager.add(u, u_id); // boundary vertex
-                                q_graph.add_edge(u_id, v_id, w); // quotient graph
+                                if (u_id != v_id) {
+                                    bv_manager.add(u, u_id); // boundary vertex
+                                    q_graph.add_edge(u_id, v_id, w); // quotient graph
+                                }
                             }
-                        }
-                    endfor
-                }
-            endfor
+                        endfor
+                    }
+                endfor
 
-            initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
-            initial_max_block_weight = max(p_manager.get_bweights());
+                initial_qap              = get_qap(graphs.back(), p_manager, d_oracle);
+                initial_max_block_weight = max(p_manager.get_bweights());
+
+                std::cout << "INITIAL QAP: " << initial_qap << std::endl;
+            }
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("partition", get_seconds(sp_partition, ep_partition));

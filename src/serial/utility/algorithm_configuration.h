@@ -712,7 +712,7 @@ namespace HeiProMap {
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = false;
+            label_propagation_config.enabled       = true;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
@@ -721,7 +721,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled       = false;
+            k_way_fm_refinement_config.enabled       = true;
             k_way_fm_refinement_config.max_iteration = 1;
             k_way_fm_refinement_config.alpha         = 100.0;
 
@@ -731,27 +731,27 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha         = 100.0;
 
             // enable two vertex label propagation
-            two_vertex_label_propagation_config.enabled       = false;
+            two_vertex_label_propagation_config.enabled       = true;
             two_vertex_label_propagation_config.max_iteration = 25;
-            two_vertex_label_propagation_config.last_n_levels = 10;
+            two_vertex_label_propagation_config.last_n_levels = 100;
 
             // enable three vertex label propagation
-            three_vertex_label_propagation_config.enabled       = false;
+            three_vertex_label_propagation_config.enabled       = true;
             three_vertex_label_propagation_config.max_iteration = 1;
-            three_vertex_label_propagation_config.last_n_levels = 10;
+            three_vertex_label_propagation_config.last_n_levels = 100;
 
             // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_multi_way_fm_config.enabled       = true;
+            hierarchy_aware_multi_way_fm_config.enabled       = false;
             hierarchy_aware_multi_way_fm_config.max_iteration = 1;
             hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
 
             // enable hierarchy aware multi try multi way fm refinement
-            hierarchy_aware_multi_try_multi_way_fm_config.enabled = true;
+            hierarchy_aware_multi_try_multi_way_fm_config.enabled = false;
             hierarchy_aware_multi_try_multi_way_fm_config.max_iteration = 1;
             hierarchy_aware_multi_try_multi_way_fm_config.alpha = 100.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 4.0;

@@ -137,11 +137,14 @@ namespace HeiProMap {
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
                     q_graph_t& q_graph) override {
+            if (level > 0) {return;}
+
             for (size_t iteration = 0; iteration < config->max_iteration; ++iteration) {
                 for (size_t i = 0; i < m_hierarchy.size() - 1; ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);
                     rebalance_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 2 - i);
                 }
+                refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, 0);
             }
         }
 
@@ -434,16 +437,9 @@ namespace HeiProMap {
                 }
             }
 
-            std::vector<weight_t> min_blocks_weights(n_local_super_blocks, 0);
-            for (partition_t i = 0; i < n_local_super_blocks; ++i) {
-                min_blocks_weights[i] = std::max(blocks_weights[i], blocks_lmax);
-            }
-
             std::vector<size_t> indices(n_local_super_blocks);
             std::iota(indices.begin(), indices.end(), 0);
             std::sort(indices.begin(), indices.end(), [&](size_t i, size_t j) { return blocks_weights[i] > blocks_weights[j]; });
-
-            if (blocks_weights[indices[0]] <= blocks_lmax) { return; }
 
             while (max(blocks_weights) > blocks_lmax) {
                 std::sort(indices.begin(), indices.end(), [&](size_t i, size_t j) { return blocks_weights[i] > blocks_weights[j]; });
@@ -467,30 +463,27 @@ namespace HeiProMap {
                                 weight_t u_weight = g.weight(u);
 
                                 block_marker += 1;
-                                forall_guiv(g, u, j, v)
-                                    {
-                                        partition_t v_id = p_manager[v];
+                                for (partition_t v_id = neighborhood_id_start; v_id < neighborhood_id_end; ++v_id) {
+                                    if (u_id == v_id) { continue; }
+                                    if (block_used[v_id] == block_marker) { continue; }
 
-                                        if (IN_SAME_BLOCK(u_id, v_id, ids_per_super_block)) { continue; }
-                                        if (!IN_NEIGHBORING_BLOCK(v_id, neighborhood_id_start, neighborhood_id_end)) { continue; }
-                                        if (block_used[v_id] == block_marker) { continue; }
+                                    partition_t id1 = (u_id - neighborhood_id_start) / ids_per_super_block;
+                                    partition_t id2 = (v_id - neighborhood_id_start) / ids_per_super_block;
 
-                                        partition_t id2 = (v_id - neighborhood_id_start) / ids_per_super_block;
-                                        if (blocks_weights[id2] + u_weight > min_blocks_weights[id2]) { continue; }
+                                    if (blocks_weights[id2] + u_weight >= blocks_weights[id1]) { continue; }
 
-                                        s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                                        if (qap_delta > vertex_qap_delta) {
-                                            vertex_qap_delta = qap_delta;
-                                            vertex_move      = u;
-                                            vertex_curr_id   = u_id;
-                                            vertex_new_id    = v_id;
-                                            vertex_weight    = u_weight;
-                                        }
-
-                                        block_used[v_id] = block_marker;
+                                    if (qap_delta > vertex_qap_delta) {
+                                        vertex_qap_delta = qap_delta;
+                                        vertex_move      = u;
+                                        vertex_curr_id   = u_id;
+                                        vertex_new_id    = v_id;
+                                        vertex_weight    = u_weight;
                                     }
-                                endfor
+
+                                    block_used[v_id] = block_marker;
+                                }
                             }
                         endfor
                     }
@@ -500,11 +493,6 @@ namespace HeiProMap {
                         partition_t id2 = (vertex_new_id - neighborhood_id_start) / ids_per_super_block;
                         blocks_weights[id1] -= vertex_weight;
                         blocks_weights[id2] += vertex_weight;
-
-                        min_blocks_weights[id1] = std::min(min_blocks_weights[id1], blocks_weights[id1]);
-                        min_blocks_weights[id2] = std::min(min_blocks_weights[id2], blocks_weights[id2]);
-                        min_blocks_weights[id1] = std::max(min_blocks_weights[id1], blocks_lmax);
-                        min_blocks_weights[id2] = std::max(min_blocks_weights[id2], blocks_lmax);
 
                         bv_manager.move(g, p_manager, vertex_move, vertex_curr_id, vertex_new_id);
                         q_graph.move(g, p_manager, vertex_move, vertex_curr_id, vertex_new_id);

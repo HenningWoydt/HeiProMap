@@ -428,7 +428,6 @@ namespace HeiProMap {
 
                             // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
                             // edge_rating = (f32) w / (f32) (u_w * v_w);
-                            // edge_rating = (f32) w / (f32) (u_w * v_w);
                             edge_rating = ((f32) (w * w)) / ((f32) (u_w * v_w));
                             // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
                             // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
