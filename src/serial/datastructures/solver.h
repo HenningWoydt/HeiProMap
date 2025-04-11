@@ -197,7 +197,7 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64 n_v_cycle = 1;
+            u64 n_v_cycle = 10;
             for (u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
@@ -206,7 +206,7 @@ namespace HeiProMap {
                 if (v_cycle > 1) { mult = 1; }
 
                 while (graphs.back().get_n() > ac.k * mult) {
-                    matching(level);
+                    matching(level, v_cycle);
                     if (matches.back().size() == 0) {
                         matches.pop_back();
                         break;
@@ -239,83 +239,6 @@ namespace HeiProMap {
                     if (config->enabled) {
                         METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
                     }
-                }
-            }
-        }
-
-        void internal_solve_full_f_cycle() {
-            u64 level     = 0;
-            u64 max_level = 0;
-
-            u64 mult = 16;
-
-            while (graphs.back().get_n() > ac.k * mult) {
-                matching(level);
-                if (matches.back().size() == 0) {
-                    matches.pop_back();
-                    break;
-                }
-
-                coarsening(level);
-
-                level += 1;
-            }
-
-            max_level = level - 1;
-            partition(0);
-            std::cout << "initial_qap = " << initial_qap << std::endl;
-
-            while (level > 0) {
-                level -= 1;
-                uncoarsening(level);
-                refinement(level, max_level);
-            }
-
-            ASSERT(max(p_manager.get_bweights()) <= lmax);
-            if (p_manager.is_overloaded()) {
-                print(p_manager.get_bweights());
-                std::cout << max(p_manager.get_bweights()) << std::endl;
-            }
-
-            std::cout << "qap_after first v_cycle = " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
-
-            for (size_t j = 0; j < max_level; ++j) {
-                while (graphs.back().get_n() > ac.k) {
-                    matching(level);
-                    if (matches.back().size() == 0) {
-                        matches.pop_back();
-                        break;
-                    }
-
-                    coarsening(level);
-
-                    level += 1;
-                }
-
-                max_level = level;
-                partition(1);
-
-                std::cout << "coarsed to level " << level << "/" <<max_level << " qap = " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
-
-                while (level > max_level - 1 -j) {
-                    level -= 1;
-                    uncoarsening(level);
-                    refinement(level, max_level);
-                }
-
-                std::cout << "uncoarsed to level " << level << "/" <<max_level << " qap = " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
-            }
-
-            while (level > 0) {
-                level -= 1;
-                uncoarsening(level);
-                refinement(level, max_level);
-            }
-
-            METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
-            for (auto [refiner, config] : refinements) {
-                if (config->enabled) {
-                    METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
                 }
             }
         }
@@ -376,23 +299,27 @@ namespace HeiProMap {
             METRICS(stat_collect.set_partition_stats(get_qap(graphs.back(), p_manager, d_oracle), p_manager.get_bweights(), lmax);)
         }
 
-        void matching(const u64 level) {
+        void matching(const u64 level, u64 v_cycle) {
             const auto sp_match = std::chrono::high_resolution_clock::now();
 
             matches.emplace_back();
             matches.back().initialize(graphs.back().get_n());
 
-            if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), p_manager, matches.back());
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(level, graphs.back(), p_manager, matches.back());
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
-                rnd_matcher.match(level, graphs.back(), p_manager, matches.back());
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+            if (v_cycle == 0) {
+                if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
+                    ge_matcher.match(level, graphs.back(), p_manager, matches.back());
+                } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
+                    he_matcher.match(level, graphs.back(), p_manager, matches.back());
+                } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
+                    rnd_matcher.match(level, graphs.back(), p_manager, matches.back());
+                } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
+                    gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+                } else {
+                    std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
             } else {
-                std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
-                exit(EXIT_FAILURE);
+                rnd_matcher.match(level, graphs.back(), p_manager, matches.back());
             }
 
             const auto ep_match = std::chrono::high_resolution_clock::now();

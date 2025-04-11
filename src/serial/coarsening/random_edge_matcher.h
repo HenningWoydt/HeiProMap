@@ -87,21 +87,30 @@ namespace HeiProMap {
 
                     weight_t u_w = g.weight(u);
 
+                    f32 counter = 0;
+                    vertex_t chosen_v;
+
                     forall_guiv(g, u, j, v)
                         {
                             if (used[v] == mark) { continue; }
-
+                            if (p_manager[u] != p_manager[v]) { continue; }
                             weight_t v_w = g.weight(v);
 
                             if (u_w + v_w > m_l_max) { continue; }
 
-                            used[u] = mark;
-                            used[v] = mark;
-
-                            matching.add(u, v);
-                            break;
+                            counter += 1.0;
+                            // choose with probability 1/counter as it ensures uniform distribution
+                            if (random_engine->get_f32() <= 1.0f / counter) {
+                                chosen_v = v;
+                            }
                         }
                     endfor
+                    if (counter > 0) {
+                        used[u]        = mark;
+                        used[chosen_v] = mark;
+
+                        matching.add(u, chosen_v);
+                    }
                 }
             endfor
 
