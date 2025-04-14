@@ -103,6 +103,15 @@ namespace HeiProMap {
         //Translation Table for mapping
         TranslationTable<vertex_t> translation_table;
 
+        u32* vertex_used  = nullptr;
+        u32 vertex_marker = 0;
+
+        u32* block_used  = nullptr;
+        u32 block_marker = 0;
+
+        Move* moves       = nullptr;
+        size_t moves_size = 0;
+
         FlowNetwork flow_network;
         ResidualFlowNetwork residual_flow_network;
         SCCGraph scc_graph;
@@ -195,6 +204,20 @@ namespace HeiProMap {
             right_penalties = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
 
             translation_table.reserve(m_n_64, m_n_64);
+
+            vertex_t t_n_64 = round_up_64(t_n);
+            vertex_t t_k_64 = round_up_64(t_k);
+
+            vertex_used = (u32*)aligned_alloc(64, t_n_64 * sizeof(u32));
+            std::fill_n(vertex_used, t_n_64, 0);
+            vertex_marker = 0;
+
+            block_used = (u32*)aligned_alloc(64, t_k_64 * sizeof(u32));
+            std::fill_n(block_used, t_k_64, 0);
+            block_marker = 0;
+
+            moves      = (Move*)aligned_alloc(64, t_n_64 * sizeof(Move));
+            moves_size = 0;
         }
 
         void refine(const u64 level,
@@ -204,10 +227,10 @@ namespace HeiProMap {
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
                     q_graph_t& q_graph) override {
-            for (size_t iteration = 0; iteration < config->max_iteration; ++iteration) {
+            for (size_t iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                 for (size_t i = 0; i < m_hierarchy.size() - 1; ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);
-                    rebalance_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 2 - i);
+                    // rebalance_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 2 - i);
                 }
             }
         }
@@ -250,7 +273,213 @@ namespace HeiProMap {
                                  partition_t neighborhood_id_end,
                                  partition_t n_local_super_blocks,
                                  partition_t ids_per_super_block) {
+            f64 alpha             = config->alpha;
+            f64 alpha_upper_bound = config->alpha_upper_bound;
+            f64 alpha_modifier    = config->alpha_modifier;
 
+            u64 max_local_iteration = config->max_local_iteration;
+            u64 iteration           = 0;
+
+            while (iteration < max_local_iteration) {
+                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
+                iteration += 1;
+
+                // get boundary vertices
+                determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
+
+                // calc max weight for each bfs
+                weight_t lmax             = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.weight() / (f64) m_k));
+                weight_t left_max_weight  = lmax - p_manager.get_bweight(right_id);
+                weight_t right_max_weight = lmax - p_manager.get_bweight(left_id);
+
+                // get both regions
+                weight_t left_region_weight;
+                weight_t right_region_weight;
+                determine_regions(g, p_manager, left_id, left_max_weight, &left_region_weight, right_id, right_max_weight, &right_region_weight);
+
+                if (left_region_size + right_region_size == 0) {
+                    // if both regions are empty, increase their sizes
+                    if (alpha == alpha_upper_bound) { return; }
+                    alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
+                    continue;
+                }
+
+                // determine penalties for all vertices
+                determine_penalties(g, p_manager, d_oracle, left_id, right_id);
+
+                // build a translation table from graph to flow network
+                vertex_t    new_u = 0;
+                for (size_t i     = 0; i < left_region_size; ++i) { translation_table.add(left_region[i], new_u++); }
+                for (size_t i     = 0; i < right_region_size; ++i) { translation_table.add(right_region[i], new_u++); }
+
+                // build flownetwork
+                build_flow_network(g, d_oracle, left_id, right_id);
+
+                // solve the flow network
+                flow_network.solve();
+
+                bool            qap_normal_calculated = false;
+                weight_t        qap_normal_change;
+                std::vector<u8> is_left;
+                if (config->use_closed_vertex_set) {
+#if HEAVYASSERT_ENABLED
+                    // get the first cut for comparison
+                    flow_network.get_cut(is_left);
+
+                    if (cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
+                        // make the changes
+                        weight_t qap            = get_qap(g, p_manager, d_oracle);
+                        std::vector<u8> changed = change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+
+                        qap_normal_calculated = true;
+                        // qap_normal_change     = qap - get_qap(g, p_manager, d_oracle);
+
+                        revert_boundary(g, bv_manager, p_manager, q_graph, changed, left_id, right_id);
+                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+                    }
+#endif
+
+                    // build residual network
+                    flow_network.build_residual_network(residual_flow_network);
+
+                    // build scc graph
+                    scc_graph.initialize(residual_flow_network, g, translation_table);
+
+                    // reduce the scc graph
+                    scc_graph.reduce();
+
+                    // determine best balanced min cut
+                    weight_t left_non_region_weight  = p_manager.get_bweight(left_id) - left_region_weight;
+                    weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
+                    bool     closure_found           = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
+/*
+#if HEAVYASSERT_ENABLED
+                    std::vector<std::vector<u8>> all_is_left = scc_graph.get_all_closures(left_non_region_weight, right_non_region_weight, m_lmax, 10, *random_engine);
+                    std::vector<weight_t> qap_deltas;
+                    // make the changes
+                    weight_t qap = get_qap(g, p_manager, d_oracle);
+                    for (auto& is_left : all_is_left) {
+                        std::vector<u8> changed = change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+
+                        qap_deltas.push_back(qap - get_qap(g, p_manager, d_oracle));
+
+                        revert_boundary(g, bv_manager, p_manager, q_graph, changed, left_id, right_id);
+                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+                    }
+                    for (size_t i = 0; i < qap_deltas.size(); ++i) {
+                        if (qap_deltas[0] != qap_deltas[i]) {
+                            print(qap_deltas);
+                            std::cout << "original flow cut: " << qap_normal_change << std::endl;
+                            print(is_left);
+                            for (auto vec : all_is_left) {
+                                print(vec);
+                            }
+
+                            flow_network.print();
+                            residual_flow_network.print();
+                            scc_graph.print();
+
+                            exit(1);
+                        }
+                    }
+#endif
+ */
+
+                    if (left_region_size == 5 && right_region_size == 5 && scc_graph.get_n_scc() >=4 && false) {
+                        std::cout << "Left-Region" << std::endl;
+                        for (size_t i = 0; i < left_region_size; ++i) {
+                            vertex_t    u    = left_region[i];
+                            weight_t    u_w  = g.weight(u);
+                            partition_t u_id = p_manager[u];
+                            std::cout << "(" << u << ", " << u_w << ", " << u_id << ") : ";
+                            forall_guivw(g, u, j, v, w)
+                                {
+                                    partition_t v_id = p_manager[v];
+                                    std::cout << "(" << v << ", " << w << ", " << d_oracle.get(u_id, v_id) << ", " << v_id << ") ";
+                                }
+                            endfor
+                            std::cout << std::endl;
+                        }
+
+                        std::cout << "Right-Region" << std::endl;
+                        for (size_t i = 0; i < right_region_size; ++i) {
+                            vertex_t    u    = right_region[i];
+                            weight_t    u_w  = g.weight(u);
+                            partition_t u_id = p_manager[u];
+                            std::cout << "(" << u << ", " << u_w << ", " << u_id << ") : ";
+                            forall_guivw(g, u, j, v, w)
+                                {
+                                    partition_t v_id = p_manager[v];
+                                    std::cout << "(" << v << ", " << w << ", " << d_oracle.get(u_id, v_id) << ", " << v_id << ") ";
+                                }
+                            endfor
+                            std::cout << std::endl;
+                        }
+
+                        std::cout << "Left-Region Penalties" << std::endl;
+                        for (size_t i = 0; i < left_region_size; ++i) {
+                            vertex_t    u    = left_region[i];
+                            weight_t l_penalty = left_penalties[u];
+                            weight_t r_penalty = right_penalties[u];
+                            std::cout << u << " : " << l_penalty << " -- " << r_penalty << std::endl;
+                        }
+
+                        std::cout << "Right-Region Penalties" << std::endl;
+                        for (size_t i = 0; i < right_region_size; ++i) {
+                            vertex_t    u    = right_region[i];
+                            weight_t l_penalty = left_penalties[u];
+                            weight_t r_penalty = right_penalties[u];
+                            std::cout << u << " : " << l_penalty << " -- " << r_penalty << std::endl;
+                        }
+
+                        flow_network.print();
+                        residual_flow_network.print();
+                        scc_graph.print();
+
+                        std::cout << "best found closure: ";
+                        print(is_left);
+                        exit(1);
+                    }
+
+                    if (!closure_found) {
+                        if (alpha == 1.0) { return; }
+                        alpha = std::max(alpha / alpha_modifier, 1.0);
+                        continue;
+                    }
+                } else {
+                    // simply use the first cut found
+                    flow_network.get_cut(is_left);
+
+                    if (!cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
+                        if (alpha == 1.0) { return; }
+                        alpha = std::max(alpha / alpha_modifier, 1.0);
+                        continue;
+                    }
+                }
+
+                // check if the cut actually changes the partition
+                if (!cut_changes_partition(is_left)) {
+                    // cut is valid, but does not change anything
+                    if (alpha == 1.0) { return; }
+                    alpha = std::max(alpha / alpha_modifier, 1.0);
+                    continue;
+                }
+
+                // cut is valid and changes the partition, increase alpha
+                alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
+
+                // make the changes
+                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
+                change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
+                // HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
+
+                active_next_round[left_id]  = 1;
+                active_next_round[right_id] = 1;
+            }
+            ASSERT(max(p_manager.get_bweights()) <= m_lmax);
         }
 
         void rebalance_layer(const u64 level,
