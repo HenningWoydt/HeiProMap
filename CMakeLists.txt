@@ -9,11 +9,28 @@ set(PROJECT_DESCRIPTION "HeiProMap: Heidelberg Process Mapping")
 set(PROJECT_VERSION "1.0.0")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+enable_language(CXX)
+set(CXX ON)
+
 # KaHIP library
 set(NOMPI ON CACHE BOOL "For KaHIP: disable all targets that depend on MPI (kaffpaE, ParHIP)")
 include_directories(extern/KaHIP)
 link_directories(extern/KaHIP)
 add_subdirectory(extern/KaHIP)
+
+if(NOT GUROBI_DIR)
+    message(FATAL_ERROR "GUROBI_DIR not set — please pass it using -DGUROBI_DIR=/opt/gurobi1201/linux64")
+endif()
+
+message(STATUS "GUROBI_DIR is ${GUROBI_DIR}")
+message(STATUS "GUROBI_HOME is $ENV{GUROBI_HOME}")
+
+find_package(GUROBI REQUIRED)
+include_directories(${GUROBI_INCLUDE_DIRS})
+
+message(STATUS "GUROBI_INCLUDE_DIRS is ${GUROBI_INCLUDE_DIRS}")
+message(STATUS "GUROBI_CXX_LIBRARY is ${GUROBI_CXX_LIBRARY}")
+message(STATUS "GUROBI_LIBRARY is ${GUROBI_LIBRARY}")
 
 # Compiler Flags
 set(CMAKE_CXX_STANDARD 17)
@@ -50,5 +67,8 @@ if (OpenMP_CXX_FOUND)
 endif ()
 
 # Link KaHIP library
-target_link_libraries(HeiProMap kahip_static)
-target_link_libraries(MtHeiProMap kahip_static)
+target_link_libraries(HeiProMap kahip)
+target_link_libraries(MtHeiProMap kahip)
+
+target_link_libraries(HeiProMap ${GUROBI_CXX_LIBRARY})
+target_link_libraries(HeiProMap ${GUROBI_LIBRARY})

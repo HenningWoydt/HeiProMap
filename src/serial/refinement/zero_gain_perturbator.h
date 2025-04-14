@@ -34,7 +34,7 @@ namespace HeiProMap {
 
                                 s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                                if (qap_delta >= 0 || ((-1.0 / (f64) (qap_delta)) < randomEngine.get_f64())) {
+                                if (qap_delta == 0) {
                                     bv_manager.move(g, p_manager, u, u_id, v_id);
                                     q_graph.move(g, p_manager, u, u_id, v_id);
                                     p_manager.move(u, u_w, u_id, v_id);

@@ -187,7 +187,7 @@ namespace HeiProMap {
             f64 alpha = config->alpha;
             f64 beta  = std::log(g.get_n());
 
-            weight_t blocks_lmax = (weight_t)ids_per_super_block * m_lmax;;
+            weight_t blocks_lmax = (weight_t)ids_per_super_block * m_lmax;
             std::vector<weight_t> blocks_weights(n_local_super_blocks, 0);
 
             for (partition_t i = 0; i < n_local_super_blocks; ++i) {
@@ -405,35 +405,32 @@ namespace HeiProMap {
                     partition_t end   = neighborhood_id_start + (id + 1) * ids_per_super_block;
                     for (partition_t u_id = start; u_id < end; ++u_id) {
                         forall_bv_id_iu(bv_manager, u_id, k, u)
-                            {
-                                weight_t u_weight = g.weight(u);
+                        {
+                            weight_t u_weight = g.weight(u);
 
-                                block_marker += 1;
-                                forall_guiv(g, u, j, v)
-                                    {
-                                        partition_t v_id = p_manager[v];
+                            block_marker += 1;
+                            for (partition_t v_id = neighborhood_id_start; v_id < neighborhood_id_end; ++v_id) {
+                                if (u_id == v_id) { continue; }
+                                if (block_used[v_id] == block_marker) { continue; }
 
-                                        if (IN_SAME_BLOCK(u_id, v_id, ids_per_super_block)) { continue; }
-                                        if (!IN_NEIGHBORING_BLOCK(v_id, neighborhood_id_start, neighborhood_id_end)) { continue; }
-                                        if (block_used[v_id] == block_marker) { continue; }
+                                partition_t id1 = (u_id - neighborhood_id_start) / ids_per_super_block;
+                                partition_t id2 = (v_id - neighborhood_id_start) / ids_per_super_block;
 
-                                        partition_t id2 = (v_id - neighborhood_id_start) / ids_per_super_block;
-                                        if (blocks_weights[id2] + u_weight > min_blocks_weights[id2]) { continue; }
+                                if (blocks_weights[id2] + u_weight >= blocks_weights[id1]) { continue; }
 
-                                        s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                                        if (qap_delta > vertex_qap_delta) {
-                                            vertex_qap_delta = qap_delta;
-                                            vertex_move      = u;
-                                            vertex_curr_id   = u_id;
-                                            vertex_new_id    = v_id;
-                                            vertex_weight    = u_weight;
-                                        }
+                                if (qap_delta > vertex_qap_delta) {
+                                    vertex_qap_delta = qap_delta;
+                                    vertex_move      = u;
+                                    vertex_curr_id   = u_id;
+                                    vertex_new_id    = v_id;
+                                    vertex_weight    = u_weight;
+                                }
 
-                                        block_used[v_id] = block_marker;
-                                    }
-                                endfor
+                                block_used[v_id] = block_marker;
                             }
+                        }
                         endfor
                     }
 

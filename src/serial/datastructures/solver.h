@@ -100,6 +100,7 @@ namespace HeiProMap {
         KWayFMRefinement k_way_refine;
         MultiTryFMRefinement multi_try_fm_refinement;
         FlowBasedRefinement flow_based_refinement;
+        ILPRefinement ilp_refinement;
 
         HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
         HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
@@ -152,6 +153,7 @@ namespace HeiProMap {
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
+            refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
@@ -197,7 +199,7 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64 n_v_cycle = 10;
+            u64 n_v_cycle = 1;
             for (u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
@@ -364,29 +366,28 @@ namespace HeiProMap {
             const auto sp_refinement = std::chrono::high_resolution_clock::now();
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
-            // s64 qap_1 = get_qap(graphs.back(), p_manager, d_oracle);
-            // pertubation.pertubate(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
-            // s64 qap_2 = get_qap(graphs.back(), p_manager, d_oracle);
-            // std::cout << qap_2 - qap_1 << " " << qap_2 << std::endl;
 
             ZeroGainPerturbator perturbator;
 
-            for (auto [refiner, config] : refinements) {
-                if (config->enabled) {
-                    const auto sp = std::chrono::high_resolution_clock::now();
+            u64 refinement_max_iterations = 1;
+            for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
+                for (auto [refiner, config] : refinements) {
+                    if (config->enabled) {
+                        const auto sp = std::chrono::high_resolution_clock::now();
 
-                    // perturbator.perturbate(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph, lmax, random_engine);
-                    refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
-                    HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
+                        // perturbator.perturbate(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph, lmax, random_engine);
+                        refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
+                        HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
 
-                    const auto ep = std::chrono::high_resolution_clock::now();
-                    SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
-                    s64 qap_delta = 0;
-                    SMALL_METRICS(qap_delta = qap_before - qap_after;)
+                        const auto ep = std::chrono::high_resolution_clock::now();
+                        SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
+                        s64 qap_delta = 0;
+                        SMALL_METRICS(qap_delta = qap_before - qap_after;)
 
-                    small_stat_collect.add_refinement(config->name, get_seconds(sp, ep), qap_delta);
+                        small_stat_collect.add_refinement(config->name, get_seconds(sp, ep), qap_delta);
 
-                    SMALL_METRICS(qap_before = qap_after;)
+                        SMALL_METRICS(qap_before = qap_after;)
+                    }
                 }
             }
 

@@ -297,12 +297,17 @@ namespace HeiProMap {
                 // determine in degree of each vertex
                 std::vector<vertex_t> in_deg(n_scc, 0);
                 for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
-                    for (vertex_t scc_v: edges[scc_u]) { in_deg[scc_v] += 1; }
+                    if (is_active[scc_u] == 0) { continue;}
+                    for (vertex_t scc_v: edges[scc_u]) {
+                        if (is_active[scc_v] == 0) { continue; }
+                        in_deg[scc_v] += 1;
+                    }
                 }
 
                 // push roots into stack
                 std::vector<vertex_t> stack;
                 for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
+                    if (is_active[scc_u] == 0) { continue; }
                     if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
                 }
                 std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
@@ -316,6 +321,7 @@ namespace HeiProMap {
                     topo_order.push_back(scc_u);
 
                     for (vertex_t scc_v: edges[scc_u]) {
+                        if (is_active[scc_v] == 0) { continue; }
                         in_deg[scc_v] -= 1;
                         if (in_deg[scc_v] == 0) { stack.push_back(scc_v); }
                     }
