@@ -34,6 +34,8 @@
 #include "../../commons/utils.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
+#include "../refinement/hierarchy_aware_flow_based_refinement.h"
+#include "../refinement/hierarchy_aware_ILP_refinement.h"
 #include "../refinement/hierarchy_aware_multi_way_fm_refinement.h"
 #include "../refinement/ILP_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
@@ -261,8 +263,10 @@ namespace HeiProMap {
         FlowBasedRefinementConfiguration flow_based_refinement_config                  = FlowBasedRefinementConfiguration("Flow Based");
         ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
 
-        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config                   = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
-        HierarchyAwareMultiTryMultiWayFMConfiguration hierarchy_aware_multi_try_multi_way_fm_config = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
+        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config                          = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
+        HierarchyAwareMultiTryMultiWayFMConfiguration hierarchy_aware_multi_try_multi_way_fm_config        = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
+        HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
+        HierarchyAwareFlowBasedRefinementConfiguration hierarchy_aware_flow_based_refinement_configuration = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
 
         AlgorithmConfiguration() = default;
 
@@ -754,9 +758,9 @@ namespace HeiProMap {
             hierarchy_aware_multi_try_multi_way_fm_config.alpha         = 100.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled                    = false;
-            flow_based_refinement_config.max_global_iteration       = 2;
-            flow_based_refinement_config.max_local_iteration        = 10;
+            flow_based_refinement_config.enabled                    = true;
+            flow_based_refinement_config.max_global_iteration       = 1;
+            flow_based_refinement_config.max_local_iteration        = 5;
             flow_based_refinement_config.alpha                      = 8.0;
             flow_based_refinement_config.alpha_upper_bound          = 32.0;
             flow_based_refinement_config.alpha_modifier             = 2.0;
@@ -764,8 +768,22 @@ namespace HeiProMap {
             flow_based_refinement_config.closed_vertex_sets_repeats = 100;
 
             // enable ILP based refinement
-            ilp_refinement_configuration.enabled = true;
+            ilp_refinement_configuration.enabled        = false;
             ilp_refinement_configuration.max_n_vertices = 1000;
+
+            // enable hierarchy aware ILP refinement
+            hierarchy_aware_ilp_refinement_configuration.enabled        = false;
+            hierarchy_aware_ilp_refinement_configuration.max_n_vertices = 100;
+
+            // enable hierarchy aware flow-based refinement
+            hierarchy_aware_flow_based_refinement_configuration.enabled                    = true;
+            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration       = 1;
+            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration        = 5;
+            hierarchy_aware_flow_based_refinement_configuration.alpha                      = 8.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 32.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_modifier             = 2.0;
+            hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set      = true;
+            hierarchy_aware_flow_based_refinement_configuration.closed_vertex_sets_repeats = 100;
         }
 
         /**

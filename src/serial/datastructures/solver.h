@@ -51,10 +51,10 @@
 #include "../refinement/quotient_graph_refinement_Faraj20.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
+#include "../refinement/zero_gain_perturbator.h"
 #include "../utility/algorithm_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
-#include "../refinement/zero_gain_perturbator.h"
 
 namespace HeiProMap {
     /**
@@ -104,6 +104,8 @@ namespace HeiProMap {
 
         HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
         HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
+        HierarchyAwareILPRefinement hierarchy_aware_ilp_refinement;
+        HierarchyAwareFlowBasedRefinement hierarchy_aware_flow_based_refinement;
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
@@ -154,6 +156,8 @@ namespace HeiProMap {
             refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
+            refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
+            refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {

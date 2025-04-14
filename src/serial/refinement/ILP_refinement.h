@@ -28,8 +28,8 @@
 #define HEIPROMAP_ILP_REFINEMENT_H
 
 #include <gurobi_c++.h>
-#include <unordered_map>
 
+#include "../../commons/aligned_array.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
 #include "../../commons/utils.h"
@@ -58,6 +58,12 @@ namespace HeiProMap {
         u8* active_next_round = nullptr;
         PairWeight* pairs     = nullptr;
         size_t pairs_size     = 0;
+
+        AlignedArray<vertex_t> vertices;
+        size_t vertices_size = 0;
+        AlignedArray<weight_t> u_id_penalties;
+        AlignedArray<weight_t> v_id_penalties;
+        AlignedArray<GRBVar> vars;
 
         RandomEngine* random_engine              = nullptr;
         const ILPRefinementConfiguration* config = nullptr;
@@ -99,6 +105,12 @@ namespace HeiProMap {
             active_next_round = (u8*)aligned_alloc(64, t_k_64 * sizeof(u8));
             pairs             = (PairWeight*)aligned_alloc(64, t_k_t_k_64 * sizeof(PairWeight));
             pairs_size        = 0;
+
+            vertices = AlignedArray<vertex_t>(t_n);
+
+            u_id_penalties = AlignedArray<weight_t>(t_n);
+            v_id_penalties = AlignedArray<weight_t>(t_n);
+            vars           = AlignedArray<GRBVar>(t_n);
         }
 
         void refine(const u64 level,
@@ -160,25 +172,44 @@ namespace HeiProMap {
                            q_graph_t& q_graph,
                            partition_t u_id,
                            partition_t v_id) {
+            refine_blocks_new(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
+            return;
+
+            static f64 time_setup = 0.0;
+            static f64 time_solve = 0.0;
+
             if (bv_manager.size(u_id) + bv_manager.size(v_id) > config->max_n_vertices) { return; }
 
-            weight_t curr_qap = get_qap(g, p_manager, d_oracle);
+            auto sp_setup = std::chrono::high_resolution_clock::now();
+
+            // weight_t curr_qap = get_qap(g, p_manager, d_oracle);
 
             weight_t total_u_id_weight = 0;
             weight_t total_v_id_weight = 0;
 
-            std::vector<weight_t> u_id_penalties(g.get_n(), 0);
-            std::vector<weight_t> v_id_penalties(g.get_n(), 0);
+            // ilp goes here
+            GRBEnv env = GRBEnv(true);
+            env.set("OutputFlag", "0"); // disable output
+            env.start();
+            GRBModel model = GRBModel(env);
 
-            struct CutInfo {
-                vertex_t u;
-                vertex_t v;
-                weight_t penalty;
+            GRBQuadExpr penalty = 0;
+            GRBLinExpr u_weight = 0;
+            GRBLinExpr v_weight = 0;
 
-                CutInfo(vertex_t _u, vertex_t _v, weight_t _penalty) : u(_u), v(_v), penalty(_penalty) {}
-            };
-
-            std::vector<CutInfo> cuts;
+            vertices_size = 0;
+            forall_bv_id_iu(bv_manager, u_id, i, u)
+                {
+                    vertices[vertices_size++] = u;
+                    vars[u]                   = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
+                }
+            endfor
+            forall_bv_id_iu(bv_manager, v_id, i, v)
+                {
+                    vertices[vertices_size++] = v;
+                    vars[v]                   = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
+                }
+            endfor
 
             forall_bv_id_iu(bv_manager, u_id, i, u)
                 {
@@ -191,15 +222,20 @@ namespace HeiProMap {
                             partition_t vv_id = p_manager[vv];
                             if (vv_id == v_id) {
                                 if (vv > u) { continue; }
-                                cuts.emplace_back(u, vv, 2 * w * d_oracle.get(u_id, v_id));
+                                weight_t p = 2 * w * d_oracle.get(u_id, v_id);
+                                penalty += p * (vars[u] + vars[vv] - 2 * vars[u] * vars[vv]);
                             } else {
-                                penalty_u_id += w * d_oracle.get(vv_id, u_id);
-                                penalty_v_id += w * d_oracle.get(vv_id, v_id);
+                                penalty_u_id += 2 * w * d_oracle.get(vv_id, u_id);
+                                penalty_v_id += 2 * w * d_oracle.get(vv_id, v_id);
                             }
                         }
                     endfor
-                    u_id_penalties[u] = 2 * penalty_u_id;
-                    v_id_penalties[u] = 2 * penalty_v_id;
+
+                    penalty += penalty_u_id * (1 - vars[u]); // penalty if in u_id
+                    penalty += penalty_v_id * vars[u]; // penalty if in v_id
+
+                    u_weight += g.weight(u) * (1 - vars[u]);
+                    v_weight += g.weight(u) * vars[u];
                 }
             endfor
 
@@ -214,71 +250,40 @@ namespace HeiProMap {
                             partition_t vv_id = p_manager[vv];
                             if (vv_id == u_id) {
                                 if (vv > v) { continue; }
-                                cuts.emplace_back(v, vv, 2 * w * d_oracle.get(u_id, v_id));
+                                weight_t p = 2 * w * d_oracle.get(u_id, v_id);
+                                penalty += p * (vars[v] + vars[vv] - 2 * vars[v] * vars[vv]);
                             } else {
-                                penalty_u_id += w * d_oracle.get(vv_id, u_id);
-                                penalty_v_id += w * d_oracle.get(vv_id, v_id);
+                                penalty_u_id += 2 * w * d_oracle.get(vv_id, u_id);
+                                penalty_v_id += 2 * w * d_oracle.get(vv_id, v_id);
                             }
                         }
                     endfor
-                    u_id_penalties[v] = 2 * penalty_u_id;
-                    v_id_penalties[v] = 2 * penalty_v_id;
+
+                    penalty += penalty_u_id * (1 - vars[v]); // penalty if in u_id
+                    penalty += penalty_v_id * vars[v]; // penalty if in v_id
+
+                    u_weight += g.weight(v) * (1 - vars[v]);
+                    v_weight += g.weight(v) * vars[v];
                 }
             endfor
-
-            // ilp goes here
-            GRBEnv env = GRBEnv(true);
-            env.set("OutputFlag", "0"); // disable output
-            env.start();
-            GRBModel model = GRBModel(env);
-
-            std::unordered_map<vertex_t, GRBVar> x;
-            forall_bv_id_iu(bv_manager, u_id, i, u)
-                {
-                    x[u] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
-                }
-            endfor
-            forall_bv_id_iu(bv_manager, v_id, i, v)
-                {
-                    x[v] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
-                }
-            endfor
-
-            GRBQuadExpr new_penalty = 0;
-
-            for (const auto& [v, var] : x) {
-                new_penalty += u_id_penalties[v] * (1 - var); // penalty if in u_id
-                new_penalty += v_id_penalties[v] * var; // penalty if in v_id
-            }
-
-            // handle cross-edges (boundary edges)
-            for (const CutInfo& cut : cuts) {
-                auto xu = x[cut.u];
-                auto xv = x[cut.v];
-
-                new_penalty += cut.penalty * (xu + xv - 2 * xu * xv);
-            }
-
-            GRBLinExpr u_weight = 0;
-            GRBLinExpr v_weight = 0;
-
-            for (const auto& [v, var] : x) {
-                u_weight += g.weight(v) * (1 - var);
-                v_weight += g.weight(v) * var;
-            }
 
             model.addConstr(u_weight <= m_lmax - (p_manager.get_bweight(u_id) - total_u_id_weight));
             model.addConstr(v_weight <= m_lmax - (p_manager.get_bweight(v_id) - total_v_id_weight));
 
-            model.setObjective(new_penalty, GRB_MINIMIZE);
+            auto ep_setup = std::chrono::high_resolution_clock::now();
+
+            auto sp_solve = std::chrono::high_resolution_clock::now();
+            model.setObjective(penalty, GRB_MINIMIZE);
             model.optimize();
+            auto ep_solve = std::chrono::high_resolution_clock::now();
 
             u64 n_changes = 0;
 
-            double objective_value = 0;
             if (model.get(GRB_IntAttr_Status) == GRB_OPTIMAL) {
-                objective_value = model.get(GRB_DoubleAttr_ObjVal);
-                for (const auto& [v, var] : x) {
+                for (size_t i = 0; i < vertices_size; ++i) {
+                    const vertex_t v  = vertices[i];
+                    const GRBVar& var = vars[v];
+
                     int assignment     = round(var.get(GRB_DoubleAttr_X));
                     partition_t new_id = (assignment == 0) ? u_id : v_id;
                     partition_t old_id = p_manager[v];
@@ -297,7 +302,115 @@ namespace HeiProMap {
                 }
             }
 
-            std::cout << "Number of changes: " << n_changes << " " << curr_qap - get_qap(g, p_manager, d_oracle) << std::endl;
+            // time_setup += get_seconds(sp_setup, ep_setup);
+            // time_solve += get_seconds(sp_solve, ep_solve);
+            // std::cout << "Number of changes: " << n_changes << " " << curr_qap - get_qap(g, p_manager, d_oracle) << " " << time_setup << " " << time_solve << " " << max(p_manager.get_bweights()) << std::endl;
+        }
+
+        void refine_blocks_new(const u64 level,
+                               const u64 max_level,
+                               const graph_t& g,
+                               const d_oracle_t& d_oracle,
+                               bv_manager_t& bv_manager,
+                               p_manager_t& p_manager,
+                               q_graph_t& q_graph,
+                               partition_t u_id,
+                               partition_t v_id) {
+            static f64 time_setup = 0.0;
+            static f64 time_solve = 0.0;
+
+            if (p_manager.size(u_id) + p_manager.size(v_id) > config->max_n_vertices) { return; }
+
+            auto sp_setup = std::chrono::high_resolution_clock::now();
+
+            weight_t curr_qap = get_qap(g, p_manager, d_oracle);
+
+            // ilp goes here
+            GRBEnv env = GRBEnv(true);
+            env.set("OutputFlag", "0"); // disable output
+            env.start();
+            GRBModel model = GRBModel(env);
+
+            GRBQuadExpr penalty = 0;
+            GRBLinExpr u_weight = 0;
+            GRBLinExpr v_weight = 0;
+
+            vertices_size = 0;
+            for (vertex_t u = 0; u < g.get_n(); ++u) {
+                if (p_manager[u] == u_id || p_manager[u] == v_id) {
+                    vertices[vertices_size++] = u;
+                    vars[u]                   = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
+                }
+            }
+
+            if (vertices_size > config->max_n_vertices) { return; }
+
+            for (size_t i = 0; i < vertices_size; ++i) {
+                const vertex_t u    = vertices[i];
+                partition_t curr_id = p_manager[u];
+
+                weight_t penalty_u_id = 0;
+                weight_t penalty_v_id = 0;
+
+                forall_guivw(g, u, j, vv, w)
+                    {
+                        partition_t vv_id = p_manager[vv];
+                        if (vv_id == u_id || vv_id == v_id) {
+                            if (vv > u) { continue; }
+                            weight_t p = 2 * w * d_oracle.get(u_id, v_id);
+                            penalty += p * (vars[u] + vars[vv] - 2 * vars[u] * vars[vv]);
+                        } else {
+                            penalty_u_id += 2 * w * d_oracle.get(vv_id, u_id);
+                            penalty_v_id += 2 * w * d_oracle.get(vv_id, v_id);
+                        }
+                    }
+                endfor
+
+                penalty += penalty_u_id * (1 - vars[u]); // penalty if in u_id
+                penalty += penalty_v_id * vars[u]; // penalty if in v_id
+
+                u_weight += g.weight(u) * (1 - vars[u]);
+                v_weight += g.weight(u) * vars[u];
+            }
+
+            model.addConstr(u_weight <= m_lmax);
+            model.addConstr(v_weight <= m_lmax);
+
+            auto ep_setup = std::chrono::high_resolution_clock::now();
+
+            auto sp_solve = std::chrono::high_resolution_clock::now();
+            model.setObjective(penalty, GRB_MINIMIZE);
+            model.optimize();
+            auto ep_solve = std::chrono::high_resolution_clock::now();
+
+            u64 n_changes = 0;
+
+            if (model.get(GRB_IntAttr_Status) == GRB_OPTIMAL) {
+                for (size_t i = 0; i < vertices_size; ++i) {
+                    const vertex_t v  = vertices[i];
+                    const GRBVar& var = vars[v];
+
+                    int assignment     = round(var.get(GRB_DoubleAttr_X));
+                    partition_t new_id = (assignment == 0) ? u_id : v_id;
+                    partition_t old_id = p_manager[v];
+
+                    if (old_id != new_id) {
+                        n_changes++;
+                        if (bv_manager.is_boundary(v)) {
+                            bv_manager.move(g, p_manager, v, old_id, new_id);
+                        } else {
+                            bv_manager.add_new(g, p_manager, v, new_id);
+                        }
+
+                        q_graph.move(g, p_manager, v, old_id, new_id);
+                        p_manager.move(v, g.weight(v), old_id, new_id);
+                    }
+                }
+            }
+
+            time_setup += get_seconds(sp_setup, ep_setup);
+            time_solve += get_seconds(sp_solve, ep_solve);
+            std::cout << "Number of changes: " << n_changes << " " << curr_qap - get_qap(g, p_manager, d_oracle) << " " << time_setup << " " << time_solve << " " << max(p_manager.get_bweights()) << std::endl;
         }
 
         JSONString get_stats() override {
