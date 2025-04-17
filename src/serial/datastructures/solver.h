@@ -100,11 +100,11 @@ namespace HeiProMap {
         KWayFMRefinement k_way_refine;
         MultiTryFMRefinement multi_try_fm_refinement;
         FlowBasedRefinement flow_based_refinement;
-        ILPRefinement ilp_refinement;
+        // ILPRefinement ilp_refinement;
 
         HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
         HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
-        HierarchyAwareILPRefinement hierarchy_aware_ilp_refinement;
+        // HierarchyAwareILPRefinement hierarchy_aware_ilp_refinement;
         HierarchyAwareFlowBasedRefinement hierarchy_aware_flow_based_refinement;
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
@@ -155,9 +155,9 @@ namespace HeiProMap {
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
-            refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
-            refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
             refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
+            // refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
+            // refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
@@ -203,7 +203,7 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64 n_v_cycle = 1;
+            u64 n_v_cycle = 10;
             for (u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
@@ -228,7 +228,7 @@ namespace HeiProMap {
 
                 std::cout << initial_qap << std::endl;
 
-                ASSERT(max(p_manager.get_bweights()) <= lmax);
+                // ASSERT(max(p_manager.get_bweights()) <= lmax);
                 if (p_manager.is_overloaded()) {
                     print(p_manager.get_bweights());
                     std::cout << max(p_manager.get_bweights()) << std::endl;

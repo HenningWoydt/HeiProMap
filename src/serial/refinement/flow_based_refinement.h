@@ -56,30 +56,41 @@ namespace HeiProMap {
             source = n;
             target = n + 1;
 
-            if (edges.size() < n + 2) {
+            if (edges.size() != n + 2) {
                 edges.resize(n + 2);
-            } else {
-                for (vertex_t i = 0; i < n + 2; ++i) { edges[i].clear(); }
+            }
+            for (auto &vec: edges) {
+                vec.clear();
             }
         }
 
         void add_directed_edge(vertex_t u, vertex_t v, weight_t w) {
+            for(auto & e : edges[u]) { ASSERT(e.v != v); }
+
             edges[u].emplace_back(v, w);
         }
 
         void add_edge_to_source(vertex_t u, weight_t w) {
+            for(auto & e : edges[u]) { ASSERT(e.v != source); }
+
             edges[u].emplace_back(source, w);
         }
 
         void add_edge_to_target(vertex_t u, weight_t w) {
+            for(auto & e : edges[u]) { ASSERT(e.v != target); }
+
             edges[u].emplace_back(target, w);
         }
 
         void add_edge_from_source(vertex_t u, weight_t w) {
+            for(auto & e : edges[source]) { ASSERT(e.v != u); }
+
             edges[source].emplace_back(u, w);
         }
 
         void add_edge_from_target(vertex_t u, weight_t w) {
+            for(auto & e : edges[target]) { ASSERT(e.v != u); }
+
             edges[target].emplace_back(u, w);
         }
 
@@ -140,12 +151,16 @@ namespace HeiProMap {
         vertex_t                           idx       = 0;
         vertex_t                           n_scc     = 0;
 
+        const ResidualFlowNetwork *temp_g = nullptr;
+
     public:
         SCCGraph() = default;
 
         void initialize(const ResidualFlowNetwork &residual_flow_network,
                         const graph_t &g,
                         const TranslationTable<vertex_t> &tt) {
+            temp_g = &residual_flow_network;
+
             n      = residual_flow_network.get_n() + 2;
             source = residual_flow_network.get_source();
             target = residual_flow_network.get_target();
@@ -165,7 +180,8 @@ namespace HeiProMap {
 
             // === Gabow's Algorithm ===
             for (vertex_t v = 0; v < n; ++v) {
-                if (index[v] == UNVISITED) { dfs(v, residual_flow_network); }
+                // if (index[v] == UNVISITED) { dfs(v, residual_flow_network); }
+                if (index[v] == UNVISITED) { dfs_non_recursive(v, residual_flow_network); }
             }
 
             // clear old edges
@@ -213,7 +229,7 @@ namespace HeiProMap {
             HEAVYASSERT(assert_scc_correct(residual_flow_network));
         }
 
-        vertex_t get_n_scc() const {return n_scc; }
+        vertex_t get_n_scc() const { return n_scc; }
 
         void reduce() {
             std::vector<vertex_t> curr;
@@ -270,8 +286,12 @@ namespace HeiProMap {
             ASSERT(no_duplicates(scc_t_predecessors));
 
 #if ASSERT_ENABLED
-            for(vertex_t scc_u : scc_s_successors){
-                for(vertex_t scc_v : scc_t_predecessors) {
+            for (vertex_t scc_u: scc_s_successors) {
+                for (vertex_t scc_v: scc_t_predecessors) {
+                    if (scc_u == scc_v) {
+                        temp_g->print();
+                        print();
+                    }
                     ASSERT(scc_u != scc_v);
                 }
             }
@@ -297,7 +317,7 @@ namespace HeiProMap {
                 // determine in degree of each vertex
                 std::vector<vertex_t> in_deg(n_scc, 0);
                 for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
-                    if (is_active[scc_u] == 0) { continue;}
+                    if (is_active[scc_u] == 0) { continue; }
                     for (vertex_t scc_v: edges[scc_u]) {
                         if (is_active[scc_v] == 0) { continue; }
                         in_deg[scc_v] += 1;
@@ -561,6 +581,48 @@ namespace HeiProMap {
             }
         }
 
+        void dfs_non_recursive(vertex_t start, const ResidualFlowNetwork &residual_flow_network) {
+            std::stack<std::pair<vertex_t, size_t>> stack; // (node, next neighbor index)
+
+            stack.push({start, 0});
+            index[start] = idx++;
+            S.push_back(start);
+            P.push_back(start);
+
+            while (!stack.empty()) {
+                auto &[v, i] = stack.top();  // current node and index into its neighbors
+                const auto &neighbors = residual_flow_network[v];
+
+                if (i < neighbors.size()) {
+                    vertex_t u = neighbors[i++].v;
+                    if (index[u] == UNVISITED) {
+                        index[u] = idx++;
+                        S.push_back(u);
+                        P.push_back(u);
+                        stack.push({u, 0});  // dive deeper
+                    } else if (scc_id[u] == UNVISITED) {
+                        while (!P.empty() && index[P.back()] > index[u]) {
+                            P.pop_back();
+                        }
+                    }
+                } else {
+                    // done processing all neighbors
+                    if (!P.empty() && P.back() == v) {
+                        vertex_per_scc.emplace_back();
+                        vertex_t w;
+                        do {
+                            w = S.back(); S.pop_back();
+                            scc_id[w] = n_scc;
+                            vertex_per_scc.back().push_back(w);
+                        } while (w != v);
+                        P.pop_back();
+                        ++n_scc;
+                    }
+                    stack.pop();
+                }
+            }
+        }
+
         bool assert_scc_correct(const ResidualFlowNetwork &residual_flow_network) {
             // asserts that all found scc are correct
 
@@ -675,34 +737,45 @@ namespace HeiProMap {
             source = n;
             target = n + 1;
 
-            // adj.clear();
-            // adj.resize(n + 2); // also include source and target in adj list
+            if (adj.size() != n + 2) {
+                adj.resize(n + 2);
+            }
+            for (auto &vec: adj) {
+                vec.clear();
+            }
         }
 
         void add(vertex_t u, vertex_t v, weight_t w) {
             ASSERT(u < n);
             ASSERT(v < n);
             ASSERT(w >= 0);
+            for(auto & e : adj[u]){ ASSERT(e.v != v); }
+            for(auto & e : adj[v]){ ASSERT(e.v != u); }
+
             g.add_edge(u, v, w, w);
 
-            // adj[u].emplace_back(v, w);
-            // adj[v].emplace_back(u, w);
+            adj[u].emplace_back(v, w);
+            adj[v].emplace_back(u, w);
         }
 
         void add_s_edge(vertex_t v, weight_t w) {
             ASSERT(v < n);
             ASSERT(w >= 0);
+            for(auto & e : adj[source]){ ASSERT(e.v != v); }
+
             g.add_edge(source, v, w, 0);
 
-            // adj[source].emplace_back(v, w);
+            adj[source].emplace_back(v, w);
         }
 
         void add_t_edge(vertex_t v, weight_t w) {
             ASSERT(v < n);
             ASSERT(w >= 0);
+            for(auto & e : adj[target]){ ASSERT(e.v != v); }
+
             g.add_edge(v, target, w, 0);
 
-            // adj[v].emplace_back(target, w);
+            adj[v].emplace_back(target, w);
         }
 
         void build_residual_network(ResidualFlowNetwork &residual_g) {
@@ -735,6 +808,15 @@ namespace HeiProMap {
         }
 
         void solve() {
+            for (auto &vec: adj) {
+
+                for (size_t i = 0; i < vec.size(); ++i) {
+                    for (size_t j = i + 1; j < vec.size(); ++j) {
+                        ASSERT(vec[i].v != vec[j].v);
+                    }
+                }
+            }
+
             const weight_t INF = std::numeric_limits<weight_t>::max() / 2;
             g.add_tweights(source, INF, 0);
             g.add_tweights(target, 0, INF);
@@ -762,7 +844,7 @@ namespace HeiProMap {
                     std::cout << "Node " << u << ": ";
                 }
 
-                for (const auto& edge : adj[u]) {
+                for (const auto &edge: adj[u]) {
                     std::cout << edge.v << "(w=" << edge.w << ") ";
                 }
 
@@ -818,8 +900,6 @@ namespace HeiProMap {
         u32 *is_left_region  = nullptr;
         u32 *is_right_region = nullptr;
         u32 is_region_mark   = 0;
-
-        u32 *bfs_level = nullptr;
 
         vertex_t *queue     = nullptr;
         size_t   queue_size = 0;
@@ -907,8 +987,6 @@ namespace HeiProMap {
             right_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
             right_region_size = 0;
 
-            bfs_level = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-
             is_left_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
             std::fill_n(is_left_region, m_n_64, 0);
             is_right_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
@@ -973,7 +1051,6 @@ namespace HeiProMap {
                            partition_t left_id,
                            partition_t right_id) {
             ASSERT(left_id != right_id);
-            ASSERT(max(p_manager.get_bweights()) <= m_lmax);
 
             f64 alpha             = config->alpha;
             f64 alpha_upper_bound = config->alpha_upper_bound;
@@ -983,7 +1060,6 @@ namespace HeiProMap {
             u64 iteration           = 0;
 
             while (iteration < max_local_iteration) {
-                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 iteration += 1;
 
                 // get boundary vertices
@@ -1089,7 +1165,7 @@ namespace HeiProMap {
 #endif
  */
 
-                    if (left_region_size == 5 && right_region_size == 5 && scc_graph.get_n_scc() >=4 && false) {
+                    if (left_region_size == 5 && right_region_size == 5 && scc_graph.get_n_scc() >= 4 && false) {
                         std::cout << "Left-Region" << std::endl;
                         for (size_t i = 0; i < left_region_size; ++i) {
                             vertex_t    u    = left_region[i];
@@ -1122,7 +1198,7 @@ namespace HeiProMap {
 
                         std::cout << "Left-Region Penalties" << std::endl;
                         for (size_t i = 0; i < left_region_size; ++i) {
-                            vertex_t    u    = left_region[i];
+                            vertex_t u         = left_region[i];
                             weight_t l_penalty = left_penalties[u];
                             weight_t r_penalty = right_penalties[u];
                             std::cout << u << " : " << l_penalty << " -- " << r_penalty << std::endl;
@@ -1130,7 +1206,7 @@ namespace HeiProMap {
 
                         std::cout << "Right-Region Penalties" << std::endl;
                         for (size_t i = 0; i < right_region_size; ++i) {
-                            vertex_t    u    = right_region[i];
+                            vertex_t u         = right_region[i];
                             weight_t l_penalty = left_penalties[u];
                             weight_t r_penalty = right_penalties[u];
                             std::cout << u << " : " << l_penalty << " -- " << r_penalty << std::endl;
@@ -1173,15 +1249,11 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
                 change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
-                ASSERT(max(p_manager.get_bweights()) <= m_lmax);
-                // HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
 
                 active_next_round[left_id]  = 1;
                 active_next_round[right_id] = 1;
             }
-            ASSERT(max(p_manager.get_bweights()) <= m_lmax);
         }
 
         void determine_boundary_vertices(const graph_t &g,
@@ -1241,7 +1313,6 @@ namespace HeiProMap {
                 ASSERT(p_manager[u] == left_id);
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
-                bfs_level[u]        = 0;
             }
 
             size_t queue_idx = 0;
@@ -1262,7 +1333,6 @@ namespace HeiProMap {
                             if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue[queue_size++] = v;
                                 seen[v]             = seen_mark - 1;
-                                bfs_level[v]        = bfs_level[u] + 1;
                             }
                         }
                     endfor
@@ -1279,7 +1349,6 @@ namespace HeiProMap {
                 ASSERT(p_manager[u] == right_id);
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
-                bfs_level[u]        = 0;
             }
 
             right_region_size = 0;
@@ -1300,7 +1369,6 @@ namespace HeiProMap {
                             if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue[queue_size++] = v;
                                 seen[v]             = seen_mark - 1;
-                                bfs_level[v]        = bfs_level[u] + 1;
                             }
                         }
                     endfor
@@ -1321,10 +1389,27 @@ namespace HeiProMap {
                 right_penalties[u] = 0;
                 forall_guivw(g, u, i, v, w)
                     {
-                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) { continue; } // ignore neighbors that are in the region
+                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) { continue; } // ignore neighbors that are in the region, they will be handled later
                         partition_t v_id = p_manager[v];
+
                         left_penalties[u] += w * d_oracle.get(left_id, v_id);
                         right_penalties[u] += w * d_oracle.get(right_id, v_id);
+
+                        /*
+                        if (v_id != left_id && v_id != right_id) {
+                            // peripheral edge
+                            left_penalties[u] += w * d_oracle.get(left_id, v_id);
+                            right_penalties[u] += w * d_oracle.get(right_id, v_id);
+                        } else if (v_id == left_id) {
+                            // edge from left region into left block, only right penalty
+                            // left_penalties[u] += w * d_oracle.get(left_id, v_id);
+                            right_penalties[u] += w * d_oracle.get(right_id, v_id);
+                        } else {
+                            // edge from left region into right block, only left penalty
+                            left_penalties[u] += w * d_oracle.get(left_id, v_id);
+                            // right_penalties[u] += w * d_oracle.get(right_id, v_id);
+                        }
+                         */
                     }
                 endfor
                 left_penalties[u] *= 2;
@@ -1336,10 +1421,27 @@ namespace HeiProMap {
                 right_penalties[u] = 0;
                 forall_guivw(g, u, i, v, w)
                     {
-                        if (is_right_region[v] == is_region_mark || is_left_region[v] == is_region_mark) { continue; } // ignore neighbors that are in the region
+                        if (is_right_region[v] == is_region_mark || is_left_region[v] == is_region_mark) { continue; } // ignore neighbors that are in the region, they will be handled later
                         partition_t v_id = p_manager[v];
+
                         left_penalties[u] += w * d_oracle.get(left_id, v_id);
                         right_penalties[u] += w * d_oracle.get(right_id, v_id);
+
+                        /*
+                        if (v_id != left_id && v_id != right_id) {
+                            // peripheral edge
+                            left_penalties[u] += w * d_oracle.get(left_id, v_id);
+                            right_penalties[u] += w * d_oracle.get(right_id, v_id);
+                        } else if (v_id == left_id) {
+                            // edge from right region into left block, only right penalty
+                            // left_penalties[u] += w * d_oracle.get(left_id, v_id);
+                            right_penalties[u] += w * d_oracle.get(right_id, v_id);
+                        } else {
+                            // edge from right region into right block, only left penalty
+                            left_penalties[u] += w * d_oracle.get(left_id, v_id);
+                            // right_penalties[u] += w * d_oracle.get(right_id, v_id);
+                        }
+                         */
                     }
                 endfor
                 left_penalties[u] *= 2;
@@ -1375,16 +1477,14 @@ namespace HeiProMap {
                         }
 
                         if (is_left_region[v] != is_region_mark) { continue; }
-                        if (bfs_level[u] < bfs_level[v]) { continue; } // only forward edges allowed
-
-                        weight_t mult = bfs_level[u] == bfs_level[v] ? 1 : 2;
+                        if (u < v) { continue; } // no double edges
 
                         vertex_t new_u = translation_table.get_n(u);
                         vertex_t new_v = translation_table.get_n(v);
 
                         ASSERT(new_u != new_v);
 
-                        flow_network.add(new_u, new_v, mult * w * distance);
+                        flow_network.add(new_u, new_v, 2 * w * distance);
                     }
                 endfor
             }
@@ -1397,16 +1497,14 @@ namespace HeiProMap {
                 forall_guivw(g, u, i, v, w)
                     {
                         if (is_right_region[v] != is_region_mark) { continue; } // vertex gets handled by penalties, or if v belongs to the left region, no edge is made
-                        if (bfs_level[u] > bfs_level[v]) { continue; } // only forward edges allowed
-
-                        weight_t mult = bfs_level[u] == bfs_level[v] ? 1 : 2;
+                        if (u < v) { continue; } // no double edges
 
                         vertex_t new_u = translation_table.get_n(u);
                         vertex_t new_v = translation_table.get_n(v);
 
                         ASSERT(new_u != new_v);
 
-                        flow_network.add(new_u, new_v, mult * w * distance);
+                        flow_network.add(new_u, new_v, 2 * w * distance);
                     }
                 endfor
             }

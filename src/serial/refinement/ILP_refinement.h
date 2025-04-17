@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_ILP_REFINEMENT_H
 #define HEIPROMAP_ILP_REFINEMENT_H
 
+/*
 #include <gurobi_c++.h>
 
 #include "../../commons/aligned_array.h"
@@ -425,5 +426,6 @@ namespace HeiProMap {
         }
     };
 }
+*/
 
 #endif //HEIPROMAP_ILP_REFINEMENT_H

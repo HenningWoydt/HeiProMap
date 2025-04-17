@@ -26,6 +26,7 @@
 
 #ifndef HEIPROMAP_HIERARCHY_AWARE_ILP_REFINEMENT_H
 #define HEIPROMAP_HIERARCHY_AWARE_ILP_REFINEMENT_H
+/*
 
 #include <gurobi_c++.h>
 
@@ -184,4 +185,5 @@ namespace HeiProMap {
     };
 }
 
+ */
 #endif //HEIPROMAP_HIERARCHY_AWARE_ILP_REFINEMENT_H

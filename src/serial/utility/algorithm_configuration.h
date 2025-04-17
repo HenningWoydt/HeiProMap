@@ -261,11 +261,11 @@ namespace HeiProMap {
         TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config     = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
         FlowBasedRefinementConfiguration flow_based_refinement_config                  = FlowBasedRefinementConfiguration("Flow Based");
-        ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
+        // ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
 
         HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config                          = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
         HierarchyAwareMultiTryMultiWayFMConfiguration hierarchy_aware_multi_try_multi_way_fm_config        = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
-        HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
+        // HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
         HierarchyAwareFlowBasedRefinementConfiguration hierarchy_aware_flow_based_refinement_configuration = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
 
         AlgorithmConfiguration() = default;
@@ -723,7 +723,7 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.enabled       = false;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha         = 100.0;
 
@@ -733,7 +733,7 @@ namespace HeiProMap {
             k_way_fm_refinement_config.alpha         = 100.0;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = true;
+            multi_try_fm_refinement_config.enabled       = false;
             multi_try_fm_refinement_config.max_iteration = 2;
             multi_try_fm_refinement_config.alpha         = 100.0;
 
@@ -748,7 +748,7 @@ namespace HeiProMap {
             three_vertex_label_propagation_config.last_n_levels = 100;
 
             // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_multi_way_fm_config.enabled       = false;
+            hierarchy_aware_multi_way_fm_config.enabled       = true;
             hierarchy_aware_multi_way_fm_config.max_iteration = 2;
             hierarchy_aware_multi_way_fm_config.alpha         = 1000.0;
 
@@ -768,19 +768,19 @@ namespace HeiProMap {
             flow_based_refinement_config.closed_vertex_sets_repeats = 100;
 
             // enable ILP based refinement
-            ilp_refinement_configuration.enabled        = false;
-            ilp_refinement_configuration.max_n_vertices = 1000;
+            // ilp_refinement_configuration.enabled        = false;
+            // ilp_refinement_configuration.max_n_vertices = 1000;
 
             // enable hierarchy aware ILP refinement
-            hierarchy_aware_ilp_refinement_configuration.enabled        = false;
-            hierarchy_aware_ilp_refinement_configuration.max_n_vertices = 100;
+            // hierarchy_aware_ilp_refinement_configuration.enabled        = false;
+            // hierarchy_aware_ilp_refinement_configuration.max_n_vertices = 100;
 
             // enable hierarchy aware flow-based refinement
             hierarchy_aware_flow_based_refinement_configuration.enabled                    = true;
-            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration       = 1;
-            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration        = 5;
-            hierarchy_aware_flow_based_refinement_configuration.alpha                      = 8.0;
-            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 32.0;
+            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration       = 10;
+            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration        = 10;
+            hierarchy_aware_flow_based_refinement_configuration.alpha                      = 16.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 64.0;
             hierarchy_aware_flow_based_refinement_configuration.alpha_modifier             = 2.0;
             hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set      = true;
             hierarchy_aware_flow_based_refinement_configuration.closed_vertex_sets_repeats = 100;

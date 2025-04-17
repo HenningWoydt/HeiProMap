@@ -138,7 +138,7 @@ namespace HeiProMap {
             for (size_t iteration = 0; iteration < config->max_iteration; ++iteration) {
                 for (size_t i = 0; i < m_hierarchy.size() - 1; ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);
-                    rebalance_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 2 - i);
+                    // rebalance_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 2 - i);
                 }
             }
         }

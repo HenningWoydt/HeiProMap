@@ -48,6 +48,7 @@ namespace HeiProMap {
             free(partition);
             free(partition_temp);
             free(bweights);
+            free(n_vertices);
         }
 
         void initialize(const vertex_t t_n,
@@ -68,6 +69,7 @@ namespace HeiProMap {
 
             n_vertices = (size_t*)aligned_alloc(64, t_k_64 * sizeof(size_t));
             std::fill_n(n_vertices, t_k_64, 0);
+            n_vertices[0] = t_n;
         }
 
         // read
@@ -97,7 +99,6 @@ namespace HeiProMap {
 
         size_t size(const partition_t id) const { return n_vertices[id]; }
 
-
         std::vector<weight_t> get_bweights() const override {
             std::vector<weight_t> weights(m_k);
             for (size_t i = 0; i < m_k; ++i) {
@@ -110,6 +111,7 @@ namespace HeiProMap {
             for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
                 vertex_t old_u        = matching.get_o(new_u);
                 partition_temp[new_u] = partition[old_u];
+                n_vertices[partition[old_u]] -= 1;
             }
             std::swap(partition, partition_temp);
         }
@@ -120,6 +122,9 @@ namespace HeiProMap {
                 vertex_t old_u_partner        = matching.get_partner(old_u);
                 partition_temp[old_u]         = partition[new_u];
                 partition_temp[old_u_partner] = partition[new_u];
+                if(old_u != old_u_partner) {
+                    n_vertices[partition[new_u]] += 1;
+                }
             }
             std::swap(partition, partition_temp);
         }
