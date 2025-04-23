@@ -721,7 +721,7 @@ namespace HeiProMap {
         vertex_t                            source;
         vertex_t                            target;
 
-        std::vector<std::vector<EdgeVW>> adj;
+        // std::vector<std::vector<EdgeVW>> adj;
 
     public:
         FlowNetwork() : g(Graph<weight_t, weight_t, weight_t>(0, 0)) {
@@ -737,45 +737,47 @@ namespace HeiProMap {
             source = n;
             target = n + 1;
 
+            /*
             if (adj.size() != n + 2) {
                 adj.resize(n + 2);
             }
             for (auto &vec: adj) {
                 vec.clear();
             }
+             */
         }
 
         void add(vertex_t u, vertex_t v, weight_t w) {
             ASSERT(u < n);
             ASSERT(v < n);
             ASSERT(w >= 0);
-            for(auto & e : adj[u]){ ASSERT(e.v != v); }
-            for(auto & e : adj[v]){ ASSERT(e.v != u); }
+            // for(auto & e : adj[u]){ ASSERT(e.v != v); }
+            // for(auto & e : adj[v]){ ASSERT(e.v != u); }
 
             g.add_edge(u, v, w, w);
 
-            adj[u].emplace_back(v, w);
-            adj[v].emplace_back(u, w);
+            // adj[u].emplace_back(v, w);
+            // adj[v].emplace_back(u, w);
         }
 
         void add_s_edge(vertex_t v, weight_t w) {
             ASSERT(v < n);
             ASSERT(w >= 0);
-            for(auto & e : adj[source]){ ASSERT(e.v != v); }
+            // for(auto & e : adj[source]){ ASSERT(e.v != v); }
 
             g.add_edge(source, v, w, 0);
 
-            adj[source].emplace_back(v, w);
+            // adj[source].emplace_back(v, w);
         }
 
         void add_t_edge(vertex_t v, weight_t w) {
             ASSERT(v < n);
             ASSERT(w >= 0);
-            for(auto & e : adj[target]){ ASSERT(e.v != v); }
+            // for(auto & e : adj[target]){ ASSERT(e.v != v); }
 
             g.add_edge(v, target, w, 0);
 
-            adj[v].emplace_back(target, w);
+            // adj[v].emplace_back(target, w);
         }
 
         void build_residual_network(ResidualFlowNetwork &residual_g) {
@@ -808,6 +810,7 @@ namespace HeiProMap {
         }
 
         void solve() {
+            /*
             for (auto &vec: adj) {
 
                 for (size_t i = 0; i < vec.size(); ++i) {
@@ -816,6 +819,7 @@ namespace HeiProMap {
                     }
                 }
             }
+             */
 
             const weight_t INF = std::numeric_limits<weight_t>::max() / 2;
             g.add_tweights(source, INF, 0);
@@ -832,6 +836,7 @@ namespace HeiProMap {
         }
 
         void print() const {
+            /*
             std::cout << "Flow Network Adjacency List:\n";
             std::cout << "-----------------------------\n";
 
@@ -852,6 +857,7 @@ namespace HeiProMap {
             }
 
             std::cout << "-----------------------------\n";
+             */
         }
     };
 

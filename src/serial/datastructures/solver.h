@@ -203,7 +203,7 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64 n_v_cycle = 10;
+            u64 n_v_cycle = 1;
             for (u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
@@ -225,8 +225,6 @@ namespace HeiProMap {
 
                 max_level = level - 1;
                 partition(v_cycle);
-
-                std::cout << initial_qap << std::endl;
 
                 // ASSERT(max(p_manager.get_bweights()) <= lmax);
                 if (p_manager.is_overloaded()) {
@@ -252,7 +250,6 @@ namespace HeiProMap {
         void partition(u64 v_cycle) {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
-            std::cout << "curr qap " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (v_cycle == 0) {
                     if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
@@ -292,8 +289,6 @@ namespace HeiProMap {
 
                 initial_qap              = get_qap(graphs.back(), p_manager, d_oracle);
                 initial_max_block_weight = max(p_manager.get_bweights());
-
-                std::cout << "INITIAL QAP: " << initial_qap << std::endl;
             }
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();

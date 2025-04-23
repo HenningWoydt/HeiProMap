@@ -610,7 +610,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "strong";
+            global_multisection_config.mode_string = "eco";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
@@ -623,12 +623,12 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha         = 100.0;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = false;
-            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled       = true;
+            k_way_fm_refinement_config.enabled       = false;
             k_way_fm_refinement_config.max_iteration = 1;
             k_way_fm_refinement_config.alpha         = 100.0;
 
@@ -644,23 +644,26 @@ namespace HeiProMap {
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.random_level = 4;
 
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "strong";
+            global_multisection_config.mode_string = "eco";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
-            // enable label propagation
-            label_propagation_config.enabled       = true;
-            label_propagation_config.max_iteration = 25;
-
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.max_iteration = 2;
+            quotient_graph_refinement_config.alpha         = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled = true;
+            k_way_fm_refinement_config.enabled = false;
+
+            // enable multi-try fm
+            multi_try_fm_refinement_config.enabled       = true;
+            multi_try_fm_refinement_config.max_iteration = 2;
+            multi_try_fm_refinement_config.alpha         = 100.0;
         }
 
         void set_strong() {
@@ -695,13 +698,14 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha         = 100.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled               = true;
-            flow_based_refinement_config.max_global_iteration  = 1;
-            flow_based_refinement_config.max_local_iteration   = 2;
-            flow_based_refinement_config.alpha                 = 2.0;
-            flow_based_refinement_config.alpha_upper_bound     = 16.0;
-            flow_based_refinement_config.alpha_modifier        = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = false;
+            flow_based_refinement_config.enabled                    = true;
+            flow_based_refinement_config.max_global_iteration       = 1;
+            flow_based_refinement_config.max_local_iteration        = 3;
+            flow_based_refinement_config.alpha                      = 8.0;
+            flow_based_refinement_config.alpha_upper_bound          = 32.0;
+            flow_based_refinement_config.alpha_modifier             = 2.0;
+            flow_based_refinement_config.use_closed_vertex_set      = true;
+            flow_based_refinement_config.closed_vertex_sets_repeats = 10;
         }
 
         void set_experimental() {
