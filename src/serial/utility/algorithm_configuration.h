@@ -655,15 +655,12 @@ namespace HeiProMap {
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled       = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha         = 100.0;
-
-            // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
+            quotient_graph_refinement_config.alpha         = 1000.0;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 3;
-            multi_try_fm_refinement_config.alpha         = 100.0;
+            multi_try_fm_refinement_config.alpha         = 1000.0;
         }
 
         void set_strong() {
