@@ -872,6 +872,8 @@ namespace HeiProMap {
         f64  alpha_modifier             = 2.0;
         bool use_closed_vertex_set      = true;
         u64  closed_vertex_sets_repeats = 10;
+        u64  max_level                   = 100;
+        u64  min_level                   = 0;
     };
 
     class FlowBasedRefinement final : public ISerialRefiner {
@@ -1019,6 +1021,9 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+
+            if(!(config->min_level <= level && level < config->max_level)){ return; }
+
             std::fill_n(active_this_round, m_k, 1);
             std::fill_n(active_next_round, m_k, 0);
 
