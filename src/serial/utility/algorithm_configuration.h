@@ -644,12 +644,12 @@ namespace HeiProMap {
             coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.random_level = 0;
 
             // set multisection
             partitioning_algorithm_string          = "multisection";
             partitioning_algorithm_id              = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "eco";
+            global_multisection_config.mode_string = "strong";
             global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable quotient graph refinement
@@ -662,7 +662,7 @@ namespace HeiProMap {
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled       = true;
-            multi_try_fm_refinement_config.max_iteration = 2;
+            multi_try_fm_refinement_config.max_iteration = 3;
             multi_try_fm_refinement_config.alpha         = 100.0;
         }
 
