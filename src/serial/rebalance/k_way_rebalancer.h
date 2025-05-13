@@ -34,7 +34,6 @@
 #include "../../commons/definitions.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
-#include "../refinement/k_way_fm_refinement_Faraj20.h"
 
 namespace HeiProMap {
     class KWayRebalancer {

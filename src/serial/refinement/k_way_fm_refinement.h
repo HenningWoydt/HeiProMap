@@ -30,7 +30,7 @@
 #include <queue>
 
 #include "../../commons/utils.h"
-#include "../datastructures/functions.h"
+#include "../utility/functions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
 

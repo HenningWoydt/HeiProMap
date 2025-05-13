@@ -24,40 +24,22 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include "functions.h"
+#ifndef HEIPROMAP_IGRAPH_H
+#define HEIPROMAP_IGRAPH_H
+
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
-    bool is_boundary(const graph_t& g,
-                     const p_manager_t& p_manager,
-                     const vertex_t u) {
-        partition_t u_id = p_manager[u];
-
-#pragma GCC unroll 4
-        forall_guiv(g, u, i, v)
-            {
-                partition_t v_id = p_manager[v];
-                if (u_id != v_id) {
-                    return true;
-                }
-            }
-        endfor
-        return false;
-    }
-
-    bool is_connected_to(const graph_t& g,
-                         const p_manager_t& p_manager,
-                         const vertex_t u,
-                         const partition_t id) {
-
-#pragma GCC unroll 4
-        forall_guiv(g, u, i, v)
-            {
-                partition_t v_id = p_manager[v];
-                if (id == v_id) {
-                    return true;
-                }
-            }
-        endfor
-        return false;
-    }
+    class IGraph {
+    public:
+        virtual vertex_t get_n() const = 0;
+        virtual vertex_t get_m() const = 0;
+        virtual weight_t weight() const = 0;
+        virtual weight_t weight(vertex_t u) const = 0;
+        virtual size_t size(vertex_t u) const = 0;
+        virtual vertex_t neighbor(vertex_t u, size_t idx) const = 0;
+        virtual weight_t weight(vertex_t u, size_t idx) const = 0;
+    };
 }
+
+#endif //HEIPROMAP_IGRAPH_H

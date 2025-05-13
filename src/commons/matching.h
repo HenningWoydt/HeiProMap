@@ -29,9 +29,9 @@
 
 #include <numeric>
 
-#include "../../commons/definitions.h"
-#include "../../commons/translation_table.h"
-#include "../../commons/utils.h"
+#include "definitions.h"
+#include "translation_table.h"
+#include "utils.h"
 
 namespace HeiProMap {
     class Matching {

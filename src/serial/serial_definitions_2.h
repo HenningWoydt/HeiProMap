@@ -28,9 +28,14 @@
 #define HEIPROMAP_SERIAL_DEFINITIONS_2_H
 
 #include "datastructures/partition_manager.h"
+#include "datastructures/deep_partition_manager.h"
 
 namespace HeiProMap {
+#if USE_DEEP_DATASTRUCTURES
+    typedef DeepPartitionManager p_manager_t;
+#else
     typedef PartitionManager p_manager_t;
+#endif
 }
 
 #endif //HEIPROMAP_SERIAL_DEFINITIONS_2_H

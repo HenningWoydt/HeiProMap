@@ -27,10 +27,11 @@
 #ifndef HEIPROMAP_QUOTIENT_GRAPH_REFINEMENT_H
 #define HEIPROMAP_QUOTIENT_GRAPH_REFINEMENT_H
 
-#include "quotient_graph_refinement_Faraj20.h"
 #include "../../commons/utils.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
+#include "../datastructures/indexed_max_heap.h"
+#include "../utility/functions.h"
 
 namespace HeiProMap {
     struct PairWeight {

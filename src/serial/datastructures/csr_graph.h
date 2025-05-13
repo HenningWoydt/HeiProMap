@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_GRAPH_SPLIT_H
-#define HEIPROMAP_GRAPH_SPLIT_H
+#ifndef HEIPROMAP_CSR_GRAPH_H
+#define HEIPROMAP_CSR_GRAPH_H
 
 #include <cstring>
 #include <fcntl.h>
@@ -36,28 +36,29 @@
 
 #include "../../commons/definitions.h"
 #include "../../commons/utils.h"
-#include "../coarsening/matching.h"
-#include "../interfaces/ISerialGraph.h"
+#include "../../commons/matching.h"
+#include "../interfaces/IGraph.h"
+#include "../../commons/aligned_array.h"
 
 namespace HeiProMap {
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
-    class GraphSplit final : public ISerialGraph {
+    class CSRGraph final : public IGraph {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
 
         weight_t m_graph_weight = 0;
 
-        weight_t* m_v_weights   = nullptr;
-        size_t* m_neighborhoods = nullptr;
-        vertex_t* m_edges_v     = nullptr;
-        weight_t* m_edges_w     = nullptr;
+        AlignedArray<weight_t> m_v_weights;
+        AlignedArray<size_t> m_neighborhoods;
+        AlignedArray<vertex_t> m_edges_v;
+        AlignedArray<weight_t> m_edges_w;
 
     public:
-        GraphSplit() = default;
+        CSRGraph() = default;
 
-        explicit GraphSplit(const std::string& graph_in) {
+        explicit CSRGraph(const std::string &graph_in) {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -75,7 +76,7 @@ namespace HeiProMap {
             size_t file_size = fileInfo.st_size;
 
             // Memory-map the file
-            char* file_arr = static_cast<char*>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
+            char *file_arr = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
             if (file_arr == MAP_FAILED) {
                 std::cerr << "File " << graph_in << " Could not map the file!" << std::endl;
                 close(fd);
@@ -134,20 +135,17 @@ namespace HeiProMap {
             move_while(file_arr, i, ' ', file_size);
             ++i; // now on the next line
 
-            vertex_t m_n_64    = round_up_64(m_n + 1);
-            vertex_t m_m_64    = round_up_64(m_m + 1);
-            m_neighborhoods    = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_neighborhoods.initialize(m_n + 1);
             m_neighborhoods[0] = 0;
-            m_edges_v          = (vertex_t*)aligned_alloc(64, m_m_64 * sizeof(vertex_t));
-            m_edges_w          = (weight_t*)aligned_alloc(64, m_m_64 * sizeof(weight_t));
+            m_edges_v.initialize(m_m+1);
+            m_edges_w.initialize(m_m+1);
 
-            size_t curr_m = 0;
-            vertex_t u    = 0;
+            size_t   curr_m = 0;
+            vertex_t u      = 0;
             if (fmt_1 == '0' && fmt_2 == '0') {
-                m_v_weights = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
-                std::fill_n(m_v_weights, m_n_64, 1);
+                m_v_weights.initialize(m_n + 1, 1);
 
-                m_graph_weight = (weight_t)m_n;
+                m_graph_weight = (weight_t) m_n;
                 while (true) {
                     if (file_arr[i] == '%') {
                         // this line is a comment, ignore it
@@ -210,8 +208,7 @@ namespace HeiProMap {
                     }
                 }
             } else {
-                m_v_weights = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
-                std::fill_n(m_v_weights, m_n_64, 0);
+                m_v_weights.initialize(m_n + 1, 0);
 
                 while (true) {
                     if (file_arr[i] == '%') {
@@ -267,32 +264,30 @@ namespace HeiProMap {
             close(fd);
         }
 
-        void initialize(const GraphSplit& g,
-                        Matching& matching) {
+        void initialize(const CSRGraph &g,
+                        Matching &matching) {
             matching.set_translation();
 
             m_n = matching.get_n_coarse_nodes();
-
-            const vertex_t m_n_64 = round_up_64(m_n + 1);
-            const vertex_t m_m_64 = round_up_64(g.get_m() + 1);
+            m_m = g.get_m() + 1;
 
             m_graph_weight = g.m_graph_weight;
-            m_v_weights    = (weight_t*)aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            m_v_weights.initialize(m_n);
 
-            m_neighborhoods = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
-            m_edges_v       = (vertex_t*)aligned_alloc(64, m_m_64 * sizeof(vertex_t));
-            m_edges_w       = (weight_t*)aligned_alloc(64, m_m_64 * sizeof(weight_t));
+            m_neighborhoods.initialize(m_n + 1);
+            m_edges_v.initialize(m_m);
+            m_edges_w.initialize(m_m);
 
             struct IdxMark {
                 vertex_t idx;
-                u32 mark;
+                u32      mark;
             };
 
-            IdxMark* idx_mark = (IdxMark*)aligned_alloc(64, m_n_64 * sizeof(IdxMark));
-            memset(idx_mark, 0, m_n_64 * sizeof(IdxMark));
+            AlignedArray<IdxMark> idx_mark;
+            idx_mark.initialize(m_n, {0, 0});
             u32 mark = 0;
 
-            size_t curr_m      = 0;
+            size_t curr_m = 0;
             m_neighborhoods[0] = 0;
             for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
                 vertex_t old_v = matching.get_partner(old_u);
@@ -357,49 +352,35 @@ namespace HeiProMap {
 
             for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
                 if (old_u == matching.get_partner(old_u)) {
-                    vertex_t new_u     = matching.get_n(old_u);
+                    vertex_t new_u = matching.get_n(old_u);
                     m_v_weights[new_u] = g.weight(old_u);
                 } else if (old_u < matching.get_partner(old_u)) {
-                    vertex_t new_u     = matching.get_n(old_u);
-                    vertex_t old_v     = matching.get_partner(old_u);
+                    vertex_t new_u = matching.get_n(old_u);
+                    vertex_t old_v = matching.get_partner(old_u);
                     m_v_weights[new_u] = g.weight(old_u) + g.weight(old_v);
                 }
             }
-
-            free(idx_mark);
 
             m_m = curr_m;
         }
 
         // Move constructor
-        GraphSplit(GraphSplit&& other) noexcept {
+        CSRGraph(CSRGraph &&other) noexcept {
             m_n = other.m_n;
             m_m = other.m_m;
 
             m_graph_weight = other.m_graph_weight;
 
-            m_v_weights     = other.m_v_weights;
-            m_neighborhoods = other.m_neighborhoods;
-            m_edges_v       = other.m_edges_v;
-            m_edges_w       = other.m_edges_w;
-
-            other.m_v_weights     = nullptr;
-            other.m_neighborhoods = nullptr;
-            other.m_edges_v       = nullptr;
-            other.m_edges_w       = nullptr;
+            std::swap(m_v_weights, other.m_v_weights);
+            std::swap(m_neighborhoods, other.m_neighborhoods);
+            std::swap(m_edges_v, other.m_edges_v);
+            std::swap(m_edges_w, other.m_edges_w);
         }
 
         // Optionally disable copying.
-        GraphSplit(const GraphSplit&) = delete;
+        CSRGraph(const CSRGraph &) = delete;
 
-        GraphSplit& operator=(const GraphSplit&) = delete;
-
-        ~GraphSplit() override {
-            free(m_v_weights);
-            free(m_neighborhoods);
-            free(m_edges_v);
-            free(m_edges_w);
-        }
+        CSRGraph &operator=(const CSRGraph &) = delete;
 
         vertex_t get_n() const override { return m_n; }
 
@@ -412,8 +393,9 @@ namespace HeiProMap {
         size_t size(const vertex_t u) const override { return m_neighborhoods[u + 1] - m_neighborhoods[u]; }
 
         vertex_t neighbor(const vertex_t u, const size_t idx) const override { return m_edges_v[m_neighborhoods[u] + idx]; }
+
         weight_t weight(const vertex_t u, const size_t idx) const override { return m_edges_w[m_neighborhoods[u] + idx]; }
     };
 }
 
-#endif //HEIPROMAP_GRAPH_SPLIT_H
+#endif //HEIPROMAP_CSR_GRAPH_H

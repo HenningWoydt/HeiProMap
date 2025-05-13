@@ -24,14 +24,15 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_SOLVER_H
-#define HEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_DEEP_SOLVER_H
+#define HEIPROMAP_DEEP_SOLVER_H
 
 #include <cmath>
 
-#include "boundary_vertex_manger.h"
-#include "partition_manager.h"
-#include "quotient_graph.h"
+#include "deep_boundary_vertex_manager.h"
+#include "deep_partition_manager.h"
+#include "deep_quotient_graph.h"
+#include "deep_distance_oracle.h"
 #include "../../commons/definitions.h"
 #include "../../commons/macros.h"
 #include "../../commons/random_engine.h"
@@ -58,7 +59,7 @@ namespace HeiProMap {
     /**
      * Solver for serial Process Mapping.
      */
-    class Solver {
+    class DeepSolver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
 
@@ -70,10 +71,10 @@ namespace HeiProMap {
         std::chrono::high_resolution_clock::time_point sp;
 
         std::vector<graph_t> graphs;
-        PartitionManager p_manager;
-        BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
-        DistanceOracle d_oracle;
+        DeepPartitionManager p_manager;
+        DeepBoundaryVertexManager bv_manager;
+        DeepQuotientGraph q_graph;
+        DeepDistanceOracle d_oracle;
 
         // balance
         weight_t lmax = 0;
@@ -103,7 +104,7 @@ namespace HeiProMap {
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
     public:
-        explicit Solver(const AlgorithmConfiguration& t_ac) {
+        explicit DeepSolver(const AlgorithmConfiguration& t_ac) {
             sp = std::chrono::high_resolution_clock::now();
 
             ac            = t_ac;
@@ -354,8 +355,6 @@ namespace HeiProMap {
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
 
-            ZeroGainPerturbator perturbator;
-
             u64 refinement_max_iterations = 1;
             for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
                 for (auto [refiner, config] : refinements) {
@@ -388,4 +387,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_SOLVER_H
+#endif //HEIPROMAP_DEEP_SOLVER_H

@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <unordered_set>
+#include <queue>
 
 #include "../../extern/maxflow-v3.04.src/graph.h"
 
@@ -37,7 +38,7 @@
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
 #include "../../commons/utils.h"
-#include "../datastructures/functions.h"
+#include "../utility/functions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
 

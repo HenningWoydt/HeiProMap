@@ -43,7 +43,7 @@
 #include <string>
 #include <utility>
 
-#include "../commons/definitions.h"
+#include "definitions.h"
 
 namespace HeiProMap {
 

@@ -35,12 +35,18 @@ namespace HeiProMap {
     class ISerialQuotientGraph {
     public:
         virtual ~ISerialQuotientGraph() = default;
+
         virtual void initialize(partition_t k) = 0;
+
         virtual void add_edge(partition_t u, partition_t v, weight_t w) = 0;
+
         virtual void remove_edge(partition_t u, partition_t v, weight_t w) = 0;
+
         virtual bool has_edge(partition_t u, partition_t v) const = 0;
+
         virtual weight_t get_weight(partition_t u, partition_t v) const = 0;
-        virtual void move(const graph_t& g, const p_manager_t& p_manager, vertex_t u, partition_t old_id, partition_t new_id) = 0;
+
+        virtual void move(const graph_t &g, const p_manager_t &p_manager, vertex_t u, partition_t old_id, partition_t new_id) = 0;
     };
 }
 

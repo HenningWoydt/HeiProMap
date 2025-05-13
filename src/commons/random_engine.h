@@ -29,7 +29,7 @@
 
 #include <random>
 
-#include "../commons/definitions.h"
+#include "definitions.h"
 
 namespace HeiProMap {
     class RandomEngine {

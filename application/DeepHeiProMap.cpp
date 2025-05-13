@@ -25,7 +25,7 @@
  ******************************************************************************/
 
 #ifndef USE_DEEP_DATASTRUCTURES
-#define USE_DEEP_DATASTRUCTURES false
+#define USE_DEEP_DATASTRUCTURES true
 #endif
 
 #include <cstring>
@@ -33,8 +33,8 @@
 
 #include "../../src/commons/definitions.h"
 #include "../src/commons/utils.h"
-#include "../src/serial/datastructures/solver.h"
 #include "../src/serial/utility/algorithm_configuration.h"
+#include "../src/serial/datastructures/deep_solver.h"
 
 using namespace HeiProMap;
 
@@ -51,9 +51,12 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/training/PGPgiantcompo.graph"},
                     // {"--mapping", "../data/out/partition/PGPgiantcompo.txt"},
                     // {"--statistics", "../data/out/statistics/PGPgiantcompo.JSON"},
-                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
-                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
+                    // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    {"--graph", "../data/mapping/del26.graph"}, // To Beat 2715456 in 220.94 s
+                    {"--mapping", "../data/out/partition/del26.txt"},
+                    {"--statistics", "../data/out/statistics/del26.JSON"},
                     // {"--graph", "../data/training/598a.graph"},
                     // {"--mapping", "../data/out/partition/598a.txt"},
                     // {"--statistics", "../data/out/statistics/598a.JSON"},
@@ -66,10 +69,10 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"}, // To beat 207196 in 0.29
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
-                    {"--hierarchy", "4:8:6"},
-                    {"--distance", "1:10:100"},
+                    {"--hierarchy", "64:16:32:32"},
+                    {"--distance", "1:10:50:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "eco"},
+                    {"--config", "fast"},
                     {"--seed", "0"},
 
                     // coarsening
@@ -129,9 +132,9 @@ int main(const int argc, char* argv[]) {
 
                     // Refinement Hierarchy aware cycles
                     // {"--refinement-hierarchy-aware-cycles-enable", "0"},
-                };
+            };
 
-            std::vector<std::string> args = {"HeiProMap"};
+            std::vector<std::string> args = {"DeepHeiProMap"};
             for (const auto& [key, val] : input) {
                 args.push_back(key);
                 args.push_back(val);
@@ -155,7 +158,7 @@ int main(const int argc, char* argv[]) {
 
             AlgorithmConfiguration ac(argc, argv);
 
-            Solver solver(ac);
+            DeepSolver solver(ac);
             solver.solve();
 
             for (int i = 0; i < argc; ++i) { delete[] argv[i]; }
@@ -164,7 +167,7 @@ int main(const int argc, char* argv[]) {
     } else {
         AlgorithmConfiguration ac(argc, argv);
 
-        Solver solver(ac);
+        DeepSolver solver(ac);
         solver.solve();
     }
 

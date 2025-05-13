@@ -32,7 +32,7 @@
 #include "../../definitions.h"
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 #include "../interfaces/ISerialDistanceOracle.h"
-#include "../interfaces/ISerialGraph.h"
+#include "../interfaces/IGraph.h"
 #include "../interfaces/ISerialPartitionManager.h"
 
 namespace HeiProMap {

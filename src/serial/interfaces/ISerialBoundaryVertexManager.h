@@ -34,7 +34,6 @@
 namespace HeiProMap {
     class ISerialBoundaryVertexManager {
     public:
-        virtual ~ISerialBoundaryVertexManager() = default;
         virtual void initialize(vertex_t t_n, partition_t t_k) = 0;
         virtual size_t size() const = 0;
         virtual size_t size(partition_t id) const = 0;

@@ -43,7 +43,7 @@
 #define METRICS_TIME(x)
 #endif
 
-#include "../commons/JSON_utils.h"
+#include "JSON_utils.h"
 
 namespace HeiProMap {
     class StatisticCollector {

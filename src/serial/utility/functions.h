@@ -32,14 +32,39 @@
 #include "../../commons/definitions.h"
 
 namespace HeiProMap {
-    bool is_boundary(const graph_t& g,
+    inline bool is_boundary(const graph_t& g,
                      const p_manager_t& p_manager,
-                     vertex_t u);
+                     vertex_t u) {
+        partition_t u_id = p_manager[u];
 
-    bool is_connected_to(const graph_t& g,
+#pragma GCC unroll 4
+        forall_guiv(g, u, i, v)
+            {
+                partition_t v_id = p_manager[v];
+                if (u_id != v_id) {
+                    return true;
+                }
+            }
+        endfor
+        return false;
+    }
+
+    inline bool is_connected_to(const graph_t& g,
                          const p_manager_t& p_manager,
                          vertex_t u,
-                         partition_t id);
+                         partition_t id) {
+
+#pragma GCC unroll 4
+        forall_guiv(g, u, i, v)
+            {
+                partition_t v_id = p_manager[v];
+                if (id == v_id) {
+                    return true;
+                }
+            }
+        endfor
+        return false;
+    }
 }
 
 #endif //HEIPROMAP_FUNCTIONS_H

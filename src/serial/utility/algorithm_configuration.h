@@ -39,12 +39,16 @@
 #include "../refinement/hierarchy_aware_multi_way_fm_refinement.h"
 #include "../refinement/ILP_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
-#include "../refinement/k_way_fm_refinement_Faraj20.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/multi_try_fm_refinement.h"
-#include "../refinement/multi_try_fm_refinement_Faraj20.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
+#include "../coarsening/heavy_edge_matcher.h"
+#include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/random_edge_matcher.h"
+#include "../partitioning/kaffpa_partitioner.h"
+#include "../refinement/three_vertex_label_propagation_refinement.h"
+#include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
 
 
 namespace HeiProMap {
@@ -249,11 +253,6 @@ namespace HeiProMap {
         REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
 
         // refinement algorithms
-        LabelPropagationFaraj20Configuration        label_propagation_faraj20_config         = LabelPropagationFaraj20Configuration("Label Propagation Faraj20");
-        QuotientGraphRefinementFaraj20Configuration quotient_graph_refinement_faraj20_config = QuotientGraphRefinementFaraj20Configuration("Quotient Graph Faraj20");
-        KWayFMRefinementFaraj20Configuration        k_way_fm_refinement_faraj20_config       = KWayFMRefinementFaraj20Configuration("K-Way-FM Faraj20");
-        MultiTryFmRefinementFaraj20Configuration    multi_try_fm_refinement_faraj20_config   = MultiTryFmRefinementFaraj20Configuration("Multi Try-FM Faraj20");
-
         LabelPropagationConfiguration            label_propagation_config              = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration     quotient_graph_refinement_config      = QuotientGraphRefinementConfiguration("Quotient Graph");
         KWayFMRefinementConfiguration            k_way_fm_refinement_config            = KWayFMRefinementConfiguration("K-Way-FM");
@@ -348,38 +347,6 @@ namespace HeiProMap {
         }
 
         void enable_refinement_algorithms(const bool use_default = false) {
-            // initialize label propagation faraj20 configuration
-            if (use_default || is_set("--refinement-lable-propagation-faraj20-max-iterations")) {
-                label_propagation_faraj20_config.max_iteration = std::stoi(get("--refinement-lable-propagation-faraj20-max-iterations"));
-            }
-            if (use_default || is_set("--refinement-lable-propagation-faraj20-enable")) {
-                label_propagation_faraj20_config.enabled = get("--refinement-lable-propagation-faraj20-enable") == "1";
-            }
-
-            // initialize quotient graph faraj20 configuration
-            if (use_default || is_set("--refinement-quotient-graph-faraj20-max-iterations")) {
-                quotient_graph_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-quotient-graph-faraj20-max-iterations"));
-            }
-            if (use_default || is_set("--refinement-quotient-graph-faraj20-enable")) {
-                quotient_graph_refinement_faraj20_config.enabled = get("--refinement-quotient-graph-faraj20-enable") == "1";
-            }
-
-            // initialize K-Way FM refinement faraj20 configuration
-            if (use_default || is_set("--refinement-k-way-fm-faraj20-max-iterations")) {
-                k_way_fm_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-k-way-fm-faraj20-max-iterations"));
-            }
-            if (use_default || is_set("--refinement-k-way-fm-faraj20-enable")) {
-                k_way_fm_refinement_faraj20_config.enabled = get("--refinement-k-way-fm-faraj20-enable") == "1";
-            }
-
-            // initialize Multi-Try FM refinement faraj20 configuration
-            if (use_default || is_set("--refinement-multi-try-fm-faraj20-max-iterations")) {
-                multi_try_fm_refinement_faraj20_config.max_iteration = std::stoi(get("--refinement-multi-try-fm-faraj20-max-iterations"));
-            }
-            if (use_default || is_set("--refinement-multi-try-fm-faraj20-enable")) {
-                multi_try_fm_refinement_faraj20_config.enabled = get("--refinement-multi-try-fm-faraj20-enable") == "1";
-            }
-
             // initialize label propagation configuration
             if (use_default || is_set("--refinement-lable-propagation-max-iterations")) {
                 label_propagation_config.max_iteration = std::stoi(get("--refinement-lable-propagation-max-iterations"));
@@ -520,9 +487,6 @@ namespace HeiProMap {
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            label_propagation_faraj20_config.enabled       = true;
-            label_propagation_faraj20_config.max_iteration = 25;
         }
 
         void set_Faraj20_eco() {
@@ -540,17 +504,6 @@ namespace HeiProMap {
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // enable label propagation
-            label_propagation_faraj20_config.enabled       = true;
-            label_propagation_faraj20_config.max_iteration = 25;
-
-            // enable quotient graph refinement
-            quotient_graph_refinement_faraj20_config.enabled       = true;
-            quotient_graph_refinement_faraj20_config.max_iteration = std::numeric_limits<u64>::max();
-
-            // enable k-way fm refinement
-            k_way_fm_refinement_faraj20_config.enabled = true;
         }
 
         void set_Faraj20_strong() {
@@ -568,20 +521,6 @@ namespace HeiProMap {
             kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
             kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
             kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-
-            // enable label propagation
-            label_propagation_faraj20_config.enabled       = true;
-            label_propagation_faraj20_config.max_iteration = 25;
-
-            // enable quotient graph refinement
-            quotient_graph_refinement_faraj20_config.enabled       = true;
-            quotient_graph_refinement_faraj20_config.max_iteration = std::numeric_limits<u64>::max();
-
-            // enable k-way fm refinement
-            k_way_fm_refinement_faraj20_config.enabled = true;
-
-            // enable multi-try fm
-            multi_try_fm_refinement_faraj20_config.enabled = true;
         }
 
         void set_fastest() {

@@ -58,6 +58,7 @@ file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.
 
 add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
+add_executable(DeepHeiProMap application/DeepHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)
@@ -69,6 +70,7 @@ endif ()
 # Link KaHIP library
 target_link_libraries(HeiProMap kahip)
 target_link_libraries(MtHeiProMap kahip)
+target_link_libraries(DeepHeiProMap kahip)
 
 # target_link_libraries(HeiProMap ${GUROBI_CXX_LIBRARY})
 # target_link_libraries(HeiProMap ${GUROBI_LIBRARY})

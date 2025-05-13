@@ -30,7 +30,7 @@
 #include <gtest/gtest.h>
 
 #include "../../src/definitions.h"
-#include "../../src/serial/interfaces/ISerialGraph.h"
+#include "../../src/serial/interfaces/IGraph.h"
 
 namespace HeiProMap {
     void graphs_are_equal(const ISerialGraph& g1, const ISerialGraph& g2);

@@ -24,27 +24,29 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_QUOTIENT_GRAPH_H
-#define HEIPROMAP_QUOTIENT_GRAPH_H
+#ifndef HEIPROMAP_DEEP_QUOTIENT_GRAPH_H
+#define HEIPROMAP_DEEP_QUOTIENT_GRAPH_H
+
 
 #include "../../commons/definitions.h"
-#include "../../commons/aligned_array.h"
 #include "../interfaces/ISerialQuotientGraph.h"
 
 namespace HeiProMap {
-    class QuotientGraph final : public ISerialQuotientGraph {
+    class DeepQuotientGraph final : public ISerialQuotientGraph {
         partition_t m_k = 0;
 
-         AlignedArray<weight_t> m_adj_mtx;
+        weight_t* m_adj_mtx = nullptr;
 
     public:
-        QuotientGraph() = default;
+        DeepQuotientGraph() = default;
+        ~DeepQuotientGraph() override { free(m_adj_mtx); }
 
         void initialize(const partition_t t_k) override {
             partition_t k_k_64 = round_up_64(t_k * t_k);
             m_k                = t_k;
 
-            m_adj_mtx.initialize(k_k_64, 0);
+            m_adj_mtx = (weight_t*)aligned_alloc(64, k_k_64 * sizeof(weight_t));
+            std::fill_n(m_adj_mtx, k_k_64, 0);
         }
 
         void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
@@ -80,21 +82,25 @@ namespace HeiProMap {
             ASSERT(new_id != old_id);
 
             forall_guivw(g, u, i, v, w)
-                {
-                    partition_t v_id = p_manager[v];
+            {
+                partition_t v_id = p_manager[v];
 
-                    // remove old edge, if existed
-                    if (old_id != v_id) {
-                        remove_edge(old_id, v_id, w * 2);
-                    }
-                    // add new edge, if has to exist
-                    if (new_id != v_id) {
-                        add_edge(new_id, v_id, w * 2);
-                    }
+                // remove old edge, if existed
+                if (old_id != v_id) {
+                    remove_edge(old_id, v_id, w * 2);
                 }
+                // add new edge, if has to exist
+                if (new_id != v_id) {
+                    add_edge(new_id, v_id, w * 2);
+                }
+            }
             endfor
+        }
+
+        void reset(){
+            std::fill_n(m_adj_mtx, m_k * m_k, 0);
         }
     };
 }
 
-#endif //HEIPROMAP_QUOTIENT_GRAPH_H
+#endif //HEIPROMAP_DEEP_QUOTIENT_GRAPH_H

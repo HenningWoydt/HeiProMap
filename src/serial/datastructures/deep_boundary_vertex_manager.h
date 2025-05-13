@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
-#define HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
+#ifndef HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H
+#define HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H
 
 #include "distance_oracle.h"
 #include "../serial_definitions_1.h"
@@ -35,7 +35,7 @@
 #include "../interfaces/ISerialBoundaryVertexManager.h"
 
 namespace HeiProMap {
-    class BoundaryVertexManager final : public ISerialBoundaryVertexManager {
+    class DeepBoundaryVertexManager final : public ISerialBoundaryVertexManager {
         vertex_t    m_n = 0;                                    // number of vertices in the graph
         partition_t m_k = 0;                                    // number of partitions
 
@@ -241,4 +241,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
+#endif //HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H

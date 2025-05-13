@@ -30,47 +30,82 @@
 #include "utils.h"
 
 namespace HeiProMap {
-    template <typename T>
+    template<typename T>
     class AlignedArray {
-        T* ptr = nullptr;
+        T *m_ptr = nullptr;
+        size_t m_n = 0;
+
+        static_assert(std::is_trivially_destructible<T>::value,
+                      "AlignedArray requires trivially destructible types");
 
     public:
         AlignedArray() = default;
 
-        explicit AlignedArray(const size_t n) {
-            size_t n_64 = round_up_64(n);
-            ptr         = (T*)aligned_alloc(64, n_64 * sizeof(T));
+        void initialize(const size_t n) {
+            size_t size = round_up_64(n);
+            if (size > m_n) {
+                m_n = size;
+                free(m_ptr);
+                m_ptr = (T*) aligned_alloc(64, size * sizeof(T));
+            }
         }
 
-        explicit AlignedArray(const size_t n, const T fill_value) {
-            size_t n_64 = round_up_64(n);
-            ptr         = (T*)aligned_alloc(64, n_64 * sizeof(T));
-            std::fill_n(ptr, n_64, fill_value);
+
+        void initialize(const size_t n, const T fill_value) {
+            size_t size = round_up_64(n);
+            if (size > m_n) {
+                m_n = size;
+                free(m_ptr);
+                m_ptr = (T*) aligned_alloc(64, size * sizeof(T));
+            }
+            std::fill_n(m_ptr, size, fill_value);
         }
 
-        ~AlignedArray() { free(ptr); }
 
-        AlignedArray(const AlignedArray&) = delete;
-        AlignedArray& operator=(const AlignedArray&) = delete;
+        ~AlignedArray() { free(m_ptr); }
+
+        AlignedArray(const AlignedArray &) = delete;
+
+        AlignedArray &operator=(const AlignedArray &) = delete;
+
         // Move constructor
-        AlignedArray(AlignedArray&& other) noexcept {
-            ptr = other.ptr;
-            other.ptr = nullptr;
+        AlignedArray(AlignedArray &&other) noexcept {
+            free(m_ptr);
+            m_n = 0;
+
+            m_ptr = other.m_ptr;
+            m_n = other.m_n;
+
+            other.m_ptr = nullptr;
+            other.m_n = 0;
         }
 
         // Move assignment
-        AlignedArray& operator=(AlignedArray&& other) noexcept {
+        AlignedArray &operator=(AlignedArray &&other) noexcept {
             if (this != &other) {
-                free(ptr);
-                ptr = other.ptr;
-                other.ptr = nullptr;
+                free(m_ptr);
+                m_n = 0;
+
+                m_ptr = other.m_ptr;
+                m_n = other.m_n;
+
+                other.m_ptr = nullptr;
+                other.m_n = 0;
             }
             return *this;
         }
 
-        T& operator[](size_t index) { return ptr[index]; }
-        const T& operator[](size_t index) const { return ptr[index]; }
+        T &operator[](size_t index) { return m_ptr[index]; }
+
+        const T &operator[](size_t index) const { return m_ptr[index]; }
     };
+
+    template<typename T>
+    void swap(AlignedArray<T>& a, AlignedArray<T>& b) noexcept {
+        using std::swap;
+        swap(a.m_ptr, b.m_ptr);
+        swap(a.m_n, b.m_n);
+    }
 }
 
 #endif //HEIPROMAP_ALIGNED_ARRAY_H
