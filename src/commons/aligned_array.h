@@ -109,6 +109,8 @@ namespace HeiProMap {
         T &operator[](size_t index) { return m_ptr[index]; }
 
         const T &operator[](size_t index) const { return m_ptr[index]; }
+
+        T* get_ptr() { return m_ptr; }
     };
 
     template<typename T>

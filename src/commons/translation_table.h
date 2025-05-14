@@ -27,15 +27,17 @@
 #ifndef HEIPROMAP_TRANSLATION_TABLE_H
 #define HEIPROMAP_TRANSLATION_TABLE_H
 
+#include "aligned_array.h"
+
 namespace HeiProMap {
     template<typename T>
     class TranslationTable {
-        T* m_translation_o_to_n = nullptr;
-        T* m_translation_n_to_o = nullptr;
+        AlignedArray<T> m_translation_o_to_n;
+        AlignedArray<T> m_translation_n_to_o;
 
 #if ASSERT_ENABLED
-        u8* o_to_n_set = nullptr;
-        u8* n_to_o_set = nullptr;
+        AlignedArray<u8> o_to_n_set;
+        AlignedArray<u8> n_to_o_set;
 #endif
 
     public:
@@ -44,15 +46,7 @@ namespace HeiProMap {
          */
         TranslationTable() = default;
 
-        ~TranslationTable() {
-            free(m_translation_o_to_n);
-            free(m_translation_n_to_o);
-
-#if ASSERT_ENABLED
-            free(o_to_n_set);
-            free(n_to_o_set);
-#endif
-        }
+        ~TranslationTable() = default;
 
         /**
          * Adds a translation from o to n and from n to o.
@@ -71,21 +65,14 @@ namespace HeiProMap {
         }
 
         void reserve(size_t n_space, size_t o_space){
-            free(m_translation_n_to_o);
-            free(m_translation_o_to_n);
-
             size_t n_space_64 = round_up_64(n_space + 1);
             size_t o_space_64 = round_up_64(o_space + 1);
-            m_translation_n_to_o = (T*) aligned_alloc(64, n_space_64 * sizeof(T));
-            m_translation_o_to_n = (T*) aligned_alloc(64, o_space_64 * sizeof(T));
+            m_translation_n_to_o.initialize(n_space_64);
+            m_translation_o_to_n.initialize(o_space_64);
 
 #if ASSERT_ENABLED
-            free(o_to_n_set);
-            free(n_to_o_set);
-            n_to_o_set = (u8*) aligned_alloc(64, n_space_64 * sizeof(u8));
-            o_to_n_set = (u8*) aligned_alloc(64, o_space_64 * sizeof(u8));
-            std::fill_n(n_to_o_set, n_space_64, 0);
-            std::fill_n(o_to_n_set, o_space_64, 0);
+            n_to_o_set.initialize(n_space_64, 0);
+            o_to_n_set.initialize(o_space_64, 0);
 #endif
         }
 
@@ -107,6 +94,16 @@ namespace HeiProMap {
         T get_o(const T n) const {
             ASSERT(n_to_o_set[n] == 1);
             return m_translation_n_to_o[n];
+        }
+
+        void swap(TranslationTable<T>& rhs){
+            std::swap(m_translation_o_to_n, rhs.m_translation_o_to_n);
+            std::swap(m_translation_n_to_o, rhs.m_translation_n_to_o);
+
+#if ASSERT_ENABLED
+            std::swap(o_to_n_set, rhs.o_to_n_set);
+            std::swap(n_to_o_set, rhs.n_to_o_set);
+#endif
         }
     };
 }

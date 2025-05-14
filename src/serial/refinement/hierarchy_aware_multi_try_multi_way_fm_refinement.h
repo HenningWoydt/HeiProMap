@@ -58,19 +58,19 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
 
-        u32* vertex_used  = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
 
-        u32* block_used  = nullptr;
+        AlignedArray<u32> block_used;
         u32 block_marker = 0;
 
-        vertex_t* curr_boundary   = nullptr;
+        AlignedArray<u32> curr_boundary;
         size_t curr_boundary_size = 0;
 
         // IndexedMaxHeap<KWayFMMove> heap;
         std::priority_queue<KWayFMMove> heap;
 
-        Move* moves       = nullptr;
+        AlignedArray<Move> moves;
         size_t moves_size = 0;
 
         KWayRebalancer k_way_rebalancer;
@@ -82,11 +82,7 @@ namespace HeiProMap {
     public:
         HierarchyAwareMultiTryMultiWayFMRefinement() = default;
 
-        ~HierarchyAwareMultiTryMultiWayFMRefinement() override {
-            free(vertex_used);
-            free(block_used);
-            free(moves);
-        }
+        ~HierarchyAwareMultiTryMultiWayFMRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -110,21 +106,16 @@ namespace HeiProMap {
             config           = dynamic_cast<const HierarchyAwareMultiTryMultiWayFMConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
-            vertex_t t_n_64 = round_up_64(t_n);
-            vertex_t t_k_64 = round_up_64(t_k);
-
-            vertex_used = (u32*)aligned_alloc(64, t_n_64 * sizeof(u32));
-            std::fill_n(vertex_used, t_n_64, 0);
+            vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
 
-            block_used = (u32*)aligned_alloc(64, t_k_64 * sizeof(u32));
-            std::fill_n(block_used, t_k_64, 0);
+            block_used.initialize(m_k, 0);
             block_marker = 0;
 
-            curr_boundary      = (vertex_t*)aligned_alloc(64, sizeof(vertex_t) * t_n_64);
+            curr_boundary.initialize(m_n);
             curr_boundary_size = 0;
 
-            moves      = (Move*)aligned_alloc(64, t_n_64 * sizeof(Move));
+            moves.initialize(m_n);
             moves_size = 0;
 
             k_way_rebalancer.initialize(t_n, t_m, t_k, t_lmax, t_hierarchy, t_distance, t_random_engine, t_stat_collect);
@@ -219,7 +210,7 @@ namespace HeiProMap {
                     }
                 endfor
             }
-            std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, random_engine->gen);
+            std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->gen);
 
             vertex_marker += 1;
             for (size_t ii = 0; ii < curr_boundary_size; ++ii) {

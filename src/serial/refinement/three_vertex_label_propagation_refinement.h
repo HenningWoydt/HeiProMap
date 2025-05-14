@@ -51,19 +51,19 @@ namespace HeiProMap {
         std::vector<weight_t> m_distance;
         u64 m_seed = 0;
 
-        u32* vertex_used  = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
 
-        u32* block_used  = nullptr;
+        AlignedArray<u32> block_used;
         u32 block_marker = 0;
 
-        vertex_t* curr_boundary   = nullptr;
+        AlignedArray<vertex_t> curr_boundary;
         size_t curr_boundary_size = 0;
 
-        partition_t* u_move_ids = nullptr;
+        AlignedArray<partition_t> u_move_ids;
         size_t u_move_ids_size  = 0;
 
-        partition_t* v_move_ids = nullptr;
+        AlignedArray<partition_t> v_move_ids;
         size_t v_move_ids_size  = 0;
 
         RandomEngine* random_engine                            = nullptr;
@@ -81,13 +81,7 @@ namespace HeiProMap {
     public:
         ThreeVertexLabelPropagationRefinement() = default;
 
-        ~ThreeVertexLabelPropagationRefinement() override {
-            free(vertex_used);
-            free(block_used);
-            free(curr_boundary);
-            free(u_move_ids);
-            free(v_move_ids);
-        }
+        ~ThreeVertexLabelPropagationRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -114,19 +108,16 @@ namespace HeiProMap {
             vertex_t m_n_64    = round_up_64(m_n);
             partition_t m_k_64 = round_up_64(m_k);
 
-            vertex_used = (u32*)aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(vertex_used, m_n_64, vertex_marker);
+            vertex_used.initialize(m_n, 0);
+            block_used.initialize(m_k, 0);
 
-            block_used = (u32*)aligned_alloc(64, m_k_64 * sizeof(u32));
-            std::fill_n(block_used, m_k_64, block_marker);
-
-            curr_boundary      = (vertex_t*)aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            curr_boundary.initialize(m_n);
             curr_boundary_size = 0;
 
-            u_move_ids      = (vertex_t*)aligned_alloc(64, m_k_64 * sizeof(vertex_t));
+            u_move_ids.initialize(m_k);
             u_move_ids_size = 0;
 
-            v_move_ids      = (vertex_t*)aligned_alloc(64, m_k_64 * sizeof(vertex_t));
+            v_move_ids.initialize(m_k);
             v_move_ids_size = 0;
         }
 
@@ -173,7 +164,7 @@ namespace HeiProMap {
                         curr_boundary[curr_boundary_size++] = u;
                     }
                 endfor
-                std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, random_engine->gen);
+                std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->gen);
 
                 METRICS(auto ep_get_boundary = std::chrono::high_resolution_clock::now());
                 METRICS(auto sp_iterate = std::chrono::high_resolution_clock::now());

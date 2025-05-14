@@ -70,7 +70,7 @@ namespace HeiProMap {
         IndexedMaxHeap<s64> boundary_vertices_v;
 
         // store change
-        vertex_t* moves        = nullptr;
+        AlignedArray<vertex_t> moves;
         size_t moves_size      = 0;
         s64 curr_qap_gain      = 0;
         s64 max_qap_gain       = 0;
@@ -79,13 +79,13 @@ namespace HeiProMap {
         size_t best_idx        = 0;
 
         // active block scheduling
-        u8* active_this_round = nullptr;
-        u8* active_next_round = nullptr;
-        PairWeight* pairs     = nullptr;
+        AlignedArray<u8> active_this_round;
+        AlignedArray<u8> active_next_round;
+        AlignedArray<PairWeight> pairs;
         size_t pairs_size     = 0;
 
         // store which vertices have been moved
-        u32* vertex_used = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_mark  = 0;
 
         RandomEngine* random_engine                        = nullptr;
@@ -102,13 +102,7 @@ namespace HeiProMap {
     public:
         QuotientGraphRefinement() = default;
 
-        ~QuotientGraphRefinement() override {
-            free(vertex_used);
-            free(moves);
-            free(active_this_round);
-            free(active_next_round);
-            free(pairs);
-        }
+        ~QuotientGraphRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -141,16 +135,16 @@ namespace HeiProMap {
             boundary_vertices_v.initialize(m_n);
 
             vertex_mark = 0;
-            vertex_used = (u32*)aligned_alloc(64, t_n_64 * sizeof(u32));
-            std::fill_n(vertex_used, t_n_64, vertex_mark);
+            vertex_used.initialize(m_n, 0);
 
-            moves      = (vertex_t*)aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            moves.initialize(m_n);
             moves_size = 0;
 
             // active block scheduling
-            active_this_round = (u8*)aligned_alloc(64, t_k_64 * sizeof(u8));
-            active_next_round = (u8*)aligned_alloc(64, t_k_64 * sizeof(u8));
-            pairs             = (PairWeight*)aligned_alloc(64, t_k_t_k_64 * sizeof(PairWeight));
+            active_this_round.initialize(m_k);
+            active_next_round.initialize(m_k);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            pairs.initialize(size);
             pairs_size        = 0;
         }
 
@@ -168,8 +162,8 @@ namespace HeiProMap {
             METRICS(iteration_time_moves.emplace_back();)
             METRICS(iteration_qap_delta.emplace_back();)
 
-            std::fill_n(active_this_round, m_k, 1);
-            std::fill_n(active_next_round, m_k, 0);
+            active_this_round.initialize(m_k, 1);
+            active_next_round.initialize(m_k, 0);
 
             u64 iteration = 0;
             while (iteration < config->max_iteration) {
@@ -196,7 +190,7 @@ namespace HeiProMap {
                     }
                 }
                 if (pairs_size == 0) { return; }
-                std::sort(pairs, pairs + pairs_size, std::greater<>());
+                std::sort(pairs.get_ptr(), pairs.get_ptr() + pairs_size, std::greater<>());
 
                 METRICS_TIME(ep_get_pairs)
                 METRICS(iteration_time_get_pairs.back().back() += get_seconds(sp_get_pairs, ep_get_pairs);)
@@ -211,7 +205,7 @@ namespace HeiProMap {
                 }
 
                 std::swap(active_this_round, active_next_round);
-                std::fill_n(active_next_round, m_k, 0);
+                active_next_round.initialize(m_k, 0);
             }
         }
 

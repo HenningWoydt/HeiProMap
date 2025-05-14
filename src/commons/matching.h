@@ -38,10 +38,10 @@ namespace HeiProMap {
     private:
         vertex_t m_n = 0;
 
-        EdgeUV* matches     = nullptr;
+        AlignedArray<EdgeUV> matches;
         size_t matches_size = 0;
 
-        vertex_t* partner = nullptr;
+        AlignedArray<vertex_t> partner;
 
         TranslationTable<vertex_t> tt;
 
@@ -52,11 +52,11 @@ namespace HeiProMap {
             vertex_t n_64 = round_up_64(n);
             m_n           = n;
 
-            matches      = (EdgeUV*)aligned_alloc(64, (n_64 / 2) * sizeof(EdgeUV));
+            matches.initialize((n_64 / 2));
             matches_size = 0;
 
-            partner = (vertex_t*)aligned_alloc(64, n_64 * sizeof(vertex_t));
-            std::iota(partner, partner + n_64, 0);
+            partner.initialize(m_n);
+            std::iota(partner.get_ptr(), partner.get_ptr() + n_64, 0);
 
             tt.reserve(n, n);
         }
@@ -64,15 +64,10 @@ namespace HeiProMap {
         // Move constructor
         Matching(Matching&& other) noexcept {
             m_n          = other.m_n;
-            matches      = other.matches;
+            std::swap(matches, other.matches);
             matches_size = other.matches_size;
-            partner      = other.partner;
-            std::swap(tt, other.tt);
-
-            other.m_n          = 0;
-            other.matches      = nullptr;
-            other.matches_size = 0;
-            other.partner      = nullptr;
+            std::swap(partner, other.partner);
+            tt.swap(other.tt);
         }
 
         // Optionally disable copying.
@@ -80,10 +75,7 @@ namespace HeiProMap {
 
         Matching& operator=(const Matching&) = delete;
 
-        ~Matching() {
-            free(matches);
-            free(partner);
-        }
+        ~Matching() = default;
 
         void add(vertex_t u, vertex_t v) {
             ASSERT(matches_size < (m_n / 2));

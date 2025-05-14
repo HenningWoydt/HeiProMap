@@ -62,16 +62,16 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
 
-        u32* vertex_used  = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
 
-        u32* block_used  = nullptr;
+        AlignedArray<u32> block_used;
         u32 block_marker = 0;
 
         // IndexedMaxHeap<KWayFMMove> heap;
         std::priority_queue<KWayFMMove> heap;
 
-        Move* moves       = nullptr;
+        AlignedArray<Move> moves;
         size_t moves_size = 0;
 
         KWayRebalancer k_way_rebalancer;
@@ -83,11 +83,7 @@ namespace HeiProMap {
     public:
         HierarchyAwareMultiWayFMRefinement() = default;
 
-        ~HierarchyAwareMultiWayFMRefinement() override {
-            free(vertex_used);
-            free(block_used);
-            free(moves);
-        }
+        ~HierarchyAwareMultiWayFMRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -111,18 +107,13 @@ namespace HeiProMap {
             config           = dynamic_cast<const HierarchyAwareMultiWayFMConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
-            vertex_t t_n_64 = round_up_64(t_n);
-            vertex_t t_k_64 = round_up_64(t_k);
-
-            vertex_used = (u32*)aligned_alloc(64, t_n_64 * sizeof(u32));
-            std::fill_n(vertex_used, t_n_64, 0);
+            vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
 
-            block_used = (u32*)aligned_alloc(64, t_k_64 * sizeof(u32));
-            std::fill_n(block_used, t_k_64, 0);
+            block_used.initialize(m_k, 0);
             block_marker = 0;
 
-            moves      = (Move*)aligned_alloc(64, t_n_64 * sizeof(Move));
+            moves.initialize(m_n);
             moves_size = 0;
 
             k_way_rebalancer.initialize(t_n, t_m, t_k, t_lmax, t_hierarchy, t_distance, t_random_engine, t_stat_collect);

@@ -50,7 +50,7 @@ namespace HeiProMap {
         StatisticCollector* m_stat_collector         = nullptr;
 
         u32 mark = 0;
-        std::vector<u32> used;
+        AlignedArray<u32> used;
 
     public:
         RandomEdgeMatcher() = default;
@@ -72,7 +72,7 @@ namespace HeiProMap {
             m_stat_collector = &t_stat_collect;
 
             mark = 0;
-            used.resize(m_n, mark);
+            used.initialize(m_n, 0);
         }
 
         void match(const size_t level,

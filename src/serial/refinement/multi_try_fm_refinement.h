@@ -53,16 +53,16 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
 
-        u32* vertex_used = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_mark  = 0;
 
-        u32* block_used = nullptr;
+        AlignedArray<u32> block_used;
         u32 block_mark  = 0;
 
-        vertex_t* curr_boundary   = nullptr;
+        AlignedArray<vertex_t> curr_boundary;
         size_t curr_boundary_size = 0;
 
-        Move* moves       = nullptr;
+        AlignedArray<Move> moves;
         size_t moves_size = 0;
 
         // priority queues
@@ -87,12 +87,7 @@ namespace HeiProMap {
     public:
         MultiTryFMRefinement() = default;
 
-        ~MultiTryFMRefinement() override {
-            free(vertex_used);
-            free(block_used);
-            free(curr_boundary);
-            free(moves);
-        }
+        ~MultiTryFMRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -119,18 +114,16 @@ namespace HeiProMap {
             vertex_t m_n_64    = round_up_64(m_n);
             partition_t m_k_64 = round_up_64(m_k);
 
-            vertex_used = (u32*)aligned_alloc(64, sizeof(u32) * m_n_64);
-            std::fill_n(vertex_used, m_n_64, 0);
+            vertex_used.initialize(m_n, 0);
             vertex_mark = 0;
 
-            block_used = (u32*)aligned_alloc(64, sizeof(u32) * m_k_64);
-            std::fill_n(block_used, m_k_64, 0);
+            block_used.initialize(m_k, 0);
             block_mark = 0;
 
-            curr_boundary      = (vertex_t*)aligned_alloc(64, sizeof(vertex_t) * m_n_64);
+            curr_boundary.initialize(m_n);
             curr_boundary_size = 0;
 
-            moves      = (Move*)aligned_alloc(64, sizeof(Move) * m_n_64);
+            moves.initialize(m_n);
             moves_size = 0;
 
             heap.initialize(m_n);
@@ -183,7 +176,7 @@ namespace HeiProMap {
                         curr_boundary[curr_boundary_size++] = u;
                     }
                 endfor
-                std::shuffle(curr_boundary, curr_boundary + curr_boundary_size, random_engine->gen);
+                std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->gen);
 
                 METRICS_TIME(ep_get_boundary)
 

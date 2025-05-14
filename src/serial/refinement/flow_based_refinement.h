@@ -41,6 +41,7 @@
 #include "../utility/functions.h"
 #include "../interfaces/ISerialRefiner.h"
 #include "../utility/qap.h"
+#include "../utility/assert_state.h"
 
 namespace HeiProMap {
     class ResidualFlowNetwork {
@@ -66,31 +67,31 @@ namespace HeiProMap {
         }
 
         void add_directed_edge(vertex_t u, vertex_t v, weight_t w) {
-            for(auto & e : edges[u]) { ASSERT(e.v != v); }
+            for (auto &e: edges[u]) { ASSERT(e.v != v); }
 
             edges[u].emplace_back(v, w);
         }
 
         void add_edge_to_source(vertex_t u, weight_t w) {
-            for(auto & e : edges[u]) { ASSERT(e.v != source); }
+            for (auto &e: edges[u]) { ASSERT(e.v != source); }
 
             edges[u].emplace_back(source, w);
         }
 
         void add_edge_to_target(vertex_t u, weight_t w) {
-            for(auto & e : edges[u]) { ASSERT(e.v != target); }
+            for (auto &e: edges[u]) { ASSERT(e.v != target); }
 
             edges[u].emplace_back(target, w);
         }
 
         void add_edge_from_source(vertex_t u, weight_t w) {
-            for(auto & e : edges[source]) { ASSERT(e.v != u); }
+            for (auto &e: edges[source]) { ASSERT(e.v != u); }
 
             edges[source].emplace_back(u, w);
         }
 
         void add_edge_from_target(vertex_t u, weight_t w) {
-            for(auto & e : edges[target]) { ASSERT(e.v != u); }
+            for (auto &e: edges[target]) { ASSERT(e.v != u); }
 
             edges[target].emplace_back(u, w);
         }
@@ -591,7 +592,7 @@ namespace HeiProMap {
             P.push_back(start);
 
             while (!stack.empty()) {
-                auto &[v, i] = stack.top();  // current node and index into its neighbors
+                auto       &[v, i]    = stack.top();  // current node and index into its neighbors
                 const auto &neighbors = residual_flow_network[v];
 
                 if (i < neighbors.size()) {
@@ -612,7 +613,8 @@ namespace HeiProMap {
                         vertex_per_scc.emplace_back();
                         vertex_t w;
                         do {
-                            w = S.back(); S.pop_back();
+                            w = S.back();
+                            S.pop_back();
                             scc_id[w] = n_scc;
                             vertex_per_scc.back().push_back(w);
                         } while (w != v);
@@ -873,8 +875,8 @@ namespace HeiProMap {
         f64  alpha_modifier             = 2.0;
         bool use_closed_vertex_set      = true;
         u64  closed_vertex_sets_repeats = 10;
-        u64  max_level                   = 100;
-        u64  min_level                   = 0;
+        u64  max_level                  = 100;
+        u64  min_level                  = 0;
     };
 
     class FlowBasedRefinement final : public ISerialRefiner {
@@ -887,38 +889,38 @@ namespace HeiProMap {
         std::vector<weight_t>    m_distance;
 
         // active block scheduling
-        u8         *active_this_round = nullptr;
-        u8         *active_next_round = nullptr;
-        PairWeight *pairs             = nullptr;
-        size_t     pairs_size         = 0;
+        AlignedArray<u8>         active_this_round;
+        AlignedArray<u8>         active_next_round;
+        AlignedArray<PairWeight> pairs;
+        size_t                   pairs_size = 0;
 
-        // array for boundary vertices
-        vertex_t *left_boundary     = nullptr;
-        size_t   left_boundary_size = 0;
+        // array for boundary
+        AlignedArray<vertex_t> left_boundary;
+        size_t                 left_boundary_size = 0;
 
-        vertex_t *right_boundary     = nullptr;
-        size_t   right_boundary_size = 0;
+        AlignedArray<vertex_t> right_boundary;
+        size_t                 right_boundary_size = 0;
 
         // array for regions
-        vertex_t *left_region     = nullptr;
-        size_t   left_region_size = 0;
+        AlignedArray<vertex_t> left_region;
+        size_t                 left_region_size = 0;
 
-        vertex_t *right_region     = nullptr;
-        size_t   right_region_size = 0;
+        AlignedArray<vertex_t> right_region;
+        size_t                 right_region_size = 0;
 
-        u32 *is_left_region  = nullptr;
-        u32 *is_right_region = nullptr;
-        u32 is_region_mark   = 0;
+        AlignedArray<u32> is_left_region;
+        AlignedArray<u32> is_right_region;
+        u32               is_region_mark = 0;
 
-        vertex_t *queue     = nullptr;
-        size_t   queue_size = 0;
+        AlignedArray<vertex_t> queue;
+        size_t                 queue_size = 0;
 
-        u32 *seen     = nullptr;
-        u32 seen_mark = 0;
+        AlignedArray<u32> seen;
+        u32               seen_mark = 0;
 
         // array for penalties
-        weight_t *left_penalties  = nullptr;
-        weight_t *right_penalties = nullptr;
+        AlignedArray<weight_t> left_penalties;
+        AlignedArray<weight_t> right_penalties;
 
         //Translation Table for mapping
         TranslationTable<vertex_t> translation_table;
@@ -934,23 +936,7 @@ namespace HeiProMap {
     public:
         FlowBasedRefinement() = default;
 
-        ~FlowBasedRefinement() override {
-            free(active_this_round);
-            free(active_next_round);
-
-            free(left_boundary);
-            free(right_boundary);
-
-            free(left_region);
-            free(right_region);
-            free(is_left_region);
-            free(is_right_region);
-            free(queue);
-            free(seen);
-
-            free(left_penalties);
-            free(right_penalties);
-        }
+        ~FlowBasedRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -974,45 +960,39 @@ namespace HeiProMap {
             config           = dynamic_cast<const FlowBasedRefinementConfiguration *>(&i_config);
             m_stat_collector = &t_stat_collect;
 
-            vertex_t    m_n_64     = round_up_64(m_n);
-            partition_t m_k_64     = round_up_64(m_k);
-            partition_t m_k_m_k_64 = round_up_64(m_k * m_k);
-
             // active block scheduling
-            active_this_round = (u8 *) aligned_alloc(64, m_k_64 * sizeof(u8));
-            active_next_round = (u8 *) aligned_alloc(64, m_k_64 * sizeof(u8));
-            pairs             = (PairWeight *) aligned_alloc(64, m_k_m_k_64 * sizeof(PairWeight));
-            pairs_size        = 0;
+            active_this_round.initialize(m_k);
+            active_next_round.initialize(m_k);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            pairs.initialize(size);
+            pairs_size = 0;
 
-            left_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            left_boundary.initialize(m_n);
             left_boundary_size = 0;
 
-            right_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            right_boundary.initialize(m_n);
             right_boundary_size = 0;
 
-            left_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            left_region.initialize(m_n);
             left_region_size = 0;
 
-            right_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            right_region.initialize(m_n);
             right_region_size = 0;
 
-            is_left_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(is_left_region, m_n_64, 0);
-            is_right_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(is_right_region, m_n_64, 0);
+            is_left_region.initialize(m_n, 0);
+            is_right_region.initialize(m_n, 0);
             is_region_mark = 0;
 
-            queue      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            queue.initialize(m_n);
             queue_size = 0;
 
-            seen = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(seen, m_n_64, 0);
+            seen.initialize(m_n, 0);
             seen_mark = 0;
 
-            left_penalties  = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
-            right_penalties = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            left_penalties.initialize(m_n);
+            right_penalties.initialize(m_n);
 
-            translation_table.reserve(m_n_64, m_n_64);
+            translation_table.reserve(m_n, m_n);
         }
 
         void refine(const u64 level,
@@ -1023,10 +1003,10 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
 
-            if(!(config->min_level <= level && level < config->max_level)){ return; }
+            if (!(config->min_level <= level && level < config->max_level)) { return; }
 
-            std::fill_n(active_this_round, m_k, 1);
-            std::fill_n(active_next_round, m_k, 0);
+            active_this_round.initialize(m_k, 1);
+            active_next_round.initialize(m_k, 0);
 
             for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                 // determine all pairs in the quotient graph
@@ -1038,7 +1018,7 @@ namespace HeiProMap {
                         }
                     }
                 }
-                std::sort(pairs, pairs + pairs_size, std::greater<>());
+                std::sort(pairs.get_ptr(), pairs.get_ptr() + pairs_size, std::greater<>());
 
                 if (pairs_size == 0) { return; }
 
@@ -1049,7 +1029,7 @@ namespace HeiProMap {
                 }
 
                 std::swap(active_this_round, active_next_round);
-                std::fill_n(active_next_round, m_k, 0);
+                active_next_round.initialize(m_k, 0);
             }
         }
 

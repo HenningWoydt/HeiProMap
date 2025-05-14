@@ -51,10 +51,11 @@ namespace HeiProMap {
         RandomEngine                         *random_engine    = nullptr;
         StatisticCollector                   *m_stat_collector = nullptr;
 
-        std::vector<EdgeUVW> edges;
+        AlignedArray<EdgeUVW> edges;
+        size_t                edges_size = 0;
 
-        u32              mark = 0;
-        std::vector<u32> used;
+        u32               mark = 0;
+        AlignedArray<u32> used;
 
     public:
         GreedyEdgeMatcher() = default;
@@ -75,18 +76,18 @@ namespace HeiProMap {
             random_engine    = &t_random_engine;
             m_stat_collector = &t_stat_collect;
 
-            edges.reserve(m_m);
+            edges.initialize(m_m);
 
             mark = 0;
-            used.resize(m_n, 0);
+            used.initialize(m_n, 0);
         }
 
         void match(const size_t level,
                    const graph_t &g,
-                   p_manager_t& p_manager,
+                   p_manager_t &p_manager,
                    Matching &matching) override {
             mark += 1;
-            edges.clear();
+            edges_size = 0;
 
             // first handle pendant vertices
             if (config->match_pendant_vertices_first) {
@@ -98,13 +99,14 @@ namespace HeiProMap {
 
                         const vertex_t v      = g.neighbor(u, 0);
                         const weight_t ew     = g.weight(u, 0);
-                        const f64      rating = (f64) ew / (f64) (g.size(u) * g.size(v));
-                        edges.emplace_back(u, v, rating);
+                        const f32      rating = (f32) ew / (f32) (g.size(u) * g.size(v));
+                        edges[edges_size++] = {u, v, rating};
                     }
                 endfor
-                std::sort(edges.begin(), edges.end(), std::greater<>());
+                std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
-                for (const auto &[u, v, w]: edges) {
+                for (size_t i = 0; i < edges_size; ++i) {
+                    const auto &[u, v, w] = edges[i];
                     if (used[u] == mark || used[v] == mark) {
                         continue;
                     }
@@ -121,6 +123,7 @@ namespace HeiProMap {
                         matching.add(u, v);
                     }
                 }
+
             }
 
             // handle all other vertices
@@ -145,14 +148,15 @@ namespace HeiProMap {
                             }
 
                             const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
-                            edges.emplace_back(u, v, edge_rating);
+                            edges[edges_size++] = {u, v, edge_rating};
                         }
                     endfor
                 }
             endfor
-            std::sort(edges.begin(), edges.end(), std::greater<>());
+            std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
-            for (const auto &[u, v, w]: edges) {
+            for (size_t i = 0; i < edges_size; ++i) {
+                const auto &[u, v, w] = edges[i];
                 if (used[u] != mark && used[v] != mark) {
                     // use this edge
                     used[u] = mark;
@@ -160,6 +164,7 @@ namespace HeiProMap {
 
                     matching.add(u, v);
                 }
+
             }
 
 #if ASSERT_ENABLED
@@ -185,6 +190,7 @@ namespace HeiProMap {
             }
 #endif
         }
+
 
         JSONString get_stats() override {
             return {};

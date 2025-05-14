@@ -34,45 +34,38 @@
 namespace HeiProMap {
     class IndexedUpdateHeapEntry {
     public:
-        vertex_t u;
+        vertex_t    u;
         partition_t id;
-        s64 qap_delta;
+        s64         qap_delta;
 
-        bool operator>(const IndexedUpdateHeapEntry& m) const { return qap_delta > m.qap_delta; }
-        bool operator>=(const IndexedUpdateHeapEntry& m) const { return qap_delta >= m.qap_delta; }
-        bool operator<(const IndexedUpdateHeapEntry& m) const { return qap_delta < m.qap_delta; }
-        bool operator<=(const IndexedUpdateHeapEntry& m) const { return qap_delta <= m.qap_delta; }
+        bool operator>(const IndexedUpdateHeapEntry &m) const { return qap_delta > m.qap_delta; }
+        bool operator>=(const IndexedUpdateHeapEntry &m) const { return qap_delta >= m.qap_delta; }
+        bool operator<(const IndexedUpdateHeapEntry &m) const { return qap_delta < m.qap_delta; }
+        bool operator<=(const IndexedUpdateHeapEntry &m) const { return qap_delta <= m.qap_delta; }
     };
 
     class IndexedUpdateHeap {
-        size_t m_n                     = 0;
-        size_t m_heap_size             = 0;
-        IndexedUpdateHeapEntry* m_heap = nullptr;
-        size_t* m_indices              = nullptr; // Mapping of keys to heap indices
+        size_t                                m_n         = 0;
+        size_t                                m_heap_size = 0;
+        AlignedArray <IndexedUpdateHeapEntry> m_heap;
+        AlignedArray <size_t>                 m_indices;
 
-        u64 m_iteration          = 0;
-        u64* m_iteration_counter = nullptr;
+        u64                m_iteration = 0;
+        AlignedArray <u64> m_iteration_counter;
 
     public:
         IndexedUpdateHeap() = default;
 
-        ~IndexedUpdateHeap() {
-            free(m_heap);
-            free(m_indices);
-            free(m_iteration_counter);
-        }
+        ~IndexedUpdateHeap() = default;
 
         void initialize(const size_t t_n) {
-            size_t m_n_64 = round_up_64(t_n);
-
             m_n         = t_n;
             m_heap_size = 0;
-            m_heap      = (IndexedUpdateHeapEntry*)aligned_alloc(64, m_n_64 * sizeof(IndexedUpdateHeapEntry));
-            m_indices   = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_heap.initialize(m_n);
+            m_indices.initialize(m_n);
 
-            m_iteration         = 1;
-            m_iteration_counter = (u64*)aligned_alloc(64, m_n_64 * sizeof(u64));
-            std::fill_n(m_iteration_counter, m_n_64, 0);
+            m_iteration = 1;
+            m_iteration_counter.initialize(m_n, 0);
         }
 
         void push(const vertex_t u, const partition_t move_id, const s64 qap_delta) {
@@ -114,7 +107,7 @@ namespace HeiProMap {
         void pop() {
             ASSERT(!empty());
 
-            size_t last_index      = m_heap_size - 1;
+            size_t last_index = m_heap_size - 1;
             m_indices[m_heap[0].u] = HEAP_TOMBSTONE;
             if (last_index > 0) {
                 m_heap[0]              = m_heap[last_index];

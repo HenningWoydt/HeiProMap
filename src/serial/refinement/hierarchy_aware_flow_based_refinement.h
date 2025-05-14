@@ -66,49 +66,49 @@ namespace HeiProMap {
         std::vector<weight_t>    m_distance;
 
         // active block scheduling
-        u8         *active_this_round = nullptr;
-        u8         *active_next_round = nullptr;
-        PairWeight *pairs             = nullptr;
-        size_t     pairs_size         = 0;
+        AlignedArray <u8>         active_this_round;
+        AlignedArray <u8>         active_next_round;
+        AlignedArray <PairWeight> pairs;
+        size_t                    pairs_size = 0;
 
         // array for boundary vertices
-        vertex_t *left_boundary     = nullptr;
+        AlignedArray<vertex_t> left_boundary;
         size_t   left_boundary_size = 0;
 
-        vertex_t *right_boundary     = nullptr;
+        AlignedArray<vertex_t> right_boundary;
         size_t   right_boundary_size = 0;
 
         // array for regions
-        vertex_t *left_region     = nullptr;
+        AlignedArray<vertex_t> left_region;
         size_t   left_region_size = 0;
 
-        vertex_t *right_region     = nullptr;
+        AlignedArray<vertex_t> right_region;
         size_t   right_region_size = 0;
 
-        u32 *is_left_region  = nullptr;
-        u32 *is_right_region = nullptr;
+        AlignedArray<u32> is_left_region;
+        AlignedArray<u32> is_right_region;
         u32 is_region_mark   = 0;
 
-        vertex_t *queue     = nullptr;
+        AlignedArray<vertex_t> queue;
         size_t   queue_size = 0;
 
-        u32 *seen     = nullptr;
+        AlignedArray<u32> seen;
         u32 seen_mark = 0;
 
         // array for penalties
-        weight_t *left_penalties  = nullptr;
-        weight_t *right_penalties = nullptr;
+        AlignedArray<weight_t> left_penalties;
+        AlignedArray<weight_t> right_penalties;
 
         //Translation Table for mapping
         TranslationTable<vertex_t> translation_table;
 
-        u32 *vertex_used  = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
 
-        u32 *block_used  = nullptr;
+        AlignedArray<u32> block_used;
         u32 block_marker = 0;
 
-        Move   *moves     = nullptr;
+        AlignedArray<Move> moves;
         size_t moves_size = 0;
 
         FlowNetwork         flow_network;
@@ -122,23 +122,7 @@ namespace HeiProMap {
     public:
         HierarchyAwareFlowBasedRefinement() = default;
 
-        ~HierarchyAwareFlowBasedRefinement() override {
-            free(active_this_round);
-            free(active_next_round);
-
-            free(left_boundary);
-            free(right_boundary);
-
-            free(left_region);
-            free(right_region);
-            free(is_left_region);
-            free(is_right_region);
-            free(queue);
-            free(seen);
-
-            free(left_penalties);
-            free(right_penalties);
-        }
+        ~HierarchyAwareFlowBasedRefinement() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -167,53 +151,49 @@ namespace HeiProMap {
             partition_t m_k_m_k_64 = round_up_64(m_k * m_k);
 
             // active block scheduling
-            active_this_round = (u8 *) aligned_alloc(64, m_k_64 * sizeof(u8));
-            active_next_round = (u8 *) aligned_alloc(64, m_k_64 * sizeof(u8));
-            pairs             = (PairWeight *) aligned_alloc(64, m_k_m_k_64 * sizeof(PairWeight));
-            pairs_size        = 0;
+            active_this_round.initialize(m_k);
+            active_next_round.initialize(m_k);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            pairs.initialize(size);
+            pairs_size = 0;
 
-            left_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            left_boundary.initialize(m_n);
             left_boundary_size = 0;
 
-            right_boundary      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            right_boundary.initialize(m_n);
             right_boundary_size = 0;
 
-            left_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            left_region.initialize(m_n);
             left_region_size = 0;
 
-            right_region      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            right_region.initialize(m_n);
             right_region_size = 0;
 
-            is_left_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(is_left_region, m_n_64, 0);
-            is_right_region = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(is_right_region, m_n_64, 0);
+            is_left_region.initialize(m_n, 0);
+            is_right_region.initialize(m_n, 0);
             is_region_mark = 0;
 
-            queue      = (vertex_t *) aligned_alloc(64, m_n_64 * sizeof(vertex_t));
+            queue.initialize(m_n);
             queue_size = 0;
 
-            seen = (u32 *) aligned_alloc(64, m_n_64 * sizeof(u32));
-            std::fill_n(seen, m_n_64, 0);
+            seen.initialize(m_n, 0);
             seen_mark = 0;
 
-            left_penalties  = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
-            right_penalties = (weight_t *) aligned_alloc(64, m_n_64 * sizeof(weight_t));
+            left_penalties.initialize(m_n);
+            right_penalties.initialize(m_n);
 
             translation_table.reserve(m_n_64, m_n_64);
 
             vertex_t t_n_64 = round_up_64(t_n);
             vertex_t t_k_64 = round_up_64(t_k);
 
-            vertex_used = (u32 *) aligned_alloc(64, t_n_64 * sizeof(u32));
-            std::fill_n(vertex_used, t_n_64, 0);
+            vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
 
-            block_used = (u32 *) aligned_alloc(64, t_k_64 * sizeof(u32));
-            std::fill_n(block_used, t_k_64, 0);
+            block_used.initialize(m_k, 0);
             block_marker = 0;
 
-            moves      = (Move *) aligned_alloc(64, t_n_64 * sizeof(Move));
+            moves.initialize(m_n_64);
             moves_size = 0;
         }
 
@@ -288,11 +268,11 @@ namespace HeiProMap {
                 iteration += 1;
 
                 // get info before changing
-                std::vector<weight_t> qap_before = get_qap_per_layer(g, p_manager, d_oracle, m_hierarchy.size());
-                s64              n_vertices_left_before  = 0;
-                s64              n_vertices_right_before = 0;
-                for (partition_t id                      = left_start; id < left_end; ++id) { n_vertices_left_before += p_manager.size(id); }
-                for (partition_t id                      = right_start; id < right_end; ++id) { n_vertices_right_before += p_manager.size(id); }
+                std::vector<weight_t> qap_before              = get_qap_per_layer(g, p_manager, d_oracle, m_hierarchy.size());
+                s64                   n_vertices_left_before  = 0;
+                s64                   n_vertices_right_before = 0;
+                for (partition_t      id                      = left_start; id < left_end; ++id) { n_vertices_left_before += p_manager.size(id); }
+                for (partition_t      id                      = right_start; id < right_end; ++id) { n_vertices_right_before += p_manager.size(id); }
 
                 s64              edge_cut_before = 0;
                 for (partition_t id              = left_start; id < left_end; ++id) {

@@ -44,10 +44,10 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
 
-        u32* vertex_used = nullptr;
+        AlignedArray<u32> vertex_used;
         u32 vertex_mark  = 0;
 
-        u32* block_used  = nullptr;
+        AlignedArray<u32> block_used;
         u32 block_marker = 0;
 
         RandomEngine* random_engine          = nullptr;
@@ -71,15 +71,10 @@ namespace HeiProMap {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
-            vertex_t t_n_64 = round_up_64(t_n);
-            vertex_t t_k_64 = round_up_64(t_k);
-
-            vertex_used = (u32*)aligned_alloc(64, sizeof(u32) * t_n_64);
-            std::fill_n(vertex_used, t_n_64, 0);
+            vertex_used.initialize(m_n, 0);
             vertex_mark = 0;
 
-            block_used = (u32*)aligned_alloc(64, t_k_64 * sizeof(u32));
-            std::fill_n(block_used, t_k_64, 0);
+            block_used.initialize(m_k, 0);
             block_marker = 0;
 
             random_engine    = &t_random_engine;

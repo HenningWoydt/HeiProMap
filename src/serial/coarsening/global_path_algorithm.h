@@ -73,18 +73,18 @@ namespace HeiProMap {
         RandomEngine                           *random_engine    = nullptr;
         StatisticCollector                     *m_stat_collector = nullptr;
 
-        Neighbors *m_neighbors = nullptr;
-        u32       *path_id     = nullptr;
-        u32       *path_length = nullptr;
+        AlignedArray<Neighbors> m_neighbors;
+        AlignedArray<u32> path_id;
+        AlignedArray<u32> path_length;
 
-        EdgeUVW *edges = nullptr;
+        AlignedArray<EdgeUVW> edges;
         size_t edges_size = 0;
 
         // for DP
-        f32      *dp_w     = nullptr;
-        s64      *dp_m     = nullptr;
-        u8       *dp_take  = nullptr;
-        vertex_t *dp_edges = nullptr;
+        AlignedArray<f32> dp_w;
+        AlignedArray<s64> dp_m;
+        AlignedArray<u8> dp_take;
+        AlignedArray<vertex_t> dp_edges;
 
         Matching dp_cycle_matches1;
         Matching dp_cycle_matches2;
@@ -106,18 +106,7 @@ namespace HeiProMap {
     public:
         GlobalPathAlgorithmMatcher() = default;
 
-        ~GlobalPathAlgorithmMatcher() override {
-            free(m_neighbors);
-            free(path_id);
-            free(path_length);
-
-            free(edges);
-
-            free(dp_w);
-            free(dp_m);
-            free(dp_take);
-            free(dp_edges);
-        }
+        ~GlobalPathAlgorithmMatcher() override = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -138,16 +127,16 @@ namespace HeiProMap {
             vertex_t t_n_64 = round_up_64(t_n);
             vertex_t t_m_64 = round_up_64(t_m);
 
-            m_neighbors = (Neighbors *) aligned_alloc(64, t_n_64 * sizeof(Neighbors));
-            path_id     = (u32 *) aligned_alloc(64, t_n_64 * sizeof(u32));
-            path_length = (u32 *) aligned_alloc(64, t_n_64 * sizeof(u32));
+            m_neighbors.initialize(m_n);
+            path_id.initialize(m_n);
+            path_length.initialize(m_n);
 
-            edges = (EdgeUVW *) aligned_alloc(64, t_m_64 * sizeof(EdgeUVW));
+            edges.initialize(m_m);
 
-            dp_w     = (f32 *) aligned_alloc(64, t_n_64 * sizeof(f32));
-            dp_m     = (s64 *) aligned_alloc(64, t_n_64 * sizeof(s64));
-            dp_take  = (u8 *) aligned_alloc(64, t_n_64 * sizeof(u8));
-            dp_edges = (vertex_t *) aligned_alloc(64, t_n_64 * sizeof(vertex_t));
+            dp_w.initialize(m_n);
+            dp_m.initialize(m_n);
+            dp_take.initialize(m_n);
+            dp_edges.initialize(m_n);
 
             dp_cycle_matches1.initialize(t_n_64);
             dp_cycle_matches2.initialize(t_n_64);
@@ -180,7 +169,7 @@ namespace HeiProMap {
             compute_ratings(g, p_manager);
 
             METRICS_TIME(sp_sorting)
-            std::sort(edges, edges + edges_size, std::greater<>());
+            std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
             METRICS_TIME(ep_sorting)
             METRICS(level_time_sorting.back() += get_seconds(sp_sorting, ep_sorting);)
 

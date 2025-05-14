@@ -36,20 +36,15 @@ namespace HeiProMap {
         partition_t m_k = 0;
         weight_t lmax   = 0;
 
-        partition_t* partition      = nullptr;
-        partition_t* partition_temp = nullptr;
-        weight_t* bweights          = nullptr;
-        size_t* n_vertices          = nullptr;
+        AlignedArray<partition_t> partition;
+        AlignedArray<partition_t> partition_temp;
+        AlignedArray<partition_t> bweights;
+        AlignedArray<size_t> n_vertices;
 
     public:
         PartitionManager() = default;
 
-        ~PartitionManager() override {
-            free(partition);
-            free(partition_temp);
-            free(bweights);
-            free(n_vertices);
-        }
+        ~PartitionManager() override = default;
 
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
@@ -61,14 +56,10 @@ namespace HeiProMap {
             m_k  = t_k;
             lmax = t_lmax;
 
-            partition = (partition_t*)aligned_alloc(64, t_n_64 * sizeof(partition_t));
-            std::fill_n(partition, t_n_64, 0);
-            partition_temp = (partition_t*)aligned_alloc(64, t_n_64 * sizeof(partition_t));
-            bweights       = (weight_t*)aligned_alloc(64, t_k_64 * sizeof(weight_t));
-            std::fill_n(bweights, t_k_64, 0);
-
-            n_vertices = (size_t*)aligned_alloc(64, t_k_64 * sizeof(size_t));
-            std::fill_n(n_vertices, t_k_64, 0);
+            partition.initialize(m_n, 0);
+            partition_temp.initialize(m_n);
+            bweights.initialize(m_k, 0);
+            n_vertices.initialize(m_k, 0);
             n_vertices[0] = t_n;
         }
 
@@ -137,8 +128,8 @@ namespace HeiProMap {
         }
 
         void reset_weights() {
-            std::fill_n(bweights, m_k, 0);
-            std::fill_n(n_vertices, m_k, 0);
+            bweights.initialize(m_k, 0);
+            n_vertices.initialize(m_k, 0);
         }
     };
 }

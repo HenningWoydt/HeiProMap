@@ -36,11 +36,11 @@ namespace HeiProMap {
      *
      * @tparam T The value.
      */
-    template <typename T>
+    template<typename T>
     class IndexedMaxHeapEntry {
     public:
         size_t key = 0;
-        T val{};
+        T      val{};
 
         IndexedMaxHeapEntry() = default;
 
@@ -57,37 +57,30 @@ namespace HeiProMap {
      *
      * @tparam T The value.
      */
-    template <typename T>
+    template<typename T>
     class IndexedMaxHeap {
     private:
-        size_t m_n                     = 0;
-        size_t m_heap_size             = 0;
-        IndexedMaxHeapEntry<T>* m_heap = nullptr;
-        size_t* m_indices              = nullptr; // Mapping of keys to heap indices
+        size_t                                m_n         = 0;
+        size_t                                m_heap_size = 0;
+        AlignedArray <IndexedMaxHeapEntry<T>> m_heap;
+        AlignedArray <size_t>                 m_indices;
 
-        u64 m_iteration          = 0;
-        u64* m_iteration_counter = nullptr;
+        u64                m_iteration = 0;
+        AlignedArray <u64> m_iteration_counter;
 
     public:
         IndexedMaxHeap() = default;
 
-        ~IndexedMaxHeap() {
-            free(m_heap);
-            free(m_indices);
-            free(m_iteration_counter);
-        }
+        ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {
-            size_t m_n_64 = round_up_64(t_n);
-
             m_n         = t_n;
             m_heap_size = 0;
-            m_heap      = (IndexedMaxHeapEntry<T>*)aligned_alloc(64, m_n_64 * sizeof(IndexedMaxHeapEntry<T>));
-            m_indices   = (size_t*)aligned_alloc(64, m_n_64 * sizeof(size_t));
+            m_heap.initialize(m_n);
+            m_indices.initialize(m_n);
 
-            m_iteration          = 0;
-            m_iteration_counter = (u64*)aligned_alloc(64, m_n_64 * sizeof(u64));
-            std::fill_n(m_iteration_counter, m_n_64, 0);
+            m_iteration = 0;
+            m_iteration_counter.initialize(m_n, 0);
         }
 
         void push(const size_t key, const T t) {
@@ -142,7 +135,7 @@ namespace HeiProMap {
         void pop() {
             ASSERT(!empty());
 
-            size_t last_index        = m_heap_size - 1;
+            size_t last_index = m_heap_size - 1;
             m_indices[m_heap[0].key] = HEAP_TOMBSTONE;
             if (last_index > 0) {
                 m_heap[0]                = m_heap[last_index];
@@ -159,7 +152,7 @@ namespace HeiProMap {
             return m_heap[0].key;
         }
 
-        T& top() {
+        T &top() {
             ASSERT(!empty());
             return m_heap[0].val;
         }
