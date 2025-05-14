@@ -220,7 +220,7 @@ namespace HeiProMap {
         void refine(const u64 level,
                     const u64 max_level,
                     const graph_t &g,
-                    const d_oracle_t &d_oracle,
+                    d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
@@ -234,7 +234,7 @@ namespace HeiProMap {
         void refine_layer(const u64 level,
                           const u64 max_level,
                           const graph_t &g,
-                          const d_oracle_t &d_oracle,
+                          d_oracle_t &d_oracle,
                           bv_manager_t &bv_manager,
                           p_manager_t &p_manager,
                           q_graph_t &q_graph,
@@ -267,7 +267,7 @@ namespace HeiProMap {
         void refine_neighborhood(const u64 level,
                                  const u64 max_level,
                                  const graph_t &g,
-                                 const d_oracle_t &d_oracle,
+                                 d_oracle_t &d_oracle,
                                  bv_manager_t &bv_manager,
                                  p_manager_t &p_manager,
                                  q_graph_t &q_graph,
@@ -753,7 +753,7 @@ namespace HeiProMap {
         }
 
         void change_boundary(const graph_t &g,
-                             const d_oracle_t &d_oracle,
+                             d_oracle_t &d_oracle,
                              bv_manager_t &bv_manager,
                              p_manager_t &p_manager,
                              q_graph_t &q_graph,

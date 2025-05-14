@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_DISTANCE_ORACLE_H
 #define HEIPROMAP_DISTANCE_ORACLE_H
 
+#include "../../commons/aligned_array.h"
 #include "../../commons/definitions.h"
 #include "../../commons/macros.h"
 #include "../../commons/utils.h"
@@ -38,15 +39,12 @@ namespace HeiProMap {
         std::vector<weight_t> m_distance;
         partition_t m_k = 0;
 
-        weight_t* m_mtx = nullptr;
-        partition_t* m_h_mtx = nullptr;
+        AlignedArray<weight_t> m_mtx;
+        AlignedArray<partition_t> m_h_mtx;
 
     public:
         DistanceOracle() = default;
-        ~DistanceOracle() override {
-            free(m_mtx);
-            free(m_h_mtx);
-        }
+        ~DistanceOracle() override = default;
 
         void initialize(const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance) override {
@@ -54,9 +52,8 @@ namespace HeiProMap {
             m_distance  = t_distance;
             m_k         = prod<partition_t>(m_hierarchy);
 
-            size_t m_k_m_k_64 = round_up_64(m_k * m_k);
-            m_mtx = (weight_t*) aligned_alloc(64, m_k_m_k_64 * sizeof(weight_t));
-            m_h_mtx = (partition_t*) aligned_alloc(64, m_k_m_k_64 * sizeof(partition_t));
+            m_mtx.initialize(m_k * m_k);
+            m_h_mtx.initialize(m_k * m_k);
 
             std::vector<std::vector<partition_t>> locs(m_k, std::vector<partition_t>(m_hierarchy.size()));
             for (partition_t id = 0; id < m_k; ++id) {
@@ -78,23 +75,21 @@ namespace HeiProMap {
             }
         }
 
-        weight_t get(partition_t u_id, partition_t v_id) const {
+        weight_t get(partition_t u_id, partition_t v_id) override {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
             ASSERT(u_id * m_k + v_id < m_k * m_k);
-            weight_t* m_mtx_copy = ASSUME_ALIGNED(weight_t*, m_mtx, 64);
-            return m_mtx_copy[u_id * m_k + v_id];
+            return m_mtx[u_id * m_k + v_id];
         }
 
-        partition_t get_h(partition_t u_id, partition_t v_id) const {
+        partition_t get_h(partition_t u_id, partition_t v_id) override {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
             ASSERT(u_id * m_k + v_id < m_k * m_k);
-            partition_t* m_h_mtx_copy = ASSUME_ALIGNED(partition_t*, m_h_mtx, 64);
-            return m_h_mtx_copy[u_id * m_k + v_id];
+            return m_h_mtx[u_id * m_k + v_id];
         }
 
-        bool last_level_pair(partition_t u_id, partition_t v_id) const {
+        bool last_level_pair(partition_t u_id, partition_t v_id) override {
             return (u_id / m_hierarchy[0]) == (v_id / m_hierarchy[0]);
         }
 

@@ -1018,7 +1018,7 @@ namespace HeiProMap {
         void refine(const u64 level,
                     const u64 max_level,
                     const graph_t &g,
-                    const d_oracle_t &d_oracle,
+                    d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
@@ -1056,7 +1056,7 @@ namespace HeiProMap {
         void refine_blocks(const u64 level,
                            const u64 max_level,
                            const graph_t &g,
-                           const d_oracle_t &d_oracle,
+                           d_oracle_t &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
@@ -1392,7 +1392,7 @@ namespace HeiProMap {
 
         void determine_penalties(const graph_t &g,
                                  const p_manager_t &p_manager,
-                                 const d_oracle_t &d_oracle,
+                                 d_oracle_t &d_oracle,
                                  partition_t left_id,
                                  partition_t right_id) {
             for (size_t j = 0; j < left_region_size; ++j) {
@@ -1462,7 +1462,7 @@ namespace HeiProMap {
         }
 
         void build_flow_network(const graph_t &g,
-                                const d_oracle_t &d_oracle,
+                                d_oracle_t &d_oracle,
                                 partition_t left_id,
                                 partition_t right_id) {
             weight_t distance = d_oracle.get(left_id, right_id);
