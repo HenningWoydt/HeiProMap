@@ -52,8 +52,9 @@ namespace HeiProMap {
             m_distance  = t_distance;
             m_k         = prod<partition_t>(m_hierarchy);
 
-            m_mtx.initialize(m_k * m_k);
-            m_h_mtx.initialize(m_k * m_k);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            m_mtx.initialize(size);
+            m_h_mtx.initialize(size);
 
             std::vector<std::vector<partition_t>> locs(m_k, std::vector<partition_t>(m_hierarchy.size()));
             for (partition_t id = 0; id < m_k; ++id) {

@@ -59,7 +59,8 @@ namespace HeiProMap {
             m_n_boundary = 0;
             m_n_boundary_edges.initialize(m_n, 0);
 
-            m_boundaries.initialize(m_k * m_n);
+            size_t size = (size_t) m_k * (size_t) m_n;
+            m_boundaries.initialize(size);
             m_boundaries_size.initialize(m_k, 0);
             m_vertex_idx.initialize(m_n);
 

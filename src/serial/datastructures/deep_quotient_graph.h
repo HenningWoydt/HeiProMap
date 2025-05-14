@@ -35,18 +35,17 @@ namespace HeiProMap {
     class DeepQuotientGraph final : public ISerialQuotientGraph {
         partition_t m_k = 0;
 
-        weight_t* m_adj_mtx = nullptr;
+        AlignedArray<weight_t> m_adj_mtx;
 
     public:
         DeepQuotientGraph() = default;
-        ~DeepQuotientGraph() override { free(m_adj_mtx); }
+        ~DeepQuotientGraph() override = default;
 
         void initialize(const partition_t t_k) override {
-            partition_t k_k_64 = round_up_64(t_k * t_k);
             m_k                = t_k;
 
-            m_adj_mtx = (weight_t*)aligned_alloc(64, k_k_64 * sizeof(weight_t));
-            std::fill_n(m_adj_mtx, k_k_64, 0);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            m_adj_mtx.initialize(size, 0);
         }
 
         void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
@@ -98,7 +97,8 @@ namespace HeiProMap {
         }
 
         void reset(){
-            std::fill_n(m_adj_mtx, m_k * m_k, 0);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            m_adj_mtx.initialize(size, 0);
         }
     };
 }

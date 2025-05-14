@@ -41,10 +41,10 @@ namespace HeiProMap {
         QuotientGraph() = default;
 
         void initialize(const partition_t t_k) override {
-            partition_t k_k_64 = round_up_64(t_k * t_k);
             m_k                = t_k;
 
-            m_adj_mtx.initialize(k_k_64, 0);
+            size_t size = (size_t) m_k * (size_t) m_k;
+            m_adj_mtx.initialize(size, 0);
         }
 
         void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {

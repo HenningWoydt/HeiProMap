@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_ALIGNED_ARRAY_H
 #define HEIPROMAP_ALIGNED_ARRAY_H
 
+#include "macros.h"
 #include "utils.h"
 
 namespace HeiProMap {
@@ -43,6 +44,11 @@ namespace HeiProMap {
 
         void initialize(const size_t n) {
             size_t size = round_up_64(n);
+
+#if ASSERT_ENABLED
+            std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
+#endif
+
             if (size > m_n) {
                 m_n = size;
                 free(m_ptr);
@@ -53,6 +59,11 @@ namespace HeiProMap {
 
         void initialize(const size_t n, const T fill_value) {
             size_t size = round_up_64(n);
+
+#if ASSERT_ENABLED
+            std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
+#endif
+
             if (size > m_n) {
                 m_n = size;
                 free(m_ptr);
