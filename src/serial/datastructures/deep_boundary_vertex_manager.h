@@ -39,16 +39,11 @@ namespace HeiProMap {
         vertex_t    m_n = 0;                                    // number of vertices in the graph
         partition_t m_k = 0;                                    // number of partitions
 
-        vertex_t               m_n_boundary = 0;                // number of boundary vertices
-        AlignedArray<vertex_t> m_n_boundary_edges;              // number of boundary edges for each vertex
-
-        AlignedArray<vertex_t> m_boundaries;
-        AlignedArray<size_t>   m_boundaries_size;               // number of boundary vertices for each partition
-        AlignedArray<size_t>   m_vertex_idx;                    // index of the vertex in the boundary array for each vertex
-
-        AlignedArray<vertex_t> m_complete_boundary;             // complete boundary, i.e. all vertices that are in a partition
-        AlignedArray<vertex_t> m_complete_boundary_vertex_idx;  // index of the vertex in the complete boundary array for each vertex
-        size_t                 m_complete_boundary_size = 0;    // size of the complete boundary array
+        AlignedArray<vertex_t>    m_boundary;             // complete boundary, i.e. all vertices that are in a partition
+        AlignedArray<vertex_t>    m_vertex_idx;  // index of the vertex in the complete boundary array for each vertex
+        AlignedArray<vertex_t>    m_n_boundary_edges;              // number of boundary edges for each vertex
+        AlignedArray<partition_t> m_partition;
+        size_t                    m_boundary_size = 0;    // size of the complete boundary array
 
     public:
         void initialize(const vertex_t t_n,
@@ -56,39 +51,45 @@ namespace HeiProMap {
             m_n = t_n;
             m_k = t_k;
 
-            m_n_boundary = 0;
-            m_n_boundary_edges.initialize(m_n, 0);
-
-            size_t size = (size_t) m_k * (size_t) m_n;
-            m_boundaries.initialize(size);
-            m_boundaries_size.initialize(m_k, 0);
+            m_boundary.initialize(m_n);
             m_vertex_idx.initialize(m_n);
-
-            m_complete_boundary.initialize(m_n);
-            m_complete_boundary_vertex_idx.initialize(m_n);
-            m_complete_boundary_size = 0;
+            m_n_boundary_edges.initialize(m_n, 0);
+            m_partition.initialize(m_n);
+            m_boundary_size = 0;
         }
 
-        size_t size() const override { return m_n_boundary; }
+        size_t size() const override { return m_boundary_size; }
 
-        size_t size(const partition_t id) const override { return m_boundaries_size[id]; }
+        size_t size(const partition_t id) const override {
+            size_t      size = 0;
+            for (size_t i    = 0; i < m_boundary_size; ++i) {
+                size += m_partition[i] == id;
+            }
+            return size;
+        }
 
-        vertex_t get(const size_t i) const override { return m_complete_boundary[i]; }
+        vertex_t get(const size_t i) const override { return m_boundary[i]; }
 
-        vertex_t get(const partition_t id, const size_t i) const override { return m_boundaries[id * m_n + i]; }
+        vertex_t get(const partition_t id, const size_t i) const override {
+            size_t      size = 0;
+            for (size_t j    = 0; j < m_boundary_size; ++j) {
+                if (m_partition[j] == id) {
+                    if (size == i) { return m_partition[j]; }
+                    size += 1;
+                }
+            }
+            abort();
+        }
 
         bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
 
         void add(const vertex_t u,
                  const partition_t id) override {
             if (m_n_boundary_edges[u] == 0) {
-                m_n_boundary += 1;
-                m_boundaries[id * m_n + (m_boundaries_size[id]++)] = u;
-                m_vertex_idx[u]                                    = m_boundaries_size[id] - 1;
-
-                m_complete_boundary[m_complete_boundary_size] = u;
-                m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
-                m_complete_boundary_size += 1;
+                m_boundary[m_boundary_size] = u;
+                m_vertex_idx[u]             = m_boundary_size;
+                m_partition[u]              = id;
+                m_boundary_size += 1;
             }
             m_n_boundary_edges[u] += 1;
         }
@@ -108,14 +109,11 @@ namespace HeiProMap {
                 }
             endfor
             if (n_neighbors > 0) {
-                m_n_boundary += 1;
-                m_n_boundary_edges[u]                              = n_neighbors;
-                m_boundaries[id * m_n + (m_boundaries_size[id]++)] = u;
-                m_vertex_idx[u]                                    = m_boundaries_size[id] - 1;
-
-                m_complete_boundary[m_complete_boundary_size] = u;
-                m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
-                m_complete_boundary_size += 1;
+                m_boundary[m_boundary_size] = u;
+                m_vertex_idx[u]             = m_boundary_size;
+                m_n_boundary_edges[u]       = n_neighbors;
+                m_partition[u]              = id;
+                m_boundary_size += 1;
             }
         }
 
@@ -124,12 +122,10 @@ namespace HeiProMap {
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) override {
+
             bool u_was_boundary = is_boundary(u);
 
-            // remove u from its old id
-            if (u_was_boundary) {
-                remove(u, old_id);
-            }
+            m_partition[u] = new_id;
 
             // check how many connections u still has and if the neighbor are still boundary
             forall_guiv(g, u, i, v)
@@ -142,39 +138,49 @@ namespace HeiProMap {
                         ASSERT(m_n_boundary_edges[v] > 0);
                         m_n_boundary_edges[u] -= 1;
                         m_n_boundary_edges[v] -= 1;
-                        m_n_boundary -= m_n_boundary_edges[u] == 0; // decrease by 1 if it is 0
-                        m_n_boundary -= m_n_boundary_edges[v] == 0; // decrease by 1 if it is 0
                         if (m_n_boundary_edges[v] == 0) {
-                            remove(v, v_id);
-                            remove_from_complete(v);
+                            vertex_t last_v             = m_boundary[m_boundary_size - 1];
+                            m_vertex_idx[last_v]        = m_vertex_idx[v];
+                            m_boundary[m_vertex_idx[v]] = last_v;
+                            m_boundary_size - 1;
                         }
                     } else if (v_id == old_id) {
                         // u was moved to a different block, both gain 1 edge
                         m_n_boundary_edges[u] += 1;
                         m_n_boundary_edges[v] += 1;
-                        m_n_boundary += m_n_boundary_edges[u] == 1; // add by 1 if 0
-                        m_n_boundary += m_n_boundary_edges[v] == 1; // add by 1 if 0
                         if (m_n_boundary_edges[v] == 1) {
-                            emplace(v, v_id);
-                            emplace_in_complete(v);
+                            m_boundary[m_boundary_size] = v;
+                            m_vertex_idx[v]             = m_boundary_size;
+                            m_n_boundary_edges[v]       = 1;
+                            m_partition[v]              = v_id;
+                            m_boundary_size += 1;
                         }
                     }
                     // else, v and u are in different blocks and still connected, nothing changes
                 }
             endfor
 
-            if (m_n_boundary_edges[u] > 0) { emplace(u, new_id); } // emplace u into the sub-boundary
-            if (u_was_boundary && m_n_boundary_edges[u] == 0) { remove_from_complete(u); } // if u has no more edges remove it from the complete-boundary
-            if (!u_was_boundary && m_n_boundary_edges[u] > 0) { emplace_in_complete(u); }
+            if (u_was_boundary && m_n_boundary_edges[u] == 0) {
+                // remove u
+                vertex_t last_v = m_boundary[m_boundary_size - 1];
+                m_vertex_idx[last_v]        = m_vertex_idx[u];
+                m_boundary[m_vertex_idx[u]] = last_v;
+                m_boundary_size - 1;
+            } else if (!u_was_boundary && m_n_boundary_edges[u] > 0) {
+                // add u
+                m_boundary[m_boundary_size] = u;
+                m_vertex_idx[u]             = m_boundary_size;
+                m_n_boundary_edges[u]       = 1;
+                m_partition[u]              = new_id;
+                m_boundary_size += 1;
+            }
         }
 
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager) override {
             // compute all from scratch
             m_n_boundary_edges.initialize(m_n, 0);
-            m_boundaries_size.initialize(m_k, 0);
-            m_complete_boundary_size = 0;
-            m_n_boundary             = 0;
+            m_boundary_size = 0;
 
             forall_gu(g, u)
                 {
@@ -188,15 +194,12 @@ namespace HeiProMap {
                     endfor
 
                     if (n_different > 0) {
-                        m_n_boundary_edges[u]                                  = n_different;
-                        m_boundaries[u_id * m_n + (m_boundaries_size[u_id]++)] = u;
-                        m_vertex_idx[u]                                        = m_boundaries_size[u_id] - 1;
+                        m_n_boundary_edges[u] = n_different;
 
-                        m_complete_boundary[m_complete_boundary_size] = u;
-                        m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
-                        m_complete_boundary_size += 1;
-
-                        m_n_boundary += 1;
+                        m_boundary[m_boundary_size] = u;
+                        m_vertex_idx[u]             = m_boundary_size;
+                        m_partition[u]              = u_id;
+                        m_boundary_size += 1;
                     }
                 }
             endfor
@@ -204,40 +207,7 @@ namespace HeiProMap {
 
         void reset() {
             m_n_boundary_edges.initialize(m_n, 0);
-            m_boundaries_size.initialize(m_k, 0);
-            m_complete_boundary_size = 0;
-            m_n_boundary             = 0;
-        }
-
-    private:
-        void remove_from_complete(const vertex_t u) {
-            vertex_t last_vertex = m_complete_boundary[m_complete_boundary_size - 1];
-            m_complete_boundary_size -= 1;
-            size_t u_idx = m_complete_boundary_vertex_idx[u];
-
-            m_complete_boundary[u_idx]                  = last_vertex;
-            m_complete_boundary_vertex_idx[last_vertex] = u_idx;
-        }
-
-        void emplace_in_complete(const vertex_t u) {
-            m_complete_boundary[m_complete_boundary_size] = u;
-            m_complete_boundary_vertex_idx[u]             = m_complete_boundary_size;
-            m_complete_boundary_size += 1;
-        }
-
-        void remove(const vertex_t u,
-                    const partition_t id) {
-            vertex_t last_vertex = m_boundaries[id * m_n + (--m_boundaries_size[id])];
-            size_t   u_idx       = m_vertex_idx[u];
-
-            m_boundaries[id * m_n + u_idx] = last_vertex;
-            m_vertex_idx[last_vertex]      = u_idx;
-        }
-
-        void emplace(const vertex_t u,
-                     const partition_t id) {
-            m_boundaries[id * m_n + (m_boundaries_size[id]++)] = u;
-            m_vertex_idx[u]                                    = m_boundaries_size[id] - 1;
+            m_boundary_size = 0;
         }
     };
 }

@@ -87,19 +87,7 @@ namespace HeiProMap {
         GlobalPathAlgorithmMatcher gpa_matcher;
 
         // refinement
-        LabelPropagationRefinement lp_refine;
-        TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
-        ThreeVertexLabelPropagationRefinement three_vertex_lp_refine;
-        QuotientGraphRefinement qg_refine;
-        KWayFMRefinement k_way_refine;
-        MultiTryFMRefinement multi_try_fm_refinement;
-        FlowBasedRefinement flow_based_refinement;
-        // ILPRefinement ilp_refinement;
 
-        HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
-        HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
-        // HierarchyAwareILPRefinement hierarchy_aware_ilp_refinement;
-        HierarchyAwareFlowBasedRefinement hierarchy_aware_flow_based_refinement;
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
@@ -129,24 +117,20 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
-            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
-            rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config, stat_collect);
-            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config, stat_collect);
+            if(ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS){
+                gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config, stat_collect);
+            } else if(ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING){
+                ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
+            } else if(ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING){
+                he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
+            } else if(ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING){
+                rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config, stat_collect);
+            } else{
+                std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
+                exit(EXIT_FAILURE);
+            }
 
             // refinement
-            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
-            refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
-            refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
-            refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
-            refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
-            refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
-            refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
-            refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
-            // refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
-            // refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
@@ -208,6 +192,8 @@ namespace HeiProMap {
                     }
 
                     coarsening(level);
+
+                    std::cout << graphs.back().get_n() << " " << matches.back().size() << std::endl;
 
                     level += 1;
                 }

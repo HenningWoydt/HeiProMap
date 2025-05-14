@@ -53,12 +53,12 @@ namespace HeiProMap {
             m_k  = t_k;
             lmax = t_lmax;
 
-            partition.initialize(t_n, 0);
-            partition_temp.initialize(t_n);
-            bweights.initialize(t_k, 0);
+            partition.initialize(m_n, 0);
+            partition_temp.initialize(m_n);
+            bweights.initialize(m_k, 0);
 
-            n_vertices.initialize(t_k, 0);
-            n_vertices[0] = t_n;
+            n_vertices.initialize(m_k, 0);
+            n_vertices[0] = m_n;
         }
 
         // read
