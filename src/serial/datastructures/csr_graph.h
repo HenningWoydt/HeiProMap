@@ -269,14 +269,14 @@ namespace HeiProMap {
             matching.set_translation();
 
             m_n = matching.get_n_coarse_nodes();
-            m_m = g.get_m() + 1;
+            const vertex_t temp_m = g.get_m() + 1;
 
             m_graph_weight = g.m_graph_weight;
-            m_v_weights.initialize(m_n);
+            m_v_weights.initialize(m_n + 1);
 
             m_neighborhoods.initialize(m_n + 1);
-            m_edges_v.initialize(m_m);
-            m_edges_w.initialize(m_m);
+            m_edges_v.initialize(temp_m);
+            m_edges_w.initialize(temp_m);
 
             struct IdxMark {
                 vertex_t idx;
@@ -395,6 +395,19 @@ namespace HeiProMap {
         vertex_t neighbor(const vertex_t u, const size_t idx) const override { return m_edges_v[m_neighborhoods[u] + idx]; }
 
         weight_t weight(const vertex_t u, const size_t idx) const override { return m_edges_w[m_neighborhoods[u] + idx]; }
+
+        void write_graph(std::string file_path) {
+            std::ofstream file(file_path);
+
+            file << m_n << " " << m_m/2 << " 011" << std::endl;
+            for (size_t i = 0; i < m_n; ++i) {
+                file << m_v_weights[i] << " ";
+                for (size_t j = m_neighborhoods[i]; j < m_neighborhoods[i + 1]; ++j) {
+                    file << m_edges_v[j] + 1 << " " << m_edges_w[j] << " ";
+                }
+                file << std::endl;
+            }
+        }
     };
 }
 

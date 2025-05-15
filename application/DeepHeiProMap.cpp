@@ -72,7 +72,7 @@ int main(const int argc, char* argv[]) {
                     {"--hierarchy", "64:16:32:32"},
                     {"--distance", "1:10:50:100"},
                     {"--imbalance", "0.03"},
-                    {"--config", "fast"},
+                    {"--config", "experimental"},
                     {"--seed", "0"},
 
                     // coarsening

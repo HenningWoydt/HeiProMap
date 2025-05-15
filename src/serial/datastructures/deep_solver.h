@@ -78,6 +78,7 @@ namespace HeiProMap {
 
         // balance
         weight_t lmax = 0;
+        std::vector<weight_t> lmax_vec;
 
         // matching
         std::vector<Matching> matches;
@@ -106,6 +107,12 @@ namespace HeiProMap {
             const auto sp_io = std::chrono::high_resolution_clock::now();
             // balance
             lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].weight() / (f64)ac.k));
+            lmax_vec.resize(ac.hierarchy.size());
+            partition_t temp_k = 1;
+            for (u64 i = 0; i < ac.hierarchy.size(); ++i) {
+                temp_k *= ac.hierarchy[ac.hierarchy.size() - 1 - i];
+                lmax_vec[ac.hierarchy.size() - 1 - i] = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].weight() / (f64)temp_k));
+            }
 
             // manager
             p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
@@ -117,15 +124,15 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            if(ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS){
-                gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config, stat_collect);
-            } else if(ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING){
-                ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
-            } else if(ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING){
-                he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
-            } else if(ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING){
-                rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config, stat_collect);
-            } else{
+            if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
+                gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), random_engine, ac.global_path_algorithm_config, stat_collect);
+            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
+                ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), random_engine, ac.greedy_edge_matcher_config, stat_collect);
+            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
+                he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), random_engine, ac.heavy_edge_matcher_config, stat_collect);
+            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
+                rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), random_engine, ac.random_edge_matcher_config, stat_collect);
+            } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
             }
@@ -184,24 +191,29 @@ namespace HeiProMap {
                 u64 mult = 16;
                 if (v_cycle > 1) { mult = 1; }
 
-                while (graphs.back().get_n() > ac.k * mult) {
+                std::cout << graphs.back().get_n() << " " << graphs.back().get_m() << ac.hierarchy.back() << " " << ac.hierarchy.back() * mult << std::endl;
+
+                while (graphs.back().get_n() > ac.hierarchy.back() * mult) {
                     matching(level, v_cycle);
                     if (matches.back().size() == 0) {
+                        std::cout << "No matching found!" << std::endl;
+                        graphs.back().write_graph("temp.graph");
                         matches.pop_back();
                         break;
                     }
 
                     coarsening(level);
 
-                    std::cout << graphs.back().get_n() << " " << matches.back().size() << std::endl;
+                    std::cout << level << " " << graphs.back().get_n() << " " << graphs.back().get_m() << " " << matches.back().size() << " " << ac.hierarchy.back() << " " << ac.hierarchy.back() * mult << std::endl;
 
                     level += 1;
                 }
 
                 max_level = level - 1;
-                partition(v_cycle);
+                // partition(v_cycle);
 
                 // ASSERT(max(p_manager.get_bweights()) <= lmax);
+                /*
                 if (p_manager.is_overloaded()) {
                     print(p_manager.get_bweights());
                     std::cout << max(p_manager.get_bweights()) << std::endl;
@@ -219,6 +231,7 @@ namespace HeiProMap {
                         METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
                     }
                 }
+                */
             }
         }
 

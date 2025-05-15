@@ -46,7 +46,7 @@ namespace HeiProMap {
             size_t size = round_up_64(n);
 
 #if ASSERT_ENABLED
-            std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
+            // std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
 #endif
 
             if (size > m_n) {
@@ -61,7 +61,7 @@ namespace HeiProMap {
             size_t size = round_up_64(n);
 
 #if ASSERT_ENABLED
-            std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
+            // std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
 #endif
 
             if (size > m_n) {

@@ -124,9 +124,6 @@ namespace HeiProMap {
             random_engine    = &t_random_engine;
             m_stat_collector = &t_stat_collect;
 
-            vertex_t t_n_64 = round_up_64(t_n);
-            vertex_t t_m_64 = round_up_64(t_m);
-
             m_neighbors.initialize(m_n);
             path_id.initialize(m_n);
             path_length.initialize(m_n);
@@ -138,8 +135,8 @@ namespace HeiProMap {
             dp_take.initialize(m_n);
             dp_edges.initialize(m_n);
 
-            dp_cycle_matches1.initialize(t_n_64);
-            dp_cycle_matches2.initialize(t_n_64);
+            dp_cycle_matches1.initialize(m_n);
+            dp_cycle_matches2.initialize(m_n);
         }
 
         void match(const size_t level,
