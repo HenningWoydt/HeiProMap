@@ -60,6 +60,8 @@ namespace HeiProMap {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
 
+            if (u_id == v_id) { return 0; }
+
             determine_loc(u_id, u_loc);
             determine_loc(v_id, v_loc);
 
@@ -69,6 +71,8 @@ namespace HeiProMap {
         partition_t get_h(partition_t u_id, partition_t v_id) override {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
+
+            if (u_id == v_id) { return 0; }
 
             determine_loc(u_id, u_loc);
             determine_loc(v_id, v_loc);
