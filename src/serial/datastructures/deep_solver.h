@@ -210,7 +210,7 @@ namespace HeiProMap {
                 }
 
                 max_level = level - 1;
-                // partition(v_cycle);
+                partition(v_cycle);
 
                 // ASSERT(max(p_manager.get_bweights()) <= lmax);
                 /*

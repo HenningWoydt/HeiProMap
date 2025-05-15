@@ -65,14 +65,12 @@ namespace HeiProMap {
         }
 
         void reserve(size_t n_space, size_t o_space){
-            size_t n_space_64 = round_up_64(n_space + 1);
-            size_t o_space_64 = round_up_64(o_space + 1);
-            m_translation_n_to_o.initialize(n_space_64);
-            m_translation_o_to_n.initialize(o_space_64);
+            m_translation_n_to_o.initialize(n_space);
+            m_translation_o_to_n.initialize(o_space);
 
 #if ASSERT_ENABLED
-            n_to_o_set.initialize(n_space_64, 0);
-            o_to_n_set.initialize(o_space_64, 0);
+            n_to_o_set.initialize(n_space, 0);
+            o_to_n_set.initialize(o_space, 0);
 #endif
         }
 
