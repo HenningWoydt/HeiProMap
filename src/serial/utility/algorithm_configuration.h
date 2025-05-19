@@ -47,6 +47,7 @@
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/random_edge_matcher.h"
 #include "../partitioning/kaffpa_partitioner.h"
+#include "../partitioning/kaffpa_kway_partitioner.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
 
@@ -247,6 +248,7 @@ namespace HeiProMap {
 
         GlobalMultisectionConfiguration global_multisection_config;
         KaffpaPartitionerConfiguration  kaffpa_partitioner_config;
+        KaffpaKWayPartitionerConfiguration kaffpa_kway_partitioner_config;
 
         // rebalance algorithm
         std::string      rebalancing_algorithm_string;

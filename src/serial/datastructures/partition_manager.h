@@ -49,9 +49,6 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t t_lmax) override {
-            vertex_t t_n_64 = round_up_64(t_n);
-            vertex_t t_k_64 = round_up_64(t_k);
-
             m_n  = t_n;
             m_k  = t_k;
             lmax = t_lmax;
@@ -99,10 +96,12 @@ namespace HeiProMap {
         }
 
         void contract(const Matching& matching) {
-            for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
-                vertex_t old_u        = matching.get_o(new_u);
-                partition_temp[new_u] = partition[old_u];
-                n_vertices[partition[old_u]] -= 1;
+            for (size_t i = 0; i < matching.size(); ++i) {
+                auto[u, v] = matching[i];
+                vertex_t smaller_vertex = std::min(u, v);
+                vertex_t new_u        = matching.get_n(smaller_vertex);
+                partition_temp[new_u] = partition[smaller_vertex];
+                n_vertices[partition[smaller_vertex]] -= 1;
             }
             std::swap(partition, partition_temp);
         }
@@ -113,7 +112,7 @@ namespace HeiProMap {
                 vertex_t old_u_partner        = matching.get_partner(old_u);
                 partition_temp[old_u]         = partition[new_u];
                 partition_temp[old_u_partner] = partition[new_u];
-                if(old_u != old_u_partner) {
+                if (old_u != old_u_partner) {
                     n_vertices[partition[new_u]] += 1;
                 }
             }
@@ -131,6 +130,14 @@ namespace HeiProMap {
             bweights.initialize(m_k, 0);
             n_vertices.initialize(m_k, 0);
         }
+
+        void set_lmax(const partition_t id, const weight_t new_lmax) {}
+
+        weight_t get_lmax(const partition_t id) { return 0; }
+
+        void set_hierarchy_level(const partition_t id, const partition_t level) {}
+
+        partition_t get_hierarchy_level(const partition_t id) { return 0; }
     };
 }
 

@@ -122,7 +122,7 @@ namespace HeiProMap {
             p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
             bv_manager.initialize(graphs[0].get_n(), ac.k);
             q_graph.initialize(ac.k);
-            HEAVYASSERT(assert_state_pre_partitioning(graphs[0]));
+            HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
             d_oracle.initialize(ac.hierarchy, ac.distance);
@@ -321,14 +321,20 @@ namespace HeiProMap {
         void coarsening(const u64 level) {
             const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
+            HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
+
+            std::cout << graphs.back().get_n() << " " << matches.back().get_n_coarse_nodes() << " " << p_manager.size(0) << std::endl;
+
             graphs.emplace_back(); // coarse the graph
             graphs.back().initialize(graphs[graphs.size() - 2], matches.back());
             p_manager.contract(matches.back());
 
+            std::cout << graphs.back().get_n() << " " << matches.back().get_n_coarse_nodes() << " " << p_manager.size(0) << std::endl;
+
             const auto ep_coarse = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("coarsening", get_seconds(sp_coarse, ep_coarse));
 
-            HEAVYASSERT(assert_state_pre_partitioning(graphs.back()));
+            HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
             METRICS(stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);)
             METRICS(stat_collect.set_coarsening_stats(graphs.back().get_n(), level);)
         }

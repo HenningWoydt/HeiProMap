@@ -31,12 +31,12 @@
 
 #include "kaHIP_interface.h"
 
-#include "../interfaces/ISerialPartitioner.h"
 #include "../serial_definitions_1.h"
 #include "../serial_definitions_2.h"
 #include "../serial_definitions_3.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
+#include "../interfaces/ISerialPartitioner.h"
 
 namespace HeiProMap {
     enum KaffpaKWayPartitionerMode {
@@ -46,7 +46,7 @@ namespace HeiProMap {
         KAFFPA_KWAY_PARTITIONER_MODE_FAST,
     };
 
-    inline KaffpaKWayPartitionerMode string_to_kaffpa_kway_partitioner_mode(const std::string &str) {
+    inline KaffpaKWayPartitionerMode string_to_kaffpa_kway_partitioner_mode(const std::string& str) {
         if (str == "UNDEFINED") return KAFFPA_KWAY_PARTITIONER_MODE_UNDEFINED;
         if (str == "strong") return KAFFPA_KWAY_PARTITIONER_MODE_STRONG;
         if (str == "eco") return KAFFPA_KWAY_PARTITIONER_MODE_ECO;
@@ -56,38 +56,39 @@ namespace HeiProMap {
 
     inline std::string kaffpa_kway_partitioner_mode_to_string(KaffpaKWayPartitionerMode mode) {
         switch (mode) {
-            case KAFFPA_KWAY_PARTITIONER_MODE_UNDEFINED:
-                return "UNDEFINED";
-            case KAFFPA_KWAY_PARTITIONER_MODE_STRONG:
-                return "strong";
-            case KAFFPA_KWAY_PARTITIONER_MODE_ECO:
-                return "eco";
-            case KAFFPA_KWAY_PARTITIONER_MODE_FAST:
-                return "fast";
-            default:
-                return "UNDEFINED";
+        case KAFFPA_KWAY_PARTITIONER_MODE_UNDEFINED:
+            return "UNDEFINED";
+        case KAFFPA_KWAY_PARTITIONER_MODE_STRONG:
+            return "strong";
+        case KAFFPA_KWAY_PARTITIONER_MODE_ECO:
+            return "eco";
+        case KAFFPA_KWAY_PARTITIONER_MODE_FAST:
+            return "fast";
+        default:
+            return "UNDEFINED";
         }
     }
 
     class KaffpaKWayPartitionerConfiguration final : public ISerialPartitionerConfiguration {
     public:
-        std::string               mode_string;
+        std::string mode_string;
         KaffpaKWayPartitionerMode mode; // Which mode to use: strong, eco, fast
     };
 
     class KaffpaKWayPartitioner {
     private:
         // vars needed for kaffpa
-        int* vwgt = nullptr;
-        int* xadj = nullptr;
+        int* vwgt    = nullptr;
+        int* xadj    = nullptr;
         int* adjcwgt = nullptr;
-        int* adjncy = nullptr;
-        int* part = nullptr;
+        int* adjncy  = nullptr;
+        int* part    = nullptr;
 
         size_t n_vertices = 0;
-        size_t n_edges = 0;
+        size_t n_edges    = 0;
 
         TranslationTable<vertex_t> tt;
+
     public:
         ~KaffpaKWayPartitioner() {
             free(vwgt);
@@ -112,85 +113,113 @@ namespace HeiProMap {
         void partition(const graph_t& g,
                        p_manager_t& p_manager,
                        partition_t id,
+                       partition_t id_increment,
                        partition_t k,
                        weight_t lmax,
+                       s32 hierarchy_level,
                        RandomEngine& t_random_engine,
                        const ISerialPartitionerConfiguration& i_config,
                        StatisticCollector& t_stat_collect) {
             tt.reserve(g.get_n(), g.get_n());
 
             vertex_t subgraph_n_vertices = 0;
-            vertex_t subgraph_n_edges = 0;
-            weight_t subgraph_weight = 0;
+            vertex_t subgraph_n_edges    = 0;
+            weight_t subgraph_weight     = 0;
             // step 1: extract number of vertices and edges, build tt
-            forall_gu(g, u) {
-                if(p_manager[u] == id){
-                    tt.add(u, subgraph_n_vertices);
-                    subgraph_n_vertices += 1;
-                    subgraph_weight += g.weight(u);
-                    forall_guiv(g, u, i, v){
-                        if(p_manager[v] == id){ subgraph_n_edges += 1; }
-                    } endfor
+            forall_gu(g, u)
+                {
+                    if (p_manager[u] == id) {
+                        tt.add(u, subgraph_n_vertices);
+                        subgraph_n_vertices += 1;
+                        subgraph_weight += g.weight(u);
+                        forall_guiv(g, u, i, v)
+                            {
+                                if (p_manager[v] == id) { subgraph_n_edges += 1; }
+                            }
+                        endfor
+                    }
                 }
-            } endfor
+            endfor
 
             allocate(subgraph_n_vertices, subgraph_n_edges);
             xadj[0] = 0;
             // step 2: build graph in kaffpa variables
-            forall_gu(g, u) {
-                    if(p_manager[u] == id){
-                        vertex_t new_u = tt.get_n(u);
-                        vwgt[new_u] = g.weight(u);
+            forall_gu(g, u)
+                {
+                    if (p_manager[u] == id) {
+                        vertex_t new_u  = tt.get_n(u);
+                        vwgt[new_u]     = g.weight(u);
                         xadj[new_u + 1] = xadj[new_u];
-                        forall_guivw(g, u, i, v, w){
-                                if(p_manager[v] == id){
-                                    vertex_t new_v = tt.get_n(v);
-                                    adjncy[xadj[new_u + 1]] = new_v;
+                        forall_guivw(g, u, i, v, w)
+                            {
+                                if (p_manager[v] == id) {
+                                    vertex_t new_v           = tt.get_n(v);
+                                    adjncy[xadj[new_u + 1]]  = (int) new_v;
                                     adjcwgt[xadj[new_u + 1]] = w;
                                     xadj[new_u + 1] += 1;
                                 }
-                            } endfor
+                            }
+                        endfor
                     }
-                } endfor
+                }
+            endfor
 
             // step 3: calculate allowed imbalance
-            f64 imbalance = ((f64) (lmax * k) / (f64) subgraph_weight) - 1.0;
+            f64 imbalance = ((f64)(lmax * k) / (f64)subgraph_weight) - 1.0;
+            ASSERT(imbalance >= 0.0);
 
             // step 4: partition
-            int n = subgraph_n_vertices;
-            int n_parts = k;
+            int n       = (int)subgraph_n_vertices;
+            int n_parts = (int)k;
             int edge_cut;
             kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &n_parts, &imbalance, true, 0, FAST, &edge_cut, part);
 
             // step 5: extract partition into p_manager
+            for (vertex_t vertex = 0; vertex < subgraph_n_vertices; ++vertex) {
+                if (part[vertex] == 0) { continue; }
+                partition_t vertex_id  = id;
+                partition_t move_id    = id + id_increment * part[vertex];
+                weight_t vertex_weight = g.weight(vertex);
 
+                // bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                // q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+            }
 
+            std::cout << n << " " << n_parts << " " << imbalance << " " << edge_cut << std::endl;
 
+            for (partition_t i = 0; i < k; ++i) {
+
+                partition_t move_id    = id + id_increment * i;
+                p_manager.set_lmax(move_id, lmax);
+                p_manager.set_hierarchy_level(move_id, hierarchy_level - 1);
+
+                std::cout << "Setting " << move_id << " " << lmax << " " << hierarchy_level - 1 << " " << p_manager.size(move_id) << std::endl;
+            }
         }
 
-        void allocate(size_t new_n_vertices, size_t new_n_edges){
-            if(new_n_vertices > n_vertices){
+        void allocate(size_t new_n_vertices, size_t new_n_edges) {
+            if (new_n_vertices > n_vertices) {
                 n_vertices = new_n_vertices;
 
                 free(vwgt);
                 free(xadj);
                 free(part);
 
-                vwgt = (int*) malloc(n_vertices * sizeof(int));
-                xadj = (int*) malloc((n_vertices + 1) * sizeof(int));
-                part = (int*) malloc(n_vertices * sizeof(int));
+                vwgt = (int*)malloc(n_vertices * sizeof(int));
+                xadj = (int*)malloc((n_vertices + 1) * sizeof(int));
+                part = (int*)malloc(n_vertices * sizeof(int));
             }
 
-            if(new_n_edges > n_edges){
+            if (new_n_edges > n_edges) {
                 n_edges = new_n_edges;
 
                 free(adjcwgt);
                 free(adjncy);
 
-                adjcwgt = (int*) malloc(n_edges * sizeof(int));
-                adjncy = (int*) malloc(n_edges * sizeof(int));
+                adjcwgt = (int*)malloc(n_edges * sizeof(int));
+                adjncy  = (int*)malloc(n_edges * sizeof(int));
             }
-
         }
     };
 }
