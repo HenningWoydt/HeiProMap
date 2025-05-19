@@ -56,7 +56,7 @@ namespace HeiProMap {
             bweights.initialize(m_k, 0);
             n_vertices.initialize(m_k, 0);
             lmax.initialize(m_k, t_lmax);
-            hierarchy_level.initialize(m_k);
+            hierarchy_level.initialize(m_k, -1);
         }
 
         // read

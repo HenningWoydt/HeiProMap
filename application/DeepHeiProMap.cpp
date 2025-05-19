@@ -51,12 +51,12 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/training/PGPgiantcompo.graph"},
                     // {"--mapping", "../data/out/partition/PGPgiantcompo.txt"},
                     // {"--statistics", "../data/out/statistics/PGPgiantcompo.JSON"},
-                    // {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
-                    // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                    // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
-                    {"--graph", "../data/mapping/del26.graph"}, // To Beat 2715456 in 220.94 s
-                    {"--mapping", "../data/out/partition/del26.txt"},
-                    {"--statistics", "../data/out/statistics/del26.JSON"},
+                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
+                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph", "../data/mapping/del26.graph"}, // To Beat 2715456 in 220.94 s
+                    // {"--mapping", "../data/out/partition/del26.txt"},
+                    // {"--statistics", "../data/out/statistics/del26.JSON"},
                     // {"--graph", "../data/training/598a.graph"},
                     // {"--mapping", "../data/out/partition/598a.txt"},
                     // {"--statistics", "../data/out/statistics/598a.JSON"},
@@ -69,7 +69,7 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"}, // To beat 207196 in 0.29
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
-                    {"--hierarchy", "64:16:32:32"},
+                    {"--hierarchy", "32:8:16:16"},
                     {"--distance", "1:10:50:100"},
                     {"--imbalance", "0.03"},
                     {"--config", "experimental"},

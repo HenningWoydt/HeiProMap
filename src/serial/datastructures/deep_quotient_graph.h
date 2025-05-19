@@ -48,6 +48,8 @@ namespace HeiProMap {
         }
 
         void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
+            if(u_id == v_id) { return; }
+
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
@@ -61,6 +63,8 @@ namespace HeiProMap {
         }
 
         void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
+            if(u_id == v_id) { return; }
+
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
@@ -73,6 +77,8 @@ namespace HeiProMap {
         }
 
         bool has_edge(const partition_t u_id, const partition_t v_id) const override {
+            if(u_id == v_id) { return false; }
+
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
@@ -86,6 +92,8 @@ namespace HeiProMap {
         }
 
         weight_t get_weight(const partition_t u_id, const partition_t v_id) const override {
+            if(u_id == v_id) { return 0; }
+
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
@@ -112,11 +120,11 @@ namespace HeiProMap {
 
                 // remove old edge, if existed
                 if (old_id != v_id) {
-                    remove_edge(old_id, v_id, w * 2);
+                    remove_edge(old_id, v_id, w);
                 }
                 // add new edge, if has to exist
                 if (new_id != v_id) {
-                    add_edge(new_id, v_id, w * 2);
+                    add_edge(new_id, v_id, w);
                 }
             }
             endfor

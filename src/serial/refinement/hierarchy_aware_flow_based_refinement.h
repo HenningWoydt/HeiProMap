@@ -421,7 +421,7 @@ namespace HeiProMap {
         }
 
         void determine_boundary_vertices(const graph_t &g,
-                                         const bv_manager_t &bv_manager,
+                                         bv_manager_t &bv_manager,
                                          const p_manager_t &p_manager,
                                          partition_t left_start,
                                          partition_t left_end,
