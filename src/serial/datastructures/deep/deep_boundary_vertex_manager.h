@@ -27,11 +27,11 @@
 #ifndef HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H
 #define HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H
 
-#include "distance_oracle.h"
-#include "../serial_definitions_1.h"
-#include "../serial_definitions_2.h"
-#include "../../commons/definitions.h"
-#include "../../commons/macros.h"
+#include "../distance_oracle.h"
+#include "../../serial_definitions_1.h"
+#include "../../serial_definitions_2.h"
+#include "../../../commons/definitions.h"
+#include "../../../commons/macros.h"
 
 namespace HeiProMap {
     class DeepBoundaryVertexManager {
@@ -79,12 +79,12 @@ namespace HeiProMap {
                  const partition_t id) {}
 
         void add_new(const graph_t &g,
-                     const p_manager_t &p_manager,
+                     const deep_p_manager_t &p_manager,
                      const vertex_t u,
                      const partition_t u_id) {}
 
         void move(const graph_t &g,
-                  const p_manager_t &p_manager,
+                  const deep_p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
@@ -113,7 +113,7 @@ namespace HeiProMap {
         }
 
         void compute_from_scratch(const graph_t &g,
-                                  const p_manager_t &p_manager) {
+                                  const deep_p_manager_t &p_manager) {
             // compute all from scratch
             m_n_boundary_edges.initialize(m_n, 0);
             m_boundary_size = 0;

@@ -42,10 +42,6 @@ namespace HeiProMap {
         AlignedArray<partition_t> m_h_mtx;
 
     public:
-        DistanceOracle() = default;
-
-        ~DistanceOracle() = default;
-
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance) {
             m_hierarchy = t_hierarchy;

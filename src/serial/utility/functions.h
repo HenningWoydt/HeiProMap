@@ -32,9 +32,10 @@
 #include "../../commons/definitions.h"
 
 namespace HeiProMap {
-    inline bool is_boundary(const graph_t& g,
-                     const p_manager_t& p_manager,
-                     vertex_t u) {
+    template<typename PartitionManagerT>
+    inline bool is_boundary(const graph_t &g,
+                            const PartitionManagerT &p_manager,
+                            vertex_t u) {
         partition_t u_id = p_manager[u];
 
 #pragma GCC unroll 4
@@ -49,10 +50,11 @@ namespace HeiProMap {
         return false;
     }
 
-    inline bool is_connected_to(const graph_t& g,
-                         const p_manager_t& p_manager,
-                         vertex_t u,
-                         partition_t id) {
+    template<typename PartitionManagerT>
+    inline bool is_connected_to(const graph_t &g,
+                                const PartitionManagerT &p_manager,
+                                vertex_t u,
+                                partition_t id) {
 
 #pragma GCC unroll 4
         forall_guiv(g, u, i, v)

@@ -134,9 +134,10 @@ namespace HeiProMap {
             dp_cycle_matches2.initialize(m_n);
         }
 
+        template<typename PartitionManagerT>
         void match(const size_t level,
                    const graph_t &g,
-                   p_manager_t &p_manager,
+                   const PartitionManagerT &p_manager,
                    Matching &matching)  {
             METRICS(level_time_compute_ratings.emplace_back(0.0);)
             METRICS(level_time_sorting.emplace_back(0.0);)
@@ -384,7 +385,8 @@ namespace HeiProMap {
             METRICS(level_edges.back() += edges_size;)
         }
 
-        void compute_ratings(const graph_t &g, const p_manager_t &p_manager) {
+        template<typename PartitionManagerT>
+        void compute_ratings(const graph_t &g, const PartitionManagerT &p_manager) {
             // compute_ratings_4(g);
             // return;
             METRICS_TIME(sp_compute_ratings)

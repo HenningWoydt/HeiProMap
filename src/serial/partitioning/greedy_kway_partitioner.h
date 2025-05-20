@@ -141,9 +141,9 @@ namespace HeiProMap {
         }
 
         void partition(const graph_t &g,
-                       p_manager_t &p_manager,
-                       bv_manager_t &bv_manager,
-                       q_graph_t &q_graph,
+                       deep_p_manager_t &p_manager,
+                       deep_bv_manager_t &bv_manager,
+                       deep_q_graph_t &q_graph,
                        partition_t id,
                        partition_t id_increment,
                        partition_t k,

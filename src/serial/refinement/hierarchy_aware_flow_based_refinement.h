@@ -39,7 +39,7 @@
 #include "../../commons/statistic_collector.h"
 #include "../../commons/utils.h"
 #include "../utility/functions.h"
-#include "../interfaces/ISerialRefiner.h"
+#include "ISerialRefiner.h"
 #include "../utility/qap.h"
 
 namespace HeiProMap {

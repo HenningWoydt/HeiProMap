@@ -27,19 +27,17 @@
 #ifndef HEIPROMAP_SERIAL_DEFINITIONS_3_H
 #define HEIPROMAP_SERIAL_DEFINITIONS_3_H
 
-#include "datastructures/deep_boundary_vertex_manager.h"
-#include "datastructures/deep_quotient_graph.h"
+#include "datastructures/deep/deep_boundary_vertex_manager.h"
+#include "datastructures/deep/deep_quotient_graph.h"
 #include "datastructures/boundary_vertex_manger.h"
 #include "datastructures/quotient_graph.h"
 
 namespace HeiProMap {
-#if USE_DEEP_DATASTRUCTURES
-    typedef DeepBoundaryVertexManager bv_manager_t;
-    typedef DeepQuotientGraph         q_graph_t;
-#else
-    typedef BoundaryVertexManager bv_manager_t;
-    typedef QuotientGraph q_graph_t;
-#endif
+
+    typedef DeepBoundaryVertexManager deep_bv_manager_t;
+    typedef BoundaryVertexManager     bv_manager_t;
+    typedef DeepQuotientGraph         deep_q_graph_t;
+    typedef QuotientGraph             q_graph_t;
 
     // Macro to iterate over all boundary vertices
 #define forall_bv_iu(bv_manager, i, u) for (size_t i = 0; i < bv_manager.size(); ++i) { const vertex_t u = bv_manager.get(i);

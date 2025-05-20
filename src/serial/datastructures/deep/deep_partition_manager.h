@@ -27,8 +27,8 @@
 #ifndef HEIPROMAP_DEEP_PARTITION_MANAGER_H
 #define HEIPROMAP_DEEP_PARTITION_MANAGER_H
 
-#include "../../commons/aligned_array.h"
-#include "../../commons/definitions.h"
+#include "../../../commons/aligned_array.h"
+#include "../../../commons/definitions.h"
 
 namespace HeiProMap {
     class DeepPartitionManager {
@@ -43,8 +43,6 @@ namespace HeiProMap {
         AlignedArray<s32> hierarchy_level;
 
     public:
-        DeepPartitionManager() = default;
-
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t t_lmax) {

@@ -28,7 +28,7 @@
 #define HEIPROMAP_DEEP_QUOTIENT_GRAPH_H
 
 
-#include "../../commons/definitions.h"
+#include "../../../commons/definitions.h"
 
 namespace HeiProMap {
     class DeepQuotientGraph {
@@ -36,11 +36,9 @@ namespace HeiProMap {
 
         std::vector<std::vector<EdgeVW>> edges;
 
+        std::vector<std::pair<partition_t, partition_t>> pairs;
+
     public:
-        DeepQuotientGraph() = default;
-
-        ~DeepQuotientGraph() = default;
-
         void initialize(const partition_t t_k) {
             m_k = t_k;
 
@@ -107,7 +105,7 @@ namespace HeiProMap {
         }
 
         void move(const graph_t &g,
-                  const p_manager_t &p_manager,
+                  const deep_p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
@@ -135,6 +133,23 @@ namespace HeiProMap {
                 edge.clear();
             }
         }
+
+        size_t n_pairs(){
+            size_t n = 0;
+            pairs.clear();
+
+            for(partition_t id1 = 0; id1 < m_k; ++id1){
+                for(auto &[id2, w] : edges[id1]){
+                    if(w > 0){
+                        n += 1;
+                        pairs.emplace_back(id1, id2);
+                    }
+                }
+            }
+            return n;
+        }
+
+        std::pair<partition_t, partition_t> get_pair(size_t idx){ return pairs[idx]; }
     };
 }
 

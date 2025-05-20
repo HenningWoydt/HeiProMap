@@ -33,29 +33,30 @@
 #include "deep_distance_oracle.h"
 #include "deep_partition_manager.h"
 #include "deep_quotient_graph.h"
-#include "../../commons/definitions.h"
-#include "../../commons/macros.h"
-#include "../../commons/matching.h"
-#include "../../commons/random_engine.h"
-#include "../../commons/small_statistic_collector.h"
-#include "../../commons/statistic_collector.h"
-#include "../../commons/utils.h"
-#include "../coarsening/global_path_algorithm.h"
-#include "../coarsening/greedy_edge_matcher.h"
-#include "../coarsening/heavy_edge_matcher.h"
-#include "../coarsening/random_edge_matcher.h"
-#include "../partitioning/global_multisection.h"
-#include "../partitioning/greedy_kway_partitioner.h"
-#include "../partitioning/kaffpa_kway_partitioner.h"
-#include "../partitioning/kaffpa_partitioner.h"
-#include "../refinement/flow_based_refinement.h"
-#include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
-#include "../refinement/three_vertex_label_propagation_refinement.h"
-#include "../refinement/two_vertex_label_propagation_refinement.h"
-#include "../refinement/zero_gain_perturbator.h"
-#include "../utility/algorithm_configuration.h"
-#include "../utility/assert_state.h"
-#include "../utility/qap.h"
+#include "../../../commons/definitions.h"
+#include "../../../commons/macros.h"
+#include "../../../commons/matching.h"
+#include "../../../commons/random_engine.h"
+#include "../../../commons/small_statistic_collector.h"
+#include "../../../commons/statistic_collector.h"
+#include "../../../commons/utils.h"
+#include "../../coarsening/global_path_algorithm.h"
+#include "../../coarsening/greedy_edge_matcher.h"
+#include "../../coarsening/heavy_edge_matcher.h"
+#include "../../coarsening/random_edge_matcher.h"
+#include "../../partitioning/global_multisection.h"
+#include "../../partitioning/greedy_kway_partitioner.h"
+#include "../../partitioning/kaffpa_kway_partitioner.h"
+#include "../../partitioning/kaffpa_partitioner.h"
+#include "../../refinement/flow_based_refinement.h"
+#include "../../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
+#include "../../refinement/three_vertex_label_propagation_refinement.h"
+#include "../../refinement/two_vertex_label_propagation_refinement.h"
+#include "../../refinement/zero_gain_perturbator.h"
+#include "../../utility/algorithm_configuration.h"
+#include "../../utility/assert_state.h"
+#include "../../utility/qap.h"
+#include "../../refinement/deep/deep_quotient_graph_refinement.h"
 
 namespace HeiProMap {
     /**
@@ -92,6 +93,8 @@ namespace HeiProMap {
 
         // refinement
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
+        DeepQuotientGraphRefinementConfiguration ref_config = DeepQuotientGraphRefinementConfiguration("ABC");
+        DeepQuotientGraphRefinement ref;
 
     public:
         explicit DeepSolver(const AlgorithmConfiguration &t_ac) {
@@ -138,6 +141,7 @@ namespace HeiProMap {
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), random_engine, ac.global_path_algorithm_config, stat_collect);
 
             // refinement
+            ref.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, random_engine, ref_config, stat_collect);
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
@@ -326,7 +330,26 @@ namespace HeiProMap {
             METRICS(stat_collect.set_uncoarsening_stats(level, graphs.back().get_n());)
         }
 
-        void refinement(const u64 level, const u64 max_level) {}
+        void refinement(const u64 level, const u64 max_level) {
+            const auto sp_refinement = std::chrono::high_resolution_clock::now();
+
+            SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
+
+            s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);
+
+            ref.refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
+
+            s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);
+
+            std::cout << qap_before << " " << qap_after << " " << qap_before - qap_after << std::endl;
+
+            const auto ep_refinement = std::chrono::high_resolution_clock::now();
+            small_stat_collect.add("refinement", get_seconds(sp_refinement, ep_refinement));
+
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
+            METRICS(stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);)
+            METRICS(stat_collect.set_refinement_stats(level, get_qap(graphs.back(), p_manager, d_oracle));)
+        }
     };
 }
 

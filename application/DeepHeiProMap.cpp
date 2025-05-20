@@ -24,17 +24,13 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef USE_DEEP_DATASTRUCTURES
-#define USE_DEEP_DATASTRUCTURES true
-#endif
-
 #include <cstring>
 #include <iostream>
 
 #include "../../src/commons/definitions.h"
 #include "../src/commons/utils.h"
 #include "../src/serial/utility/algorithm_configuration.h"
-#include "../src/serial/datastructures/deep_solver.h"
+#include "../src/serial/datastructures/deep/deep_solver.h"
 
 using namespace HeiProMap;
 

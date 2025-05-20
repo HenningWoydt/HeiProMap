@@ -31,7 +31,7 @@
 
 #include "../../commons/definitions.h"
 #include "../../commons/utils.h"
-#include "../interfaces/ISerialRefiner.h"
+#include "ISerialRefiner.h"
 
 namespace HeiProMap {
     class TwoVertexLabelPropagationConfiguration final : public ISerialRefinerConfiguration {

@@ -24,10 +24,6 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef USE_DEEP_DATASTRUCTURES
-#define USE_DEEP_DATASTRUCTURES false
-#endif
-
 #include <cstring>
 #include <iostream>
 

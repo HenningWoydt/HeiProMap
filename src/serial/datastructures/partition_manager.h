@@ -41,10 +41,6 @@ namespace HeiProMap {
         AlignedArray<size_t>      n_vertices;
 
     public:
-        PartitionManager() = default;
-
-        ~PartitionManager() = default;
-
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t t_lmax) {

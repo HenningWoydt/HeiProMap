@@ -33,9 +33,10 @@
 
 namespace HeiProMap {
 
-    inline weight_t get_qap(const graph_t &g,
-                            const p_manager_t &p_manager,
-                            d_oracle_t &d_oracle) {
+    template<typename PartitionManagerT, typename DistanceOracleT>
+    inline weight_t get_qap(graph_t &g,
+                            PartitionManagerT &p_manager,
+                            DistanceOracleT &d_oracle) {
         weight_t qap = 0;
 
         forall_gu(g, u)
@@ -82,13 +83,13 @@ namespace HeiProMap {
     }
 
 
-
+    template<typename PartitionManagerT, typename DistanceOracleT>
     inline s64 get_u_qap_delta(const graph_t &g,
                                const vertex_t u,
                                const partition_t old_id,
                                const partition_t new_id,
-                               const p_manager_t &p_manager,
-                               d_oracle_t &d_oracle) {
+                               const PartitionManagerT &p_manager,
+                               DistanceOracleT &d_oracle) {
         s64 qap_delta = 0;
 
 #pragma GCC unroll 8
@@ -105,11 +106,12 @@ namespace HeiProMap {
         return qap_delta;
     }
 
+    template<typename PartitionManagerT>
     inline s64 get_u_edge_cut_delta(const graph_t &g,
                                     const vertex_t u,
                                     const partition_t old_id,
                                     const partition_t new_id,
-                                    const p_manager_t &p_manager) {
+                                    const PartitionManagerT &p_manager) {
         s64 edge_cut_delta = 0;
 
 #pragma GCC unroll 8
@@ -302,13 +304,14 @@ namespace HeiProMap {
         return qap_delta;
     }
 
+    template<typename PartitionManagerT, typename DistanceOracleT>
     inline s64 get_u_qap_delta_and_is_connected_to(const graph_t &g,
                                                    const vertex_t u,
                                                    const partition_t old_id,
                                                    const partition_t new_id,
                                                    bool &is_connected_to_new_id,
-                                                   const p_manager_t &p_manager,
-                                                   d_oracle_t &d_oracle) {
+                                                   const PartitionManagerT &p_manager,
+                                                   DistanceOracleT &d_oracle) {
         is_connected_to_new_id = false;
 
         s64 qap_delta = 0;
@@ -330,12 +333,13 @@ namespace HeiProMap {
         return qap_delta;
     }
 
+    template<typename PartitionManagerT>
     inline s64 get_u_edge_cut_delta_and_is_connected_to(const graph_t &g,
                                                         const vertex_t u,
                                                         const partition_t old_id,
                                                         const partition_t new_id,
                                                         bool &is_connected_to_new_id,
-                                                        const p_manager_t &p_manager) {
+                                                        const PartitionManagerT &p_manager) {
         is_connected_to_new_id = false;
 
         s64 edge_cut_delta = 0;

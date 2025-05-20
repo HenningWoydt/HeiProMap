@@ -37,8 +37,6 @@ namespace HeiProMap {
         AlignedArray<weight_t> m_adj_mtx;
 
     public:
-        QuotientGraph() = default;
-
         void initialize(const partition_t t_k) {
             m_k = t_k;
 
