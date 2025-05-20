@@ -36,7 +36,6 @@
 #include "../serial_definitions_3.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
-#include "../interfaces/ISerialPartitioner.h"
 
 namespace HeiProMap {
     enum KaffpaKWayPartitionerMode {
@@ -69,7 +68,7 @@ namespace HeiProMap {
         }
     }
 
-    class KaffpaKWayPartitionerConfiguration final : public ISerialPartitionerConfiguration {
+    class KaffpaKWayPartitionerConfiguration {
     public:
         std::string               mode_string;
         KaffpaKWayPartitionerMode mode; // Which mode to use: strong, eco, fast
@@ -108,7 +107,7 @@ namespace HeiProMap {
          * @param p_manager The partition manager.
          * @param id The id of the subgraph to partition.
          * @param k The number of partitions.
-         * @param lmax The maximum distance between two vertices.
+         * @param lmax The maximum weight of a partition.
          * @param t_random_engine The random engine.
          * @param i_config The configuration.
          * @param t_stat_collect The statistic collector.
@@ -123,7 +122,7 @@ namespace HeiProMap {
                        weight_t lmax,
                        s32 hierarchy_level,
                        RandomEngine &t_random_engine,
-                       const ISerialPartitionerConfiguration &i_config,
+                       const KaffpaKWayPartitionerConfiguration &i_config,
                        StatisticCollector &t_stat_collect) {
             auto sp = std::chrono::high_resolution_clock::now();
 

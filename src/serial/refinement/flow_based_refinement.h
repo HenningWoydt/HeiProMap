@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <unordered_set>
 #include <queue>
+#include <stack>
 
 #include "../../extern/maxflow-v3.04.src/graph.h"
 

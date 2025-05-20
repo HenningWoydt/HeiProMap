@@ -33,15 +33,17 @@
 #include "../../commons/definitions.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
-#include "../interfaces/ISerialMatcher.h"
+#include "../../commons/aligned_array.h"
+#include "../serial_definitions_1.h"
+#include "../serial_definitions_2.h"
 
 namespace HeiProMap {
-    class GreedyEdgeMatcherConfiguration final : public ISerialMatcherConfiguration {
+    class GreedyEdgeMatcherConfiguration {
     public:
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
-    class GreedyEdgeMatcher final : public ISerialMatcher {
+    class GreedyEdgeMatcher {
         vertex_t    m_n     = 0;
         vertex_t    m_m     = 0;
         partition_t m_k     = 0;
@@ -65,8 +67,8 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const weight_t t_l_max,
                         RandomEngine &t_random_engine,
-                        const ISerialMatcherConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) override {
+                        const GreedyEdgeMatcherConfiguration &i_config,
+                        StatisticCollector &t_stat_collect) {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
@@ -85,25 +87,25 @@ namespace HeiProMap {
         void match(const size_t level,
                    const graph_t &g,
                    p_manager_t &p_manager,
-                   Matching &matching) override {
+                   Matching &matching) {
             mark += 1;
             edges_size = 0;
 
             // first handle pendant vertices
             if (config->match_pendant_vertices_first) {
                 forall_gu(g, u)
-                    {
-                        if (g.size(u) != 1) {
-                            continue;
-                        }
-
-                        const vertex_t v      = g.neighbor(u, 0);
-                        const weight_t ew     = g.weight(u, 0);
-                        const f32      rating = (f32) ew / (f32) (g.size(u) * g.size(v));
-                        edges[edges_size++] = {u, v, rating};
+                {
+                    if (g.size(u) != 1) {
+                        continue;
                     }
+
+                    const vertex_t v      = g.neighbor(u, 0);
+                    const weight_t ew     = g.weight(u, 0);
+                    const f32      rating = (f32) ew / (f32) (g.size(u) * g.size(v));
+                    edges[edges_size++] = {u, v, rating};
+                }
                 endfor
-                std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+                        std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
                 for (size_t i = 0; i < edges_size; ++i) {
                     const auto &[u, v, w] = edges[i];
@@ -128,32 +130,32 @@ namespace HeiProMap {
 
             // handle all other vertices
             forall_gu(g, u)
-                {
-                    weight_t u_w = g.weight(u);
+            {
+                weight_t u_w = g.weight(u);
 
-                    if (used[u] == mark) {
+                if (used[u] == mark) {
+                    continue;
+                }
+
+                forall_guivw(g, u, j, v, w)
+                {
+                    weight_t v_w = g.weight(v);
+
+                    if (used[v] == mark) {
                         continue;
                     }
 
-                    forall_guivw(g, u, j, v, w)
-                        {
-                            weight_t v_w = g.weight(v);
+                    if (g.weight(u) + g.weight(v) > m_l_max) {
+                        continue;
+                    }
 
-                            if (used[v] == mark) {
-                                continue;
-                            }
-
-                            if (g.weight(u) + g.weight(v) > m_l_max) {
-                                continue;
-                            }
-
-                            const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
-                            edges[edges_size++] = {u, v, edge_rating};
-                        }
-                    endfor
+                    const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
+                    edges[edges_size++] = {u, v, edge_rating};
                 }
+                endfor
+            }
             endfor
-            std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+                    std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
             for (size_t i = 0; i < edges_size; ++i) {
                 const auto &[u, v, w] = edges[i];
@@ -192,7 +194,7 @@ namespace HeiProMap {
         }
 
 
-        JSONString get_stats() override {
+        JSONString get_stats() {
             return {};
         }
     };

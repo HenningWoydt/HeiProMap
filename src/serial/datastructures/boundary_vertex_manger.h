@@ -32,10 +32,9 @@
 #include "../serial_definitions_2.h"
 #include "../../commons/definitions.h"
 #include "../../commons/macros.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
 
 namespace HeiProMap {
-    class BoundaryVertexManager final : public ISerialBoundaryVertexManager {
+    class BoundaryVertexManager {
         vertex_t    m_n = 0;                                    // number of vertices in the graph
         partition_t m_k = 0;                                    // number of partitions
 
@@ -52,7 +51,7 @@ namespace HeiProMap {
 
     public:
         void initialize(const vertex_t t_n,
-                        const partition_t t_k) override {
+                        const partition_t t_k) {
             m_n = t_n;
             m_k = t_k;
 
@@ -69,18 +68,18 @@ namespace HeiProMap {
             m_complete_boundary_size = 0;
         }
 
-        size_t size() const override { return m_n_boundary; }
+        size_t size() const { return m_n_boundary; }
 
-        size_t size(const partition_t id) const override { return m_boundaries_size[id]; }
+        size_t size(const partition_t id) const { return m_boundaries_size[id]; }
 
-        vertex_t get(const size_t i) const override { return m_complete_boundary[i]; }
+        vertex_t get(const size_t i) const { return m_complete_boundary[i]; }
 
-        vertex_t get(const partition_t id, const size_t i) const override { return m_boundaries[id * m_n + i]; }
+        vertex_t get(const partition_t id, const size_t i) const { return m_boundaries[id * m_n + i]; }
 
-        bool is_boundary(const vertex_t u) const override { return m_n_boundary_edges[u] > 0; }
+        bool is_boundary(const vertex_t u) const { return m_n_boundary_edges[u] > 0; }
 
         void add(const vertex_t u,
-                 const partition_t id) override {
+                 const partition_t id) {
             if (m_n_boundary_edges[u] == 0) {
                 m_n_boundary += 1;
                 m_boundaries[id * m_n + (m_boundaries_size[id]++)] = u;
@@ -123,7 +122,7 @@ namespace HeiProMap {
                   const p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
-                  const partition_t new_id) override {
+                  const partition_t new_id) {
             bool u_was_boundary = is_boundary(u);
 
             // remove u from its old id
@@ -169,7 +168,7 @@ namespace HeiProMap {
         }
 
         void compute_from_scratch(const graph_t &g,
-                                  const p_manager_t &p_manager) override {
+                                  const p_manager_t &p_manager) {
             // compute all from scratch
             m_n_boundary_edges.initialize(m_n, 0);
             m_boundaries_size.initialize(m_k, 0);

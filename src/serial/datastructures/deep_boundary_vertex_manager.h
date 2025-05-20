@@ -32,7 +32,6 @@
 #include "../serial_definitions_2.h"
 #include "../../commons/definitions.h"
 #include "../../commons/macros.h"
-#include "../interfaces/ISerialBoundaryVertexManager.h"
 
 namespace HeiProMap {
     class DeepBoundaryVertexManager {
@@ -89,7 +88,7 @@ namespace HeiProMap {
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
-            if(is_boundary(u)){
+            if (is_boundary(u)) {
                 // remove from the old sub boundary
                 size_t idx = m_sub_vertex_idx[u];
                 ASSERT(idx < m_sub_boundary[old_id].size());
@@ -106,7 +105,7 @@ namespace HeiProMap {
                 }
             endfor
 
-            if(is_boundary(u)){
+            if (is_boundary(u)) {
                 // add to the new sub boundary
                 m_sub_boundary[new_id].emplace_back(u);
                 m_sub_vertex_idx[u] = m_sub_boundary[new_id].size() - 1;
@@ -137,7 +136,7 @@ namespace HeiProMap {
                             }
                         }
                     endfor
-                    if(is_boundary(u)){
+                    if (is_boundary(u)) {
                         // add to the new sub boundary
                         m_sub_boundary[u_id].emplace_back(u);
                         m_sub_vertex_idx[u] = m_sub_boundary[u_id].size() - 1;

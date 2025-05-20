@@ -28,7 +28,6 @@
 #define HEIPROMAP_KAFFPA_PARTITIONER_H
 
 #include "../../commons/definitions.h"
-#include "../interfaces/ISerialPartitioner.h"
 #include "interface/kaHIP_interface.h"
 
 namespace HeiProMap {
@@ -88,7 +87,7 @@ namespace HeiProMap {
         }
     }
 
-    class KaffpaPartitionerConfiguration final : public ISerialPartitionerConfiguration {
+    class KaffpaPartitionerConfiguration {
     public:
         std::string             mode_string;
         KaffpaPartitionerMode   mode; // Which mode to use: strong, eco, fast
@@ -96,7 +95,7 @@ namespace HeiProMap {
         KaffpaPartitionerMethod method; // Which method to use: bisection, multisection
     };
 
-    class KaffpaPartitioner final : public ISerialPartitioner {
+    class KaffpaPartitioner {
     public:
         void partition(const graph_t &g,
                        p_manager_t &p_manager,
@@ -104,8 +103,8 @@ namespace HeiProMap {
                        const std::vector<weight_t> &distance,
                        const f64 imbalance,
                        RandomEngine &t_random_engine,
-                       const ISerialPartitionerConfiguration &i_config,
-                       StatisticCollector &t_stat_collect) override {
+                       const KaffpaPartitionerConfiguration &i_config,
+                       StatisticCollector &t_stat_collect) {
             KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration *>(&i_config);
 
             // number of vertices and edges
@@ -127,8 +126,8 @@ namespace HeiProMap {
             endfor
 
             // vertex weights
-            int *v_weights = (int *) malloc(n * sizeof(int));
-            for (int i = 0; i < n; ++i) { v_weights[i] = (int) g.weight(tt.get_o(i)); }
+            int      *v_weights = (int *) malloc(n * sizeof(int));
+            for (int i          = 0; i < n; ++i) { v_weights[i] = (int) g.weight(tt.get_o(i)); }
 
             // pointer to adjacency lists
             int *adj_ptr   = (int *) malloc((n + 1) * sizeof(int));
@@ -153,12 +152,12 @@ namespace HeiProMap {
             double   kaffpa_imbalance = imbalance;
 
             // hierarchy
-            int *kaffpa_hierarchy = (int *) malloc(hierarchy.size() * sizeof(int));
-            for (u64 i = 0; i < hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int) hierarchy[i]; }
+            int      *kaffpa_hierarchy = (int *) malloc(hierarchy.size() * sizeof(int));
+            for (u64 i                 = 0; i < hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int) hierarchy[i]; }
 
             // distance
-            int *kaffpa_distance = (int *) malloc(distance.size() * sizeof(int));
-            for (u64 i = 0; i < distance.size(); ++i) { kaffpa_distance[i] = (int) distance[i]; }
+            int      *kaffpa_distance = (int *) malloc(distance.size() * sizeof(int));
+            for (u64 i                = 0; i < distance.size(); ++i) { kaffpa_distance[i] = (int) distance[i]; }
 
             // mode
             int kaffpa_map_mode;

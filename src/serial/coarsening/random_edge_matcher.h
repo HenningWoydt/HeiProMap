@@ -32,24 +32,23 @@
 #include "../../commons/definitions.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
-#include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
-    class RandomEdgeMatcherConfiguration final : public ISerialMatcherConfiguration {
+    class RandomEdgeMatcherConfiguration {
     public:
     };
 
-    class RandomEdgeMatcher final : public ISerialMatcher {
-        vertex_t m_n     = 0;
-        vertex_t m_m     = 0;
-        partition_t m_k  = 0;
-        weight_t m_l_max = 0;
+    class RandomEdgeMatcher {
+        vertex_t    m_n     = 0;
+        vertex_t    m_m     = 0;
+        partition_t m_k     = 0;
+        weight_t    m_l_max = 0;
 
-        const RandomEdgeMatcherConfiguration* config = nullptr;
-        RandomEngine* random_engine                  = nullptr;
-        StatisticCollector* m_stat_collector         = nullptr;
+        const RandomEdgeMatcherConfiguration *config           = nullptr;
+        RandomEngine                         *random_engine    = nullptr;
+        StatisticCollector                   *m_stat_collector = nullptr;
 
-        u32 mark = 0;
+        u32               mark = 0;
         AlignedArray<u32> used;
 
     public:
@@ -59,15 +58,15 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_l_max,
-                        RandomEngine& t_random_engine,
-                        const ISerialMatcherConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        RandomEngine &t_random_engine,
+                        const RandomEdgeMatcherConfiguration &i_config,
+                        StatisticCollector &t_stat_collect) {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
             m_l_max = t_l_max;
 
-            config           = dynamic_cast<const RandomEdgeMatcherConfiguration*>(&i_config);
+            config           = dynamic_cast<const RandomEdgeMatcherConfiguration *>(&i_config);
             random_engine    = &t_random_engine;
             m_stat_collector = &t_stat_collect;
 
@@ -76,9 +75,9 @@ namespace HeiProMap {
         }
 
         void match(const size_t level,
-                   const graph_t& g,
-                   p_manager_t& p_manager,
-                   Matching& matching) override {
+                   const graph_t &g,
+                   p_manager_t &p_manager,
+                   Matching &matching) {
             mark += 1;
 
             forall_gu(g, u)
@@ -87,7 +86,7 @@ namespace HeiProMap {
 
                     weight_t u_w = g.weight(u);
 
-                    f32 counter = 0;
+                    f32      counter = 0;
                     vertex_t chosen_v;
 
                     forall_guiv(g, u, j, v)
@@ -138,7 +137,7 @@ namespace HeiProMap {
 #endif
         }
 
-        JSONString get_stats() override {
+        JSONString get_stats() {
             return {};
         }
     };

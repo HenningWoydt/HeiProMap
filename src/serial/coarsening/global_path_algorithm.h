@@ -37,7 +37,6 @@
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
 #include "../../commons/utils.h"
-#include "../interfaces/ISerialMatcher.h"
 
 namespace HeiProMap {
     struct Neighbors {
@@ -52,7 +51,7 @@ namespace HeiProMap {
 #define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
 #define IS_UNMATCHED(n, u) n.n1 == u
 
-    class GlobalPathAlgorithmConfiguration final : public ISerialMatcherConfiguration {
+    class GlobalPathAlgorithmConfiguration {
     public:
         size_t random_level = 4;
     };
@@ -63,7 +62,7 @@ namespace HeiProMap {
      * > Engineering Algorithms for Approximate Weighted Matching.
      * > Experimental Algorithms, 6th International Workshop, WEA 2007, Rome, Italy, June 6-8, 2007, Proceedings.
      */
-    class GlobalPathAlgorithmMatcher final : public ISerialMatcher {
+    class GlobalPathAlgorithmMatcher {
         vertex_t    m_n     = 0;
         vertex_t    m_m     = 0;
         partition_t m_k     = 0;
@@ -74,16 +73,16 @@ namespace HeiProMap {
         StatisticCollector                     *m_stat_collector = nullptr;
 
         AlignedArray<Neighbors> m_neighbors;
-        AlignedArray<u32> path_id;
-        AlignedArray<u32> path_length;
+        AlignedArray<u32>       path_id;
+        AlignedArray<u32>       path_length;
 
         AlignedArray<EdgeUVW> edges;
-        size_t edges_size = 0;
+        size_t                edges_size = 0;
 
         // for DP
-        AlignedArray<f32> dp_w;
-        AlignedArray<s64> dp_m;
-        AlignedArray<u8> dp_take;
+        AlignedArray<f32>      dp_w;
+        AlignedArray<s64>      dp_m;
+        AlignedArray<u8>       dp_take;
         AlignedArray<vertex_t> dp_edges;
 
         Matching dp_cycle_matches1;
@@ -104,17 +103,13 @@ namespace HeiProMap {
         METRICS(std::vector<u64> level_edges_combine_paths;)
 
     public:
-        GlobalPathAlgorithmMatcher() = default;
-
-        ~GlobalPathAlgorithmMatcher() override = default;
-
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_l_max,
                         RandomEngine &t_random_engine,
-                        const ISerialMatcherConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) override {
+                        const GlobalPathAlgorithmConfiguration &i_config,
+                        StatisticCollector &t_stat_collect)  {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
@@ -142,7 +137,7 @@ namespace HeiProMap {
         void match(const size_t level,
                    const graph_t &g,
                    p_manager_t &p_manager,
-                   Matching &matching) override {
+                   Matching &matching)  {
             METRICS(level_time_compute_ratings.emplace_back(0.0);)
             METRICS(level_time_sorting.emplace_back(0.0);)
             METRICS(level_time_build_paths.emplace_back(0.0);)
@@ -683,7 +678,7 @@ namespace HeiProMap {
 #endif
         }
 
-        JSONString get_stats() override {
+        JSONString get_stats()  {
             std::string stats = "{ \n";
 #if COLLECT_METRICS
             std::vector<f64> level_time(level_time_compute_ratings.size(), 0.0);

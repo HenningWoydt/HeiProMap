@@ -29,32 +29,32 @@
 
 
 #include "../../commons/definitions.h"
-#include "../interfaces/ISerialQuotientGraph.h"
 
 namespace HeiProMap {
-    class DeepQuotientGraph final : public ISerialQuotientGraph {
+    class DeepQuotientGraph {
         partition_t m_k = 0;
 
         std::vector<std::vector<EdgeVW>> edges;
 
     public:
         DeepQuotientGraph() = default;
-        ~DeepQuotientGraph() override = default;
 
-        void initialize(const partition_t t_k) override {
-            m_k                = t_k;
+        ~DeepQuotientGraph() = default;
+
+        void initialize(const partition_t t_k) {
+            m_k = t_k;
 
             edges.resize(m_k);
         }
 
-        void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
-            if(u_id == v_id) { return; }
+        void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
+            if (u_id == v_id) { return; }
 
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
-            for(size_t i = 0; i < edges[min].size(); ++i){
-                if(edges[min][i].v == max){
+            for (size_t i = 0; i < edges[min].size(); ++i) {
+                if (edges[min][i].v == max) {
                     edges[min][i].w += w;
                     return;
                 }
@@ -62,28 +62,28 @@ namespace HeiProMap {
             edges[min].emplace_back(max, w);
         }
 
-        void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
-            if(u_id == v_id) { return; }
+        void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
+            if (u_id == v_id) { return; }
 
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
-            for(size_t i = 0; i < edges[min].size(); ++i){
-                if(edges[min][i].v == max){
+            for (size_t i = 0; i < edges[min].size(); ++i) {
+                if (edges[min][i].v == max) {
                     edges[min][i].w -= w;
                     return;
                 }
             }
         }
 
-        bool has_edge(const partition_t u_id, const partition_t v_id) const override {
-            if(u_id == v_id) { return false; }
+        bool has_edge(const partition_t u_id, const partition_t v_id) const {
+            if (u_id == v_id) { return false; }
 
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
-            for(size_t i = 0; i < edges[min].size(); ++i){
-                if(edges[min][i].v == max){
+            for (size_t i = 0; i < edges[min].size(); ++i) {
+                if (edges[min][i].v == max) {
                     return edges[min][i].w > 0;
                 }
             }
@@ -91,14 +91,14 @@ namespace HeiProMap {
             return false;
         }
 
-        weight_t get_weight(const partition_t u_id, const partition_t v_id) const override {
-            if(u_id == v_id) { return 0; }
+        weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
+            if (u_id == v_id) { return 0; }
 
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
 
-            for(size_t i = 0; i < edges[min].size(); ++i){
-                if(edges[min][i].v == max){
+            for (size_t i = 0; i < edges[min].size(); ++i) {
+                if (edges[min][i].v == max) {
                     return edges[min][i].w;
                 }
             }
@@ -106,32 +106,32 @@ namespace HeiProMap {
             return 0;
         }
 
-        void move(const graph_t& g,
-                  const p_manager_t& p_manager,
+        void move(const graph_t &g,
+                  const p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
-                  const partition_t new_id) override {
+                  const partition_t new_id) {
             ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 
             forall_guivw(g, u, i, v, w)
-            {
-                partition_t v_id = p_manager[v];
+                {
+                    partition_t v_id = p_manager[v];
 
-                // remove old edge, if existed
-                if (old_id != v_id) {
-                    remove_edge(old_id, v_id, w);
+                    // remove old edge, if existed
+                    if (old_id != v_id) {
+                        remove_edge(old_id, v_id, w);
+                    }
+                    // add new edge, if has to exist
+                    if (new_id != v_id) {
+                        add_edge(new_id, v_id, w);
+                    }
                 }
-                // add new edge, if has to exist
-                if (new_id != v_id) {
-                    add_edge(new_id, v_id, w);
-                }
-            }
             endfor
         }
 
-        void reset(){
-            for(auto &edge: edges){
+        void reset() {
+            for (auto &edge: edges) {
                 edge.clear();
             }
         }

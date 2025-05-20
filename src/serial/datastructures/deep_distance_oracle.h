@@ -31,23 +31,23 @@
 #include "../../commons/definitions.h"
 #include "../../commons/macros.h"
 #include "../../commons/utils.h"
-#include "../interfaces/ISerialDistanceOracle.h"
 
 namespace HeiProMap {
-    class DeepDistanceOracle final : public ISerialDistanceOracle {
+    class DeepDistanceOracle {
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        partition_t m_k = 0;
+        std::vector<weight_t>    m_distance;
+        partition_t              m_k = 0;
 
         AlignedArray<partition_t> u_loc;
         AlignedArray<partition_t> v_loc;
 
     public:
         DeepDistanceOracle() = default;
-        ~DeepDistanceOracle() override = default;
 
-        void initialize(const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance) override {
+        ~DeepDistanceOracle() = default;
+
+        void initialize(const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance) {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
             m_k         = prod<partition_t>(m_hierarchy);
@@ -56,7 +56,7 @@ namespace HeiProMap {
             v_loc.initialize(m_hierarchy.size());
         }
 
-        weight_t get(partition_t u_id, partition_t v_id) override {
+        weight_t get(partition_t u_id, partition_t v_id) {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
 
@@ -68,7 +68,7 @@ namespace HeiProMap {
             return determine_distance(u_loc, v_loc);
         }
 
-        partition_t get_h(partition_t u_id, partition_t v_id) override {
+        partition_t get_h(partition_t u_id, partition_t v_id) {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
 
@@ -80,13 +80,13 @@ namespace HeiProMap {
             return determine_hierarchy(u_loc, v_loc);
         }
 
-        bool last_level_pair(partition_t u_id, partition_t v_id) override {
+        bool last_level_pair(partition_t u_id, partition_t v_id) {
             return (u_id / m_hierarchy[0]) == (v_id / m_hierarchy[0]);
         }
 
     private:
         void determine_loc(partition_t u_id,
-                           AlignedArray<partition_t>& loc) {
+                           AlignedArray<partition_t> &loc) {
             ASSERT(prod<u64>(m_hierarchy) == m_k);
             ASSERT(u_id < m_k);
             ASSERT(!m_hierarchy.empty());
@@ -94,7 +94,7 @@ namespace HeiProMap {
             u64 r_start = 0;
             u64 r_end   = m_k;
 
-            u64 s = m_hierarchy.size();
+            u64      s = m_hierarchy.size();
             for (u64 i = 0; i < m_hierarchy.size(); ++i) {
                 u64 n_parts = m_hierarchy[s - 1 - i];
                 u64 add     = (r_end - r_start) / n_parts;
@@ -103,7 +103,7 @@ namespace HeiProMap {
                     if (r_start <= u_id && u_id < r_start + add) {
                         // we have found the part of the partition
                         loc[s - 1 - i] = j;
-                        r_end            = r_start + add;
+                        r_end = r_start + add;
                         break;
                     } else {
                         r_start += add;
@@ -112,14 +112,14 @@ namespace HeiProMap {
             }
         }
 
-        weight_t determine_distance(const AlignedArray<partition_t>& loc_1,
-                                    const AlignedArray<partition_t>& loc_2) {
+        weight_t determine_distance(const AlignedArray<partition_t> &loc_1,
+                                    const AlignedArray<partition_t> &loc_2) {
             ASSERT(prod<u64>(m_hierarchy) == m_k);
             ASSERT(!m_hierarchy.empty());
             ASSERT(m_hierarchy.size() == m_distance.size());
 
             // determine the distance
-            u64 s = m_hierarchy.size();
+            u64      s = m_hierarchy.size();
             for (u64 i = 0; i < m_hierarchy.size(); ++i) {
                 if (loc_1[s - 1 - i] != loc_2[s - 1 - i]) {
                     return m_distance[s - 1 - i];
@@ -129,14 +129,14 @@ namespace HeiProMap {
             abort();
         }
 
-        partition_t determine_hierarchy(const AlignedArray<partition_t>& loc_1,
-                                        const AlignedArray<partition_t>& loc_2) {
+        partition_t determine_hierarchy(const AlignedArray<partition_t> &loc_1,
+                                        const AlignedArray<partition_t> &loc_2) {
             ASSERT(prod<u64>(m_hierarchy) == m_k);
             ASSERT(!m_hierarchy.empty());
             ASSERT(m_hierarchy.size() == m_distance.size());
 
             // determine the distance
-            u64 s = m_hierarchy.size();
+            u64      s = m_hierarchy.size();
             for (u64 i = 0; i < m_hierarchy.size(); ++i) {
                 if (loc_1[s - 1 - i] != loc_2[s - 1 - i]) {
                     return s - 1 - i;

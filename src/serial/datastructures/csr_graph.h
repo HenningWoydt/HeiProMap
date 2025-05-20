@@ -37,21 +37,20 @@
 #include "../../commons/definitions.h"
 #include "../../commons/utils.h"
 #include "../../commons/matching.h"
-#include "../interfaces/IGraph.h"
 #include "../../commons/aligned_array.h"
 
 namespace HeiProMap {
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
-    class CSRGraph final : public IGraph {
+    class CSRGraph {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
 
         weight_t m_graph_weight = 0;
 
         AlignedArray<weight_t> m_v_weights;
-        AlignedArray<size_t> m_neighborhoods;
+        AlignedArray<size_t>   m_neighborhoods;
         AlignedArray<vertex_t> m_edges_v;
         AlignedArray<weight_t> m_edges_w;
 
@@ -137,8 +136,8 @@ namespace HeiProMap {
 
             m_neighborhoods.initialize(m_n + 1);
             m_neighborhoods[0] = 0;
-            m_edges_v.initialize(m_m+1);
-            m_edges_w.initialize(m_m+1);
+            m_edges_v.initialize(m_m + 1);
+            m_edges_w.initialize(m_m + 1);
 
             size_t   curr_m = 0;
             vertex_t u      = 0;
@@ -382,24 +381,24 @@ namespace HeiProMap {
 
         CSRGraph &operator=(const CSRGraph &) = delete;
 
-        vertex_t get_n() const override { return m_n; }
+        vertex_t get_n() const { return m_n; }
 
-        vertex_t get_m() const override { return m_m; }
+        vertex_t get_m() const { return m_m; }
 
-        weight_t weight() const override { return m_graph_weight; }
+        weight_t weight() const { return m_graph_weight; }
 
-        weight_t weight(const vertex_t u) const override { return m_v_weights[u]; }
+        weight_t weight(const vertex_t u) const { return m_v_weights[u]; }
 
-        size_t size(const vertex_t u) const override { return m_neighborhoods[u + 1] - m_neighborhoods[u]; }
+        size_t size(const vertex_t u) const { return m_neighborhoods[u + 1] - m_neighborhoods[u]; }
 
-        vertex_t neighbor(const vertex_t u, const size_t idx) const override { return m_edges_v[m_neighborhoods[u] + idx]; }
+        vertex_t neighbor(const vertex_t u, const size_t idx) const { return m_edges_v[m_neighborhoods[u] + idx]; }
 
-        weight_t weight(const vertex_t u, const size_t idx) const override { return m_edges_w[m_neighborhoods[u] + idx]; }
+        weight_t weight(const vertex_t u, const size_t idx) const { return m_edges_w[m_neighborhoods[u] + idx]; }
 
         void write_graph(std::string file_path) {
             std::ofstream file(file_path);
 
-            file << m_n << " " << m_m/2 << " 011" << std::endl;
+            file << m_n << " " << m_m / 2 << " 011" << std::endl;
             for (size_t i = 0; i < m_n; ++i) {
                 file << m_v_weights[i] << " ";
                 for (size_t j = m_neighborhoods[i]; j < m_neighborhoods[i + 1]; ++j) {

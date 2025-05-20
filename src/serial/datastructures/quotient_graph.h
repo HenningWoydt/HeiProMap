@@ -29,53 +29,52 @@
 
 #include "../../commons/definitions.h"
 #include "../../commons/aligned_array.h"
-#include "../interfaces/ISerialQuotientGraph.h"
 
 namespace HeiProMap {
-    class QuotientGraph final : public ISerialQuotientGraph {
+    class QuotientGraph {
         partition_t m_k = 0;
 
-         AlignedArray<weight_t> m_adj_mtx;
+        AlignedArray<weight_t> m_adj_mtx;
 
     public:
         QuotientGraph() = default;
 
-        void initialize(const partition_t t_k) override {
-            m_k                = t_k;
+        void initialize(const partition_t t_k) {
+            m_k = t_k;
 
             size_t size = (size_t) m_k * (size_t) m_k;
             m_adj_mtx.initialize(size, 0);
         }
 
-        void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
+        void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
             m_adj_mtx[min * m_k + max] += w;
         }
 
-        void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) override {
+        void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
             m_adj_mtx[min * m_k + max] -= w;
         }
 
-        bool has_edge(const partition_t u_id, const partition_t v_id) const override {
+        bool has_edge(const partition_t u_id, const partition_t v_id) const {
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
             return m_adj_mtx[min * m_k + max] > 0;
         }
 
-        weight_t get_weight(const partition_t u_id, const partition_t v_id) const override {
+        weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
             partition_t min = std::min(u_id, v_id);
             partition_t max = std::max(u_id, v_id);
             return m_adj_mtx[min * m_k + max];
         }
 
-        void move(const graph_t& g,
-                  const p_manager_t& p_manager,
+        void move(const graph_t &g,
+                  const p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
-                  const partition_t new_id) override {
+                  const partition_t new_id) {
             ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 

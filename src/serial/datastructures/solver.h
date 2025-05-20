@@ -106,15 +106,16 @@ namespace HeiProMap {
         explicit Solver(const AlgorithmConfiguration& t_ac) {
             sp = std::chrono::high_resolution_clock::now();
 
-            ac            = t_ac;
-            random_engine = RandomEngine(ac.seed);
-
             const auto sp_graph_io = std::chrono::high_resolution_clock::now();
             graphs.emplace_back(ac.graph_in);
             const auto ep_graph_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("graph_io", get_seconds(sp_graph_io, ep_graph_io));
 
+            ac            = t_ac;
+            random_engine = RandomEngine(ac.seed);
+
             const auto sp_io = std::chrono::high_resolution_clock::now();
+
             // balance
             lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].weight() / (f64)ac.k));
 

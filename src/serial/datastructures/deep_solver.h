@@ -45,6 +45,7 @@
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../coarsening/random_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
+#include "../partitioning/greedy_kway_partitioner.h"
 #include "../partitioning/kaffpa_kway_partitioner.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
@@ -77,7 +78,8 @@ namespace HeiProMap {
         DeepBoundaryVertexManager bv_manager;
         DeepQuotientGraph q_graph;
 
-        KaffpaKWayPartitioner partitioner;
+        // KaffpaKWayPartitioner partitioner;
+        GreedyKWayPartitioner partitioner;
 
         // balance
         weight_t                 lmax = 0;
@@ -170,21 +172,36 @@ namespace HeiProMap {
             std::cout << "Total time        : " << duration << std::endl;
             std::cout << "#Nodes            : " << graphs.back().get_n() << std::endl;
             std::cout << "#Edges            : " << graphs.back().get_m() << std::endl;
+            std::cout << "k                 : " << ac.k << std::endl;
             std::cout << "Lmax              : " << lmax << std::endl;
             std::cout << "Init. QAP         : " << initial_qap << std::endl;
             std::cout << "Init. max block w : " << initial_max_block_weight << std::endl;
             std::cout << "Final QAP         : " << qap << std::endl;
             std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
 
+            size_t n_empty_partitions = 0;
+            size_t n_overloaded_partitions = 0;
+            weight_t sum_too_much = 0;
+            for(partition_t id = 0; id < ac.k; ++id){
+                n_empty_partitions += p_manager.get_bweight(id) == 0;
+                n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
+                sum_too_much += std::max(0, p_manager.get_bweight(id) - lmax);
+            }
+            std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
+            std::cout << "#oload partitions : " << n_overloaded_partitions << std::endl;
+            std::cout << "Sum oload weights : " << sum_too_much << std::endl;
+
             return p;
         }
 
     private:
         void internal_solve() {
+            print(lmax_vec);
+
             u64 level     = 0;
             u64 max_level = 0;
 
-            while (graphs.back().get_n() > ac.hierarchy.back() * 32) {
+            while (graphs.back().get_n() > ac.hierarchy.back() * 64) {
                 matching(level);
                 if (matches.back().size() == 0) {
                     std::cout << "No matching found!" << std::endl;
@@ -225,9 +242,9 @@ namespace HeiProMap {
             std::cout << "partition" << std::endl;
 
             partition_t id = 0;
-            partitioner.partition(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.kaffpa_kway_partitioner_config, stat_collect);
+            partitioner.partition(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.greedy_kway_partitioner_config, stat_collect);
 
-            // initial_qap              = get_qap(graphs.back(), p_manager, d_oracle);
+            initial_qap              = get_qap(graphs.back(), p_manager, d_oracle);
             initial_max_block_weight = max(p_manager.get_bweights());
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
@@ -246,13 +263,13 @@ namespace HeiProMap {
 
             std::vector<partition_t> ids;
             for (partition_t         id = 0; id < ac.k; ++id) {
-                if (p_manager.get_hierarchy_level(id) >= 0 && (level == 0 || p_manager.size(id) > 8 * ac.hierarchy[p_manager.get_hierarchy_level(id)])) {
+                if (p_manager.get_hierarchy_level(id) >= 0 && (level == 0 || p_manager.size(id) > 64 * ac.hierarchy[p_manager.get_hierarchy_level(id)])) {
                     ids.push_back(id);
                 }
             }
 
             for (partition_t id: ids) {
-                partitioner.partition(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.kaffpa_kway_partitioner_config, stat_collect);
+                partitioner.partition(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.greedy_kway_partitioner_config, stat_collect);
             }
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
