@@ -37,7 +37,7 @@ namespace HeiProMap {
 
         AlignedArray<partition_t> partition;
         AlignedArray<partition_t> partition_temp;
-        AlignedArray<partition_t> bweights;
+        AlignedArray<weight_t> bweights;
         AlignedArray<size_t>      n_vertices;
 
     public:
