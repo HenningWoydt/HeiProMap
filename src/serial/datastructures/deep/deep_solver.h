@@ -272,9 +272,40 @@ namespace HeiProMap {
                 }
             }
 
+            size_t total = ids.size();
+            size_t count = 0;
+            const int barWidth = 50;
+            std::cout << "Total #partitions: " << total << std::endl;
             for (partition_t id: ids) {
-                partitioner.partition(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.greedy_kway_partitioner_config, stat_collect);
+                if (p_manager.get_hierarchy_level(id) > 0) {
+                    partitioner.partition(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.greedy_kway_partitioner_config, stat_collect);
+                } else {
+                    partitioner.partition_full_balance(graphs.back(), p_manager, bv_manager, q_graph, id, k_rem[p_manager.get_hierarchy_level(id)], ac.hierarchy[p_manager.get_hierarchy_level(id)], lmax_vec[p_manager.get_hierarchy_level(id)], p_manager.get_hierarchy_level(id), random_engine, ac.greedy_kway_partitioner_config, stat_collect);
+                }
+
+                // update progress
+                ++count;
+                float progress = float(count) / float(total);
+                int pos = int(progress * barWidth);
+
+                // carriage-return first, then bar, then flush
+                std::cerr
+                    << '\r'
+                    << '[';
+                for (int i = 0; i < barWidth; ++i) {
+                    if      (i < pos)       std::cerr << '=';
+                    else if (i == pos)      std::cerr << '>';
+                    else                    std::cerr << ' ';
+                }
+                std::cerr
+                    << "] "
+                    << std::setw(3) << int(progress * 100.0f)
+                    << "% "
+                    << std::flush;
             }
+
+            // once done, move to the next line
+            std::cerr << "\n";
 
             const auto ep_partition = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("partition", get_seconds(sp_partition, ep_partition));
