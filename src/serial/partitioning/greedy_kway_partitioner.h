@@ -36,15 +36,12 @@
 #include "../../commons/statistic_collector.h"
 
 namespace HeiProMap {
-
-    class GreedyKWayPartitionerConfiguration {
-
-    };
+    class GreedyKWayPartitionerConfiguration {};
 
     class GreedyKWayPartitioner {
     private:
-        AlignedArray<weight_t>    weights;
-        AlignedArray<weight_t>    edge_cut_saved;
+        AlignedArray<weight_t> weights;
+        AlignedArray<weight_t> edge_cut_saved;
         AlignedArray<partition_t> new_partition;
 
     public:
@@ -60,18 +57,18 @@ namespace HeiProMap {
          * @param i_config The configuration.
          * @param t_stat_collect The statistic collector.
          */
-        void partition_old(const graph_t &g,
-                       p_manager_t &p_manager,
-                       bv_manager_t &bv_manager,
-                       q_graph_t &q_graph,
+        void partition(const graph_t& g,
+                       deep_p_manager_t& p_manager,
+                       deep_bv_manager_t& bv_manager,
+                       deep_q_graph_t& q_graph,
                        partition_t id,
                        partition_t id_increment,
                        partition_t k,
                        weight_t lmax,
                        s32 hierarchy_level,
-                       RandomEngine &t_random_engine,
-                       const GreedyKWayPartitionerConfiguration &i_config,
-                       StatisticCollector &t_stat_collect) {
+                       RandomEngine& t_random_engine,
+                       const GreedyKWayPartitionerConfiguration& i_config,
+                       StatisticCollector& t_stat_collect) {
             weights.initialize(k, 0);
             new_partition.initialize(g.get_n(), k);
 
@@ -91,16 +88,16 @@ namespace HeiProMap {
                         }
                     endfor
 
-                    weight_t u_weight = g.weight(u);
+                    weight_t u_weight   = g.weight(u);
                     partition_t best_id = 0;
-                    for(partition_t new_id = 0; new_id < k; ++new_id){
-                        if(weights[new_id] < weights[best_id]) { best_id = new_id; }
+                    for (partition_t new_id = 0; new_id < k; ++new_id) {
+                        if (weights[new_id] < weights[best_id]) { best_id = new_id; }
                     }
 
-                    for(partition_t new_id = 0; new_id < k; ++new_id){
-                        if(weights[new_id] + u_weight > lmax) { continue; }
+                    for (partition_t new_id = 0; new_id < k; ++new_id) {
+                        if (weights[new_id] + u_weight > lmax) { continue; }
 
-                        if(edge_cut_saved[new_id] > edge_cut_saved[best_id] || (edge_cut_saved[new_id] == edge_cut_saved[best_id] && weights[new_id] < weights[best_id])){
+                        if (edge_cut_saved[new_id] > edge_cut_saved[best_id] || (edge_cut_saved[new_id] == edge_cut_saved[best_id] && weights[new_id] < weights[best_id])) {
                             best_id = new_id;
                         }
                     }
@@ -115,8 +112,8 @@ namespace HeiProMap {
                 if (new_partition[u] == 0) { continue; }
                 partition_t move_id = id + id_increment * new_partition[u];
 
-                partition_t u_id     = id;
-                weight_t    u_weight = g.weight(u);
+                partition_t u_id  = id;
+                weight_t u_weight = g.weight(u);
 
                 bv_manager.move(g, p_manager, u, u_id, move_id);
                 q_graph.move(g, p_manager, u, u_id, move_id);
@@ -128,44 +125,32 @@ namespace HeiProMap {
                 p_manager.set_lmax(move_id, lmax);
                 p_manager.set_hierarchy_level(move_id, hierarchy_level - 1);
             }
-
-            /*
-            for (partition_t i = 0; i < k; ++i) {
-                partition_t move_id = id + id_increment * i;
-
-                if(p_manager.get_bweight(move_id) > lmax){
-                    std::cout << move_id << " overloaded " << p_manager.get_bweight(move_id) << " > " << lmax << std::endl;
-                }
-            }
-             */
         }
 
-        void partition(const graph_t &g,
-                       deep_p_manager_t &p_manager,
-                       deep_bv_manager_t &bv_manager,
-                       deep_q_graph_t &q_graph,
-                       partition_t id,
-                       partition_t id_increment,
-                       partition_t k,
-                       weight_t lmax,
-                       s32 hierarchy_level,
-                       RandomEngine &t_random_engine,
-                       const GreedyKWayPartitionerConfiguration &i_config,
-                       StatisticCollector &t_stat_collect) {
-            // std::cout << "A " << hierarchy_level << " " << id << " " << lmax << std::endl;
-
+        void partition_full_balance(const graph_t& g,
+                                    deep_p_manager_t& p_manager,
+                                    deep_bv_manager_t& bv_manager,
+                                    deep_q_graph_t& q_graph,
+                                    partition_t id,
+                                    partition_t id_increment,
+                                    partition_t k,
+                                    weight_t lmax,
+                                    s32 hierarchy_level,
+                                    RandomEngine& t_random_engine,
+                                    const GreedyKWayPartitionerConfiguration& i_config,
+                                    StatisticCollector& t_stat_collect) {
             weights.initialize(k, 0);
             new_partition.initialize(g.get_n(), k);
 
             forall_gu(g, u)
                 {
-                    partition_t u_id = p_manager[u];
+                    partition_t u_id  = p_manager[u];
                     weight_t u_weight = g.weight(u);
                     if (u_id != id) { continue; }
 
                     partition_t best_id = 0;
-                    for(partition_t new_id = 0; new_id < k; ++new_id){
-                        if(weights[new_id] < weights[best_id]) { best_id = new_id; }
+                    for (partition_t new_id = 0; new_id < k; ++new_id) {
+                        if (weights[new_id] < weights[best_id]) { best_id = new_id; }
                     }
 
                     weights[best_id] += u_weight;
@@ -178,8 +163,8 @@ namespace HeiProMap {
                 if (new_partition[u] == 0) { continue; }
                 partition_t move_id = id + id_increment * new_partition[u];
 
-                partition_t u_id     = id;
-                weight_t    u_weight = g.weight(u);
+                partition_t u_id  = id;
+                weight_t u_weight = g.weight(u);
 
                 bv_manager.move(g, p_manager, u, u_id, move_id);
                 q_graph.move(g, p_manager, u, u_id, move_id);
