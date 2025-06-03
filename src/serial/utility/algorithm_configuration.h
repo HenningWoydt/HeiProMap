@@ -51,6 +51,7 @@
 #include "../partitioning/kaffpa_kway_partitioner.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
+#include "../refinement/hierarchy_aware_quotient_graph_refinement.h"
 
 
 namespace HeiProMap {
@@ -247,8 +248,8 @@ namespace HeiProMap {
         std::string       partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
-        GlobalMultisectionConfiguration global_multisection_config;
-        KaffpaPartitionerConfiguration  kaffpa_partitioner_config;
+        GlobalMultisectionConfiguration    global_multisection_config;
+        KaffpaPartitionerConfiguration     kaffpa_partitioner_config;
         GreedyKWayPartitionerConfiguration greedy_kway_partitioner_config;
         KaffpaKWayPartitionerConfiguration kaffpa_kway_partitioner_config;
 
@@ -266,10 +267,13 @@ namespace HeiProMap {
         FlowBasedRefinementConfiguration         flow_based_refinement_config          = FlowBasedRefinementConfiguration("Flow Based");
         // ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
 
-        HierarchyAwareMultiWayFMConfiguration          hierarchy_aware_multi_way_fm_config                 = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
-        HierarchyAwareMultiTryMultiWayFMConfiguration  hierarchy_aware_multi_try_multi_way_fm_config       = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
+        HierarchyAwareMultiWayFMConfiguration              hierarchy_aware_multi_way_fm_config                     = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
+        HierarchyAwareMultiTryMultiWayFMConfiguration      hierarchy_aware_multi_try_multi_way_fm_config           = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
         // HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
-        HierarchyAwareFlowBasedRefinementConfiguration hierarchy_aware_flow_based_refinement_configuration = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
+        HierarchyAwareFlowBasedRefinementConfiguration     hierarchy_aware_flow_based_refinement_configuration     = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
+        HierarchyAwareQuotientGraphRefinementConfiguration hierarchy_aware_quotient_graph_refinement_configuration = HierarchyAwareQuotientGraphRefinementConfiguration("Hierarchy Aware Quotient Graph Refineemnt");
+
+        OptimisticRefinementConfiguration optimistic_refinement_configuration = OptimisticRefinementConfiguration("Optimistic Refinement");
 
         AlgorithmConfiguration() = default;
 
@@ -638,9 +642,9 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha         = 1000.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled                    = true;
+            flow_based_refinement_config.enabled                    = false;
             flow_based_refinement_config.min_level                  = 0;
-            flow_based_refinement_config.max_level                  = 5;
+            flow_based_refinement_config.max_level                  = 100;
             flow_based_refinement_config.max_global_iteration       = 1;
             flow_based_refinement_config.max_local_iteration        = 3;
             flow_based_refinement_config.alpha                      = 2.0;
@@ -648,6 +652,11 @@ namespace HeiProMap {
             flow_based_refinement_config.alpha_modifier             = 2.0;
             flow_based_refinement_config.use_closed_vertex_set      = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 10;
+
+            hierarchy_aware_multi_way_fm_config.enabled = false;
+            hierarchy_aware_quotient_graph_refinement_configuration.enabled = true;
+
+            optimistic_refinement_configuration.enabled = false;
         }
 
         void set_experimental() {
