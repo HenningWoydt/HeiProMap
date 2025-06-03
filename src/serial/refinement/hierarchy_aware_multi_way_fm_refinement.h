@@ -69,7 +69,7 @@ namespace HeiProMap {
         u32 block_marker = 0;
 
         // IndexedMaxHeap<KWayFMMove> heap;
-        std::priority_queue<KWayFMMove> heap;
+        // std::priority_queue<KWayFMMove> heap;
 
         AlignedArray<Move> moves;
         size_t moves_size = 0;
@@ -121,7 +121,7 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const u64 max_level,
-                    const graph_t& g,
+                    graph_t& g,
                     d_oracle_t& d_oracle,
                     bv_manager_t& bv_manager,
                     p_manager_t& p_manager,
