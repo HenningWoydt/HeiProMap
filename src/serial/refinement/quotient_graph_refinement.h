@@ -114,10 +114,6 @@ namespace HeiProMap {
                         RandomEngine& t_random_engine,
                         const ISerialRefinerConfiguration& i_config,
                         StatisticCollector& t_stat_collect) override {
-            vertex_t t_n_64        = round_up_64(t_n);
-            partition_t t_k_64     = round_up_64(t_k);
-            partition_t t_k_t_k_64 = round_up_64(t_k * t_k);
-
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;

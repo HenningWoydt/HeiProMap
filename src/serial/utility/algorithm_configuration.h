@@ -629,7 +629,7 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.enabled       = false;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha         = 1000.0;
 
@@ -642,7 +642,7 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha         = 1000.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled                    = false;
+            flow_based_refinement_config.enabled                    = true;
             flow_based_refinement_config.min_level                  = 0;
             flow_based_refinement_config.max_level                  = 100;
             flow_based_refinement_config.max_global_iteration       = 1;
