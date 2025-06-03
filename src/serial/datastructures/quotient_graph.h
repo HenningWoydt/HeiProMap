@@ -82,11 +82,11 @@ namespace HeiProMap {
 
                     // remove old edge, if existed
                     if (old_id != v_id) {
-                        remove_edge(old_id, v_id, w * 2);
+                        remove_edge(old_id, v_id, w);
                     }
                     // add new edge, if has to exist
                     if (new_id != v_id) {
-                        add_edge(new_id, v_id, w * 2);
+                        add_edge(new_id, v_id, w);
                     }
                 }
             endfor

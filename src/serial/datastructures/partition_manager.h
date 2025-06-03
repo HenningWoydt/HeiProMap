@@ -37,7 +37,7 @@ namespace HeiProMap {
 
         AlignedArray<partition_t> partition;
         AlignedArray<partition_t> partition_temp;
-        AlignedArray<weight_t> bweights;
+        AlignedArray<weight_t>    bweights;
         AlignedArray<size_t>      n_vertices;
 
     public:
@@ -91,13 +91,29 @@ namespace HeiProMap {
         }
 
         void contract(const Matching &matching) {
-            for (size_t i = 0; i < matching.size(); ++i) {
-                auto     [u, v]         = matching[i];
-                vertex_t smaller_vertex = std::min(u, v);
-                vertex_t new_u          = matching.get_n(smaller_vertex);
-                partition_temp[new_u] = partition[smaller_vertex];
-                n_vertices[partition[smaller_vertex]] -= 1;
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                if(u == matching.get_partner(u)){
+                    vertex_t new_u = matching.get_n(u);
+                    partition_temp[new_u] = partition[u];
+
+                    ASSERT(u < m_n);
+                    ASSERT(partition[u] == partition[matching.get_partner(u)]);
+                    ASSERT(new_u < m_n);
+                    ASSERT(n_vertices[partition[u]] != std::numeric_limits<size_t>::max());
+                }
+
+                if (u < matching.get_partner(u)) {
+                    vertex_t new_u = matching.get_n(u);
+                    partition_temp[new_u] = partition[u];
+                    n_vertices[partition[u]] -= 1;
+
+                    ASSERT(u < m_n);
+                    ASSERT(partition[u] == partition[matching.get_partner(u)]);
+                    ASSERT(new_u < m_n);
+                    ASSERT(n_vertices[partition[u]] != std::numeric_limits<size_t>::max());
+                }
             }
+
             std::swap(partition, partition_temp);
         }
 
