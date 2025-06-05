@@ -50,7 +50,6 @@
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../refinement/zero_gain_perturbator.h"
-#include "../refinement/optimistic_refinement.h"
 #include "../utility/algorithm_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
@@ -102,8 +101,6 @@ namespace HeiProMap {
         HierarchyAwareFlowBasedRefinement          hierarchy_aware_flow_based_refinement;
         HierarchyAwareQuotientGraphRefinement      hierarchy_aware_quotient_graph_refinement;
 
-        OptimisticRefinement optimistic_refinement;
-
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
 
     public:
@@ -152,8 +149,6 @@ namespace HeiProMap {
             refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
             // refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
             // refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
-
-            refinements.emplace_back(&optimistic_refinement, &ac.optimistic_refinement_configuration);
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {

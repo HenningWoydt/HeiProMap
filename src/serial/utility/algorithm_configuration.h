@@ -273,8 +273,6 @@ namespace HeiProMap {
         HierarchyAwareFlowBasedRefinementConfiguration     hierarchy_aware_flow_based_refinement_configuration     = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
         HierarchyAwareQuotientGraphRefinementConfiguration hierarchy_aware_quotient_graph_refinement_configuration = HierarchyAwareQuotientGraphRefinementConfiguration("Hierarchy Aware Quotient Graph Refineemnt");
 
-        OptimisticRefinementConfiguration optimistic_refinement_configuration = OptimisticRefinementConfiguration("Optimistic Refinement");
-
         AlgorithmConfiguration() = default;
 
         void set_hierarchy() {
@@ -653,10 +651,10 @@ namespace HeiProMap {
             flow_based_refinement_config.use_closed_vertex_set      = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 10;
 
-            hierarchy_aware_multi_way_fm_config.enabled = false;
-            hierarchy_aware_quotient_graph_refinement_configuration.enabled = true;
+            hierarchy_aware_flow_based_refinement_configuration.enabled = true;
 
-            optimistic_refinement_configuration.enabled = false;
+            hierarchy_aware_multi_way_fm_config.enabled = false;
+            hierarchy_aware_quotient_graph_refinement_configuration.enabled = false;
         }
 
         void set_experimental() {

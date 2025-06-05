@@ -144,6 +144,18 @@ namespace HeiProMap {
 
                         if (is_connected(g, bv_manager, p_manager, n1_start, n2_start, ids_per_super_block)) {
                             refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, n1_start, n2_start, ids_per_super_block, m_lmax * ids_per_super_block);
+
+                            weight_t n1_weight = 0;
+                            for (partition_t id = n1_start; id < n1_start + ids_per_super_block; ++id) {
+                                n1_weight += p_manager.get_bweight(id);
+                            }
+
+                            weight_t n2_weight = 0;
+                            for (partition_t id = n2_start; id < n2_start + ids_per_super_block; ++id) {
+                                n2_weight += p_manager.get_bweight(id);
+                            }
+
+                            // std::cout << n1_start << " " << n2_start << " " << ids_per_super_block << " " << n1_weight << " " << n2_weight << " " << m_lmax * ids_per_super_block << std::endl;
                         }
                     }
                 }

@@ -45,52 +45,52 @@
 namespace HeiProMap {
     class HierarchyAwareFlowBasedRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit HierarchyAwareFlowBasedRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+        explicit HierarchyAwareFlowBasedRefinementConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
 
-        u64  max_global_iteration       = 1;
-        u64  max_local_iteration        = 3;
-        f64  alpha                      = 2.0;
-        f64  alpha_upper_bound          = 8.0;
-        f64  alpha_modifier             = 2.0;
-        bool use_closed_vertex_set      = true;
-        u64  closed_vertex_sets_repeats = 10;
+        u64 max_global_iteration       = 1;
+        u64 max_local_iteration        = 3;
+        f64 alpha                      = 2.0;
+        f64 alpha_upper_bound          = 8.0;
+        f64 alpha_modifier             = 2.0;
+        bool use_closed_vertex_set     = true;
+        u64 closed_vertex_sets_repeats = 10;
     };
 
     class HierarchyAwareFlowBasedRefinement final : public ISerialRefiner {
-        vertex_t                 m_n         = 0;
-        vertex_t                 m_m         = 0;
-        partition_t              m_k         = 0;
-        f64                      m_imbalance = 0.0;
-        weight_t                 m_lmax      = 0;
+        vertex_t m_n    = 0;
+        vertex_t m_m    = 0;
+        partition_t m_k = 0;
+        f64 m_imbalance = 0.0;
+        weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
+        std::vector<weight_t> m_distance;
 
         // active block scheduling
-        AlignedArray <u8>         active_this_round;
-        AlignedArray <u8>         active_next_round;
-        AlignedArray <PairWeight> pairs;
-        size_t                    pairs_size = 0;
+        AlignedArray<u8> active_this_round;
+        AlignedArray<u8> active_next_round;
+        AlignedArray<PairWeight> pairs;
+        size_t pairs_size = 0;
 
         // array for boundary vertices
         AlignedArray<vertex_t> left_boundary;
-        size_t   left_boundary_size = 0;
+        size_t left_boundary_size = 0;
 
         AlignedArray<vertex_t> right_boundary;
-        size_t   right_boundary_size = 0;
+        size_t right_boundary_size = 0;
 
         // array for regions
         AlignedArray<vertex_t> left_region;
-        size_t   left_region_size = 0;
+        size_t left_region_size = 0;
 
         AlignedArray<vertex_t> right_region;
-        size_t   right_region_size = 0;
+        size_t right_region_size = 0;
 
         AlignedArray<u32> is_left_region;
         AlignedArray<u32> is_right_region;
-        u32 is_region_mark   = 0;
+        u32 is_region_mark = 0;
 
         AlignedArray<vertex_t> queue;
-        size_t   queue_size = 0;
+        size_t queue_size = 0;
 
         AlignedArray<u32> seen;
         u32 seen_mark = 0;
@@ -111,13 +111,13 @@ namespace HeiProMap {
         AlignedArray<Move> moves;
         size_t moves_size = 0;
 
-        FlowNetwork         flow_network;
+        FlowNetwork flow_network;
         ResidualFlowNetwork residual_flow_network;
-        SCCGraph            scc_graph;
+        SCCGraph scc_graph;
 
-        RandomEngine                                         *random_engine    = nullptr;
-        const HierarchyAwareFlowBasedRefinementConfiguration *config           = nullptr;
-        StatisticCollector                                   *m_stat_collector = nullptr;
+        RandomEngine* random_engine                                  = nullptr;
+        const HierarchyAwareFlowBasedRefinementConfiguration* config = nullptr;
+        StatisticCollector* m_stat_collector                         = nullptr;
 
     public:
         HierarchyAwareFlowBasedRefinement() = default;
@@ -129,11 +129,11 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const f64 t_imbalance,
                         const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
-                        const ISerialRefinerConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) override {
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        RandomEngine& t_random_engine,
+                        const ISerialRefinerConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -143,17 +143,13 @@ namespace HeiProMap {
             m_distance  = t_distance;
 
             random_engine    = &t_random_engine;
-            config           = dynamic_cast<const HierarchyAwareFlowBasedRefinementConfiguration *>(&i_config);
+            config           = dynamic_cast<const HierarchyAwareFlowBasedRefinementConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
-
-            vertex_t    m_n_64     = round_up_64(m_n);
-            partition_t m_k_64     = round_up_64(m_k);
-            partition_t m_k_m_k_64 = round_up_64(m_k * m_k);
 
             // active block scheduling
             active_this_round.initialize(m_k);
             active_next_round.initialize(m_k);
-            size_t size = (size_t) m_k * (size_t) m_k;
+            size_t size = (size_t)m_k * (size_t)m_k;
             pairs.initialize(size);
             pairs_size = 0;
 
@@ -182,10 +178,7 @@ namespace HeiProMap {
             left_penalties.initialize(m_n);
             right_penalties.initialize(m_n);
 
-            translation_table.reserve(m_n_64, m_n_64);
-
-            vertex_t t_n_64 = round_up_64(t_n);
-            vertex_t t_k_64 = round_up_64(t_k);
+            translation_table.reserve(m_n, m_n);
 
             vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
@@ -193,250 +186,139 @@ namespace HeiProMap {
             block_used.initialize(m_k, 0);
             block_marker = 0;
 
-            moves.initialize(m_n_64);
+            moves.initialize(m_n);
             moves_size = 0;
         }
 
         void refine(const u64 level,
                     const u64 max_level,
-                    graph_t &g,
-                    d_oracle_t &d_oracle,
-                    bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                    graph_t& g,
+                    d_oracle_t& d_oracle,
+                    bv_manager_t& bv_manager,
+                    p_manager_t& p_manager,
+                    q_graph_t& q_graph) override {
             for (size_t iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                for (size_t i = 0; i < m_hierarchy.size(); ++i) {
+                for (size_t i = m_hierarchy.size() - 1; i < m_hierarchy.size(); ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);
                 }
             }
         }
 
-        void refine_layer(const u64 level,
-                          const u64 max_level,
-                          const graph_t &g,
-                          d_oracle_t &d_oracle,
-                          bv_manager_t &bv_manager,
-                          p_manager_t &p_manager,
-                          q_graph_t &q_graph,
-                          size_t layer) {
-            partition_t n_total_super_blocks = 1;
-            for (size_t i                    = layer; i < m_hierarchy.size(); ++i) { n_total_super_blocks *= m_hierarchy[i]; }
-            partition_t ids_per_super_block  = m_k / n_total_super_blocks;
-
-            partition_t n_local_super_blocks = m_hierarchy[layer];
-            partition_t n_upper_blocks       = 1;
-            for (size_t i                    = layer + 1; i < m_hierarchy.size(); ++i) { n_upper_blocks *= m_hierarchy[i]; }
-
-            for (size_t upper_block_id = 0; upper_block_id < n_upper_blocks; ++upper_block_id) {
-
-                for (size_t super_block_id_1 = 0; super_block_id_1 < n_local_super_blocks; ++super_block_id_1) {
-                    for (size_t super_block_id_2 = super_block_id_1 + 1; super_block_id_2 < n_local_super_blocks; ++super_block_id_2) {
-                        partition_t left_start  = super_block_id_1 * ids_per_super_block + upper_block_id * n_local_super_blocks * ids_per_super_block;
-                        partition_t left_end    = (super_block_id_1 + 1) * ids_per_super_block + upper_block_id * n_local_super_blocks * ids_per_super_block;
-                        partition_t right_start = super_block_id_2 * ids_per_super_block + upper_block_id * n_local_super_blocks * ids_per_super_block;
-                        partition_t right_end   = (super_block_id_2 + 1) * ids_per_super_block + upper_block_id * n_local_super_blocks * ids_per_super_block;
-
-                        refine_neighborhood(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, left_start, left_end, right_start, right_end);
-                    }
-                }
-                break;
-
-            }
-        }
-
-        void refine_neighborhood(const u64 level,
-                                 const u64 max_level,
-                                 const graph_t &g,
-                                 d_oracle_t &d_oracle,
-                                 bv_manager_t &bv_manager,
-                                 p_manager_t &p_manager,
-                                 q_graph_t &q_graph,
-                                 partition_t left_start,
-                                 partition_t left_end,
-                                 partition_t right_start,
-                                 partition_t right_end) {
-            f64 alpha             = config->alpha;
-            f64 alpha_upper_bound = config->alpha_upper_bound;
-            f64 alpha_modifier    = config->alpha_modifier;
-
-            partition_t ids_per_block = left_end - left_start;
-
-            u64 max_local_iteration = config->max_local_iteration;
-            u64 iteration           = 0;
-
-            while (iteration < max_local_iteration) {
-                iteration += 1;
-
-                // get info before changing
-                std::vector<weight_t> qap_before              = get_qap_per_layer(g, p_manager, d_oracle, m_hierarchy.size());
-                s64                   n_vertices_left_before  = 0;
-                s64                   n_vertices_right_before = 0;
-                for (partition_t      id                      = left_start; id < left_end; ++id) { n_vertices_left_before += p_manager.size(id); }
-                for (partition_t      id                      = right_start; id < right_end; ++id) { n_vertices_right_before += p_manager.size(id); }
-
-                s64              edge_cut_before = 0;
-                for (partition_t id              = left_start; id < left_end; ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u)
-                        {
-                            forall_guivw(g, u, j, v, w)
-                                {
-                                    partition_t v_id = p_manager[v];
-
-                                    if (right_start <= v_id && v_id < right_end) {
-                                        edge_cut_before += w;
-                                    }
-                                }
-                            endfor
-                        }
-                    endfor
-                }
-
-                // get boundary vertices
-                determine_boundary_vertices(g, bv_manager, p_manager, left_start, left_end, right_start, right_end);
-
-                if (left_boundary_size + right_boundary_size == 0) {
-                    // no boundary is shared, so no optimization necessary
-                    return;
-                }
-
-                // calc max weight for each bfs
-                weight_t         block_lmax      = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.weight() / ((f64) m_k / (f64) ids_per_block)));
-                weight_t         left_max_weight = 0;
-                for (partition_t id              = left_start; id < left_end; ++id) { left_max_weight += p_manager.get_bweight(id); }
-                left_max_weight = block_lmax - left_max_weight;
-
-                weight_t         right_max_weight = 0;
-                for (partition_t id               = right_start; id < right_end; ++id) { right_max_weight += p_manager.get_bweight(id); }
-                right_max_weight = block_lmax - right_max_weight;
-
-                // get both regions
-                weight_t left_region_weight;
-                weight_t right_region_weight;
-                determine_regions(g, p_manager, left_start, left_end, left_max_weight, &left_region_weight, right_start, right_end, right_max_weight, &right_region_weight);
-
-                if (left_region_size + right_region_size == 0) {
-                    // if both regions are empty, increase their sizes
-                    if (alpha == alpha_upper_bound) { return; }
-                    alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
-                    continue;
-                }
-
-                // determine penalties for all vertices
-                determine_penalties(g, p_manager, left_start, left_end, right_start, right_end);
-
-                // build a translation table from graph to flow network
-                vertex_t    new_u = 0;
-                for (size_t i     = 0; i < left_region_size; ++i) { translation_table.add(left_region[i], new_u++); }
-                for (size_t i     = 0; i < right_region_size; ++i) { translation_table.add(right_region[i], new_u++); }
-
-                // build flownetwork
-                build_flow_network(g);
-
-                // solve the flow network
-                flow_network.solve();
-
-                std::vector<u8> is_left;
-                if (config->use_closed_vertex_set) {
-                    // build residual network
-                    flow_network.build_residual_network(residual_flow_network);
-
-                    // build scc graph
-                    scc_graph.initialize(residual_flow_network, g, translation_table);
-
-                    // reduce the scc graph
-                    scc_graph.reduce();
-
-                    // determine best balanced min cut
-                    weight_t         left_non_region_weight = 0;
-                    for (partition_t id                     = left_start; id < left_end; ++id) { left_non_region_weight += p_manager.get_bweight(id); }
-                    left_non_region_weight -= left_region_weight;
-
-                    weight_t         right_non_region_weight = 0;
-                    for (partition_t id                      = right_start; id < right_end; ++id) { right_non_region_weight += p_manager.get_bweight(id); }
-                    right_non_region_weight -= right_region_weight;
-
-                    bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, block_lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
-
-                    if (!closure_found) {
-                        if (alpha == 1.0) { return; }
-                        alpha = std::max(alpha / alpha_modifier, 1.0);
-                        continue;
-                    }
-                } else {
-                    // simply use the first cut found
-                    flow_network.get_cut(is_left);
-
-                    if (!cut_is_valid(g, p_manager, left_start, left_end, right_start, right_end, block_lmax, is_left)) {
-                        if (alpha == 1.0) { return; }
-                        alpha = std::max(alpha / alpha_modifier, 1.0);
-                        continue;
-                    }
-                }
-
-                // check if the cut actually changes the partition
-                if (!cut_changes_partition(is_left)) {
-                    // cut is valid, but does not change anything
-                    if (alpha == 1.0) { return; }
-                    alpha = std::max(alpha / alpha_modifier, 1.0);
-                    continue;
-                }
-
-                // cut is valid and changes the partition, increase alpha
-                alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
-
-                // make the changes
-                change_boundary(g, d_oracle, bv_manager, p_manager, q_graph, is_left, left_start, left_end, right_start, right_end);
-
-                // get info after changing
-                s64              n_vertices_left_after  = 0;
-                s64              n_vertices_right_after = 0;
-                for (partition_t id                     = left_start; id < left_end; ++id) { n_vertices_left_after += p_manager.size(id); }
-                for (partition_t id                     = right_start; id < right_end; ++id) { n_vertices_right_after += p_manager.size(id); }
-
-                s64              edge_cut_after = 0;
-                for (partition_t id             = left_start; id < left_end; ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u)
-                        {
-                            forall_guivw(g, u, j, v, w)
-                                {
-                                    partition_t v_id = p_manager[v];
-
-                                    if (right_start <= v_id && v_id < right_end) {
-                                        edge_cut_after += w;
-                                    }
-                                }
-                            endfor
-                        }
-                    endfor
-                }
-
-                std::cout << edge_cut_before << " " << edge_cut_after << " " << edge_cut_before - edge_cut_after << std::endl;
-                std::cout << n_vertices_left_before << " " << n_vertices_left_after << " " << n_vertices_left_before - n_vertices_left_after << std::endl;
-                std::cout << n_vertices_right_before << " " << n_vertices_right_after << " " << n_vertices_right_before - n_vertices_right_after << std::endl;
-                std::cout << left_max_weight << " " << right_max_weight << std::endl;
-                print(qap_before);
-                print(get_qap_per_layer(g, p_manager, d_oracle, m_hierarchy.size()));
-                std::cout << std::endl;
-            }
-        }
-
-        void determine_boundary_vertices(const graph_t &g,
-                                         bv_manager_t &bv_manager,
-                                         const p_manager_t &p_manager,
-                                         partition_t left_start,
-                                         partition_t left_end,
-                                         partition_t right_start,
-                                         partition_t right_end) {
-            left_boundary_size  = 0;
-            for (partition_t id = left_start; id < left_end; ++id) {
+        bool is_connected(const graph_t& g,
+                          bv_manager_t& bv_manager,
+                          p_manager_t& p_manager,
+                          partition_t l_start,
+                          partition_t r_start,
+                          partition_t ids_per_super_block) {
+            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
                         forall_guiv(g, u, j, v)
                             {
                                 partition_t v_id = p_manager[v];
-                                if (right_start <= v_id && v_id < right_end) {
+
+                                if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                                    return true;
+                                }
+                            }
+                        endfor
+                    }
+                endfor
+            }
+            return false;
+        }
+
+        void refine_layer(const u64 level,
+                          const u64 max_level,
+                          const graph_t& g,
+                          d_oracle_t& d_oracle,
+                          bv_manager_t& bv_manager,
+                          p_manager_t& p_manager,
+                          q_graph_t& q_graph,
+                          size_t layer) {
+            partition_t n_upper_total_super_blocks = 1;
+            partition_t n_total_super_blocks       = m_hierarchy[layer];
+            for (size_t i = layer + 1; i < m_hierarchy.size(); ++i) { n_upper_total_super_blocks *= m_hierarchy[i]; }
+            partition_t ids_per_super_block = m_k / (n_upper_total_super_blocks * m_hierarchy[layer]);
+
+            for (size_t i = 0; i < n_upper_total_super_blocks; ++i) {
+                for (size_t j = 0; j < n_total_super_blocks; ++j) {
+                    for (size_t k = j + 1; k < n_total_super_blocks; ++k) {
+                        partition_t l_start = i * (n_total_super_blocks * ids_per_super_block) + j * ids_per_super_block;
+                        partition_t r_start = i * (n_total_super_blocks * ids_per_super_block) + k * ids_per_super_block;
+
+                        refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, l_start, r_start, ids_per_super_block, m_lmax * ids_per_super_block);
+                    }
+                }
+            }
+        }
+
+        void refine_blocks(const u64 level,
+                           const u64 max_level,
+                           const graph_t& g,
+                           d_oracle_t& d_oracle,
+                           bv_manager_t& bv_manager,
+                           p_manager_t& p_manager,
+                           q_graph_t& q_graph,
+                           partition_t l_start,
+                           partition_t r_start,
+                           partition_t ids_per_super_block,
+                           weight_t lmax) {
+            // get allowed weight on each side
+            weight_t l_lmax = lmax;
+            weight_t r_lmax = lmax;
+            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_lmax -= p_manager.get_bweight(id); }
+            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_lmax -= p_manager.get_bweight(id); }
+
+            // get boundary vertices
+            determine_boundary_vertices(g, bv_manager, p_manager, l_start, r_start, ids_per_super_block);
+
+            // get regions
+            determine_regions(g, p_manager, l_start, r_start, ids_per_super_block, l_lmax, r_lmax);
+
+            if (left_region_size + right_region_size <= 10) { return; }
+
+            weight_t l_region_weight = 0;
+            weight_t r_region_weight = 0;
+            for (size_t i = 0; i < left_region_size; ++i) { l_region_weight += g.weight(left_region[i]); }
+            for (size_t i = 0; i < right_region_size; ++i) { r_region_weight += g.weight(right_region[i]); }
+
+            // build a translation table from graph to flow network
+            vertex_t new_u = 0;
+            for (size_t i = 0; i < left_region_size; ++i) { translation_table.add(left_region[i], new_u++); }
+            for (size_t i = 0; i < right_region_size; ++i) { translation_table.add(right_region[i], new_u++); }
+
+            // build flownetwork
+            build_flow_network(g);
+
+            // solve the flow network
+            flow_network.solve();
+
+            std::vector<u8> is_left;
+            flow_network.get_cut(is_left);
+
+            // check if the cut actually changes the partition
+            if (cut_changes_partition(is_left)) {
+                // make the changes
+                change_boundary(g, d_oracle, bv_manager, p_manager, q_graph, is_left, l_start, r_start, ids_per_super_block);
+            }
+        }
+
+        void determine_boundary_vertices(const graph_t& g,
+                                         bv_manager_t& bv_manager,
+                                         const p_manager_t& p_manager,
+                                         partition_t l_start,
+                                         partition_t r_start,
+                                         partition_t ids_per_super_block) {
+            left_boundary_size = 0;
+            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
+                forall_bv_id_iu(bv_manager, id, i, u)
+                    {
+                        forall_guiv(g, u, i, v)
+                            {
+                                partition_t v_id = p_manager[v];
+                                if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
                                     left_boundary[left_boundary_size++] = u;
-                                    break;
                                 }
                             }
                         endfor
@@ -445,15 +327,14 @@ namespace HeiProMap {
             }
 
             right_boundary_size = 0;
-            for (partition_t id = right_start; id < right_end; ++id) {
+            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
-                        forall_guiv(g, u, j, v)
+                        forall_guiv(g, u, i, v)
                             {
                                 partition_t v_id = p_manager[v];
-                                if (left_start <= v_id && v_id < left_end) {
+                                if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
                                     right_boundary[right_boundary_size++] = u;
-                                    break;
                                 }
                             }
                         endfor
@@ -462,44 +343,40 @@ namespace HeiProMap {
             }
         }
 
-        void determine_regions(const graph_t &g,
-                               const p_manager_t &p_manager,
-                               partition_t left_start,
-                               partition_t left_end,
-                               weight_t left_max_weight,
-                               weight_t *left_region_weight,
-                               partition_t right_start,
-                               partition_t right_end,
-                               weight_t right_max_weight,
-                               weight_t *right_region_weight) {
+        void determine_regions(const graph_t& g,
+                               const p_manager_t& p_manager,
+                               partition_t l_start,
+                               partition_t r_start,
+                               partition_t ids_per_super_block,
+                               weight_t l_lmax,
+                               weight_t r_lmax) {
             is_region_mark += 1;
             seen_mark += 2;
             // seen[u] == seen_mark     means u is processed
             // seen[u] == seen_mark - 1 means u is in the queue
 
-            weight_t left_curr_weight = 0;
-
-            queue_size = 0;
+            // fill the left boundary in the queue
+            size_t queue_idx = 0;
+            queue_size       = 0;
             for (size_t i = 0; i < left_boundary_size; ++i) {
-                vertex_t u = left_boundary[i];
+                vertex_t u          = left_boundary[i];
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
             }
 
-            size_t queue_idx = 0;
+            // empty queue in bfs fashion and add vertices in the same superblock
             left_region_size = 0;
             while (queue_idx < queue_size) {
                 vertex_t u = queue[queue_idx++];
-                if (seen[u] == seen_mark) { continue; }
 
-                if (left_curr_weight + g.weight(u) <= left_max_weight) {
+                if (g.weight(u) <= r_lmax) {
+                    r_lmax -= g.weight(u);
                     left_region[left_region_size++] = u;
                     is_left_region[u]               = is_region_mark;
-                    left_curr_weight += g.weight(u);
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (!(left_start <= v_id && v_id < left_end)) { continue; }
+                            if (!(l_start <= v_id && v_id < l_start + ids_per_super_block)) { continue; }
 
                             if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue[queue_size++] = v;
@@ -508,33 +385,31 @@ namespace HeiProMap {
                         }
                     endfor
                 }
-                seen[u]    = seen_mark;
+                seen[u] = seen_mark;
             }
-            *left_region_weight = left_curr_weight;
 
-            weight_t right_curr_weight = 0;
-
+            // fill the right boundary in the queue
+            queue_idx  = 0;
             queue_size = 0;
             for (size_t i = 0; i < right_boundary_size; ++i) {
-                vertex_t u = right_boundary[i];
+                vertex_t u          = right_boundary[i];
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
             }
 
+            // empty queue in bfs fashion and add vertices in the same superblock
             right_region_size = 0;
-            queue_idx         = 0;
             while (queue_idx < queue_size) {
                 vertex_t u = queue[queue_idx++];
-                if (seen[u] == seen_mark) { continue; }
 
-                if (right_curr_weight + g.weight(u) <= right_max_weight) {
+                if (g.weight(u) <= l_lmax) {
+                    l_lmax -= g.weight(u);
                     right_region[right_region_size++] = u;
                     is_right_region[u]                = is_region_mark;
-                    right_curr_weight += g.weight(u);
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (!(right_start <= v_id && v_id < right_end)) { continue; }
+                            if (!(r_start <= v_id && v_id < r_start + ids_per_super_block)) { continue; }
 
                             if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue[queue_size++] = v;
@@ -543,57 +418,123 @@ namespace HeiProMap {
                         }
                     endfor
                 }
-                seen[u]    = seen_mark;
+                seen[u] = seen_mark;
             }
-            *right_region_weight = right_curr_weight;
         }
 
-        void determine_penalties(const graph_t &g,
-                                 const p_manager_t &p_manager,
-                                 partition_t left_start,
-                                 partition_t left_end,
-                                 partition_t right_start,
-                                 partition_t right_end) {
-            for (size_t j = 0; j < left_region_size; ++j) {
-                vertex_t u = left_region[j];
+        void determine_penalties(const graph_t& g,
+                                 const p_manager_t& p_manager,
+                                 d_oracle_t& d_oracle,
+                                 partition_t l_start,
+                                 partition_t r_start,
+                                 partition_t ids_per_super_block) {
+            for (size_t i = 0; i < left_boundary_size; ++i) {
+                vertex_t u         = left_boundary[i];
+                partition_t u_id   = p_manager[u];
                 left_penalties[u]  = 0;
                 right_penalties[u] = 0;
-                forall_guivw(g, u, i, v, w)
+
+                forall_guivw(g, u, j, v, w)
                     {
-                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) { continue; } // ignore neighbors that are in the region
+                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) { continue; }
 
                         partition_t v_id = p_manager[v];
-                        if (!(left_start <= v_id && v_id < left_end) && !(right_start <= v_id && v_id < right_end)) { continue; } // ignore peripheral edges
 
-                        if (left_start <= v_id && v_id < left_end) {
-                            // edge from left region into left block, only right penalty
-                            right_penalties[u] += w;
-                        } else if (right_start <= v_id && v_id < right_end) {
-                            // edge from left region into right block, only left penalty
-                            left_penalties[u] += w;
+                        if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
+                            // u is in left superblock and v is in left superblock
+
+                            // if u stays in the left superblock, we pay the current cost
+                            left_penalties[u] += w * d_oracle.get(u_id, v_id);
+
+                            // if u goes to the right superblock, we do not know the final distance
+                            weight_t max_distance = -1;
+                            weight_t min_distance = std::numeric_limits<weight_t>::max();
+
+                            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
+                                weight_t dist = d_oracle.get(id, v_id);
+                                max_distance  = std::max(max_distance, dist);
+                                min_distance  = std::min(min_distance, dist);
+                            }
+
+                            // using max distance is pessimistic and leads to fewer moves
+                            // using min distance is optimistic and leads to more movement
+                            right_penalties[u] += w * min_distance;
+                        } else if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                            // u is in the left superblock and v is in the right superblock
+
+                            // if u stays in the left superblock, we pay the current cost
+                            left_penalties[u] += w * d_oracle.get(u_id, v_id);
+
+                            // if u goes to the right superblock, we do not know the final distance
+                            weight_t max_distance = -1;
+                            weight_t min_distance = std::numeric_limits<weight_t>::max();
+
+                            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
+                                weight_t dist = d_oracle.get(id, v_id);
+                                max_distance  = std::max(max_distance, dist);
+                                min_distance  = std::min(min_distance, dist);
+                            }
+
+                            // using max distance is pessimistic and leads to fewer moves
+                            // using min distance is optimistic and leads to more movement
+                            right_penalties[u] += w * min_distance;
                         }
                     }
                 endfor
                 left_penalties[u] *= 2;
                 right_penalties[u] *= 2;
             }
-            for (size_t j = 0; j < right_region_size; ++j) {
-                vertex_t u         = right_region[j];
+
+            for (size_t i = 0; i < right_boundary_size; ++i) {
+                vertex_t u         = right_boundary[i];
+                partition_t u_id   = p_manager[u];
                 left_penalties[u]  = 0;
                 right_penalties[u] = 0;
-                forall_guivw(g, u, i, v, w)
+
+                forall_guivw(g, u, j, v, w)
                     {
-                        if (is_right_region[v] == is_region_mark || is_left_region[v] == is_region_mark) { continue; } // ignore neighbors that are in the region
+                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) { continue; }
 
                         partition_t v_id = p_manager[v];
-                        if (!(left_start <= v_id && v_id < left_end) && !(right_start <= v_id && v_id < right_end)) { continue; } // ignore peripheral edges
 
-                        if (left_start <= v_id && v_id < left_end) {
-                            // edge from right region into left block, only right penalty
-                            right_penalties[u] += w;
-                        } else if (right_start <= v_id && v_id < right_end) {
-                            // edge from right region into right block, only left penalty
-                            left_penalties[u] += w;
+                        if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
+                            // u is in right superblock and v is in right superblock
+
+                            // if u stays in the right superblock, we pay the current cost
+                            right_penalties[u] += w * d_oracle.get(u_id, v_id);
+
+                            // if u goes to the left superblock, we do not know the final distance
+                            weight_t max_distance = -1;
+                            weight_t min_distance = std::numeric_limits<weight_t>::max();
+
+                            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
+                                weight_t dist = d_oracle.get(id, v_id);
+                                max_distance  = std::max(max_distance, dist);
+                                min_distance  = std::min(min_distance, dist);
+                            }
+
+                            // using max distance is pessimistic and leads to fewer moves
+                            // using min distance is optimistic and leads to more movement
+                            left_penalties[u] += w * min_distance;
+                        } else if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                            // u is in the right superblock and v is in the right superblock
+
+                            // if u stays in the right superblock, we pay the current cost
+                            right_penalties[u] += w * d_oracle.get(u_id, v_id);
+
+                            // if u goes to the left superblock, we do not know the final distance
+                            weight_t max_distance = -1;
+                            weight_t min_distance = std::numeric_limits<weight_t>::max();
+
+                            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
+                                weight_t dist = d_oracle.get(id, v_id);
+                                max_distance  = std::max(max_distance, dist);
+                                min_distance  = std::min(min_distance, dist);
+                            }
+
+                            // using max distance is pessimistic and leads to fewer moves
+                            // using min distance is optimistic and leads to more movement
+                            left_penalties[u] += w * min_distance;
                         }
                     }
                 endfor
@@ -602,248 +543,78 @@ namespace HeiProMap {
             }
         }
 
-        void build_flow_network(const graph_t &g) {
+
+        void build_flow_network(const graph_t& g) {
             // build flownetwork
             size_t n = left_region_size + right_region_size;
             flow_network.initialize(n);
 
-            // build left region
-            for (size_t j = 0; j < left_region_size; ++j) {
-                vertex_t u = left_region[j];
-                ASSERT(is_left_region[u] == is_region_mark);
+            // build the left region
+            for (size_t i = 0; i < left_region_size; ++i) {
+                vertex_t u = left_region[i];
 
-                forall_guivw(g, u, i, v, w)
+                forall_guivw(g, u, j, v, w)
                     {
-                        if (is_right_region[v] == is_region_mark) {
+                        if (u < v) { continue; } // no double edges
+                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) {
                             vertex_t new_u = translation_table.get_n(u);
                             vertex_t new_v = translation_table.get_n(v);
-
-                            ASSERT(new_u != new_v);
-
-                            flow_network.add(new_u, new_v, 2 * w);
-                            continue;
+                            flow_network.add(new_u, new_v, w);
                         }
-
-                        if (is_left_region[v] != is_region_mark) { continue; }
-                        if (u < v) { continue; } // no double edges
-
-                        vertex_t new_u = translation_table.get_n(u);
-                        vertex_t new_v = translation_table.get_n(v);
-
-                        ASSERT(new_u != new_v);
-
-                        flow_network.add(new_u, new_v, 2 * w);
                     }
                 endfor
             }
 
-            // build right region
-            for (size_t j = 0; j < right_region_size; ++j) {
-                vertex_t u = right_region[j];
-                ASSERT(is_right_region[u] == is_region_mark);
-
-                forall_guivw(g, u, i, v, w)
-                    {
-                        if (is_right_region[v] != is_region_mark) { continue; } // vertex gets handled by penalties, or if v belongs to the left region, no edge is made
-                        if (u < v) { continue; } // no double edges
-
-                        vertex_t new_u = translation_table.get_n(u);
-                        vertex_t new_v = translation_table.get_n(v);
-
-                        ASSERT(new_u != new_v);
-
-                        flow_network.add(new_u, new_v, 2 * w);
-                    }
-                endfor
-            }
-
-            // add the penalties
-            for (size_t i = 0; i < left_region_size; ++i) {
-                vertex_t u             = left_region[i];
-                vertex_t new_u         = translation_table.get_n(u);
-                weight_t left_penalty  = left_penalties[u];
-                weight_t right_penalty = right_penalties[u];
-                if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
-                if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
-            }
+            // build the right region
             for (size_t i = 0; i < right_region_size; ++i) {
-                vertex_t u             = right_region[i];
-                vertex_t new_u         = translation_table.get_n(u);
-                weight_t left_penalty  = left_penalties[u];
-                weight_t right_penalty = right_penalties[u];
-                if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
-                if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
+                vertex_t u = right_region[i];
+
+                forall_guivw(g, u, j, v, w)
+                    {
+                        if (u < v) { continue; } // no double edges
+                        if (is_left_region[v] == is_region_mark || is_right_region[v] == is_region_mark) {
+                            vertex_t new_u = translation_table.get_n(u);
+                            vertex_t new_v = translation_table.get_n(v);
+                            flow_network.add(new_u, new_v, w);
+                        }
+                    }
+                endfor
             }
         }
 
-        bool cut_is_valid(const graph_t &g,
-                          const p_manager_t &p_manager,
-                          partition_t left_start,
-                          partition_t left_end,
-                          partition_t right_start,
-                          partition_t right_end,
-                          weight_t block_lmax,
-                          std::vector<u8> &is_left) {
-            weight_t         left_weight = 0;
-            for (partition_t id          = left_start; id < left_end; ++id) { left_weight += p_manager.get_bweight(id); }
 
-            weight_t         right_weight = 0;
-            for (partition_t id           = right_start; id < right_end; ++id) { right_weight += p_manager.get_bweight(id); }
-
-            for (size_t j = 0; j < left_region_size; ++j) {
-                vertex_t u        = left_region[j];
-                weight_t u_weight = g.weight(u);
-                vertex_t new_u    = translation_table.get_n(u);
-                if (is_left[new_u] == 0) {
-                    left_weight -= u_weight;
-                    right_weight += u_weight;
-                }
-            }
-
-            for (size_t j = 0; j < right_region_size; ++j) {
-                vertex_t u        = right_region[j];
-                weight_t u_weight = g.weight(u);
-                vertex_t new_u    = translation_table.get_n(u);
-                if (is_left[new_u] == 1) {
-                    right_weight -= u_weight;
-                    left_weight += u_weight;
-                }
-            }
-
-            return left_weight <= block_lmax && right_weight <= block_lmax;
-        }
-
-        bool cut_changes_partition(std::vector<u8> &is_left) {
+        bool cut_changes_partition(std::vector<u8>& is_left) {
+            size_t count = 0;
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
                 if (is_left[new_u] == 0) {
-                    return true;
+                    count += 1;
                 }
             }
             for (size_t j = 0; j < right_region_size; ++j) {
                 vertex_t u     = right_region[j];
                 vertex_t new_u = translation_table.get_n(u);
                 if (is_left[new_u] == 1) {
-                    return true;
+                    count += 1;
                 }
             }
 
-            return false;
+            std::cout << count << " vertices " << ((f64) count / (f64) is_left.size())*100.0 <<"% would change partition" << std::endl;
+
+            return count > 0;
         }
 
-        void change_boundary(const graph_t &g,
-                             d_oracle_t &d_oracle,
-                             bv_manager_t &bv_manager,
-                             p_manager_t &p_manager,
-                             q_graph_t &q_graph,
-                             std::vector<u8> &is_left,
-                             partition_t left_start,
-                             partition_t left_end,
-                             partition_t right_start,
-                             partition_t right_end) {
+        void change_boundary(const graph_t& g,
+                             d_oracle_t& d_oracle,
+                             bv_manager_t& bv_manager,
+                             p_manager_t& p_manager,
+                             q_graph_t& q_graph,
+                             std::vector<u8>& is_left,
+                             partition_t l_start,
+                             partition_t r_start,
+                             partition_t ids_per_superblock) {
 
-            for (size_t j = 0; j < left_region_size; ++j) {
-                vertex_t    u        = left_region[j];
-                partition_t u_id     = p_manager[u];
-                weight_t    u_weight = g.weight(u);
-                vertex_t    new_u    = translation_table.get_n(u);
-
-                ASSERT(is_left_region[u] == is_region_mark);
-                ASSERT(new_u < left_region_size + right_region_size);
-
-                if (is_left[new_u] == 0) {
-                    partition_t new_id    = right_start; // default
-                    s64         best_gain = -std::numeric_limits<s64>::max();
-
-                    // determine the best not overloaded block for u
-                    for (partition_t id = right_start; id < right_end; ++id) {
-                        // if (p_manager.get_bweight(id) + u_weight > m_lmax) { continue; }
-
-                        s64 delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle);
-                        if (delta > best_gain) {
-                            new_id    = id;
-                            best_gain = delta;
-                        }
-                    }
-
-                    if (bv_manager.is_boundary(u)) {
-                        bv_manager.move(g, p_manager, u, u_id, new_id);
-                    } else {
-                        bv_manager.add_new(g, p_manager, u, new_id);
-                    }
-
-                    q_graph.move(g, p_manager, u, u_id, new_id);
-                    p_manager.move(u, g.weight(u), u_id, new_id);
-                }
-            }
-            for (size_t j = 0; j < right_region_size; ++j) {
-                vertex_t    u        = right_region[j];
-                partition_t u_id     = p_manager[u];
-                weight_t    u_weight = g.weight(u);
-                vertex_t    new_u    = translation_table.get_n(u);
-
-                ASSERT(is_right_region[u] == is_region_mark);
-                ASSERT(new_u < left_region_size + right_region_size);
-
-                if (is_left[new_u] == 1) {
-                    partition_t new_id    = left_start; // default
-                    s64         best_gain = -std::numeric_limits<s64>::max();
-
-                    // determine the best not overloaded block for u
-                    for (partition_t id = left_start; id < left_end; ++id) {
-                        // if (p_manager.get_bweight(id) + u_weight > m_lmax) { continue; }
-
-                        s64 delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle);
-                        if (delta > best_gain) {
-                            new_id    = id;
-                            best_gain = delta;
-                        }
-                    }
-
-                    if (bv_manager.is_boundary(u)) {
-                        bv_manager.move(g, p_manager, u, u_id, new_id);
-                    } else {
-                        bv_manager.add_new(g, p_manager, u, new_id);
-                    }
-
-                    q_graph.move(g, p_manager, u, u_id, new_id);
-                    p_manager.move(u, g.weight(u), u_id, new_id);
-                }
-            }
-        }
-
-        void revert_boundary(const graph_t &g,
-                             bv_manager_t &bv_manager,
-                             p_manager_t &p_manager,
-                             q_graph_t &q_graph,
-                             std::vector<u8> &changed,
-                             partition_t left_id,
-                             partition_t right_id) {
-            for (vertex_t new_u = 0; new_u < left_region_size + right_region_size; ++new_u) {
-                if (changed[new_u] == 0) { continue; }
-
-                vertex_t old_u = translation_table.get_o(new_u);
-                if (p_manager[old_u] == left_id) {
-                    if (bv_manager.is_boundary(old_u)) {
-                        bv_manager.move(g, p_manager, old_u, left_id, right_id);
-                    } else {
-                        bv_manager.add_new(g, p_manager, old_u, right_id);
-                    }
-
-                    q_graph.move(g, p_manager, old_u, left_id, right_id);
-                    p_manager.move(old_u, g.weight(old_u), left_id, right_id);
-                } else {
-                    if (bv_manager.is_boundary(old_u)) {
-                        bv_manager.move(g, p_manager, old_u, right_id, left_id);
-                    } else {
-                        bv_manager.add_new(g, p_manager, old_u, left_id);
-                    }
-
-                    q_graph.move(g, p_manager, old_u, right_id, left_id);
-                    p_manager.move(old_u, g.weight(old_u), right_id, left_id);
-                }
-            }
         }
 
         JSONString get_stats() override {
