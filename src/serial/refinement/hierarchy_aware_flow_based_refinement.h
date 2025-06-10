@@ -230,7 +230,7 @@ namespace HeiProMap {
 
         void refine_layer(const u64 level,
                           const u64 max_level,
-                          const graph_t& g,
+                          graph_t& g,
                           d_oracle_t& d_oracle,
                           bv_manager_t& bv_manager,
                           p_manager_t& p_manager,
@@ -255,7 +255,7 @@ namespace HeiProMap {
 
         void refine_blocks(const u64 level,
                            const u64 max_level,
-                           const graph_t& g,
+                           graph_t& g,
                            d_oracle_t& d_oracle,
                            bv_manager_t& bv_manager,
                            p_manager_t& p_manager,
@@ -264,6 +264,8 @@ namespace HeiProMap {
                            partition_t r_start,
                            partition_t ids_per_super_block,
                            weight_t lmax) {
+            s64 qap_before = 0; // get_qap(g, p_manager, d_oracle);
+
             // get allowed weight on each side
             weight_t l_lmax = lmax;
             weight_t r_lmax = lmax;
@@ -297,11 +299,24 @@ namespace HeiProMap {
             std::vector<u8> is_left;
             flow_network.get_cut(is_left);
 
+            vertex_t n_vertices = 0;
+            for (partition_t id = 0; id < ids_per_super_block; ++id) {
+                n_vertices += p_manager.size(l_start + id) + p_manager.size(r_start + id);
+            }
+            vertex_t n_vertices_region = left_region_size + right_region_size;
+            vertex_t n_changes         = get_n_changes(is_left);
+
+            // std::cout << n_changes << " vertices " << ((f64) n_changes / n_vertices_region)*100.0 <<"% " << ((f64) n_changes / (f64) n_vertices)*100.0 << "% would change partition" << std::endl;
+
             // check if the cut actually changes the partition
-            if (cut_changes_partition(is_left)) {
+            if (n_changes > 0) {
                 // make the changes
                 change_boundary(g, d_oracle, bv_manager, p_manager, q_graph, is_left, l_start, r_start, ids_per_super_block);
             }
+
+            s64 qap_after = 0; // get_qap(g, p_manager, d_oracle);
+
+            // std::cout << l_start << " " << r_start << " " << ids_per_super_block << " " << qap_before << " " << qap_after << " " << qap_before - qap_after << std::endl;
         }
 
         void determine_boundary_vertices(const graph_t& g,
@@ -320,6 +335,7 @@ namespace HeiProMap {
                                 if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
                                     left_boundary[left_boundary_size++] = u;
                                 }
+                                break;
                             }
                         endfor
                     }
@@ -336,6 +352,7 @@ namespace HeiProMap {
                                 if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
                                     right_boundary[right_boundary_size++] = u;
                                 }
+                                break;
                             }
                         endfor
                     }
@@ -359,7 +376,7 @@ namespace HeiProMap {
             size_t queue_idx = 0;
             queue_size       = 0;
             for (size_t i = 0; i < left_boundary_size; ++i) {
-                vertex_t u          = left_boundary[i];
+                vertex_t u = left_boundary[i];
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
             }
@@ -392,7 +409,8 @@ namespace HeiProMap {
             queue_idx  = 0;
             queue_size = 0;
             for (size_t i = 0; i < right_boundary_size; ++i) {
-                vertex_t u          = right_boundary[i];
+                vertex_t u = right_boundary[i];
+                ASSERT(r_start <= p_manager[u] && p_manager[u] < r_start + ids_per_super_block);
                 queue[queue_size++] = u;
                 seen[u]             = seen_mark - 1;
             }
@@ -583,7 +601,7 @@ namespace HeiProMap {
         }
 
 
-        bool cut_changes_partition(std::vector<u8>& is_left) {
+        size_t get_n_changes(std::vector<u8>& is_left) {
             size_t count = 0;
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
@@ -600,9 +618,7 @@ namespace HeiProMap {
                 }
             }
 
-            std::cout << count << " vertices " << ((f64) count / (f64) is_left.size())*100.0 <<"% would change partition" << std::endl;
-
-            return count > 0;
+            return count;
         }
 
         void change_boundary(const graph_t& g,
@@ -614,7 +630,83 @@ namespace HeiProMap {
                              partition_t l_start,
                              partition_t r_start,
                              partition_t ids_per_superblock) {
+            // move all vertices of the left region
+            for (size_t i = 0; i < left_region_size; ++i) {
+                vertex_t u        = left_region[i];
+                partition_t u_id  = p_manager[u];
+                weight_t u_weight = g.weight(u);
+                vertex_t new_u    = translation_table.get_n(u);
 
+                ASSERT(l_start <= u_id && u_id < l_start + ids_per_superblock);
+                ASSERT(is_left_region[u] == is_region_mark);
+                ASSERT(new_u < left_region_size + right_region_size);
+
+                print(is_left);
+                if (is_left[new_u] == 0) {
+                    // determine the best right block to move u to, that will not be overloaded
+                    partition_t best_id  = r_start;
+                    s64 best_qap_delta   = get_u_qap_delta(g, u, u_id, r_start, p_manager, d_oracle);
+                    weight_t best_weight = p_manager.get_bweight(r_start) + u_weight;
+                    for (partition_t id = r_start; id < r_start + ids_per_superblock; ++id) {
+                        if (p_manager.get_bweight(id) + u_weight > m_lmax) { continue; }
+                        s64 qap_delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle);
+                        if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && p_manager.get_bweight(id) + u_weight < best_weight)) {
+                            best_id        = id;
+                            best_qap_delta = qap_delta;
+                            best_weight    = p_manager.get_bweight(id) + u_weight;
+                        }
+                    }
+                    std::cout << best_qap_delta << std::endl;
+
+                    if (bv_manager.is_boundary(u)) {
+                        bv_manager.move(g, p_manager, u, u_id, best_id);
+                    } else {
+                        bv_manager.add_new(g, p_manager, u, best_id);
+                    }
+
+                    q_graph.move(g, p_manager, u, u_id, best_id);
+                    p_manager.move(u, g.weight(u), u_id, best_id);
+                }
+            }
+
+            // move vertices of the right region
+            for (size_t i = 0; i < right_region_size; ++i) {
+                vertex_t u        = right_region[i];
+                partition_t u_id  = p_manager[u];
+                weight_t u_weight = g.weight(u);
+                vertex_t new_u    = translation_table.get_n(u);
+
+                ASSERT(r_start <= u_id && u_id < r_start + ids_per_superblock);
+                ASSERT(is_right_region[u] == is_region_mark);
+                ASSERT(new_u < left_region_size + right_region_size);
+
+                if (is_left[new_u] == 1) {
+                    // determine the best left block to move u to, that will not be overloaded
+                    partition_t best_id  = l_start;
+                    s64 best_qap_delta   = get_u_qap_delta(g, u, u_id, l_start, p_manager, d_oracle);
+                    weight_t best_weight = p_manager.get_bweight(l_start) + u_weight;
+                    for (partition_t id = l_start; id < l_start + ids_per_superblock; ++id) {
+                        if (p_manager.get_bweight(id) + u_weight > m_lmax) { continue; }
+                        s64 qap_delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle);
+                        if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && p_manager.get_bweight(id) + u_weight < best_weight)) {
+                            best_id        = id;
+                            best_qap_delta = qap_delta;
+                            best_weight    = p_manager.get_bweight(id) + u_weight;
+                        }
+                    }
+
+                    // std::cout << best_qap_delta << std::endl;
+
+                    if (bv_manager.is_boundary(u)) {
+                        bv_manager.move(g, p_manager, u, u_id, best_id);
+                    } else {
+                        bv_manager.add_new(g, p_manager, u, best_id);
+                    }
+
+                    q_graph.move(g, p_manager, u, u_id, best_id);
+                    p_manager.move(u, g.weight(u), u_id, best_id);
+                }
+            }
         }
 
         JSONString get_stats() override {
