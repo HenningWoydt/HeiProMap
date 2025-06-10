@@ -49,18 +49,18 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t>    m_distance;
 
-        AlignedArray <u32> vertex_used;
-        u32                vertex_marker = 0;
+        AlignedArray<u32> vertex_used;
+        u32               vertex_marker = 0;
 
-        AlignedArray <u32> block_used;
-        u32                block_marker = 0;
+        AlignedArray<u32> block_used;
+        u32               block_marker = 0;
 
-        AlignedArray <vertex_t> curr_boundary;
-        size_t                  curr_boundary_size = 0;
+        AlignedArray<vertex_t> curr_boundary;
+        size_t                 curr_boundary_size = 0;
 
-        AlignedArray <partition_t> blocks;
-        AlignedArray <s64>         blocks_qap_delta;
-        size_t                     blocks_size = 0;
+        AlignedArray<partition_t> blocks;
+        AlignedArray<s64>         blocks_qap_delta;
+        size_t                    blocks_size = 0;
 
         RandomEngine                        *random_engine    = nullptr;
         const LabelPropagationConfiguration *config           = nullptr;
@@ -113,12 +113,12 @@ namespace HeiProMap {
         }
 
         void refine(const u64 level,
-                    const u64 max_level,
-                    graph_t &g,
-                    d_oracle_t &d_oracle,
-                    bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                         const u64 max_level,
+                         graph_t &g,
+                         d_oracle_t &d_oracle,
+                         bv_manager_t &bv_manager,
+                         p_manager_t &p_manager,
+                         q_graph_t &q_graph) override {
             METRICS(std::vector<f64> iteration_time);
             METRICS(std::vector<f64> iteration_time_get_boundary);
             METRICS(std::vector<f64> iteration_time_iterate);

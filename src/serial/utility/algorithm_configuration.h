@@ -52,6 +52,7 @@
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
 #include "../refinement/hierarchy_aware_quotient_graph_refinement.h"
+#include "../refinement/wave_refinement.h"
 
 
 namespace HeiProMap {
@@ -272,6 +273,8 @@ namespace HeiProMap {
         // HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
         HierarchyAwareFlowBasedRefinementConfiguration     hierarchy_aware_flow_based_refinement_configuration     = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
         HierarchyAwareQuotientGraphRefinementConfiguration hierarchy_aware_quotient_graph_refinement_configuration = HierarchyAwareQuotientGraphRefinementConfiguration("Hierarchy Aware Quotient Graph Refineemnt");
+
+        WaveRefinementConfiguration wave_refinement_configuration = WaveRefinementConfiguration("Wave Refinement");
 
         AlgorithmConfiguration() = default;
 
@@ -627,7 +630,7 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = false;
+            quotient_graph_refinement_config.enabled       = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha         = 1000.0;
 
@@ -635,7 +638,7 @@ namespace HeiProMap {
             k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.enabled       = true;
             multi_try_fm_refinement_config.max_iteration = 3;
             multi_try_fm_refinement_config.alpha         = 1000.0;
 
@@ -643,18 +646,27 @@ namespace HeiProMap {
             flow_based_refinement_config.enabled                    = true;
             flow_based_refinement_config.min_level                  = 0;
             flow_based_refinement_config.max_level                  = 100;
-            flow_based_refinement_config.max_global_iteration       = 1;
-            flow_based_refinement_config.max_local_iteration        = 3;
+            flow_based_refinement_config.max_global_iteration       = 2;
+            flow_based_refinement_config.max_local_iteration        = 5;
             flow_based_refinement_config.alpha                      = 2.0;
-            flow_based_refinement_config.alpha_upper_bound          = 8.0;
+            flow_based_refinement_config.alpha_upper_bound          = 16.0;
             flow_based_refinement_config.alpha_modifier             = 2.0;
             flow_based_refinement_config.use_closed_vertex_set      = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 10;
+            flow_based_refinement_config.closed_vertex_sets_repeats = 100;
 
-            hierarchy_aware_flow_based_refinement_configuration.enabled = true;
+            hierarchy_aware_flow_based_refinement_configuration.enabled                    = false;
+            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration       = 2;
+            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration        = 5;
+            hierarchy_aware_flow_based_refinement_configuration.alpha                      = 2.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 8.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_modifier             = 2.0;
+            hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set      = true;
+            hierarchy_aware_flow_based_refinement_configuration.closed_vertex_sets_repeats = 100;
 
-            hierarchy_aware_multi_way_fm_config.enabled = false;
+            hierarchy_aware_multi_way_fm_config.enabled                     = false;
             hierarchy_aware_quotient_graph_refinement_configuration.enabled = false;
+
+            wave_refinement_configuration.enabled = true;
         }
 
         void set_experimental() {

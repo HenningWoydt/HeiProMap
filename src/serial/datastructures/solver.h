@@ -101,6 +101,8 @@ namespace HeiProMap {
         HierarchyAwareFlowBasedRefinement          hierarchy_aware_flow_based_refinement;
         HierarchyAwareQuotientGraphRefinement      hierarchy_aware_quotient_graph_refinement;
 
+        WaveRefinement wave_refinement;
+
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
 
     public:
@@ -149,6 +151,8 @@ namespace HeiProMap {
             refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
             // refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
             // refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
+
+            refinements.emplace_back(&wave_refinement, &ac.wave_refinement_configuration);
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
@@ -207,13 +211,13 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64      n_v_cycle = 1;
+            u64      n_v_cycle = 2;
             for (u64 v_cycle   = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
 
                 u64 mult = 16;
-                if (v_cycle > 0) { mult = 4; }
+                if (v_cycle > 0) { mult = 32; }
 
                 while (graphs.back().get_n() > ac.k * mult) {
                     matching(level, v_cycle);
@@ -258,7 +262,7 @@ namespace HeiProMap {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
-                if (v_cycle == 0) {
+                if (v_cycle == 0 || true) {
                     if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
                         KaffpaPartitioner partitioner;
                         partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config, stat_collect);
@@ -315,7 +319,7 @@ namespace HeiProMap {
             matches.emplace_back();
             matches.back().initialize(graphs.back().get_n());
 
-            if (v_cycle == 0) {
+            if (v_cycle == 0 || true) {
                 if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                     ge_matcher.match(level, graphs.back(), p_manager, matches.back());
                 } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
