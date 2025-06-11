@@ -352,6 +352,31 @@ namespace HeiProMap {
 
         return edge_cut_delta;
     }
+
+    template <typename PartitionManagerT, typename DistanceOracleT>
+    std::vector<weight_t> qap_per_layer(graph_t& g,
+                                        PartitionManagerT& p_manager,
+                                        DistanceOracleT& d_oracle,
+                                        size_t l) {
+        std::vector<weight_t> qap(l, 0);
+
+        forall_gu(g, u)
+            {
+                partition_t u_id = p_manager[u];
+
+                forall_guivw(g, u, i, v, w)
+                    {
+                        partition_t v_id  = p_manager[v];
+                        weight_t distance = d_oracle.get(u_id, v_id);
+                        weight_t level    = d_oracle.get_h(u_id, v_id);
+                        qap[level] += w * distance;
+                    }
+                endfor
+            }
+        endfor
+
+        return qap;
+    }
 }
 
 #endif //HEIPROMAP_QAP_H

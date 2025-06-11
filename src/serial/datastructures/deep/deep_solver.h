@@ -366,7 +366,7 @@ namespace HeiProMap {
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
 
-            s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);
+            // s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);
 
             ref.refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
 
