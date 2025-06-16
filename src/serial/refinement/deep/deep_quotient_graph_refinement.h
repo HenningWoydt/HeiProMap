@@ -27,16 +27,16 @@
 #ifndef HEIPROMAP_DEEP_QUOTIENT_GRAPH_REFINEMENT_H
 #define HEIPROMAP_DEEP_QUOTIENT_GRAPH_REFINEMENT_H
 
-#include "../../../commons/utils.h"
 #include "ISerialDeepRefiner.h"
-#include "../../utility/qap.h"
+#include "../../../commons/utils.h"
 #include "../../datastructures/indexed_max_heap.h"
 #include "../../utility/functions.h"
+#include "../../utility/qap.h"
 
 namespace HeiProMap {
     class DeepQuotientGraphRefinementConfiguration final : public ISerialDeepRefinerConfiguration {
     public:
-        explicit DeepQuotientGraphRefinementConfiguration(const std::string &t_name) : ISerialDeepRefinerConfiguration(t_name) {}
+        explicit DeepQuotientGraphRefinementConfiguration(const std::string& t_name) : ISerialDeepRefinerConfiguration(t_name) {}
 
         u64 max_iteration = 5;
         f64 alpha         = 100.0;
@@ -44,8 +44,8 @@ namespace HeiProMap {
     };
 
     class DeepQuotientGraphRefinement final : public ISerialDeepRefiner {
-        vertex_t    m_n = 0;
-        vertex_t    m_m = 0;
+        vertex_t m_n    = 0;
+        vertex_t m_m    = 0;
         partition_t m_k = 0;
 
         // priority queues
@@ -54,12 +54,12 @@ namespace HeiProMap {
 
         // store change
         AlignedArray<vertex_t> moves;
-        size_t                 moves_size         = 0;
-        s64                    curr_qap_gain      = 0;
-        s64                    max_qap_gain       = 0;
-        s64                    curr_edge_cut_gain = 0;
-        s64                    max_edge_cut_gain  = 0;
-        size_t                 best_idx           = 0;
+        size_t moves_size      = 0;
+        s64 curr_qap_gain      = 0;
+        s64 max_qap_gain       = 0;
+        s64 curr_edge_cut_gain = 0;
+        s64 max_edge_cut_gain  = 0;
+        size_t best_idx        = 0;
 
         // active block scheduling
         AlignedArray<u8> active_this_round;
@@ -67,11 +67,11 @@ namespace HeiProMap {
 
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
-        u32               vertex_mark = 0;
+        u32 vertex_mark = 0;
 
-        RandomEngine                                   *random_engine    = nullptr;
-        const DeepQuotientGraphRefinementConfiguration *config           = nullptr;
-        StatisticCollector                             *m_stat_collector = nullptr;
+        RandomEngine* random_engine                            = nullptr;
+        const DeepQuotientGraphRefinementConfiguration* config = nullptr;
+        StatisticCollector* m_stat_collector                   = nullptr;
 
         METRICS(std::vector<std::vector<f64>> iteration_time;)
         METRICS(std::vector<std::vector<f64>> iteration_time_get_pairs;)
@@ -84,15 +84,18 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        RandomEngine &t_random_engine,
-                        const ISerialDeepRefinerConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) override {
+                        const f64 t_imbalance,
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        RandomEngine& t_random_engine,
+                        const ISerialDeepRefinerConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
 
             random_engine    = &t_random_engine;
-            config           = dynamic_cast<const DeepQuotientGraphRefinementConfiguration *>(&i_config);
+            config           = dynamic_cast<const DeepQuotientGraphRefinementConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
             // priority queues
@@ -112,11 +115,11 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const u64 max_level,
-                    const graph_t &g,
-                    deep_d_oracle_t &d_oracle,
-                    deep_bv_manager_t &bv_manager,
-                    deep_p_manager_t &p_manager,
-                    deep_q_graph_t &q_graph) override {
+                    const graph_t& g,
+                    deep_d_oracle_t& d_oracle,
+                    deep_bv_manager_t& bv_manager,
+                    deep_p_manager_t& p_manager,
+                    deep_q_graph_t& q_graph) override {
             METRICS(iteration_time.emplace_back();)
             METRICS(iteration_time_get_pairs.emplace_back();)
             METRICS(iteration_time_initialize.emplace_back();)
@@ -136,8 +139,6 @@ namespace HeiProMap {
                 METRICS(iteration_time_moves.back().push_back(0.0);)
                 METRICS(iteration_qap_delta.back().push_back(0);)
 
-                METRICS_TIME(sp)
-
                 iteration += 1;
 
                 METRICS_TIME(sp_get_pairs)
@@ -147,7 +148,6 @@ namespace HeiProMap {
                 METRICS(iteration_time_get_pairs.back().back() += get_seconds(sp_get_pairs, ep_get_pairs);)
 
                 size_t n_pairs = q_graph.n_pairs();
-                std::cout << n_pairs << std::endl;
                 for (size_t j = 0; j < n_pairs; ++j) {
                     auto [u_id, v_id] = q_graph.get_pair(j);
 
@@ -167,11 +167,11 @@ namespace HeiProMap {
 
         void refine_blocks(const u64 level,
                            const u64 max_level,
-                           const graph_t &g,
-                           deep_d_oracle_t &d_oracle,
-                           deep_bv_manager_t &bv_manager,
-                           deep_p_manager_t &p_manager,
-                           deep_q_graph_t &q_graph,
+                           const graph_t& g,
+                           deep_d_oracle_t& d_oracle,
+                           deep_bv_manager_t& bv_manager,
+                           deep_p_manager_t& p_manager,
+                           deep_q_graph_t& q_graph,
                            partition_t u_id,
                            partition_t v_id) {
             METRICS(iteration_time.emplace_back();)
@@ -181,6 +181,7 @@ namespace HeiProMap {
             METRICS(iteration_time_moves.emplace_back();)
             METRICS(iteration_qap_delta.emplace_back();)
 
+            METRICS_TIME(sp);
             METRICS_TIME(sp_initialize)
 
             f64 alpha = config->alpha;
@@ -222,10 +223,10 @@ namespace HeiProMap {
 
             // start executing moves based on the TopGain method
             vertex_mark += 1;
-            moves_size         = 0;
-            best_idx           = 0;
-            curr_qap_gain      = 0;
-            max_qap_gain       = 0;
+            moves_size    = 0;
+            best_idx      = 0;
+            curr_qap_gain = 0;
+            max_qap_gain  = 0;
 
             f64 steps_since_last_improvement = 0.0;
             f64 qap_gain_mean                = 0.0;
@@ -259,15 +260,15 @@ namespace HeiProMap {
                 }
 
                 // choose the priority queue
-                IndexedMaxHeap<s64> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
+                IndexedMaxHeap<s64>& boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
 
-                vertex_t    vertex        = boundary_vertices.top_key();
-                s64         qap_delta     = boundary_vertices.top();
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = choose_u ? u_id : v_id;
-                partition_t move_id       = choose_u ? v_id : u_id;
-                weight_t    move_lmax     = choose_u ? p_manager.get_lmax(v_id) : p_manager.get_lmax(u_id);
-                weight_t    stay_lmax     = choose_u ? p_manager.get_lmax(u_id) : p_manager.get_lmax(v_id);
+                vertex_t vertex        = boundary_vertices.top_key();
+                s64 qap_delta          = boundary_vertices.top();
+                weight_t vertex_weight = g.weight(vertex);
+                partition_t vertex_id  = choose_u ? u_id : v_id;
+                partition_t move_id    = choose_u ? v_id : u_id;
+                weight_t move_lmax     = choose_u ? p_manager.get_lmax(v_id) : p_manager.get_lmax(u_id);
+                weight_t stay_lmax     = choose_u ? p_manager.get_lmax(u_id) : p_manager.get_lmax(v_id);
                 boundary_vertices.pop();
 
                 // move the vertex
@@ -287,8 +288,8 @@ namespace HeiProMap {
                 vertex_used[vertex] = vertex_mark;
 
                 steps_since_last_improvement += 1.0;
-                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / steps_since_last_improvement;
-                f64 new_qap_gain_var  = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
+                f64 new_qap_gain_mean = qap_gain_mean + ((f64)qap_delta - qap_gain_mean) / steps_since_last_improvement;
+                f64 new_qap_gain_var  = (qap_gain_var + ((f64)qap_delta - qap_gain_mean) * ((f64)qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
 
                 qap_gain_mean = new_qap_gain_mean;
                 qap_gain_var  = new_qap_gain_var;
@@ -307,7 +308,7 @@ namespace HeiProMap {
                         partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
                         bool is_connected_to_new_id;
-                        s64  new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
+                        s64 new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
 
                         if (!is_connected_to_new_id) { continue; }
 
@@ -332,20 +333,20 @@ namespace HeiProMap {
             METRICS_TIME(sp_moves)
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
-                vertex_t    vertex        = moves[moves_size - 1 - i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex        = moves[moves_size - 1 - i];
+                weight_t vertex_weight = g.weight(vertex);
+                partition_t vertex_id  = p_manager[vertex];
+                partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
 
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
-                vertex_t    vertex        = moves[i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex        = moves[i];
+                weight_t vertex_weight = g.weight(vertex);
+                partition_t vertex_id  = p_manager[vertex];
+                partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
@@ -367,11 +368,11 @@ namespace HeiProMap {
 
         void refine_blocks_edge_cut(const u64 level,
                                     const u64 max_level,
-                                    const graph_t &g,
-                                    deep_d_oracle_t &d_oracle,
-                                    deep_bv_manager_t &bv_manager,
-                                    deep_p_manager_t &p_manager,
-                                    deep_q_graph_t &q_graph,
+                                    const graph_t& g,
+                                    deep_d_oracle_t& d_oracle,
+                                    deep_bv_manager_t& bv_manager,
+                                    deep_p_manager_t& p_manager,
+                                    deep_q_graph_t& q_graph,
                                     partition_t u_id,
                                     partition_t v_id) {
             METRICS(iteration_time.emplace_back();)
@@ -381,6 +382,7 @@ namespace HeiProMap {
             METRICS(iteration_time_moves.emplace_back();)
             METRICS(iteration_qap_delta.emplace_back();)
 
+            METRICS_TIME(sp);
             METRICS_TIME(sp_initialize)
 
             f64 alpha = config->alpha;
@@ -459,15 +461,15 @@ namespace HeiProMap {
                 }
 
                 // choose the priority queue
-                IndexedMaxHeap<s64> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
+                IndexedMaxHeap<s64>& boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
 
-                vertex_t    vertex         = boundary_vertices.top_key();
-                s64         edge_cut_delta = boundary_vertices.top();
-                weight_t    vertex_weight  = g.weight(vertex);
-                partition_t vertex_id      = choose_u ? u_id : v_id;
-                partition_t move_id        = choose_u ? v_id : u_id;
-                weight_t    move_lmax     = choose_u ? p_manager.get_lmax(v_id) : p_manager.get_lmax(u_id);
-                weight_t    stay_lmax     = choose_u ? p_manager.get_lmax(u_id) : p_manager.get_lmax(v_id);
+                vertex_t vertex        = boundary_vertices.top_key();
+                s64 edge_cut_delta     = boundary_vertices.top();
+                weight_t vertex_weight = g.weight(vertex);
+                partition_t vertex_id  = choose_u ? u_id : v_id;
+                partition_t move_id    = choose_u ? v_id : u_id;
+                weight_t move_lmax     = choose_u ? p_manager.get_lmax(v_id) : p_manager.get_lmax(u_id);
+                weight_t stay_lmax     = choose_u ? p_manager.get_lmax(u_id) : p_manager.get_lmax(v_id);
                 boundary_vertices.pop();
 
                 // move the vertex
@@ -487,8 +489,8 @@ namespace HeiProMap {
                 vertex_used[vertex] = vertex_mark;
 
                 steps_since_last_improvement += 1.0;
-                f64 new_edge_cut_gain_mean = edge_cut_gain_mean + ((f64) edge_cut_delta - edge_cut_gain_mean) / steps_since_last_improvement;
-                f64 new_edge_cut_gain_var  = (edge_cut_gain_var + ((f64) edge_cut_delta - edge_cut_gain_mean) * ((f64) edge_cut_delta - new_edge_cut_gain_mean)) / steps_since_last_improvement;
+                f64 new_edge_cut_gain_mean = edge_cut_gain_mean + ((f64)edge_cut_delta - edge_cut_gain_mean) / steps_since_last_improvement;
+                f64 new_edge_cut_gain_var  = (edge_cut_gain_var + ((f64)edge_cut_delta - edge_cut_gain_mean) * ((f64)edge_cut_delta - new_edge_cut_gain_mean)) / steps_since_last_improvement;
 
                 edge_cut_gain_mean = new_edge_cut_gain_mean;
                 edge_cut_gain_var  = new_edge_cut_gain_var;
@@ -507,7 +509,7 @@ namespace HeiProMap {
                         partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
                         bool is_connected_to_new_id;
-                        s64  new_edge_cut_delta = get_u_edge_cut_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager);
+                        s64 new_edge_cut_delta = get_u_edge_cut_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager);
 
                         if (!is_connected_to_new_id) { continue; }
 
@@ -532,20 +534,20 @@ namespace HeiProMap {
             METRICS_TIME(sp_moves)
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
-                vertex_t    vertex        = moves[moves_size - 1 - i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex        = moves[moves_size - 1 - i];
+                weight_t vertex_weight = g.weight(vertex);
+                partition_t vertex_id  = p_manager[vertex];
+                partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
 
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
-                vertex_t    vertex        = moves[i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex        = moves[i];
+                weight_t vertex_weight = g.weight(vertex);
+                partition_t vertex_id  = p_manager[vertex];
+                partition_t move_id    = u_id == vertex_id ? v_id : u_id;
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);

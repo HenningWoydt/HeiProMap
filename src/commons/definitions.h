@@ -46,9 +46,9 @@ namespace HeiProMap {
     typedef float f32;
     typedef double f64;
 
-    typedef u32 vertex_t;
-    typedef s32 weight_t;
-    typedef u32 partition_t;
+    typedef u64 vertex_t;
+    typedef s64 weight_t;
+    typedef u64 partition_t;
 
     constexpr size_t HEAP_TOMBSTONE = std::numeric_limits<size_t>::max();
 

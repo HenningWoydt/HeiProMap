@@ -170,8 +170,6 @@ namespace HeiProMap {
                 METRICS(iteration_time_moves.back().push_back(0.0);)
                 METRICS(iteration_qap_delta.back().push_back(0);)
 
-                METRICS_TIME(sp)
-
                 iteration += 1;
 
                 METRICS_TIME(sp_get_pairs)
@@ -186,7 +184,6 @@ namespace HeiProMap {
                     }
                 }
                 if (pairs_size == 0) { return; }
-                std::sort(pairs.get_ptr(), pairs.get_ptr() + pairs_size, std::greater<>());
 
                 METRICS_TIME(ep_get_pairs)
                 METRICS(iteration_time_get_pairs.back().back() += get_seconds(sp_get_pairs, ep_get_pairs);)
@@ -221,6 +218,7 @@ namespace HeiProMap {
             METRICS(iteration_time_moves.emplace_back();)
             METRICS(iteration_qap_delta.emplace_back();)
 
+            METRICS_TIME(sp);
             METRICS_TIME(sp_initialize)
 
             f64 alpha = config->alpha;
@@ -417,6 +415,7 @@ namespace HeiProMap {
             METRICS(iteration_time_moves.emplace_back();)
             METRICS(iteration_qap_delta.emplace_back();)
 
+            METRICS_TIME(sp);
             METRICS_TIME(sp_initialize)
 
             f64 alpha = config->alpha;
@@ -596,6 +595,15 @@ namespace HeiProMap {
             METRICS_TIME(ep)
             METRICS(iteration_time.back().back() += get_seconds(sp, ep);)
         }
+
+        void refine_layer(const u64 level,
+                                  const u64 max_level,
+                                  graph_t& g,
+                                  d_oracle_t& d_oracle,
+                                  bv_manager_t& bv_manager,
+                                  p_manager_t& p_manager,
+                                  q_graph_t& q_graph,
+                                  size_t layer) override {}
 
         JSONString get_stats() override {
             std::string stats = "{ \n";

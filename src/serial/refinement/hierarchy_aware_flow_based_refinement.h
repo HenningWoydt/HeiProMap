@@ -200,6 +200,7 @@ namespace HeiProMap {
             for (size_t iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                 for (size_t i = 0; i < m_hierarchy.size(); ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);
+                    // break;
                 }
             }
         }
@@ -211,7 +212,7 @@ namespace HeiProMap {
                           bv_manager_t& bv_manager,
                           p_manager_t& p_manager,
                           q_graph_t& q_graph,
-                          size_t layer) {
+                          size_t layer) override {
             partition_t n_upper_total_super_blocks = 1;
             partition_t n_total_super_blocks       = m_hierarchy[layer];
             for (size_t i = layer + 1; i < m_hierarchy.size(); ++i) { n_upper_total_super_blocks *= m_hierarchy[i]; }
@@ -256,16 +257,18 @@ namespace HeiProMap {
                 weight_t l_lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64)g.weight() / (f64)m_k)) * ids_per_super_block;
                 weight_t r_lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64)g.weight() / (f64)m_k)) * ids_per_super_block;
 
-                for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_lmax -= p_manager.get_bweight(id); }
-                for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_lmax -= p_manager.get_bweight(id); }
+                weight_t l_max_add_weight = l_lmax;;
+                weight_t r_max_add_weight = r_lmax;
+                for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_max_add_weight -= p_manager.get_bweight(id); }
+                for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_max_add_weight -= p_manager.get_bweight(id); }
 
                 // get boundary vertices
                 determine_boundary_vertices(g, bv_manager, p_manager, l_start, r_start, ids_per_super_block);
 
                 // get regions
-                determine_regions(g, p_manager, l_start, r_start, ids_per_super_block, l_lmax, r_lmax);
+                determine_regions(g, p_manager, l_start, r_start, ids_per_super_block, l_max_add_weight, r_max_add_weight);
 
-                if (left_region_size + right_region_size == 0) {
+                if (left_region_size + right_region_size <= 10) {
                     // if both regions are empty, increase their sizes
                     if (alpha == alpha_upper_bound) { return; }
                     alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
@@ -310,7 +313,7 @@ namespace HeiProMap {
 
                     weight_t left_non_region_weight  = l_weight - l_region_weight;
                     weight_t right_non_region_weight = r_weight - r_region_weight;
-                    bool closure_found               = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
+                    bool closure_found               = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
 
                     if (!closure_found) {
                         if (alpha == 1.0) { return; }
@@ -340,13 +343,15 @@ namespace HeiProMap {
 
                 change_boundary(g, d_oracle, bv_manager, p_manager, q_graph, is_left, l_start, r_start, ids_per_super_block);
 
-                weight_t l_weight = 0;
-                weight_t r_weight = 0;
-                for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_weight += p_manager.get_bweight(id); }
-                for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_weight += p_manager.get_bweight(id); }
+                bool l_overloaded = false;
+                bool r_overloaded = false;
+                for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_overloaded |= p_manager.get_bweight(id) > m_lmax; }
+                for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_overloaded |= p_manager.get_bweight(id) > m_lmax; }
 
-                if (ids_per_super_block > 1) {
+                if (ids_per_super_block > 1 && l_overloaded) {
                     rebalance(g, d_oracle, bv_manager, p_manager, q_graph, l_start, ids_per_super_block);
+                }
+                if (ids_per_super_block > 1 && r_overloaded) {
                     rebalance(g, d_oracle, bv_manager, p_manager, q_graph, r_start, ids_per_super_block);
                 }
             }
@@ -391,6 +396,9 @@ namespace HeiProMap {
                     }
                 endfor
             }
+
+            std::shuffle(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine->gen);
+            std::shuffle(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine->gen);
         }
 
         void determine_regions(const graph_t& g,
@@ -398,8 +406,8 @@ namespace HeiProMap {
                                partition_t l_start,
                                partition_t r_start,
                                partition_t ids_per_super_block,
-                               weight_t l_lmax,
-                               weight_t r_lmax) {
+                               weight_t l_max_add_weight,
+                               weight_t r_max_add_weight) {
             is_region_mark += 1;
             seen_mark += 2;
             // seen[u] == seen_mark     means u is processed
@@ -415,13 +423,15 @@ namespace HeiProMap {
             }
 
             // empty queue in bfs fashion and add vertices in the same superblock
-            left_region_size = 0;
+            weight_t l_curr_weight = 0;
+            left_region_size       = 0;
             while (queue_idx < queue_size) {
                 vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
 
-                if (g.weight(u) <= r_lmax) {
-                    r_lmax -= g.weight(u);
+                if (l_curr_weight + g.weight(u) <= r_max_add_weight) {
+                    l_curr_weight += g.weight(u);
+
                     left_region[left_region_size++] = u;
                     is_left_region[u]               = is_region_mark;
                     forall_guiv(g, u, i, v)
@@ -450,13 +460,15 @@ namespace HeiProMap {
             }
 
             // empty queue in bfs fashion and add vertices in the same superblock
-            right_region_size = 0;
+            weight_t r_curr_weight = 0;
+            right_region_size      = 0;
             while (queue_idx < queue_size) {
                 vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
 
-                if (g.weight(u) <= l_lmax) {
-                    l_lmax -= g.weight(u);
+                if (r_curr_weight + g.weight(u) <= l_max_add_weight) {
+                    r_curr_weight += g.weight(u);
+
                     right_region[right_region_size++] = u;
                     is_right_region[u]                = is_region_mark;
                     forall_guiv(g, u, i, v)
@@ -698,7 +710,13 @@ namespace HeiProMap {
 
                 if (is_left[new_u] == 0) {
                     // determine the best right block to move u to, that will not be overloaded
-                    partition_t best_id  = r_start;
+                    partition_t best_id = r_start;
+                    for (partition_t id = r_start; id < r_start + ids_per_superblock; ++id) {
+                        if (p_manager.get_bweight(id) < p_manager.get_bweight(best_id)) {
+                            best_id = id;
+                        }
+                    }
+
                     s64 best_qap_delta   = get_u_qap_delta(g, u, u_id, r_start, p_manager, d_oracle);
                     weight_t best_weight = p_manager.get_bweight(r_start) + u_weight;
                     for (partition_t id = r_start; id < r_start + ids_per_superblock; ++id) {
@@ -735,7 +753,13 @@ namespace HeiProMap {
 
                 if (is_left[new_u] == 1) {
                     // determine the best left block to move u to, that will not be overloaded
-                    partition_t best_id  = l_start;
+                    partition_t best_id = l_start;
+                    for (partition_t id = l_start; id < l_start + ids_per_superblock; ++id) {
+                        if (p_manager.get_bweight(id) < p_manager.get_bweight(best_id)) {
+                            best_id = id;
+                        }
+                    }
+
                     s64 best_qap_delta   = get_u_qap_delta(g, u, u_id, l_start, p_manager, d_oracle);
                     weight_t best_weight = p_manager.get_bweight(l_start) + u_weight;
                     for (partition_t id = l_start; id < l_start + ids_per_superblock; ++id) {
@@ -767,37 +791,42 @@ namespace HeiProMap {
                        q_graph_t& q_graph,
                        partition_t id_start,
                        partition_t ids_per_superblock) {
-
             while (true) {
                 weight_t greatest_weight = 0;
-                partition_t greatest_id = 0;
+                partition_t greatest_id  = 0;
+
                 weight_t smallest_weight = std::numeric_limits<weight_t>::max();
-                partition_t smallest_id = 0;
+                partition_t smallest_id  = 0;
+
                 for (partition_t id = id_start; id < id_start + ids_per_superblock; ++id) {
                     if (p_manager.get_bweight(id) > greatest_weight) {
                         greatest_weight = p_manager.get_bweight(id);
-                        greatest_id = id;
+                        greatest_id     = id;
                     }
 
                     if (p_manager.get_bweight(id) < smallest_weight) {
                         smallest_weight = p_manager.get_bweight(id);
-                        smallest_id = id;
+                        smallest_id     = id;
                     }
+                }
 
-                    // rebalanced
-                    if (greatest_weight <= m_lmax) { return; }
+                // rebalanced
+                if (greatest_weight <= m_lmax) {
+                    return;
+                }
 
-                    weight_t threshold = greatest_weight - m_lmax;
-                    if (threshold + smallest_weight > m_lmax) {
-                        // we need to move a vertex with at least threshold weight but that would overload all other blocks
-                        return;
-                    }
+                weight_t threshold = greatest_weight - m_lmax;
+                if (threshold + smallest_weight > m_lmax) {
+                    // we need to move a vertex with at least threshold weight but that would overload all other blocks
+                    return;
+                }
 
-                    // search for a vertex with weight greater-equal threshold and move it
-                    bool move_found = false;
-                    forall_gu(g, u) {
+                // search for a vertex with weight greater-equal threshold and move it
+                bool move_found = false;
+                forall_gu(g, u)
+                    {
                         if (p_manager[u] == greatest_id) {
-                            weight_t u_weight = p_manager.get_bweight(u);
+                            weight_t u_weight = g.weight(u);
                             if (smallest_weight + u_weight <= m_lmax) {
                                 // move
                                 bv_manager.move(g, p_manager, u, greatest_id, smallest_id);
@@ -807,14 +836,13 @@ namespace HeiProMap {
                                 break;
                             }
                         }
-                    } endfor
-
-                    if (!move_found) {
-                        return;
                     }
+                endfor
+
+                if (!move_found) {
+                    return;
                 }
             }
-
         }
 
         JSONString get_stats() override {

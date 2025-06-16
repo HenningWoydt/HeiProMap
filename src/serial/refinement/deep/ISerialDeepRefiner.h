@@ -48,9 +48,13 @@ namespace HeiProMap {
 
     class ISerialDeepRefiner {
     public:
+        virtual ~ISerialDeepRefiner() = default;
         virtual void initialize(const vertex_t t_n,
                                 const vertex_t t_m,
                                 const partition_t t_k,
+                                const f64 t_imbalance,
+                                const std::vector<partition_t> &t_hierarchy,
+                                const std::vector<weight_t> &t_distance,
                                 RandomEngine& t_random_engine,
                                 const ISerialDeepRefinerConfiguration& i_config,
                                 StatisticCollector& t_stat_collect) = 0;

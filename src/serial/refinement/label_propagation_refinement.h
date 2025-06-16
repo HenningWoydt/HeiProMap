@@ -35,43 +35,43 @@
 namespace HeiProMap {
     class LabelPropagationConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit LabelPropagationConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+        explicit LabelPropagationConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
 
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
     class LabelPropagationRefinement final : public ISerialRefiner {
-        vertex_t                 m_n         = 0;
-        vertex_t                 m_m         = 0;
-        partition_t              m_k         = 0;
-        f64                      m_imbalance = 0.0;
-        weight_t                 m_lmax      = 0;
+        vertex_t m_n    = 0;
+        vertex_t m_m    = 0;
+        partition_t m_k = 0;
+        f64 m_imbalance = 0.0;
+        weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
+        std::vector<weight_t> m_distance;
 
         AlignedArray<u32> vertex_used;
-        u32               vertex_marker = 0;
+        u32 vertex_marker = 0;
 
         AlignedArray<u32> block_used;
-        u32               block_marker = 0;
+        u32 block_marker = 0;
 
         AlignedArray<vertex_t> curr_boundary;
-        size_t                 curr_boundary_size = 0;
+        size_t curr_boundary_size = 0;
 
         AlignedArray<partition_t> blocks;
-        AlignedArray<s64>         blocks_qap_delta;
-        size_t                    blocks_size = 0;
+        AlignedArray<s64> blocks_qap_delta;
+        size_t blocks_size = 0;
 
-        RandomEngine                        *random_engine    = nullptr;
-        const LabelPropagationConfiguration *config           = nullptr;
-        StatisticCollector                  *m_stat_collector = nullptr;
+        RandomEngine* random_engine                 = nullptr;
+        const LabelPropagationConfiguration* config = nullptr;
+        StatisticCollector* m_stat_collector        = nullptr;
 
-        METRICS(f64 global_time              = 0;)
+        METRICS(f64 global_time = 0;)
         METRICS(f64 global_time_get_boundary = 0.0;)
-        METRICS(f64 global_time_iterate      = 0.0;)
+        METRICS(f64 global_time_iterate = 0.0;)
 
-        METRICS(s64 global_qap_delta     = 0;)
-        METRICS(u64 global_n_pos_moves   = 0;)
+        METRICS(s64 global_qap_delta = 0;)
+        METRICS(u64 global_n_pos_moves = 0;)
         METRICS(u64 global_n_0gain_moves = 0;)
 
     public:
@@ -84,11 +84,11 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const f64 t_imbalance,
                         const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
-                        const ISerialRefinerConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) override {
+                        const std::vector<partition_t>& t_hierarchy,
+                        const std::vector<weight_t>& t_distance,
+                        RandomEngine& t_random_engine,
+                        const ISerialRefinerConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -98,7 +98,7 @@ namespace HeiProMap {
             m_distance  = t_distance;
 
             random_engine    = &t_random_engine;
-            config           = dynamic_cast<const LabelPropagationConfiguration *>(&i_config);
+            config           = dynamic_cast<const LabelPropagationConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
             vertex_used.initialize(m_n, 0);
@@ -113,12 +113,12 @@ namespace HeiProMap {
         }
 
         void refine(const u64 level,
-                         const u64 max_level,
-                         graph_t &g,
-                         d_oracle_t &d_oracle,
-                         bv_manager_t &bv_manager,
-                         p_manager_t &p_manager,
-                         q_graph_t &q_graph) override {
+                    const u64 max_level,
+                    graph_t& g,
+                    d_oracle_t& d_oracle,
+                    bv_manager_t& bv_manager,
+                    p_manager_t& p_manager,
+                    q_graph_t& q_graph) override {
             METRICS(std::vector<f64> iteration_time);
             METRICS(std::vector<f64> iteration_time_get_boundary);
             METRICS(std::vector<f64> iteration_time_iterate);
@@ -135,8 +135,8 @@ namespace HeiProMap {
             METRICS(u64 level_n_pos_moves = 0);
             METRICS(u64 level_n_0gain_moves = 0);
 
-            bool     positive_move_occurred = true;
-            for (u64 iteration              = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
+            bool positive_move_occurred = true;
+            for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
 
                 METRICS(s64 temp_qap_delta = 0);
@@ -163,21 +163,21 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t    u_weight = g.weight(u);
-                    partition_t u_id     = p_manager[u];
+                    weight_t u_weight = g.weight(u);
+                    partition_t u_id  = p_manager[u];
 
                     // make the move that reduces qap the most
-                    partition_t best_id        = u_id;
-                    weight_t    best_id_weight = 0;
-                    s64         best_qap_delta = -1;
-                    f32         counter        = 0;
+                    partition_t best_id     = u_id;
+                    weight_t best_id_weight = 0;
+                    s64 best_qap_delta      = -1;
+                    f32 counter             = 0;
 
                     block_marker += 1;
                     block_used[u_id] = block_marker;
                     forall_guiv(g, u, i, v)
                         {
-                            partition_t v_id        = p_manager[v];
-                            weight_t    v_id_weight = p_manager.get_bweight(v_id);
+                            partition_t v_id     = p_manager[v];
+                            weight_t v_id_weight = p_manager.get_bweight(v_id);
 
                             if (block_used[v_id] != block_marker) {
                                 if (v_id_weight + u_weight <= m_lmax) {
@@ -253,6 +253,15 @@ namespace HeiProMap {
 #endif
             }
         }
+
+        void refine_layer(const u64 level,
+                                  const u64 max_level,
+                                  graph_t& g,
+                                  d_oracle_t& d_oracle,
+                                  bv_manager_t& bv_manager,
+                                  p_manager_t& p_manager,
+                                  q_graph_t& q_graph,
+                                  size_t layer) override {}
 
         JSONString get_stats() override { return {}; };
     };

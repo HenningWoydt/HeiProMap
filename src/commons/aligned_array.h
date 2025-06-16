@@ -45,10 +45,6 @@ namespace HeiProMap {
         void initialize(const size_t n) {
             size_t size = round_up_64(n);
 
-#if ASSERT_ENABLED
-            // std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
-#endif
-
             if (size > m_n) {
                 m_n = size;
                 free(m_ptr);
@@ -56,13 +52,8 @@ namespace HeiProMap {
             }
         }
 
-
         void initialize(const size_t n, const T fill_value) {
             size_t size = round_up_64(n);
-
-#if ASSERT_ENABLED
-            // std::cout << "Reserving " << (size * sizeof(T)) / (1024.0 * 1024 * 1024) << " GiB" << std::endl;
-#endif
 
             if (size > m_n) {
                 m_n = size;
@@ -72,14 +63,33 @@ namespace HeiProMap {
             std::fill_n(m_ptr, size, fill_value);
         }
 
-
         ~AlignedArray() { free(m_ptr); }
 
-        AlignedArray(const AlignedArray &) = delete;
+        // Copy constructor
+        AlignedArray(const AlignedArray &other) {
+            m_n = other.m_n;
+            if (m_n > 0) {
+                m_ptr = (T*) aligned_alloc(64, m_n * sizeof(T));
+                std::memcpy(m_ptr, other.m_ptr, m_n * sizeof(T));
+            }
+        }
 
-        AlignedArray &operator=(const AlignedArray &) = delete;
+        // Copy assignment
+        AlignedArray& operator=(const AlignedArray &other) {
+            if (this != &other) {
+                if (m_n != other.m_n) {
+                    free(m_ptr);
+                    m_n = other.m_n;
+                    m_ptr = m_n > 0 ? (T*) aligned_alloc(64, m_n * sizeof(T)) : nullptr;
+                }
+                if (m_n > 0) {
+                    std::memcpy(m_ptr, other.m_ptr, m_n * sizeof(T));
+                }
+            }
+            return *this;
+        }
 
-        // Move constructor
+
         AlignedArray(AlignedArray &&other) noexcept {
             free(m_ptr);
             m_n = 0;
@@ -91,7 +101,6 @@ namespace HeiProMap {
             other.m_n = 0;
         }
 
-        // Move assignment
         AlignedArray &operator=(AlignedArray &&other) noexcept {
             if (this != &other) {
                 free(m_ptr);

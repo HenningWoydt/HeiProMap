@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <execution>
 #include <queue>
 #include <vector>
 
@@ -42,8 +43,8 @@ namespace HeiProMap {
     struct Neighbors {
         vertex_t n1;
         vertex_t n2;
-        f32      w1;
-        f32      w2;
+        f32 w1;
+        f32 w2;
     };
 
 #define IS_ENDPOINT(n, u) n.n2 == u
@@ -63,26 +64,27 @@ namespace HeiProMap {
      * > Experimental Algorithms, 6th International Workshop, WEA 2007, Rome, Italy, June 6-8, 2007, Proceedings.
      */
     class GlobalPathAlgorithmMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
-        weight_t    m_l_max = 0;
+        vertex_t m_n     = 0;
+        vertex_t m_m     = 0;
+        partition_t m_k  = 0;
+        weight_t m_l_max = 0;
+        u64 m_threads    = 1;
 
-        const GlobalPathAlgorithmConfiguration *config           = nullptr;
-        RandomEngine                           *random_engine    = nullptr;
-        StatisticCollector                     *m_stat_collector = nullptr;
+        const GlobalPathAlgorithmConfiguration* config = nullptr;
+        RandomEngine* random_engine                    = nullptr;
+        StatisticCollector* m_stat_collector           = nullptr;
 
         AlignedArray<Neighbors> m_neighbors;
-        AlignedArray<u32>       path_id;
-        AlignedArray<u32>       path_length;
+        AlignedArray<u32> path_id;
+        AlignedArray<u32> path_length;
 
         AlignedArray<EdgeUVW> edges;
-        size_t                edges_size = 0;
+        size_t edges_size = 0;
 
         // for DP
-        AlignedArray<f32>      dp_w;
-        AlignedArray<s64>      dp_m;
-        AlignedArray<u8>       dp_take;
+        AlignedArray<f32> dp_w;
+        AlignedArray<s64> dp_m;
+        AlignedArray<u8> dp_take;
         AlignedArray<vertex_t> dp_edges;
 
         Matching dp_cycle_matches1;
@@ -107,15 +109,17 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_l_max,
-                        RandomEngine &t_random_engine,
-                        const GlobalPathAlgorithmConfiguration &i_config,
-                        StatisticCollector &t_stat_collect)  {
-            m_n     = t_n;
-            m_m     = t_m;
-            m_k     = t_k;
-            m_l_max = t_l_max;
+                        const u64 t_threads,
+                        RandomEngine& t_random_engine,
+                        const GlobalPathAlgorithmConfiguration& i_config,
+                        StatisticCollector& t_stat_collect) {
+            m_n       = t_n;
+            m_m       = t_m;
+            m_k       = t_k;
+            m_l_max   = t_l_max;
+            m_threads = t_threads;
 
-            config           = dynamic_cast<const GlobalPathAlgorithmConfiguration *>(&i_config);
+            config           = dynamic_cast<const GlobalPathAlgorithmConfiguration*>(&i_config);
             random_engine    = &t_random_engine;
             m_stat_collector = &t_stat_collect;
 
@@ -134,11 +138,11 @@ namespace HeiProMap {
             dp_cycle_matches2.initialize(m_n);
         }
 
-        template<typename PartitionManagerT>
+        template <typename PartitionManagerT>
         void match(const size_t level,
-                   const graph_t &g,
-                   const PartitionManagerT &p_manager,
-                   Matching &matching)  {
+                   const graph_t& g,
+                   const PartitionManagerT& p_manager,
+                   Matching& matching) {
             METRICS(level_time_compute_ratings.emplace_back(0.0);)
             METRICS(level_time_sorting.emplace_back(0.0);)
             METRICS(level_time_build_paths.emplace_back(0.0);)
@@ -162,7 +166,7 @@ namespace HeiProMap {
             compute_ratings(g, p_manager);
 
             METRICS_TIME(sp_sorting)
-            std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+            std::sort(std::execution::par, edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
             METRICS_TIME(ep_sorting)
             METRICS(level_time_sorting.back() += get_seconds(sp_sorting, ep_sorting);)
 
@@ -190,9 +194,9 @@ namespace HeiProMap {
                     m_neighbors[u].w1 = w;
                     m_neighbors[v].n1 = u;
                     m_neighbors[v].w1 = w;
-                    path_id[u]     = u;
-                    path_id[v]     = u;
-                    path_length[u] = 1;
+                    path_id[u]        = u;
+                    path_id[v]        = u;
+                    path_length[u]    = 1;
                     METRICS(level_edges_new_paths.back() += 1;)
                     continue;
                 }
@@ -210,7 +214,7 @@ namespace HeiProMap {
                     m_neighbors[u].w1 = w;
                     m_neighbors[v].n2 = u;
                     m_neighbors[v].w2 = w;
-                    path_id[u] = v_id;
+                    path_id[u]        = v_id;
                     path_length[v_id] += 1;
                     METRICS(level_edges_enlarge_path.back() += 1;)
                     continue;
@@ -253,10 +257,10 @@ namespace HeiProMap {
                 m_neighbors[v].n2 = u;
                 m_neighbors[v].w2 = w;
 
-                vertex_t v1  = v;
-                vertex_t v2  = u;
-                u32      id1 = v_id;
-                u32      id2 = u_id;
+                vertex_t v1 = v;
+                vertex_t v2 = u;
+                u32 id1     = v_id;
+                u32 id2     = u_id;
                 if (path_length[u_id] > path_length[v_id]) {
                     std::swap(v1, v2);
                     std::swap(id1, id2);
@@ -264,10 +268,10 @@ namespace HeiProMap {
 
                 path_length[id1] += 1 + path_length[id2];
                 while (m_neighbors[v2].n2 != v2) {
-                    path_id[v2] = id1;
+                    path_id[v2]               = id1;
                     vertex_t temp_last_vertex = v1;
-                    v1 = v2;
-                    v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                    v1                        = v2;
+                    v2                        = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
                 }
                 path_id[v2] = id1;
 
@@ -309,144 +313,81 @@ namespace HeiProMap {
 #endif
         }
 
-        void compute_ratings_4(const graph_t &g) {
+        template <typename PartitionManagerT>
+        void compute_ratings(const graph_t& g, const PartitionManagerT& p_manager) {
             METRICS_TIME(sp_compute_ratings)
 
             edges_size = 0;
-            forall_gu(g, u)
-                {
-                    weight_t u_w        = g.weight(u);
-                    weight_t max_weight = m_l_max - u_w;
+#pragma omp parallel num_threads(m_threads)
+            {
+                std::vector<EdgeUVW> local_edges;
 
-                    size_t j = 0;
-                    for (; j + 4 < g.size(u); j += 4) {
-                        const vertex_t v0 = g.neighbor(u, j + 0);
-                        const vertex_t v1 = g.neighbor(u, j + 1);
-                        const vertex_t v2 = g.neighbor(u, j + 2);
-                        const vertex_t v3 = g.neighbor(u, j + 3);
+#pragma omp for
+                forall_gu(g, u)
+                    {
+                        weight_t u_w = g.weight(u);
 
-                        const weight_t w0 = g.weight(u, j + 0);
-                        const weight_t w1 = g.weight(u, j + 1);
-                        const weight_t w2 = g.weight(u, j + 2);
-                        const weight_t w3 = g.weight(u, j + 3);
+                        forall_guivw(g, u, j, v, w)
+                            {
+                                if (u > v) { continue; }
+                                if (p_manager[u] != p_manager[v]) { continue; }
+                                weight_t v_w = g.weight(v);
 
-                        weight_t v0_w = g.weight(v0);
-                        weight_t v1_w = g.weight(v1);
-                        weight_t v2_w = g.weight(v2);
-                        weight_t v3_w = g.weight(v3);
+                                // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
+                                // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
 
-                        f32 edge_rating_0 = ((f32) (w0 * w0)) / ((f32) (u_w * v0_w));
-                        f32 edge_rating_1 = ((f32) (w1 * w1)) / ((f32) (u_w * v1_w));
-                        f32 edge_rating_2 = ((f32) (w2 * w2)) / ((f32) (u_w * v2_w));
-                        f32 edge_rating_3 = ((f32) (w3 * w3)) / ((f32) (u_w * v3_w));
+                                if (u_w + v_w > m_l_max) { continue; }
 
-                        edges[edges_size] = {u, v0, edge_rating_0};
-                        edges_size += (u < v0) && (v0_w <= max_weight);
+                                f32 edge_rating;
 
-                        edges[edges_size] = {u, v1, edge_rating_1};
-                        edges_size += (u < v1) && (v1_w <= max_weight);
+                                // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
+                                // edge_rating = (f32) w / (f32) (u_w * v_w);
+                                edge_rating = ((f32)(w * w)) / ((f32)(u_w * v_w));
+                                // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
+                                // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
+                                // edge_rating = (f32) w / (f32) (u_w * v_w * u_w * v_w);
+                                // edge_rating = (f32)w;
 
-                        edges[edges_size] = {u, v2, edge_rating_2};
-                        edges_size += (u < v2) && (v2_w <= max_weight);
-
-                        edges[edges_size] = {u, v3, edge_rating_3};
-                        edges_size += (u < v3) && (v3_w <= max_weight);
+                                // edges[edges_size++] = {u, v, edge_rating};
+                                local_edges.push_back({u, v, edge_rating});
+                            }
+                        endfor
                     }
+                endfor
 
-                    for (; j < g.size(u); ++j) {
-                        const vertex_t v = g.neighbor(u, j);
-                        const weight_t w = g.weight(u, j);
-
-                        if (u > v) { continue; }
-                        weight_t v_w = g.weight(v);
-
-                        // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-                        // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-
-                        if (v_w > max_weight) { continue; }
-
-                        f32 edge_rating;
-
-                        // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
-                        // edge_rating = (f32) w / (f32) (u_w * v_w);
-                        // edge_rating = (f32) w / (f32) (u_w * v_w);
-                        edge_rating = ((f32) (w * w)) / ((f32) (u_w * v_w));
-                        // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
-                        // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
-                        // edge_rating = (f32) w / (f32) (u_w * v_w * u_w * v_w);
-                        // edge_rating = (f32)w;
-
-                        edges[edges_size++] = {u, v, edge_rating};
+                // Critical section or lock-free append
+#pragma omp critical
+                {
+                    for (const auto& e : local_edges) {
+                        edges[edges_size++] = e;
                     }
                 }
-            endfor
+            }
             METRICS_TIME(ep_compute_ratings)
             METRICS(level_time_compute_ratings.back() += get_seconds(sp_compute_ratings, ep_compute_ratings);)
             METRICS(level_edges.back() += edges_size;)
         }
 
-        template<typename PartitionManagerT>
-        void compute_ratings(const graph_t &g, const PartitionManagerT &p_manager) {
-            // compute_ratings_4(g);
-            // return;
-            METRICS_TIME(sp_compute_ratings)
-
-            edges_size = 0;
-            forall_gu(g, u)
-                {
-                    weight_t u_w = g.weight(u);
-
-                    forall_guivw(g, u, j, v, w)
-                        {
-                            if (u > v) { continue; }
-                            if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.weight(v);
-
-                            // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-                            // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-
-                            if (u_w + v_w > m_l_max) { continue; }
-
-                            f32 edge_rating;
-
-                            // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
-                            // edge_rating = (f32) w / (f32) (u_w * v_w);
-                            edge_rating = ((f32) (w * w)) / ((f32) (u_w * v_w));
-                            // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
-                            // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
-                            // edge_rating = (f32) w / (f32) (u_w * v_w * u_w * v_w);
-                            // edge_rating = (f32)w;
-
-                            edges[edges_size++] = {u, v, edge_rating};
-                        }
-                    endfor
-                }
-            endfor
-            METRICS_TIME(ep_compute_ratings)
-            METRICS(level_time_compute_ratings.back() += get_seconds(sp_compute_ratings, ep_compute_ratings);)
-            METRICS(level_edges.back() += edges_size;)
-        }
-
-        f32 solve_path_length_1(const graph_t &g,
+        f32 solve_path_length_1(const graph_t& g,
                                 const vertex_t u,
-                                Matching &matching) {
+                                Matching& matching) {
             vertex_t uu = u;
             vertex_t vv = m_neighbors[u].n1;
-            f32      w  = m_neighbors[u].w1;
+            f32 w       = m_neighbors[u].w1;
 
             matching.add(uu, vv);
 
             return w;
         }
 
-        f32 solve_path_length_2(const graph_t &g,
+        f32 solve_path_length_2(const graph_t& g,
                                 const vertex_t u,
-                                Matching &matching) {
+                                Matching& matching) {
             vertex_t v1 = u;
             vertex_t v2 = m_neighbors[u].n1;
             vertex_t v3;
-            f32      w1 = m_neighbors[u].w1;
-            f32      w2;
+            f32 w1 = m_neighbors[u].w1;
+            f32 w2;
 
             if (m_neighbors[v2].n1 == v1) {
                 v3 = m_neighbors[v2].n2;
@@ -457,7 +398,7 @@ namespace HeiProMap {
             }
 
             vertex_t uu, vv;
-            f32      w;
+            f32 w;
             if (w1 > w2) {
                 uu = v1;
                 vv = v2;
@@ -472,10 +413,10 @@ namespace HeiProMap {
             return w;
         }
 
-        f32 solve_path(const graph_t &g,
+        f32 solve_path(const graph_t& g,
                        const vertex_t u,
                        const u32 length,
-                       Matching &matching) {
+                       Matching& matching) {
             // special case of length 1
             if (length == 1) {
                 return solve_path_length_1(g, u, matching);
@@ -487,12 +428,12 @@ namespace HeiProMap {
             }
 
             vertex_t v1, v2, v3;
-            f32      w;
+            f32 w;
 
             s64 i = 0;
 
             // first edge of the path
-            v1 = u;
+            v1          = u;
             dp_edges[i] = v1;
             if (m_neighbors[v1].n1 == v1) {
                 v2 = m_neighbors[u].n2;
@@ -573,12 +514,12 @@ namespace HeiProMap {
             return dp_w[i - 1];
         }
 
-        void solve_cycle(const graph_t &g,
+        void solve_cycle(const graph_t& g,
                          const vertex_t u,
                          const u32 length,
-                         Matching &matching) {
-            vertex_t  n1          = m_neighbors[u].n1;
-            vertex_t  n2          = m_neighbors[u].n2;
+                         Matching& matching) {
+            vertex_t n1           = m_neighbors[u].n1;
+            vertex_t n2           = m_neighbors[u].n2;
             Neighbors original_u  = m_neighbors[u];
             Neighbors original_n1 = m_neighbors[original_u.n1];
             Neighbors original_n2 = m_neighbors[original_u.n2];
@@ -601,8 +542,8 @@ namespace HeiProMap {
                 m_neighbors[n1].n2 = n1;
             }
             matching_weight1 = solve_path(g, u, length - 1, dp_cycle_matches1);
-            m_neighbors[u]  = original_u;
-            m_neighbors[n1] = original_n1;
+            m_neighbors[u]   = original_u;
+            m_neighbors[n1]  = original_n1;
 
             // cut connection between u and n2
             m_neighbors[u].n2 = u;
@@ -615,10 +556,10 @@ namespace HeiProMap {
                 m_neighbors[n2].n2 = n2;
             }
             matching_weight2 = solve_path(g, u, length - 1, dp_cycle_matches2);
-            m_neighbors[u]  = original_u;
-            m_neighbors[n2] = original_n2;
+            m_neighbors[u]   = original_u;
+            m_neighbors[n2]  = original_n2;
 
-            Matching *dp_cycle_matches = &dp_cycle_matches1;
+            Matching* dp_cycle_matches = &dp_cycle_matches1;
             if (matching_weight2 > matching_weight1) {
                 dp_cycle_matches = &dp_cycle_matches2;
             }
@@ -629,8 +570,8 @@ namespace HeiProMap {
         }
 
         void random_matching(const size_t level,
-                             const graph_t &g,
-                             Matching &matching) {
+                             const graph_t& g,
+                             Matching& matching) {
             METRICS_TIME(sp)
 
             std::vector<u8> is_matched(g.get_n(), 0);
@@ -680,7 +621,7 @@ namespace HeiProMap {
 #endif
         }
 
-        JSONString get_stats()  {
+        JSONString get_stats() {
             std::string stats = "{ \n";
 #if COLLECT_METRICS
             std::vector<f64> level_time(level_time_compute_ratings.size(), 0.0);

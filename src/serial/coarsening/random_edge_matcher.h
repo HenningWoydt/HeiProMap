@@ -74,9 +74,10 @@ namespace HeiProMap {
             used.initialize(m_n, 0);
         }
 
+        template<typename PartitionManagerT>
         void match(const size_t level,
                    const graph_t &g,
-                   p_manager_t &p_manager,
+                   PartitionManagerT &p_manager,
                    Matching &matching) {
             mark += 1;
 

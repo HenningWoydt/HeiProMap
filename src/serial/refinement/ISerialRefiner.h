@@ -66,6 +66,15 @@ namespace HeiProMap {
                             p_manager_t& p_manager,
                             q_graph_t& q_graph) = 0;
 
+        virtual void refine_layer(const u64 level,
+                                  const u64 max_level,
+                                  graph_t& g,
+                                  d_oracle_t& d_oracle,
+                                  bv_manager_t& bv_manager,
+                                  p_manager_t& p_manager,
+                                  q_graph_t& q_graph,
+                                  size_t layer) = 0;
+
         virtual JSONString get_stats() = 0;
     };
 }

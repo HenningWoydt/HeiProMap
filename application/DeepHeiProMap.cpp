@@ -29,8 +29,8 @@
 
 #include "../../src/commons/definitions.h"
 #include "../src/commons/utils.h"
-#include "../src/serial/utility/algorithm_configuration.h"
 #include "../src/serial/datastructures/deep/deep_solver.h"
+#include "../src/serial/utility/algorithm_configuration.h"
 
 using namespace HeiProMap;
 
@@ -65,10 +65,13 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"}, // To beat 207196 in 0.29
                     // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
                     // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
-                    {"--hierarchy", "64:16:32:32"},
+                    {"--hierarchy", "32:16:8:8"},
                     {"--distance", "1:10:50:100"},
+                    // {"--hierarchy", "8:8:16"},
+                    // {"--distance", "1:10:100"},
                     {"--imbalance", "0.03"},
                     {"--config", "experimental"},
+                    {"--threads", "16"},
                     {"--seed", "0"},
 
                     // coarsening
@@ -128,7 +131,7 @@ int main(const int argc, char* argv[]) {
 
                     // Refinement Hierarchy aware cycles
                     // {"--refinement-hierarchy-aware-cycles-enable", "0"},
-            };
+                };
 
             std::vector<std::string> args = {"DeepHeiProMap"};
             for (const auto& [key, val] : input) {

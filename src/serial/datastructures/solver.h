@@ -106,6 +106,8 @@ namespace HeiProMap {
 
         std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
 
+        std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> hierarchy_refinements;
+
     public:
         explicit Solver(const AlgorithmConfiguration& t_ac) {
             sp = std::chrono::high_resolution_clock::now();
@@ -147,17 +149,24 @@ namespace HeiProMap {
             refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
-            refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
-            refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
-            refinements.emplace_back(&hierarchy_aware_quotient_graph_refinement, &ac.hierarchy_aware_quotient_graph_refinement_configuration);
-            refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
-            // refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
-            // refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
+
+            hierarchy_refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
+            hierarchy_refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
+            hierarchy_refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
+            hierarchy_refinements.emplace_back(&hierarchy_aware_quotient_graph_refinement, &ac.hierarchy_aware_quotient_graph_refinement_configuration);
+            // hierarchy_refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
+            // hierarchy_refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
 
             refinements.emplace_back(&wave_refinement, &ac.wave_refinement_configuration);
             refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
 
             for (auto& [refiner, config] : refinements) {
+                if (config->enabled) {
+                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
+                }
+            }
+
+            for (auto& [refiner, config] : hierarchy_refinements) {
                 if (config->enabled) {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
                 }
@@ -203,9 +212,9 @@ namespace HeiProMap {
             for (partition_t id = 0; id < ac.k; ++id) {
                 n_empty_partitions += p_manager.get_bweight(id) == 0;
                 n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
-                sum_too_much += std::max(0, p_manager.get_bweight(id) - lmax);
+                sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
                 if (p_manager.get_bweight(id) > lmax) {
-                    std::cout << "oload: " << id << std::endl;
+                    std::cout << "oload: " << id << " " << p_manager.get_bweight(id) << " " << lmax<<  std::endl;
                 }
             }
             std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
@@ -233,9 +242,6 @@ namespace HeiProMap {
                     }
 
                     coarsening(level);
-
-                    std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
-                    print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
 
                     level += 1;
                 }
@@ -389,26 +395,27 @@ namespace HeiProMap {
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
 
-            ZeroGainPerturbator perturbator;
-
             u64 refinement_max_iterations = 1;
             for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
-                for (auto [refiner, config] : refinements) {
-                    if (config->enabled) {
-                        const auto sp = std::chrono::high_resolution_clock::now();
+                for (size_t i = 0; i < ac.hierarchy.size(); ++i) {
+                    for (auto [refiner, config] : hierarchy_refinements) {
+                        if (config->enabled) {
+                            const auto sp = std::chrono::high_resolution_clock::now();
+                            std::cout << ac.hierarchy.size() - 1 - i << " " << config->name << std::endl;
+                            print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
+                            refiner->refine_layer(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph, ac.hierarchy.size() - 1 - i);
+                            print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
+                            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
 
-                        // perturbator.perturbate(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph, lmax, random_engine);
-                        refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
-                        HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
+                            const auto ep = std::chrono::high_resolution_clock::now();
+                            SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
+                            s64 qap_delta = 0;
+                            SMALL_METRICS(qap_delta = qap_before - qap_after;)
 
-                        const auto ep = std::chrono::high_resolution_clock::now();
-                        SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
-                        s64 qap_delta = 0;
-                        SMALL_METRICS(qap_delta = qap_before - qap_after;)
+                            small_stat_collect.add_refinement(config->name, get_seconds(sp, ep), qap_delta);
 
-                        small_stat_collect.add_refinement(config->name, get_seconds(sp, ep), qap_delta);
-
-                        SMALL_METRICS(qap_before = qap_after;)
+                            SMALL_METRICS(qap_before = qap_after;)
+                        }
                     }
                 }
             }

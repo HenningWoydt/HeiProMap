@@ -44,7 +44,15 @@ namespace HeiProMap {
         AlignedArray<weight_t> edge_cut_saved;
         AlignedArray<partition_t> new_partition;
 
+        partition_t m_k = 0;
+        std::vector<std::vector<vertex_t>> blocks;
+
     public:
+        void initialize(vertex_t max_n, partition_t k) {
+            new_partition.initialize(max_n);
+            m_k = k;
+        }
+
         /**
          * Partitions the subgraph of g where the vertices have the corresponding id.
          *
@@ -140,26 +148,22 @@ namespace HeiProMap {
                                     const GreedyKWayPartitionerConfiguration& i_config,
                                     StatisticCollector& t_stat_collect) {
             weights.initialize(k, 0);
-            new_partition.initialize(g.get_n(), k);
 
-            forall_gu(g, u)
-                {
-                    partition_t u_id  = p_manager[u];
-                    weight_t u_weight = g.weight(u);
-                    if (u_id != id) { continue; }
+            for (size_t i = 0; i < blocks[id].size(); ++i) {
+                vertex_t u        = blocks[id][i];
+                weight_t u_weight = g.weight(u);
 
-                    partition_t best_id = 0;
-                    for (partition_t new_id = 0; new_id < k; ++new_id) {
-                        if (weights[new_id] < weights[best_id]) { best_id = new_id; }
-                    }
-
-                    weights[best_id] += u_weight;
-                    new_partition[u] = best_id;
+                partition_t best_id = 0;
+                for (partition_t new_id = 0; new_id < k; ++new_id) {
+                    if (weights[new_id] < weights[best_id]) { best_id = new_id; }
                 }
-            endfor
 
-            for (vertex_t u = 0; u < g.get_n(); ++u) {
-                if (p_manager[u] != id) { continue; }
+                weights[best_id] += u_weight;
+                new_partition[u] = best_id;
+            }
+
+            for (size_t i = 0; i < blocks[id].size(); ++i) {
+                vertex_t u = blocks[id][i];
                 if (new_partition[u] == 0) { continue; }
                 partition_t move_id = id + id_increment * new_partition[u];
 
@@ -176,6 +180,22 @@ namespace HeiProMap {
                 p_manager.set_lmax(move_id, lmax);
                 p_manager.set_hierarchy_level(move_id, hierarchy_level - 1);
             }
+        }
+
+        void determine_all_blocks(const graph_t& g,
+                                  deep_p_manager_t& p_manager) {
+            for (partition_t id = 0; id < std::min((partition_t)blocks.size(), m_k); ++id) {
+                blocks[id].clear();
+            }
+            if (blocks.size() < m_k) {
+                blocks.resize(m_k);
+            }
+
+            forall_gu(g, u) {
+                partition_t u_id  = p_manager[u];
+                blocks[u_id].push_back(u);
+            }
+            endfor
         }
     };
 }

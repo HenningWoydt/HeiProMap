@@ -40,7 +40,7 @@ namespace HeiProMap {
         AlignedArray<weight_t> bweights;
         AlignedArray<size_t> n_vertices;
         AlignedArray<weight_t> lmax;
-        AlignedArray<s32> hierarchy_level;
+        AlignedArray<partition_t> hierarchy_level;
 
     public:
         void initialize(const vertex_t t_n,
@@ -54,7 +54,7 @@ namespace HeiProMap {
             bweights.initialize(m_k, 0);
             n_vertices.initialize(m_k, 0);
             lmax.initialize(m_k, t_lmax);
-            hierarchy_level.initialize(m_k, -1);
+            hierarchy_level.initialize(m_k, m_k);
         }
 
         // read
@@ -75,11 +75,11 @@ namespace HeiProMap {
 
         weight_t get_lmax(const partition_t id){ return lmax[id]; }
 
-        void set_hierarchy_level(const partition_t id, const s32 level) {
+        void set_hierarchy_level(const partition_t id, const partition_t level) {
             hierarchy_level[id] = level;
         }
 
-        s32 get_hierarchy_level(const partition_t id){ return hierarchy_level[id]; }
+        partition_t get_hierarchy_level(const partition_t id){ return hierarchy_level[id]; }
 
         void move(const vertex_t u,
                   const weight_t w,
@@ -105,13 +105,29 @@ namespace HeiProMap {
         }
 
         void contract(const Matching& matching) {
-            for (size_t i = 0; i < matching.size(); ++i) {
-                auto[u, v] = matching[i];
-                vertex_t smaller_vertex = std::min(u, v);
-                vertex_t new_u        = matching.get_n(smaller_vertex);
-                partition_temp[new_u] = partition[smaller_vertex];
-                n_vertices[partition[smaller_vertex]] -= 1;
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                if(u == matching.get_partner(u)){
+                    vertex_t new_u = matching.get_n(u);
+                    partition_temp[new_u] = partition[u];
+
+                    ASSERT(u < m_n);
+                    ASSERT(partition[u] == partition[matching.get_partner(u)]);
+                    ASSERT(new_u < m_n);
+                    ASSERT(n_vertices[partition[u]] != std::numeric_limits<size_t>::max());
+                }
+
+                if (u < matching.get_partner(u)) {
+                    vertex_t new_u = matching.get_n(u);
+                    partition_temp[new_u] = partition[u];
+                    n_vertices[partition[u]] -= 1;
+
+                    ASSERT(u < m_n);
+                    ASSERT(partition[u] == partition[matching.get_partner(u)]);
+                    ASSERT(new_u < m_n);
+                    ASSERT(n_vertices[partition[u]] != std::numeric_limits<size_t>::max());
+                }
             }
+
             std::swap(partition, partition_temp);
         }
 

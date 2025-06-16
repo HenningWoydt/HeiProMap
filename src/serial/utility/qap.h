@@ -35,49 +35,72 @@ namespace HeiProMap {
     template <typename PartitionManagerT, typename DistanceOracleT>
     inline weight_t get_qap(graph_t& g,
                             PartitionManagerT& p_manager,
-                            DistanceOracleT& d_oracle) {
+                            DistanceOracleT& d_oracle,
+                            u64 threads = 1) {
         weight_t qap = 0;
+#pragma omp parallel num_threads(threads)
+        {
+            weight_t local_qap = 0;
 
-        forall_gu(g, u)
-            {
-                partition_t u_id = p_manager[u];
+#pragma omp for
+            forall_gu(g, u)
+                {
+                    partition_t u_id = p_manager[u];
 
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    vertex_t v       = g.neighbor(u, i);
-                    weight_t ew      = g.weight(u, i);
-                    partition_t v_id = p_manager[v];
-                    weight_t d       = d_oracle.get(u_id, v_id);
-                    qap += (d * ew);
+                    for (size_t i = 0; i < g.size(u); ++i) {
+                        vertex_t v       = g.neighbor(u, i);
+                        weight_t ew      = g.weight(u, i);
+                        partition_t v_id = p_manager[v];
+                        weight_t d       = d_oracle.get(u_id, v_id);
+                        local_qap += (d * ew);
+                    }
                 }
+            endfor
+#pragma omp critical
+            {
+                qap += local_qap;
             }
-        endfor
+        }
 
         return qap;
     }
 
+    template <typename PartitionManagerT, typename DistanceOracleT>
     inline std::vector<weight_t> get_qap_per_layer(const graph_t& g,
-                                                   const p_manager_t& p_manager,
-                                                   d_oracle_t& d_oracle,
-                                                   const partition_t l) {
-        std::vector<weight_t> qap(l, 0);
+                                                   const PartitionManagerT& p_manager,
+                                                   DistanceOracleT& d_oracle,
+                                                   const partition_t l,
+                                                   u64 threads = 1) {
+        std::vector<weight_t> final_qap(l, 0);
 
-        forall_gu(g, u)
+#pragma omp parallel num_threads(threads)
+        {
+            std::vector<weight_t> qap_local(l, 0);
+#pragma omp for
+            forall_gu(g, u)
+                {
+                    partition_t u_id = p_manager[u];
+
+                    forall_guivw(g, u, i, v, w)
+                        {
+                            partition_t v_id     = p_manager[v];
+                            weight_t d           = d_oracle.get(u_id, v_id);
+                            partition_t layer_id = d_oracle.get_h(u_id, v_id);
+                            qap_local[layer_id] += (d * w);
+                        }
+                    endfor
+                }
+            endfor
+
+#pragma omp critical
             {
-                partition_t u_id = p_manager[u];
-
-#pragma GCC unroll 8
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    vertex_t v           = g.neighbor(u, i);
-                    weight_t ew          = g.weight(u, i);
-                    partition_t v_id     = p_manager[v];
-                    weight_t d           = d_oracle.get(u_id, v_id);
-                    partition_t layer_id = d_oracle.get_h(u_id, v_id);
-                    qap[layer_id] += (d * ew);
+                for (u64 j = 0; j < l; ++j) {
+                    final_qap[j] += qap_local[j];
                 }
             }
-        endfor
+        }
 
-        return qap;
+        return final_qap;
     }
 
 

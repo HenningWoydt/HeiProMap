@@ -34,10 +34,10 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#include "../../commons/definitions.h"
-#include "../../commons/utils.h"
-#include "../../commons/matching.h"
 #include "../../commons/aligned_array.h"
+#include "../../commons/definitions.h"
+#include "../../commons/matching.h"
+#include "../../commons/utils.h"
 
 namespace HeiProMap {
     /**

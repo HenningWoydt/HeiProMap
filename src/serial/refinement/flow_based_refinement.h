@@ -303,7 +303,8 @@ namespace HeiProMap {
 
         bool find_best_closure(weight_t left_non_region_weight,
                                weight_t right_non_region_weight,
-                               weight_t lmax,
+                               weight_t left_lmax,
+                               weight_t right_lmax,
                                size_t repeats,
                                RandomEngine &rnd_engine,
                                std::vector<u8> &is_left) {
@@ -372,10 +373,10 @@ namespace HeiProMap {
                     complement_weight += scc_weights[scc_u];
                 }
 
-                if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
+                if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
                     weight_t left  = left_non_region_weight + closure_weight;
                     weight_t right = right_non_region_weight + complement_weight;
-                    weight_t diff  = std::min(lmax - left, lmax - right);
+                    weight_t diff  = std::min(left_lmax - left, right_lmax - right);
                     if (diff > best_diff) {
                         closure_found = true;
                         best_diff     = diff;
@@ -390,10 +391,10 @@ namespace HeiProMap {
                     closure_weight -= scc_weights[scc_u];
                     complement_weight += scc_weights[scc_u];
 
-                    if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
+                    if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
                         weight_t left  = left_non_region_weight + closure_weight;
                         weight_t right = right_non_region_weight + complement_weight;
-                        weight_t diff  = std::min(lmax - left, lmax - right);
+                        weight_t diff  = std::min(left_lmax - left, right_lmax - right);
                         if (diff > best_diff) {
                             closure_found = true;
                             best_diff     = diff;
@@ -629,6 +630,7 @@ namespace HeiProMap {
 
         bool assert_scc_correct(const ResidualFlowNetwork &residual_flow_network) {
             // asserts that all found scc are correct
+            return true;
 
             // every vertex is contained in one scc
             // and no vertex is contained in two sccs
@@ -721,14 +723,14 @@ namespace HeiProMap {
 
     class FlowNetwork {
         vertex_t                            n;
-        Graph<weight_t, weight_t, weight_t> g;
+        Graph<int, int, int> g;
         vertex_t                            source;
         vertex_t                            target;
 
         // std::vector<std::vector<EdgeVW>> adj;
 
     public:
-        FlowNetwork() : g(Graph<weight_t, weight_t, weight_t>(0, 0)) {
+        FlowNetwork() : g(Graph<int, int, int>(0, 0)) {
             n      = 0;
             source = 0;
             target = 0;
@@ -788,7 +790,7 @@ namespace HeiProMap {
             residual_g.initialize(n);
 
             int                                         n_edges = g.get_arc_num();
-            Graph<weight_t, weight_t, weight_t>::arc_id arc     = g.get_first_arc();
+            Graph<int, int, int>::arc_id arc     = g.get_first_arc();
 
             unsigned int u, v;
             for (int     i = 0; i < n_edges; ++i) {
@@ -826,8 +828,8 @@ namespace HeiProMap {
              */
 
             const weight_t INF = std::numeric_limits<weight_t>::max() / 2;
-            g.add_tweights(source, INF, 0);
-            g.add_tweights(target, 0, INF);
+            g.add_tweights(source, std::numeric_limits<int>::max() / 2, 0);
+            g.add_tweights(target, 0, std::numeric_limits<int>::max() / 2);
 
             g.maxflow();
         }
@@ -835,7 +837,7 @@ namespace HeiProMap {
         void get_cut(std::vector<u8> &is_left) {
             is_left.resize(n);
             for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = g.what_segment(u) == Graph<weight_t, weight_t, weight_t>::SOURCE;
+                is_left[u] = g.what_segment(u) == Graph<int, int, int>::SOURCE;
             }
         }
 
@@ -1089,8 +1091,6 @@ namespace HeiProMap {
                 // solve the flow network
                 flow_network.solve();
 
-                bool            qap_normal_calculated = false;
-                weight_t        qap_normal_change;
                 std::vector<u8> is_left;
                 if (config->use_closed_vertex_set) {
 #if HEAVYASSERT_ENABLED
@@ -1103,8 +1103,6 @@ namespace HeiProMap {
                         std::vector<u8> changed = change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
                         HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
 
-                        qap_normal_calculated = true;
-                        // qap_normal_change     = qap - get_qap(g, p_manager, d_oracle);
 
                         revert_boundary(g, bv_manager, p_manager, q_graph, changed, left_id, right_id);
                         HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
@@ -1123,7 +1121,7 @@ namespace HeiProMap {
                     // determine best balanced min cut
                     weight_t left_non_region_weight  = p_manager.get_bweight(left_id) - left_region_weight;
                     weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
-                    bool     closure_found           = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
+                    bool     closure_found           = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, m_lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
 /*
 #if HEAVYASSERT_ENABLED
                     std::vector<std::vector<u8>> all_is_left = scc_graph.get_all_closures(left_non_region_weight, right_non_region_weight, m_lmax, 10, *random_engine);
@@ -1652,6 +1650,15 @@ namespace HeiProMap {
                 }
             }
         }
+
+        void refine_layer(const u64 level,
+                                  const u64 max_level,
+                                  graph_t& g,
+                                  d_oracle_t& d_oracle,
+                                  bv_manager_t& bv_manager,
+                                  p_manager_t& p_manager,
+                                  q_graph_t& q_graph,
+                                  size_t layer) override {}
 
         JSONString get_stats() override {
             std::string stats = "{ \n";

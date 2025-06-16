@@ -150,6 +150,7 @@ namespace HeiProMap {
                 {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
                 {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
                 {"--config", "-c", "The configuration.", "", "", false},
+                {"--threads", "-t", "The number of threads.", "1", "", false},
                 {"--seed", "", "Seed for diversifying results.", "", "", false},
 
                 /** Coarsening */
@@ -237,6 +238,9 @@ namespace HeiProMap {
         // random initialization
         u64 seed = 0;
 
+        // threads
+        u64 threads = 1;
+
         // coarsening algorithm
         std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
@@ -275,7 +279,7 @@ namespace HeiProMap {
         HierarchyAwareFlowBasedRefinementConfiguration hierarchy_aware_flow_based_refinement_configuration         = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
         HierarchyAwareQuotientGraphRefinementConfiguration hierarchy_aware_quotient_graph_refinement_configuration = HierarchyAwareQuotientGraphRefinementConfiguration("Hierarchy Aware Quotient Graph Refineemnt");
 
-        WaveRefinementConfiguration wave_refinement_configuration   = WaveRefinementConfiguration("Wave Refinement");
+        WaveRefinementConfiguration wave_refinement_configuration           = WaveRefinementConfiguration("Wave Refinement");
         LightningRefinementConfiguration lightning_refinement_configuration = LightningRefinementConfiguration("Lightning Refinement");
 
         AlgorithmConfiguration() = default;
@@ -300,6 +304,12 @@ namespace HeiProMap {
                 seed = std::stoi(get("--seed"));
             } else {
                 seed = std::random_device{}();
+            }
+        }
+
+        void set_threads() {
+            if (is_set("--threads")) {
+                threads = std::stoi(get("--threads"));
             }
         }
 
@@ -430,6 +440,7 @@ namespace HeiProMap {
             set_distance();
             set_imbalance();
             set_seed();
+            set_threads();
 
             set_coarsening_algorithm(true);
             set_partitioning_algorithm(true);
@@ -437,15 +448,7 @@ namespace HeiProMap {
             enable_refinement_algorithms(true);
 
             // set FARAJ20 config
-            if (get("--config") == "Faraj20-fastest") {
-                set_Faraj20_fastest();
-            } else if (get("--config") == "Faraj20-fast") {
-                set_Faraj20_fast();
-            } else if (get("--config") == "Faraj20-eco") {
-                set_Faraj20_eco();
-            } else if (get("--config") == "Faraj20-strong") {
-                set_Faraj20_strong();
-            } else if (get("--config") == "fastest") {
+            if (get("--config") == "fastest") {
                 set_fastest();
             } else if (get("--config") == "fast") {
                 set_fast();
@@ -464,74 +467,6 @@ namespace HeiProMap {
             set_partitioning_algorithm();
             set_rebalancing_algorithm();
             enable_refinement_algorithms();
-        }
-
-        void set_Faraj20_fastest() {
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string           = "kaffpa";
-            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-        }
-
-        void set_Faraj20_fast() {
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string           = "kaffpa";
-            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "fast";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-        }
-
-        void set_Faraj20_eco() {
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string           = "kaffpa";
-            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "eco";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
-        }
-
-        void set_Faraj20_strong() {
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
-
-            // set kaffpa multisection partitioning
-            partitioning_algorithm_string           = "kaffpa";
-            partitioning_algorithm_id               = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            kaffpa_partitioner_config.mode_string   = "strong";
-            kaffpa_partitioner_config.mode          = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            kaffpa_partitioner_config.method_string = "bisection"; // TODO: this should be multisection, but there is a bug
-            kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
         }
 
         void set_fastest() {
@@ -656,17 +591,17 @@ namespace HeiProMap {
             flow_based_refinement_config.use_closed_vertex_set      = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 50;
 
-            hierarchy_aware_flow_based_refinement_configuration.enabled                    = false;
+            hierarchy_aware_flow_based_refinement_configuration.enabled                    = true;
             hierarchy_aware_flow_based_refinement_configuration.max_global_iteration       = 2;
             hierarchy_aware_flow_based_refinement_configuration.max_local_iteration        = 5;
             hierarchy_aware_flow_based_refinement_configuration.alpha                      = 2.0;
-            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 8.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 16.0;
             hierarchy_aware_flow_based_refinement_configuration.alpha_modifier             = 2.0;
             hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set      = true;
             hierarchy_aware_flow_based_refinement_configuration.closed_vertex_sets_repeats = 100;
 
             hierarchy_aware_multi_way_fm_config.enabled                     = false;
-            hierarchy_aware_quotient_graph_refinement_configuration.enabled = false;
+            hierarchy_aware_quotient_graph_refinement_configuration.enabled = true;
 
             wave_refinement_configuration.enabled = false;
 

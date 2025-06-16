@@ -40,6 +40,8 @@ namespace HeiProMap {
     class HierarchyAwareQuotientGraphRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
         explicit HierarchyAwareQuotientGraphRefinementConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
+
+        u64 max_iteration = 5;
     };
 
     class HierarchyAwareQuotientGraphRefinement final : public ISerialRefiner {
@@ -55,12 +57,9 @@ namespace HeiProMap {
         AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
 
-        AlignedArray<u32> block_used;
-        u32 block_marker = 0;
-
         // priority queues
-        std::priority_queue<KWayFMMove> boundary_vertices_sb1;
-        std::priority_queue<KWayFMMove> boundary_vertices_sb2;
+        IndexedMaxHeap<s64> l_boundary_vertices;
+        IndexedMaxHeap<s64> r_boundary_vertices;
 
         // store change
         AlignedArray<Move> moves;
@@ -100,11 +99,12 @@ namespace HeiProMap {
             config           = dynamic_cast<const HierarchyAwareQuotientGraphRefinementConfiguration*>(&i_config);
             m_stat_collector = &t_stat_collect;
 
+            // priority queues
+            l_boundary_vertices.initialize(m_n);
+            r_boundary_vertices.initialize(m_n);
+
             vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
-
-            block_used.initialize(m_k, 0);
-            block_marker = 0;
 
             moves.initialize(m_n);
             moves_size = 0;
@@ -126,58 +126,47 @@ namespace HeiProMap {
 
         void refine_layer(const u64 level,
                           const u64 max_level,
-                          const graph_t& g,
+                          graph_t& g,
                           d_oracle_t& d_oracle,
                           bv_manager_t& bv_manager,
                           p_manager_t& p_manager,
                           q_graph_t& q_graph,
-                          size_t layer) {
-            for (size_t rep = 0; rep < 3; ++rep) {
-                partition_t n_total_super_blocks = 1;
-                for (size_t i = layer; i < m_hierarchy.size(); ++i) { n_total_super_blocks *= m_hierarchy[i]; }
-                partition_t ids_per_super_block = m_k / n_total_super_blocks;
+                          size_t layer) override {
+            partition_t n_upper_total_super_blocks = 1;
+            partition_t n_total_super_blocks       = m_hierarchy[layer];
+            for (size_t i = layer + 1; i < m_hierarchy.size(); ++i) { n_upper_total_super_blocks *= m_hierarchy[i]; }
+            partition_t ids_per_super_block = m_k / (n_upper_total_super_blocks * m_hierarchy[layer]);
 
-                for (size_t i = 0; i < n_total_super_blocks; ++i) {
-                    for (size_t j = i + 1; j < n_total_super_blocks; ++j) {
-                        partition_t n1_start = i * ids_per_super_block;
-                        partition_t n2_start = j * ids_per_super_block;
+            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+                for (size_t i = 0; i < n_upper_total_super_blocks; ++i) {
+                    for (size_t j = 0; j < n_total_super_blocks; ++j) {
+                        for (size_t k = j + 1; k < n_total_super_blocks; ++k) {
+                            partition_t l_start = i * (n_total_super_blocks * ids_per_super_block) + j * ids_per_super_block;
+                            partition_t r_start = i * (n_total_super_blocks * ids_per_super_block) + k * ids_per_super_block;
 
-                        if (is_connected(g, bv_manager, p_manager, n1_start, n2_start, ids_per_super_block)) {
-                            refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, n1_start, n2_start, ids_per_super_block, m_lmax * ids_per_super_block);
+                            if (!is_connected(g, bv_manager, p_manager, l_start, r_start, ids_per_super_block)) { continue; }
 
-                            weight_t n1_weight = 0;
-                            for (partition_t id = n1_start; id < n1_start + ids_per_super_block; ++id) {
-                                n1_weight += p_manager.get_bweight(id);
-                            }
-
-                            weight_t n2_weight = 0;
-                            for (partition_t id = n2_start; id < n2_start + ids_per_super_block; ++id) {
-                                n2_weight += p_manager.get_bweight(id);
-                            }
-
-                            // std::cout << n1_start << " " << n2_start << " " << ids_per_super_block << " " << n1_weight << " " << n2_weight << " " << m_lmax * ids_per_super_block << std::endl;
+                            refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, l_start, r_start, ids_per_super_block, m_lmax * ids_per_super_block);
                         }
                     }
                 }
             }
         }
 
-        bool is_connected(const graph_t& g,
-                          bv_manager_t& bv_manager,
-                          p_manager_t& p_manager,
-                          partition_t n1_start,
-                          partition_t n2_start,
-                          partition_t ids_per_super_block) {
-            for (partition_t id = n1_start; id < n1_start + ids_per_super_block; ++id) {
+        static bool is_connected(const graph_t& g,
+                                 bv_manager_t& bv_manager,
+                                 p_manager_t& p_manager,
+                                 partition_t l_start,
+                                 partition_t r_start,
+                                 partition_t ids_per_super_block) {
+            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
                         forall_guiv(g, u, j, v)
                             {
                                 partition_t v_id = p_manager[v];
 
-                                if (n2_start <= v_id && v_id < n2_start + ids_per_super_block) {
-                                    return true;
-                                }
+                                if (r_start <= v_id && v_id < r_start + ids_per_super_block) { return true; }
                             }
                         endfor
                     }
@@ -209,76 +198,70 @@ namespace HeiProMap {
                            bv_manager_t& bv_manager,
                            p_manager_t& p_manager,
                            q_graph_t& q_graph,
-                           partition_t n1_start,
-                           partition_t n2_start,
+                           partition_t l_start,
+                           partition_t r_start,
                            partition_t ids_per_super_block,
                            weight_t lmax) {
             f64 alpha = 1000.0;
             f64 beta  = std::log(g.get_n());
 
-            /*
-            std::cout << "Refining: [";
-            for (partition_t id = n1_start; id < n1_start + ids_per_super_block; ++id) {
-                std::cout << id << " ";
-            }
-            std::cout << "] - [";
-            for (partition_t id = n2_start; id < n2_start + ids_per_super_block; ++id) {
-                std::cout << id << " ";
-            }
-            std::cout << "] with lmax = " << lmax << std::endl;
-            */
-
             // initialize the heaps
-            boundary_vertices_sb1 = std::priority_queue<KWayFMMove>();
-            for (partition_t id = n1_start; id < n1_start + ids_per_super_block; ++id) {
+            l_boundary_vertices.clear();
+            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
-                        block_marker += 1;
-                        forall_guiv(g, u, j, v)
+                        s64 delta         = 0;
+                        bool is_connected = false;
+                        forall_guivw(g, u, j, v, w)
                             {
                                 partition_t v_id = p_manager[v];
-                                if (block_used[v_id] == block_marker) { continue; }
-
-                                if (n2_start <= v_id && v_id < n2_start + ids_per_super_block) {
-                                    s64 delta = get_u_qap_delta(g, u, id, v_id, p_manager, d_oracle);
-                                    boundary_vertices_sb1.emplace(u, id, v_id, delta);
-                                    block_used[v_id] = block_marker;
+                                if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
+                                    delta -= w;
+                                }
+                                if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                                    delta += w;
+                                    is_connected = true;
                                 }
                             }
                         endfor
+                        if (is_connected) {
+                            l_boundary_vertices.push(u, delta);
+                        }
                     }
                 endfor
             }
 
-            boundary_vertices_sb2 = std::priority_queue<KWayFMMove>();
-            for (partition_t id = n2_start; id < n2_start + ids_per_super_block; ++id) {
+            r_boundary_vertices.clear();
+            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
-                        block_marker += 1;
-                        forall_guiv(g, u, j, v)
+                        s64 delta         = 0;
+                        bool is_connected = false;
+                        forall_guivw(g, u, j, v, w)
                             {
                                 partition_t v_id = p_manager[v];
-                                if (block_used[v_id] == block_marker) { continue; }
+                                if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
+                                    delta += w;
+                                    is_connected = true;
+                                }
 
-                                if (n1_start <= v_id && v_id < n1_start + ids_per_super_block) {
-                                    s64 delta = get_u_qap_delta(g, u, id, v_id, p_manager, d_oracle);
-                                    boundary_vertices_sb2.emplace(u, id, v_id, delta);
-                                    block_used[v_id] = block_marker;
+                                if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                                    delta -= w;
                                 }
                             }
                         endfor
+                        if (is_connected) {
+                            r_boundary_vertices.push(u, delta);
+                        }
                     }
                 endfor
             }
 
             // get the weight of both superblocks
-            weight_t weight_sb1 = 0;
-            for (partition_t id = n1_start; id < n1_start + ids_per_super_block; ++id) { weight_sb1 += p_manager.get_bweight(id); }
-            weight_t weight_sb2 = 0;
-            for (partition_t id = n2_start; id < n2_start + ids_per_super_block; ++id) { weight_sb2 += p_manager.get_bweight(id); }
-
-            weight_t max_allowed_weight = std::max(weight_sb1, weight_sb2);
-            bool start_was_unbalanced   = weight_sb1 > lmax || weight_sb2 > lmax;
+            weight_t l_weight = 0;
+            weight_t r_weight = 0;
+            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_weight += p_manager.get_bweight(id); }
+            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_weight += p_manager.get_bweight(id); }
 
             // start executing moves based on the TopGain method
             vertex_marker += 1;
@@ -292,56 +275,68 @@ namespace HeiProMap {
             f64 qap_gain_mean                = 0.0;
             f64 qap_gain_var                 = 0.0;
 
-            while ((!boundary_vertices_sb1.empty() || !boundary_vertices_sb2.empty()) && moves_size < max_n_swaps) {
+            while ((!l_boundary_vertices.empty() || !r_boundary_vertices.empty()) && moves_size < max_n_swaps) {
                 // determine from which block to choose
-                bool choose_sb1 = true;
+                bool choose_l = true;
                 // 1. if one block is empty, then choose the other one
-                if (boundary_vertices_sb1.empty() || boundary_vertices_sb2.empty()) {
-                    choose_sb1 = boundary_vertices_sb2.empty();
+                if (l_boundary_vertices.empty() || r_boundary_vertices.empty()) {
+                    choose_l = r_boundary_vertices.empty();
                 } else {
                     // 2. choose the block with greater gain and randomly if even
-                    if (boundary_vertices_sb2.top().qap_delta > boundary_vertices_sb1.top().qap_delta) {
-                        choose_sb1 = false;
-                    } else if (boundary_vertices_sb2.top().qap_delta == boundary_vertices_sb1.top().qap_delta) {
-                        choose_sb1 = random_engine->get_f32() < 0.5;
+                    if (r_boundary_vertices.top() > l_boundary_vertices.top()) {
+                        choose_l = false;
+                    } else if (r_boundary_vertices.top() == l_boundary_vertices.top()) {
+                        choose_l = random_engine->get_f32() < 0.5;
                     }
 
                     // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
-                    if (weight_sb1 > lmax && weight_sb1 > weight_sb2) { choose_sb1 = true; }
-                    if (weight_sb2 > lmax && weight_sb2 > weight_sb1) { choose_sb1 = false; }
-                    if (weight_sb1 > lmax && weight_sb2 > lmax && weight_sb1 == weight_sb2) { choose_sb1 = random_engine->get_f32() < 0.5; }
+                    if (l_weight > lmax && l_weight > r_weight) { choose_l = true; }
+                    if (r_weight > lmax && r_weight > l_weight) { choose_l = false; }
+                    if (l_weight > lmax && r_weight > lmax && l_weight == r_weight) { choose_l = random_engine->get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
-                std::priority_queue<KWayFMMove>& boundary_vertices = choose_sb1 ? boundary_vertices_sb1 : boundary_vertices_sb2;
+                IndexedMaxHeap<s64>& boundary_vertices = choose_l ? l_boundary_vertices : r_boundary_vertices;
 
-                vertex_t vertex        = boundary_vertices.top().u;
-                s64 qap_delta          = boundary_vertices.top().qap_delta;
+                vertex_t vertex        = boundary_vertices.top_key();
+                s64 qap_delta          = boundary_vertices.top();
                 weight_t vertex_weight = g.weight(vertex);
-                partition_t vertex_id  = boundary_vertices.top().u_id;
-                partition_t move_id    = boundary_vertices.top().to_move_id;
+                partition_t vertex_id  = p_manager[vertex];
+                partition_t move_id    = choose_l ? r_start : l_start;
                 boundary_vertices.pop();
 
-                // if vertex is not in the prev partition, throw away
-                if (vertex_used[vertex] == vertex_marker) { continue; }
-                if (p_manager[vertex] != vertex_id) { continue; }
-                if (choose_sb1 ? !is_connected(g, p_manager, vertex, n2_start, ids_per_super_block) : !is_connected(g, p_manager, vertex, n1_start, ids_per_super_block)) { continue; }
-                if (qap_delta != get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle)) { continue; }
+                // greedy way where to put the vertex
+                s64 move_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);;
+                if (choose_l) {
+                    for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
+                        s64 real_qap_delta = get_u_qap_delta(g, vertex, vertex_id, id, p_manager, d_oracle);
+                        if (real_qap_delta > move_qap_delta && p_manager.get_bweight(id) + vertex_weight <= m_lmax) {
+                            move_id = id;
+                            move_qap_delta = real_qap_delta;
+                        }
+                    }
+                } else {
+                    for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
+                        s64 real_qap_delta = get_u_qap_delta(g, vertex, vertex_id, id, p_manager, d_oracle);
+                        if (real_qap_delta > move_qap_delta && p_manager.get_bweight(id) + vertex_weight <= m_lmax) {
+                            move_id = id;
+                            move_qap_delta = real_qap_delta;
+                        }
+                    }
+                }
 
                 // move the vertex
                 moves[moves_size++] = {vertex, vertex_id, move_id};
                 curr_qap_gain += qap_delta;
-                if (choose_sb1) {
-                    weight_sb1 -= vertex_weight;
-                    weight_sb2 += vertex_weight;
+                if (choose_l) {
+                    l_weight -= vertex_weight;
+                    r_weight += vertex_weight;
                 } else {
-                    weight_sb1 += vertex_weight;
-                    weight_sb2 -= vertex_weight;
+                    l_weight += vertex_weight;
+                    r_weight -= vertex_weight;
                 }
 
-                bool balanced              = weight_sb1 <= lmax && weight_sb2 <= lmax;
-                bool unbalanced_but_better = start_was_unbalanced && weight_sb1 <= max_allowed_weight && weight_sb2 <= max_allowed_weight;
-                if (curr_qap_gain >= max_qap_gain && (balanced || unbalanced_but_better)) {
+                if (curr_qap_gain >= max_qap_gain && l_weight <= lmax && r_weight <= lmax) {
                     best_idx     = moves_size;
                     max_qap_gain = curr_qap_gain;
 
@@ -369,47 +364,58 @@ namespace HeiProMap {
                         if (vertex_used[neighbor] == vertex_marker) { continue; }
                         partition_t neighbor_id = p_manager[neighbor];
 
-                        if (choose_sb1) {
-                            if (!(n2_start <= neighbor_id && neighbor_id < n2_start + ids_per_super_block)) { continue; }
+                        bool in_l = l_start <= neighbor_id && neighbor_id < l_start + ids_per_super_block;
+                        bool in_r = r_start <= neighbor_id && neighbor_id < r_start + ids_per_super_block;
 
-                            block_marker += 1;
-                            forall_guiv(g, neighbor, j, v)
+                        if (!(in_l || in_r)) { continue; }
+
+                        if (in_l) {
+                            s64 delta         = 0;
+                            bool is_connected = false;
+                            forall_guivw(g, neighbor, j, v, w)
                                 {
                                     partition_t v_id = p_manager[v];
-                                    if (block_used[v_id] == block_marker) { continue; }
-
-                                    if (n1_start <= v_id && v_id < n1_start + ids_per_super_block) {
-                                        s64 delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
-                                        boundary_vertices_sb2.emplace(neighbor, neighbor_id, v_id, delta);
-                                        block_used[v_id] = block_marker;
+                                    if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
+                                        delta -= w;
+                                    }
+                                    if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                                        delta += w;
+                                        is_connected = true;
                                     }
                                 }
                             endfor
+                            if (is_connected) {
+                                l_boundary_vertices.push_update(neighbor, delta);
+                            }
                         } else {
-                            if (!(n1_start <= neighbor_id && neighbor_id < n1_start + ids_per_super_block)) { continue; }
-
-                            block_marker += 1;
-                            forall_guiv(g, neighbor, j, v)
+                            s64 delta         = 0;
+                            bool is_connected = false;
+                            forall_guivw(g, neighbor, j, v, w)
                                 {
                                     partition_t v_id = p_manager[v];
-                                    if (block_used[v_id] == block_marker) { continue; }
+                                    if (l_start <= v_id && v_id < l_start + ids_per_super_block) {
+                                        delta += w;
+                                        is_connected = true;
+                                    }
 
-                                    if (n2_start <= v_id && v_id < n2_start + ids_per_super_block) {
-                                        s64 delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
-                                        boundary_vertices_sb1.emplace(neighbor, neighbor_id, v_id, delta);
-                                        block_used[v_id] = block_marker;
+                                    if (r_start <= v_id && v_id < r_start + ids_per_super_block) {
+                                        delta -= w;
                                     }
                                 }
+
                             endfor
+                            if (is_connected) {
+                                r_boundary_vertices.push_update(neighbor, delta);
+                            }
                         }
                     }
                 endfor
 
                 // remove vertex from u if it is not boundary
-                while (!boundary_vertices_sb1.empty() && !is_connected(g, p_manager, boundary_vertices_sb1.top().u, n2_start, ids_per_super_block)) { boundary_vertices_sb1.pop(); }
+                while (!l_boundary_vertices.empty() && !is_connected(g, p_manager, l_boundary_vertices.top_key(), r_start, ids_per_super_block)) { l_boundary_vertices.pop(); }
 
                 // remove vertex from v if it is not boundary
-                while (!boundary_vertices_sb2.empty() && !is_connected(g, p_manager, boundary_vertices_sb2.top().u, n1_start, ids_per_super_block)) { boundary_vertices_sb2.pop(); }
+                while (!r_boundary_vertices.empty() && !is_connected(g, p_manager, r_boundary_vertices.top_key(), l_start, ids_per_super_block)) { r_boundary_vertices.pop(); }
             }
 
             // revert all moves in partitioning manager
