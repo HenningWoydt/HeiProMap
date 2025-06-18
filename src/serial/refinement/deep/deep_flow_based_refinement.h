@@ -102,41 +102,7 @@ namespace HeiProMap {
         };
         std::vector<thread_info> thread_infos;
         std::mutex               mutex;
-
-        // array for boundary
-        // AlignedArray<vertex_t> left_boundary;
-        // size_t left_boundary_size = 0;
-
-        // AlignedArray<vertex_t> right_boundary;
-        // size_t right_boundary_size = 0;
-
-        // array for regions
-        // AlignedArray<vertex_t> left_region;
-        // size_t left_region_size = 0;
-
-        // AlignedArray<vertex_t> right_region;
-        // size_t right_region_size = 0;
-
-        // AlignedArray<u32> is_left_region;
-        // AlignedArray<u32> is_right_region;
-        // u32 is_region_mark = 0;
-
-        // AlignedArray<vertex_t> queue;
-        // size_t queue_size = 0;
-
-        // AlignedArray<u32> seen;
-        // u32 seen_mark = 0;
-
-        // array for penalties
-        // AlignedArray<weight_t> left_penalties;
-        // AlignedArray<weight_t> right_penalties;
-
-        //Translation Table for mapping
-        // TranslationTable<vertex_t> translation_table;
-
-        // FlowNetwork flow_network;
-        // ResidualFlowNetwork residual_flow_network;
-        // SCCGraph scc_graph;
+        f64 time = 0;
 
         RandomEngine                               *random_engine = nullptr;
         const DeepFlowBasedRefinementConfiguration *config        = nullptr;
@@ -207,33 +173,6 @@ namespace HeiProMap {
 
                 thread_infos[i].translation_table.reserve(m_n, m_n);
             }
-
-            // left_boundary.initialize(m_n);
-            // left_boundary_size = 0;
-
-            // right_boundary.initialize(m_n);
-            // right_boundary_size = 0;
-
-            // left_region.initialize(m_n);
-            // left_region_size = 0;
-
-            // right_region.initialize(m_n);
-            // right_region_size = 0;
-
-            // is_left_region.initialize(m_n, 0);
-            // is_right_region.initialize(m_n, 0);
-            // is_region_mark = 0;
-
-            // queue.initialize(m_n);
-            // queue_size = 0;
-
-            // seen.initialize(m_n, 0);
-            // seen_mark = 0;
-
-            // left_penalties.initialize(m_n);
-            // right_penalties.initialize(m_n);
-
-            // translation_table.reserve(m_n, m_n);
         }
 
         void refine(u64 level,
@@ -444,7 +383,7 @@ namespace HeiProMap {
                                u64 thread_id) {
             u32 &is_region_mark = thread_infos[thread_id].is_region_mark;
 
-            u32               &seen_mark = thread_infos[thread_id].is_region_mark;
+            u32               &seen_mark = thread_infos[thread_id].seen_mark;
             AlignedArray<u32> &seen      = thread_infos[thread_id].seen;
 
             size_t                 &queue_size = thread_infos[thread_id].queue_size;
@@ -774,6 +713,7 @@ namespace HeiProMap {
 
 
             mutex.lock();
+            // auto sp = std::chrono::high_resolution_clock::now();
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
@@ -810,6 +750,8 @@ namespace HeiProMap {
                     p_manager.move(u, g.weight(u), right_id, left_id);
                 }
             }
+            // auto ep = std::chrono::high_resolution_clock::now();
+            // time += get_seconds(sp, ep);
             mutex.unlock();
         }
 

@@ -206,9 +206,9 @@ namespace HeiProMap {
                                       const deep_p_manager_t &p_manager,
                                       deep_bv_manager_t &bv_manager,
                                       const partition_t k) {
-        ASSERT(deep_assert_n_boundary_vertices(g, p_manager, bv_manager));
-        ASSERT(deep_assert_correct_vertices_boundary(g, p_manager, bv_manager));
-        ASSERT(deep_assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
+        deep_assert_n_boundary_vertices(g, p_manager, bv_manager);
+        deep_assert_correct_vertices_boundary(g, p_manager, bv_manager);
+        deep_assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k);
         return true;
     }
 
@@ -249,13 +249,13 @@ namespace HeiProMap {
                                             const deep_p_manager_t &p_manager,
                                             const partition_t k) {
         // check no self-loops
-        ASSERT(deep_assert_no_self_loops(g));
+        deep_assert_no_self_loops(g);
 
         // check no duplicate edges
-        ASSERT(deep_assert_no_double_edges(g));
+        deep_assert_no_double_edges(g);
 
         // check the correct partition sizes
-        ASSERT(deep_assert_correct_partition_size(g, p_manager, k));
+        deep_assert_correct_partition_size(g, p_manager, k);
 
         return true;
     }
@@ -266,28 +266,28 @@ namespace HeiProMap {
                                               const deep_q_graph_t &q_graph,
                                               const partition_t k) {
         // check no self-loops
-        ASSERT(deep_assert_no_self_loops(g));
+        deep_assert_no_self_loops(g);
 
         // check no duplicate edges
-        ASSERT(deep_assert_no_double_edges(g));
+        deep_assert_no_double_edges(g);
 
         // check the correct partition sizes
-        ASSERT(deep_assert_correct_partition_size(g, p_manager, k));
+        deep_assert_correct_partition_size(g, p_manager, k);
 
         // check the correct block weights
-        ASSERT(deep_assert_bweights(g, p_manager, k));
+        deep_assert_bweights(g, p_manager, k);
 
         // check the correct number of partitions
-        ASSERT(deep_assert_n_boundary_vertices(g, p_manager, bv_manager));
+        deep_assert_n_boundary_vertices(g, p_manager, bv_manager);
 
         // check the right vertices are boundary
-        ASSERT(deep_assert_correct_vertices_boundary(g, p_manager, bv_manager));
+        deep_assert_correct_vertices_boundary(g, p_manager, bv_manager);
 
         // check the right vertices are boundary per block
-        ASSERT(deep_assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
+        deep_assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k);
 
         // check the correct quotient graph
-        ASSERT(deep_assert_correct_quotient_graph(g, p_manager, q_graph, k));
+        deep_assert_correct_quotient_graph(g, p_manager, q_graph, k);
 
         return true;
     }
@@ -296,16 +296,16 @@ namespace HeiProMap {
                                               const deep_p_manager_t &p_manager,
                                               const partition_t k) {
         // check no self-loops
-        ASSERT(deep_assert_no_self_loops(g));
+        deep_assert_no_self_loops(g);
 
         // check no duplicate edges
-        ASSERT(deep_assert_no_double_edges(g));
+        deep_assert_no_double_edges(g);
 
         // check the correct partition sizes
-        ASSERT(deep_assert_correct_partition_size(g, p_manager, k));
+        deep_assert_correct_partition_size(g, p_manager, k);
 
         // check the correct block weights
-        ASSERT(deep_assert_bweights(g, p_manager, k));
+        deep_assert_bweights(g, p_manager, k);
 
         return true;
     }

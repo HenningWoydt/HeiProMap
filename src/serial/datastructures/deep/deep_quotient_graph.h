@@ -71,6 +71,10 @@ namespace HeiProMap {
             return false;
         }
 
+        std::vector<std::pair<partition_t, weight_t>> &neighborhood(const partition_t id){
+            return edges[id];
+        }
+
         weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
             ASSERT(u_id != v_id);
 
