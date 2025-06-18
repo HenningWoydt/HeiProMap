@@ -103,8 +103,7 @@ namespace HeiProMap {
                        const std::vector<weight_t> &distance,
                        const f64 imbalance,
                        RandomEngine &t_random_engine,
-                       const KaffpaPartitionerConfiguration &i_config,
-                       StatisticCollector &t_stat_collect) {
+                       const KaffpaPartitionerConfiguration &i_config) {
             KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration *>(&i_config);
 
             // number of vertices and edges

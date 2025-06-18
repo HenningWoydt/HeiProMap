@@ -28,22 +28,11 @@
 #define HEIPROMAP_DEEP_FLOW_BASED_REFINEMENT_H
 
 #include <algorithm>
-#include <queue>
-#include <stack>
-#include <unordered_set>
-
-#include "../../extern/maxflow-v3.04.src/graph.h"
 
 #include "ISerialDeepRefiner.h"
 #include "../flow_based_refinement.h"
-#include "../quotient_graph_refinement.h"
-#include "../../../commons/indexed_update_heap.h"
 #include "../../../commons/random_engine.h"
-#include "../../../commons/statistic_collector.h"
 #include "../../../commons/utils.h"
-#include "../../utility/deep/deep_assert_state.h"
-#include "../../utility/functions.h"
-#include "../../utility/qap.h"
 
 namespace HeiProMap {
     class DeepFlowBasedRefinementConfiguration final : public ISerialDeepRefinerConfiguration {
@@ -65,6 +54,7 @@ namespace HeiProMap {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
         partition_t m_k = 0;
+        u64 m_threads   = 16;
         f64 m_imbalance = 0.0;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t> m_distance;
@@ -74,44 +64,82 @@ namespace HeiProMap {
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> active_next_round;
 
-        // array for boundary
-        AlignedArray<vertex_t> left_boundary;
-        size_t left_boundary_size = 0;
+        struct thread_info {
+            // array for boundary
+            AlignedArray<vertex_t> left_boundary;
+            size_t left_boundary_size = 0;
 
-        AlignedArray<vertex_t> right_boundary;
-        size_t right_boundary_size = 0;
+            AlignedArray<vertex_t> right_boundary;
+            size_t right_boundary_size = 0;
+
+            // array for regions
+            AlignedArray<vertex_t> left_region;
+            size_t left_region_size = 0;
+
+            AlignedArray<vertex_t> right_region;
+            size_t right_region_size = 0;
+
+            AlignedArray<u32> is_left_region;
+            AlignedArray<u32> is_right_region;
+            u32 is_region_mark = 0;
+
+            AlignedArray<vertex_t> queue;
+            size_t queue_size = 0;
+
+            AlignedArray<u32> seen;
+            u32 seen_mark = 0;
+
+            // array for penalties
+            AlignedArray<weight_t> left_penalties;
+            AlignedArray<weight_t> right_penalties;
+
+            //Translation Table for mapping
+            TranslationTable<vertex_t> translation_table;
+
+            FlowNetwork flow_network;
+            ResidualFlowNetwork residual_flow_network;
+            SCCGraph scc_graph;
+        };
+        std::vector<thread_info> thread_infos;
+        std::mutex mutex;
+
+        // array for boundary
+        // AlignedArray<vertex_t> left_boundary;
+        // size_t left_boundary_size = 0;
+
+        // AlignedArray<vertex_t> right_boundary;
+        // size_t right_boundary_size = 0;
 
         // array for regions
-        AlignedArray<vertex_t> left_region;
-        size_t left_region_size = 0;
+        // AlignedArray<vertex_t> left_region;
+        // size_t left_region_size = 0;
 
-        AlignedArray<vertex_t> right_region;
-        size_t right_region_size = 0;
+        // AlignedArray<vertex_t> right_region;
+        // size_t right_region_size = 0;
 
-        AlignedArray<u32> is_left_region;
-        AlignedArray<u32> is_right_region;
-        u32 is_region_mark = 0;
+        // AlignedArray<u32> is_left_region;
+        // AlignedArray<u32> is_right_region;
+        // u32 is_region_mark = 0;
 
-        AlignedArray<vertex_t> queue;
-        size_t queue_size = 0;
+        // AlignedArray<vertex_t> queue;
+        // size_t queue_size = 0;
 
-        AlignedArray<u32> seen;
-        u32 seen_mark = 0;
+        // AlignedArray<u32> seen;
+        // u32 seen_mark = 0;
 
         // array for penalties
-        AlignedArray<weight_t> left_penalties;
-        AlignedArray<weight_t> right_penalties;
+        // AlignedArray<weight_t> left_penalties;
+        // AlignedArray<weight_t> right_penalties;
 
         //Translation Table for mapping
-        TranslationTable<vertex_t> translation_table;
+        // TranslationTable<vertex_t> translation_table;
 
-        FlowNetwork flow_network;
-        ResidualFlowNetwork residual_flow_network;
-        SCCGraph scc_graph;
+        // FlowNetwork flow_network;
+        // ResidualFlowNetwork residual_flow_network;
+        // SCCGraph scc_graph;
 
         RandomEngine* random_engine                        = nullptr;
         const DeepFlowBasedRefinementConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector               = nullptr;
 
     public:
         DeepFlowBasedRefinement() = default;
@@ -125,8 +153,7 @@ namespace HeiProMap {
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
                         RandomEngine& t_random_engine,
-                        const ISerialDeepRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const ISerialDeepRefinerConfiguration& i_config) override {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
@@ -142,40 +169,69 @@ namespace HeiProMap {
                 k_rem.push_back(k_rem.back() * m_hierarchy[i]);
             }
 
-            random_engine    = &t_random_engine;
-            config           = dynamic_cast<const DeepFlowBasedRefinementConfiguration*>(&i_config);
-            m_stat_collector = &t_stat_collect;
+            random_engine = &t_random_engine;
+            config        = dynamic_cast<const DeepFlowBasedRefinementConfiguration*>(&i_config);
 
             // active block scheduling
             active_this_round.initialize(m_k);
             active_next_round.initialize(m_k);
 
-            left_boundary.initialize(m_n);
-            left_boundary_size = 0;
+            thread_infos.resize(m_threads);
+            for (size_t i = 0; i < m_threads; ++i) {
+                thread_infos[i].left_boundary.initialize(m_n);
+                thread_infos[i].left_boundary_size = 0;
 
-            right_boundary.initialize(m_n);
-            right_boundary_size = 0;
+                thread_infos[i].right_boundary.initialize(m_n);
+                thread_infos[i].right_boundary_size = 0;
 
-            left_region.initialize(m_n);
-            left_region_size = 0;
+                thread_infos[i].left_region.initialize(m_n);
+                thread_infos[i].left_region_size = 0;
 
-            right_region.initialize(m_n);
-            right_region_size = 0;
+                thread_infos[i].right_region.initialize(m_n);
+                thread_infos[i].right_region_size = 0;
 
-            is_left_region.initialize(m_n, 0);
-            is_right_region.initialize(m_n, 0);
-            is_region_mark = 0;
+                thread_infos[i].is_left_region.initialize(m_n, 0);
+                thread_infos[i].is_right_region.initialize(m_n, 0);
+                thread_infos[i].is_region_mark = 0;
 
-            queue.initialize(m_n);
-            queue_size = 0;
+                thread_infos[i].queue.initialize(m_n);
+                thread_infos[i].queue_size = 0;
 
-            seen.initialize(m_n, 0);
-            seen_mark = 0;
+                thread_infos[i].seen.initialize(m_n, 0);
+                thread_infos[i].seen_mark = 0;
 
-            left_penalties.initialize(m_n);
-            right_penalties.initialize(m_n);
+                thread_infos[i].left_penalties.initialize(m_n);
+                thread_infos[i].right_penalties.initialize(m_n);
 
-            translation_table.reserve(m_n, m_n);
+                thread_infos[i].translation_table.reserve(m_n, m_n);
+            }
+
+            // left_boundary.initialize(m_n);
+            // left_boundary_size = 0;
+
+            // right_boundary.initialize(m_n);
+            // right_boundary_size = 0;
+
+            // left_region.initialize(m_n);
+            // left_region_size = 0;
+
+            // right_region.initialize(m_n);
+            // right_region_size = 0;
+
+            // is_left_region.initialize(m_n, 0);
+            // is_right_region.initialize(m_n, 0);
+            // is_region_mark = 0;
+
+            // queue.initialize(m_n);
+            // queue_size = 0;
+
+            // seen.initialize(m_n, 0);
+            // seen_mark = 0;
+
+            // left_penalties.initialize(m_n);
+            // right_penalties.initialize(m_n);
+
+            // translation_table.reserve(m_n, m_n);
         }
 
         void refine(u64 level,
@@ -191,14 +247,14 @@ namespace HeiProMap {
             active_next_round.initialize(m_k, 0);
 
             for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                // determine all pairs in the quotient graph
-                size_t n_pairs = q_graph.n_pairs();
-                for (size_t j = 0; j < n_pairs; ++j) {
-                    auto [u_id, v_id] = q_graph.get_pair(j);
+                std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings = q_graph.get_distance_2_matchings(active_this_round);
 
-                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) { continue; }
-
-                    refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
+                for (auto& matching : matchings) {
+#pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    for (auto [u_id, v_id] : matching) {
+                        u64 thread_id = omp_get_thread_num();
+                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
+                    }
                 }
 
                 std::swap(active_this_round, active_next_round);
@@ -206,16 +262,30 @@ namespace HeiProMap {
             }
         }
 
-        void refine_blocks(const u64 level,
-                           const u64 max_level,
-                           const graph_t& g,
+        void refine_blocks(const graph_t& g,
                            deep_d_oracle_t& d_oracle,
                            deep_bv_manager_t& bv_manager,
                            deep_p_manager_t& p_manager,
                            deep_q_graph_t& q_graph,
                            partition_t left_id,
-                           partition_t right_id) {
+                           partition_t right_id,
+                           u64 thread_id) {
             ASSERT(left_id != right_id);
+
+            size_t& left_boundary_size            = thread_infos[thread_id].left_boundary_size;
+            size_t& left_region_size              = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_boundary = thread_infos[thread_id].left_boundary;
+            AlignedArray<vertex_t>& left_region   = thread_infos[thread_id].left_region;
+
+            size_t& right_boundary_size            = thread_infos[thread_id].right_boundary_size;
+            size_t& right_region_size              = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_boundary = thread_infos[thread_id].right_boundary;
+            AlignedArray<vertex_t>& right_region   = thread_infos[thread_id].right_region;
+
+            FlowNetwork& flow_network                     = thread_infos[thread_id].flow_network;
+            ResidualFlowNetwork& residual_flow_network    = thread_infos[thread_id].residual_flow_network;
+            SCCGraph& scc_graph                           = thread_infos[thread_id].scc_graph;
+            TranslationTable<vertex_t>& translation_table = thread_infos[thread_id].translation_table;
 
             f64 alpha             = config->alpha;
             f64 alpha_upper_bound = config->alpha_upper_bound;
@@ -228,18 +298,18 @@ namespace HeiProMap {
                 iteration += 1;
 
                 // get boundary vertices
-                determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
+                determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id, thread_id);
 
                 // calc max weight for each bfs
-                weight_t left_lmax        = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64)g.weight() / (f64)m_k)) * k_rem[p_manager.get_hierarchy_level(left_id)];
-                weight_t right_lmax       = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64)g.weight() / (f64)m_k)) * k_rem[p_manager.get_hierarchy_level(right_id)];
+                weight_t left_lmax            = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64)g.weight() / (f64)m_k)) * k_rem[p_manager.get_hierarchy_level(left_id)];
+                weight_t right_lmax           = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64)g.weight() / (f64)m_k)) * k_rem[p_manager.get_hierarchy_level(right_id)];
                 weight_t left_max_add_weight  = left_lmax - p_manager.get_bweight(left_id);
                 weight_t right_max_add_weight = right_lmax - p_manager.get_bweight(right_id);
 
                 // get both regions
                 weight_t left_region_weight;
                 weight_t right_region_weight;
-                determine_regions(g, p_manager, left_id, left_max_add_weight, &left_region_weight, right_id, right_max_add_weight, &right_region_weight);
+                determine_regions(g, p_manager, left_id, left_max_add_weight, &left_region_weight, right_id, right_max_add_weight, &right_region_weight, thread_id);
 
                 weight_t left_boundary_max_weight  = 0;
                 weight_t right_boundary_max_weight = 0;
@@ -254,7 +324,7 @@ namespace HeiProMap {
                 }
 
                 // determine penalties for all vertices
-                determine_penalties(g, p_manager, d_oracle, left_id, right_id);
+                determine_penalties(g, p_manager, d_oracle, left_id, right_id, thread_id);
 
                 // build a translation table from graph to flow network
                 vertex_t new_u = 0;
@@ -262,7 +332,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < right_region_size; ++i) { translation_table.add(right_region[i], new_u++); }
 
                 // build flownetwork
-                build_flow_network(g, d_oracle, left_id, right_id);
+                build_flow_network(g, d_oracle, left_id, right_id, thread_id);
 
                 // solve the flow network
                 flow_network.solve();
@@ -289,10 +359,10 @@ namespace HeiProMap {
                         continue;
                     }
                 } else {
-                    // simply use the first cut found
+                    // use the first cut found
                     flow_network.get_cut(is_left);
 
-                    if (!cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
+                    if (!cut_is_valid(g, p_manager, left_id, right_id, is_left, thread_id)) {
                         if (alpha == 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
@@ -300,8 +370,8 @@ namespace HeiProMap {
                 }
 
                 // check if the cut actually changes the partition
-                if (!cut_changes_partition(is_left)) {
-                    // cut is valid, but does not change anything
+                if (!cut_changes_partition(is_left, thread_id)) {
+                    // the cut is valid, but does not change anything
                     if (alpha == 1.0) { return; }
                     alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
@@ -311,7 +381,7 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id, thread_id);
 
                 active_next_round[left_id]  = 1;
                 active_next_round[right_id] = 1;
@@ -322,7 +392,14 @@ namespace HeiProMap {
                                          const deep_bv_manager_t& bv_manager,
                                          const deep_p_manager_t& p_manager,
                                          partition_t left_id,
-                                         partition_t right_id) {
+                                         partition_t right_id,
+                                         u64 thread_id) {
+            size_t& left_boundary_size            = thread_infos[thread_id].left_boundary_size;
+            AlignedArray<vertex_t>& left_boundary = thread_infos[thread_id].left_boundary;
+
+            size_t& right_boundary_size            = thread_infos[thread_id].right_boundary_size;
+            AlignedArray<vertex_t>& right_boundary = thread_infos[thread_id].right_boundary;
+
             left_boundary_size = 0;
             forall_bv_id_iu(bv_manager, left_id, i, u)
                 {
@@ -361,10 +438,31 @@ namespace HeiProMap {
                                weight_t* left_region_weight,
                                partition_t right_id,
                                weight_t right_max_add_weight,
-                               weight_t* right_region_weight) {
+                               weight_t* right_region_weight,
+                               u64 thread_id) {
+            u32& is_region_mark = thread_infos[thread_id].is_region_mark;
+
+            u32& seen_mark          = thread_infos[thread_id].is_region_mark;
+            AlignedArray<u32>& seen = thread_infos[thread_id].seen;
+
+            size_t& queue_size            = thread_infos[thread_id].queue_size;
+            AlignedArray<vertex_t>& queue = thread_infos[thread_id].queue;
+
+            size_t& left_boundary_size            = thread_infos[thread_id].left_boundary_size;
+            size_t& left_region_size              = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_boundary = thread_infos[thread_id].left_boundary;
+            AlignedArray<vertex_t>& left_region   = thread_infos[thread_id].left_region;
+            AlignedArray<u32>& is_left_region     = thread_infos[thread_id].is_left_region;
+
+            size_t& right_boundary_size            = thread_infos[thread_id].right_boundary_size;
+            size_t& right_region_size              = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_boundary = thread_infos[thread_id].right_boundary;
+            AlignedArray<vertex_t>& right_region   = thread_infos[thread_id].right_region;
+            AlignedArray<u32>& is_right_region     = thread_infos[thread_id].is_right_region;
+
             is_region_mark += 1;
             seen_mark += 2;
-            // seen[u] == seen_mark     means u is processed
+            // seen[u] == seen_mark means u is processed
             // seen[u] == seen_mark - 1 means u is in the queue
 
             weight_t left_curr_weight = 0;
@@ -446,7 +544,20 @@ namespace HeiProMap {
                                  const deep_p_manager_t& p_manager,
                                  deep_d_oracle_t& d_oracle,
                                  partition_t left_id,
-                                 partition_t right_id) {
+                                 partition_t right_id,
+                                 u64 thread_id) {
+            u32& is_region_mark = thread_infos[thread_id].is_region_mark;
+
+            size_t& left_region_size               = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_region    = thread_infos[thread_id].left_region;
+            AlignedArray<u32>& is_left_region      = thread_infos[thread_id].is_left_region;
+            AlignedArray<weight_t>& left_penalties = thread_infos[thread_id].left_penalties;
+
+            size_t& right_region_size               = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_region    = thread_infos[thread_id].right_region;
+            AlignedArray<u32>& is_right_region      = thread_infos[thread_id].is_right_region;
+            AlignedArray<weight_t>& right_penalties = thread_infos[thread_id].right_penalties;
+
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u         = left_region[j];
                 left_penalties[u]  = 0;
@@ -484,14 +595,30 @@ namespace HeiProMap {
         void build_flow_network(const graph_t& g,
                                 deep_d_oracle_t& d_oracle,
                                 partition_t left_id,
-                                partition_t right_id) {
+                                partition_t right_id,
+                                u64 thread_id) {
+            u32& is_region_mark = thread_infos[thread_id].is_region_mark;
+
+            size_t& left_region_size               = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_region    = thread_infos[thread_id].left_region;
+            AlignedArray<u32>& is_left_region      = thread_infos[thread_id].is_left_region;
+            AlignedArray<weight_t>& left_penalties = thread_infos[thread_id].left_penalties;
+
+            size_t& right_region_size               = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_region    = thread_infos[thread_id].right_region;
+            AlignedArray<u32>& is_right_region      = thread_infos[thread_id].is_right_region;
+            AlignedArray<weight_t>& right_penalties = thread_infos[thread_id].right_penalties;
+
+            FlowNetwork& flow_network                     = thread_infos[thread_id].flow_network;
+            TranslationTable<vertex_t>& translation_table = thread_infos[thread_id].translation_table;
+
             weight_t distance = d_oracle.get(left_id, right_id);
 
             // build flownetwork
             size_t n = left_region_size + right_region_size;
             flow_network.initialize(n);
 
-            // build left region
+            // build the left region
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u = left_region[j];
                 ASSERT(is_left_region[u] == is_region_mark);
@@ -521,7 +648,7 @@ namespace HeiProMap {
                 endfor
             }
 
-            // build right region
+            // build the right region
             for (size_t j = 0; j < right_region_size; ++j) {
                 vertex_t u = right_region[j];
                 ASSERT(is_right_region[u] == is_region_mark);
@@ -564,7 +691,16 @@ namespace HeiProMap {
                           deep_p_manager_t& p_manager,
                           partition_t left_id,
                           partition_t right_id,
-                          std::vector<u8>& is_left) {
+                          std::vector<u8>& is_left,
+                          u64 thread_id) {
+            size_t& left_region_size            = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_region = thread_infos[thread_id].left_region;
+
+            size_t& right_region_size            = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_region = thread_infos[thread_id].right_region;
+
+            TranslationTable<vertex_t>& translation_table = thread_infos[thread_id].translation_table;
+
             weight_t left_weight  = p_manager.get_bweight(left_id);
             weight_t right_weight = p_manager.get_bweight(right_id);
             for (size_t j = 0; j < left_region_size; ++j) {
@@ -590,7 +726,16 @@ namespace HeiProMap {
             return left_weight <= p_manager.get_lmax(left_id) && right_weight <= p_manager.get_lmax(right_id);
         }
 
-        bool cut_changes_partition(std::vector<u8>& is_left) {
+        bool cut_changes_partition(std::vector<u8>& is_left,
+                                   u64 thread_id) {
+            size_t& left_region_size            = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_region = thread_infos[thread_id].left_region;
+
+            size_t& right_region_size            = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_region = thread_infos[thread_id].right_region;
+
+            TranslationTable<vertex_t>& translation_table = thread_infos[thread_id].translation_table;
+
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
@@ -615,7 +760,22 @@ namespace HeiProMap {
                              deep_q_graph_t& q_graph,
                              std::vector<u8>& is_left,
                              partition_t left_id,
-                             partition_t right_id) {
+                             partition_t right_id,
+                             u64 thread_id) {
+            u32& is_region_mark = thread_infos[thread_id].is_region_mark;
+
+            size_t& left_region_size            = thread_infos[thread_id].left_region_size;
+            AlignedArray<vertex_t>& left_region = thread_infos[thread_id].left_region;
+            AlignedArray<u32>& is_left_region   = thread_infos[thread_id].is_left_region;
+
+            size_t& right_region_size            = thread_infos[thread_id].right_region_size;
+            AlignedArray<vertex_t>& right_region = thread_infos[thread_id].right_region;
+            AlignedArray<u32>& is_right_region   = thread_infos[thread_id].is_right_region;
+
+            TranslationTable<vertex_t>& translation_table = thread_infos[thread_id].translation_table;
+
+
+            mutex.lock();
             for (size_t j = 0; j < left_region_size; ++j) {
                 vertex_t u     = left_region[j];
                 vertex_t new_u = translation_table.get_n(u);
@@ -652,6 +812,7 @@ namespace HeiProMap {
                     p_manager.move(u, g.weight(u), right_id, left_id);
                 }
             }
+            mutex.unlock();
         }
 
         void revert_boundary(const graph_t& g,
@@ -660,7 +821,14 @@ namespace HeiProMap {
                              deep_q_graph_t& q_graph,
                              std::vector<u8>& changed,
                              partition_t left_id,
-                             partition_t right_id) {
+                             partition_t right_id,
+                             u64 thread_id) {
+            size_t& left_region_size = thread_infos[thread_id].left_region_size;
+
+            size_t& right_region_size = thread_infos[thread_id].right_region_size;
+
+            TranslationTable<vertex_t>& translation_table = thread_infos[thread_id].translation_table;
+
             for (vertex_t new_u = 0; new_u < left_region_size + right_region_size; ++new_u) {
                 if (changed[new_u] == 0) { continue; }
 
@@ -685,20 +853,6 @@ namespace HeiProMap {
                     p_manager.move(old_u, g.weight(old_u), right_id, left_id);
                 }
             }
-        }
-
-        JSONString get_stats() override {
-            std::string stats = "{ \n";
-#if COLLECT_METRICS
-
-#endif
-            stats.pop_back();
-            stats.pop_back();
-            stats += "\n}";
-
-            JSONString json_stats;
-            json_stats.s = stats;
-            return json_stats;
         }
     };
 }

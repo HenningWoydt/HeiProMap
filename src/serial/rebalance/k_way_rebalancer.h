@@ -51,7 +51,6 @@ namespace HeiProMap {
         u32 block_marker = 0;
 
         RandomEngine* random_engine          = nullptr;
-        StatisticCollector* m_stat_collector = nullptr;
 
     public:
         KWayRebalancer() = default;
@@ -62,8 +61,7 @@ namespace HeiProMap {
                         const weight_t t_lmax,
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
-                        RandomEngine& t_random_engine,
-                        StatisticCollector& t_stat_collect) {
+                        RandomEngine& t_random_engine) {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -78,7 +76,6 @@ namespace HeiProMap {
             block_marker = 0;
 
             random_engine    = &t_random_engine;
-            m_stat_collector = &t_stat_collect;
         }
 
         void rebalance(const u64 level,

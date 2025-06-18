@@ -47,7 +47,6 @@ namespace HeiProMap {
 
         const HeavyEdgeMatcherConfiguration *config           = nullptr;
         RandomEngine                        *random_engine    = nullptr;
-        StatisticCollector                  *m_stat_collector = nullptr;
 
         u32               mark = 0;
         AlignedArray<u32> used;
@@ -60,8 +59,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const weight_t t_l_max,
                         RandomEngine &t_random_engine,
-                        const HeavyEdgeMatcherConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) {
+                        const HeavyEdgeMatcherConfiguration &i_config) {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
@@ -69,7 +67,6 @@ namespace HeiProMap {
 
             config           = dynamic_cast<const HeavyEdgeMatcherConfiguration *>(&i_config);
             random_engine    = &t_random_engine;
-            m_stat_collector = &t_stat_collect;
 
             mark = 0;
             used.initialize(m_n, 0);

@@ -148,6 +148,8 @@ namespace HeiProMap {
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
+            ASSERT(old_id != new_id);
+
             if (!is_boundary(u)) {
                 add_new(g, p_manager, u, new_id);
                 return;

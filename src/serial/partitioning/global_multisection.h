@@ -117,11 +117,9 @@ namespace HeiProMap {
                        const std::vector<weight_t> &distance,
                        const f64 imbalance,
                        RandomEngine &t_random_engine,
-                       const GlobalMultisectionConfiguration &i_config,
-                       StatisticCollector &t_stat_collect)  {
+                       const GlobalMultisectionConfiguration &i_config)  {
             GlobalMultisectionConfiguration config = *dynamic_cast<const GlobalMultisectionConfiguration *>(&i_config);
 
-            // TIME_POINT(sp);
             int mode;
 
             if (config.mode == GLOBAL_MULTISECTION_STRONG) {
@@ -215,10 +213,6 @@ namespace HeiProMap {
                         std::swap(item->part_temp, item->part);
                     }
                 }
-                // TIME_POINT(ep_kaffpa);
-#if COLLECT_METRICS
-                // time_kaffpa += get_seconds(sp_kaffpa, ep_kaffpa);
-#endif
 
                 if ((int) item->identifier.size() == l - 1) {
                     // insert solution

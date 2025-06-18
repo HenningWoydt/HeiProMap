@@ -73,18 +73,30 @@ namespace HeiProMap {
             lmax[id] = new_lmax;
         }
 
-        weight_t get_lmax(const partition_t id){ return lmax[id]; }
+        weight_t get_lmax(const partition_t id) const { return lmax[id]; }
 
         void set_hierarchy_level(const partition_t id, const partition_t level) {
             hierarchy_level[id] = level;
         }
 
-        partition_t get_hierarchy_level(const partition_t id){ return hierarchy_level[id]; }
+        partition_t get_hierarchy_level(const partition_t id) const { return hierarchy_level[id]; }
 
+        /**
+         * Moves a vertex from one block to another. This function is
+         * thread-safe if the threads do not move the same u and the threads do
+         * have different ids for old ID and new ID.
+         *
+         * @param u Vertex to move.
+         * @param w Weight of the vertex.
+         * @param old_id Old ID of the vertex.
+         * @param new_id New ID of the vertex.
+         */
         void move(const vertex_t u,
                   const weight_t w,
                   const partition_t old_id,
                   const partition_t new_id) {
+            ASSERT(old_id != new_id);
+
             n_vertices[old_id] -= 1;
             n_vertices[new_id] += 1;
             bweights[old_id] -= w;

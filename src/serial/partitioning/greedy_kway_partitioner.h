@@ -75,8 +75,7 @@ namespace HeiProMap {
                        weight_t lmax,
                        s32 hierarchy_level,
                        RandomEngine& t_random_engine,
-                       const GreedyKWayPartitionerConfiguration& i_config,
-                       StatisticCollector& t_stat_collect) {
+                       const GreedyKWayPartitionerConfiguration& i_config) {
             weights.initialize(k, 0);
             new_partition.initialize(g.get_n(), k);
 
@@ -145,8 +144,7 @@ namespace HeiProMap {
                                     weight_t lmax,
                                     s32 hierarchy_level,
                                     RandomEngine& t_random_engine,
-                                    const GreedyKWayPartitionerConfiguration& i_config,
-                                    StatisticCollector& t_stat_collect) {
+                                    const GreedyKWayPartitionerConfiguration& i_config) {
             weights.initialize(k, 0);
 
             for (size_t i = 0; i < blocks[id].size(); ++i) {

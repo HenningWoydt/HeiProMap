@@ -56,8 +56,7 @@ namespace HeiProMap {
                                 const std::vector<partition_t> &t_hierarchy,
                                 const std::vector<weight_t> &t_distance,
                                 RandomEngine& t_random_engine,
-                                const ISerialDeepRefinerConfiguration& i_config,
-                                StatisticCollector& t_stat_collect) = 0;
+                                const ISerialDeepRefinerConfiguration& i_config) = 0;
 
         virtual void refine(u64 level,
                             u64 max_level,
@@ -66,8 +65,6 @@ namespace HeiProMap {
                             deep_bv_manager_t& bv_manager,
                             deep_p_manager_t& p_manager,
                             deep_q_graph_t& q_graph) = 0;
-
-        virtual JSONString get_stats() = 0;
     };
 }
 

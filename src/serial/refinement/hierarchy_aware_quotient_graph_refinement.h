@@ -72,7 +72,6 @@ namespace HeiProMap {
 
         RandomEngine* random_engine                                      = nullptr;
         const HierarchyAwareQuotientGraphRefinementConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector                             = nullptr;
 
     public:
         HierarchyAwareQuotientGraphRefinement() = default;
@@ -85,8 +84,7 @@ namespace HeiProMap {
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
                         RandomEngine& t_random_engine,
-                        const ISerialRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const ISerialRefinerConfiguration& i_config) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -97,7 +95,6 @@ namespace HeiProMap {
 
             random_engine    = &t_random_engine;
             config           = dynamic_cast<const HierarchyAwareQuotientGraphRefinementConfiguration*>(&i_config);
-            m_stat_collector = &t_stat_collect;
 
             // priority queues
             l_boundary_vertices.initialize(m_n);
@@ -444,8 +441,6 @@ namespace HeiProMap {
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
         }
-
-        JSONString get_stats() override { return {}; }
     };
 }
 

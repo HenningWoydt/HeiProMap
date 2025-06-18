@@ -103,15 +103,13 @@ namespace HeiProMap {
 
         RandomEngine* random_engine                      = nullptr;
         const KaffpaKWayPartitionerConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector             = nullptr;
 
     public:
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const u64 t_threads,
                         RandomEngine& t_random_engine,
-                        const KaffpaKWayPartitionerConfiguration& t_config,
-                        StatisticCollector& t_stat_collect) {
+                        const KaffpaKWayPartitionerConfiguration& t_config) {
             m_n       = t_n;
             m_k       = t_k;
             m_threads = t_threads;
@@ -120,7 +118,6 @@ namespace HeiProMap {
 
             random_engine    = &t_random_engine;
             config           = dynamic_cast<const KaffpaKWayPartitionerConfiguration*>(&t_config);
-            m_stat_collector = &t_stat_collect;
         }
 
         ~KaffpaKWayPartitioner() {

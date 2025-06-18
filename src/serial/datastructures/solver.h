@@ -63,7 +63,6 @@ namespace HeiProMap {
         RandomEngine random_engine;
 
         // statistics
-        StatisticCollector stat_collect;
         SmallStatisticCollector small_stat_collect;
         s64 initial_qap                   = 0;
         weight_t initial_max_block_weight = 0;
@@ -135,10 +134,10 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config, stat_collect);
-            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config, stat_collect);
-            rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config, stat_collect);
-            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config, stat_collect);
+            ge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.greedy_edge_matcher_config);
+            he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config);
+            rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config);
+            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.threads, random_engine, ac.global_path_algorithm_config);
 
             // refinement
             // refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
@@ -162,30 +161,24 @@ namespace HeiProMap {
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
+                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
                 }
             }
 
             for (auto& [refiner, config] : hierarchy_refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
+                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
                 }
             }
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));
-            METRICS(stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));)
         }
 
         std::vector<vertex_t> solve() {
             internal_solve();
 
             weight_t qap = get_qap(graphs.back(), p_manager, d_oracle);
-
-            METRICS(stat_collect.set_final(qap, p_manager.get_bweights(), lmax);)
-            METRICS(stat_collect.finalize();)
-            METRICS(std::ofstream stat_file(ac.statistics_out);)
-            METRICS(stat_file << stat_collect.to_JSON();)
 
             std::vector<partition_t> p(graphs.back().get_n());
             for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
@@ -262,13 +255,6 @@ namespace HeiProMap {
                     std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
                     print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
                 }
-
-                METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
-                for (auto [refiner, config] : refinements) {
-                    if (config->enabled) {
-                        METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
-                    }
-                }
             }
         }
 
@@ -279,10 +265,10 @@ namespace HeiProMap {
                 if (v_cycle == 0) {
                     if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
                         KaffpaPartitioner partitioner;
-                        partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config, stat_collect);
+                        partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.kaffpa_partitioner_config);
                     } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                         GlobalMultisectionPartitioner partitioner;
-                        partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config, stat_collect);
+                        partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config);
                     } else {
                         std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                         exit(EXIT_FAILURE);
@@ -322,9 +308,6 @@ namespace HeiProMap {
             small_stat_collect.add("partition", get_seconds(sp_partition, ep_partition));
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
-
-            METRICS(stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));)
-            METRICS(stat_collect.set_partition_stats(get_qap(graphs.back(), p_manager, d_oracle), p_manager.get_bweights(), lmax);)
         }
 
         void matching(const u64 level, u64 v_cycle) {
@@ -352,9 +335,6 @@ namespace HeiProMap {
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("matching", get_seconds(sp_match, ep_match));
-
-            METRICS(stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);)
-            METRICS(stat_collect.set_matching_stats(level, matches.back().size());)
         }
 
         void coarsening(const u64 level) {
@@ -370,8 +350,6 @@ namespace HeiProMap {
             small_stat_collect.add("coarsening", get_seconds(sp_coarse, ep_coarse));
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
-            METRICS(stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);)
-            METRICS(stat_collect.set_coarsening_stats(graphs.back().get_n(), level);)
         }
 
         void uncoarsening(const u64 level) {
@@ -386,8 +364,6 @@ namespace HeiProMap {
             small_stat_collect.add("uncoarsening", get_seconds(sp_uncoarse, ep_uncoarse));
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
-            METRICS(stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);)
-            METRICS(stat_collect.set_uncoarsening_stats(level, graphs.back().get_n());)
         }
 
         void refinement(const u64 level, const u64 max_level) {
@@ -424,8 +400,6 @@ namespace HeiProMap {
             small_stat_collect.add("refinement", get_seconds(sp_refinement, ep_refinement));
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
-            METRICS(stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);)
-            METRICS(stat_collect.set_refinement_stats(level, get_qap(graphs.back(), p_manager, d_oracle));)
         }
     };
 }

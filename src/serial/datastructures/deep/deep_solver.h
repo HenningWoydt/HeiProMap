@@ -72,7 +72,6 @@ namespace HeiProMap {
         RandomEngine random_engine;
 
         // statistics
-        StatisticCollector stat_collect;
         SmallStatisticCollector small_stat_collect;
         s64 initial_qap                   = 0;
         weight_t initial_max_block_weight = 0;
@@ -145,7 +144,7 @@ namespace HeiProMap {
                     p_manager.set(u, graphs.back().weight(u), 0);
                 }
             endfor
-            partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config, stat_collect);
+            partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
 
             bv_manager.initialize(graphs[0].get_n(), ac.k);
             q_graph.initialize(ac.k);
@@ -154,14 +153,14 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance, ac.threads);
 
             // matching
-            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config, stat_collect);
+            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
 
             // refinement
-            deep_quotient_graph_refinement_config.enabled       = false;
+            deep_quotient_graph_refinement_config.enabled       = true;
             deep_quotient_graph_refinement_config.max_iteration = 5;
             deep_quotient_graph_refinement_config.alpha         = 1000.0;
 
-            deep_flow_based_refinement_config.enabled                    = false;
+            deep_flow_based_refinement_config.enabled                    = true;
             deep_flow_based_refinement_config.min_level                  = 0;
             deep_flow_based_refinement_config.max_level                  = 100;
             deep_flow_based_refinement_config.max_global_iteration       = 2;
@@ -169,7 +168,7 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.alpha                      = 2.0;
             deep_flow_based_refinement_config.alpha_upper_bound          = 16.0;
             deep_flow_based_refinement_config.alpha_modifier             = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set      = false;
+            deep_flow_based_refinement_config.use_closed_vertex_set      = true;
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
 
             deep_lightning_refinement_config.enabled = false;
@@ -180,24 +179,18 @@ namespace HeiProMap {
 
             for (auto& [refiner, config] : refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, ac.hierarchy, ac.distance, random_engine, *config, stat_collect);
+                    refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, ac.hierarchy, ac.distance, random_engine, *config);
                 }
             }
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));
-            METRICS(stat_collect.set_io(get_seconds(sp_graph_io, ep_graph_io), get_seconds(sp_io, ep_io));)
         }
 
         std::vector<partition_t> solve() {
             internal_solve();
 
             weight_t qap = get_qap(graphs.back(), p_manager, d_oracle, ac.threads);
-
-            METRICS(stat_collect.set_final(qap, p_manager.get_bweights(), lmax);)
-            METRICS(stat_collect.finalize();)
-            METRICS(std::ofstream stat_file(ac.statistics_out);)
-            METRICS(stat_file << stat_collect.to_JSON();)
 
             std::vector<partition_t> p(graphs.back().get_n());
             for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
@@ -278,13 +271,6 @@ namespace HeiProMap {
                 std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_seconds(sp, ep) << std::endl;
                 print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size(), ac.threads));
             }
-
-            METRICS(stat_collect.add_matching_method_stats(gpa_matcher.get_stats());)
-            for (auto [refiner, config] : refinements) {
-                if (config->enabled) {
-                    METRICS(stat_collect.add_refinement_method_stats(config->name, refiner->get_stats());)
-                }
-            }
         }
 
         void partition() {
@@ -301,9 +287,6 @@ namespace HeiProMap {
             small_stat_collect.add("partition", get_seconds(sp_partition, ep_partition));
 
             HEAVYASSERT(deep_assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
-
-            METRICS(stat_collect.set_partition_time(get_seconds(sp_partition, ep_partition));)
-            METRICS(stat_collect.set_partition_stats(get_qap(graphs.back(), p_manager, d_oracle, ac.threads), p_manager.get_bweights(), lmax);)
         }
 
         void partition_subgraphs(const u64 level, const u64 threshold) {
@@ -311,7 +294,7 @@ namespace HeiProMap {
 
             std::vector<partition_t> ids;
             for (partition_t id = 0; id < ac.k; ++id) {
-                if (p_manager.get_hierarchy_level(id) > 0 && (level == 0 || p_manager.size(id) > threshold * ac.hierarchy[p_manager.get_hierarchy_level(id) - 1])) {
+                if (p_manager.get_hierarchy_level(id) != ac.k && p_manager.get_hierarchy_level(id) > 0 && (level == 0 || p_manager.size(id) > threshold * ac.hierarchy[p_manager.get_hierarchy_level(id) - 1])) {
                     ids.push_back(id);
                 }
             }
@@ -341,9 +324,6 @@ namespace HeiProMap {
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("matching", get_seconds(sp_match, ep_match));
-
-            METRICS(stat_collect.set_matching_time(get_seconds(sp_match, ep_match), level);)
-            METRICS(stat_collect.set_matching_stats(level, matches.back().size());)
         }
 
         void coarsening(const u64 level) {
@@ -357,8 +337,6 @@ namespace HeiProMap {
             small_stat_collect.add("coarsening", get_seconds(sp_coarse, ep_coarse));
 
             HEAVYASSERT(deep_assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
-            METRICS(stat_collect.set_coarsening_time(get_seconds(sp_coarse, ep_coarse), level);)
-            METRICS(stat_collect.set_coarsening_stats(graphs.back().get_n(), level);)
         }
 
         void uncoarsening(const u64 level) {
@@ -373,8 +351,6 @@ namespace HeiProMap {
             small_stat_collect.add("uncoarsening", get_seconds(sp_uncoarse, ep_uncoarse));
 
             HEAVYASSERT(deep_assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
-            METRICS(stat_collect.set_uncoarsening_time(get_seconds(sp_uncoarse, ep_uncoarse), level);)
-            METRICS(stat_collect.set_uncoarsening_stats(level, graphs.back().get_n());)
         }
 
         void refinement(const u64 level, const u64 max_level) {
@@ -407,8 +383,6 @@ namespace HeiProMap {
             small_stat_collect.add("refinement", get_seconds(sp_refinement, ep_refinement));
 
             HEAVYASSERT(deep_assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
-            METRICS(stat_collect.set_refinement_time(get_seconds(sp_refinement, ep_refinement), level);)
-            METRICS(stat_collect.set_refinement_stats(level, get_qap(graphs.back(), p_manager, d_oracle, ac.threads));)
         }
     };
 }

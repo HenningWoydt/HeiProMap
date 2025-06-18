@@ -117,7 +117,6 @@ namespace HeiProMap {
 
         RandomEngine* random_engine                                  = nullptr;
         const HierarchyAwareFlowBasedRefinementConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector                         = nullptr;
 
     public:
         HierarchyAwareFlowBasedRefinement() = default;
@@ -132,8 +131,7 @@ namespace HeiProMap {
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
                         RandomEngine& t_random_engine,
-                        const ISerialRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const ISerialRefinerConfiguration& i_config) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -144,7 +142,6 @@ namespace HeiProMap {
 
             random_engine    = &t_random_engine;
             config           = dynamic_cast<const HierarchyAwareFlowBasedRefinementConfiguration*>(&i_config);
-            m_stat_collector = &t_stat_collect;
 
             // active block scheduling
             active_this_round.initialize(m_k);
@@ -843,20 +840,6 @@ namespace HeiProMap {
                     return;
                 }
             }
-        }
-
-        JSONString get_stats() override {
-            std::string stats = "{ \n";
-#if COLLECT_METRICS
-
-#endif
-            stats.pop_back();
-            stats.pop_back();
-            stats += "\n}";
-
-            JSONString json_stats;
-            json_stats.s = stats;
-            return json_stats;
         }
     };
 }

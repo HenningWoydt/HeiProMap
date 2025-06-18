@@ -27,8 +27,9 @@
 #ifndef HEIPROMAP_STATISTIC_COLLECTOR_H
 #define HEIPROMAP_STATISTIC_COLLECTOR_H
 
+/*
 #ifndef COLLECT_METRICS
-#define COLLECT_METRICS true
+#define COLLECT_METRICS false
 #endif
 
 #if COLLECT_METRICS
@@ -250,5 +251,7 @@ namespace HeiProMap {
 #endif
     };
 }
+
+*/
 
 #endif //HEIPROMAP_STATISTIC_COLLECTOR_H

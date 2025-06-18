@@ -51,7 +51,6 @@ namespace HeiProMap {
 
         const GreedyEdgeMatcherConfiguration *config           = nullptr;
         RandomEngine                         *random_engine    = nullptr;
-        StatisticCollector                   *m_stat_collector = nullptr;
 
         AlignedArray<EdgeUVW> edges;
         size_t                edges_size = 0;
@@ -67,8 +66,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const weight_t t_l_max,
                         RandomEngine &t_random_engine,
-                        const GreedyEdgeMatcherConfiguration &i_config,
-                        StatisticCollector &t_stat_collect) {
+                        const GreedyEdgeMatcherConfiguration &i_config) {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
@@ -76,7 +74,6 @@ namespace HeiProMap {
 
             config           = dynamic_cast<const GreedyEdgeMatcherConfiguration *>(&i_config);
             random_engine    = &t_random_engine;
-            m_stat_collector = &t_stat_collect;
 
             edges.initialize(m_m);
 

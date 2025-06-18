@@ -36,8 +36,6 @@
 #include "../../commons/definitions.h"
 #include "../../commons/JSON_utils.h"
 #include "../../commons/random_engine.h"
-#include "../../commons/statistic_collector.h"
-#include "../../commons/utils.h"
 
 namespace HeiProMap {
     struct Neighbors {
@@ -72,7 +70,6 @@ namespace HeiProMap {
 
         const GlobalPathAlgorithmConfiguration* config = nullptr;
         RandomEngine* random_engine                    = nullptr;
-        StatisticCollector* m_stat_collector           = nullptr;
 
         AlignedArray<Neighbors> m_neighbors;
         AlignedArray<u32> path_id;
@@ -90,20 +87,6 @@ namespace HeiProMap {
         Matching dp_cycle_matches1;
         Matching dp_cycle_matches2;
 
-        METRICS(std::vector<f64> level_time_compute_ratings;)
-        METRICS(std::vector<f64> level_time_sorting;)
-        METRICS(std::vector<f64> level_time_build_paths;)
-        METRICS(std::vector<f64> level_time_solve_paths;)
-        METRICS(std::vector<f64> level_time_solve_cycles;)
-        METRICS(std::vector<f64> level_time_random;)
-
-        METRICS(std::vector<u64> level_edges;)
-        METRICS(std::vector<u64> level_edges_skipped;)
-        METRICS(std::vector<u64> level_edges_form_cycle;)
-        METRICS(std::vector<u64> level_edges_new_paths;)
-        METRICS(std::vector<u64> level_edges_enlarge_path;)
-        METRICS(std::vector<u64> level_edges_combine_paths;)
-
     public:
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -111,8 +94,7 @@ namespace HeiProMap {
                         const weight_t t_l_max,
                         const u64 t_threads,
                         RandomEngine& t_random_engine,
-                        const GlobalPathAlgorithmConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) {
+                        const GlobalPathAlgorithmConfiguration& i_config) {
             m_n       = t_n;
             m_m       = t_m;
             m_k       = t_k;
@@ -121,7 +103,6 @@ namespace HeiProMap {
 
             config           = dynamic_cast<const GlobalPathAlgorithmConfiguration*>(&i_config);
             random_engine    = &t_random_engine;
-            m_stat_collector = &t_stat_collect;
 
             m_neighbors.initialize(m_n);
             path_id.initialize(m_n);
@@ -143,20 +124,6 @@ namespace HeiProMap {
                    const graph_t& g,
                    const PartitionManagerT& p_manager,
                    Matching& matching) {
-            METRICS(level_time_compute_ratings.emplace_back(0.0);)
-            METRICS(level_time_sorting.emplace_back(0.0);)
-            METRICS(level_time_build_paths.emplace_back(0.0);)
-            METRICS(level_time_solve_paths.emplace_back(0.0);)
-            METRICS(level_time_solve_cycles.emplace_back(0.0);)
-            METRICS(level_time_random.emplace_back(0.0);)
-
-            METRICS(level_edges.emplace_back(0);)
-            METRICS(level_edges_skipped.emplace_back(0);)
-            METRICS(level_edges_form_cycle.emplace_back(0);)
-            METRICS(level_edges_new_paths.emplace_back(0);)
-            METRICS(level_edges_enlarge_path.emplace_back(0);)
-            METRICS(level_edges_combine_paths.emplace_back(0);)
-
             if (level < config->random_level) {
                 // use a random matching
                 random_matching(level, g, matching);
@@ -165,12 +132,8 @@ namespace HeiProMap {
 
             compute_ratings(g, p_manager);
 
-            METRICS_TIME(sp_sorting)
             std::sort(std::execution::par, edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
-            METRICS_TIME(ep_sorting)
-            METRICS(level_time_sorting.back() += get_seconds(sp_sorting, ep_sorting);)
 
-            METRICS_TIME(sp_build_paths)
             for (vertex_t u = 0; u < g.get_n(); ++u) {
                 m_neighbors[u].n1 = u;
                 m_neighbors[u].n2 = u;
@@ -181,7 +144,6 @@ namespace HeiProMap {
 
                 if (IS_NOT_ENDPOINT(m_neighbors[u], u) || IS_NOT_ENDPOINT(m_neighbors[v], v)) {
                     // u or v is not an endpoint
-                    METRICS(level_edges_skipped.back() += 1;)
                     continue;
                 }
 
@@ -197,7 +159,6 @@ namespace HeiProMap {
                     path_id[u]        = u;
                     path_id[v]        = u;
                     path_length[u]    = 1;
-                    METRICS(level_edges_new_paths.back() += 1;)
                     continue;
                 }
 
@@ -216,7 +177,6 @@ namespace HeiProMap {
                     m_neighbors[v].w2 = w;
                     path_id[u]        = v_id;
                     path_length[v_id] += 1;
-                    METRICS(level_edges_enlarge_path.back() += 1;)
                     continue;
                 }
 
@@ -235,14 +195,8 @@ namespace HeiProMap {
                         m_neighbors[v].w2 = w;
 
                         // solve the cycle
-                        METRICS_TIME(sp_solve_cycle)
                         solve_cycle(g, u, path_length[u_id], matching);
-                        METRICS_TIME(ep_solve_cycle)
                         path_length[u_id] = 0;
-
-                        METRICS(level_time_solve_cycles.back() += get_seconds(sp_solve_cycle, ep_solve_cycle);)
-                        METRICS(level_time_build_paths.back() -= get_seconds(sp_solve_cycle, ep_solve_cycle);)
-                        METRICS(level_edges_form_cycle.back() += 1;)
                     }
                     continue;
                 }
@@ -274,14 +228,9 @@ namespace HeiProMap {
                     v2                        = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
                 }
                 path_id[v2] = id1;
-
-                METRICS(level_edges_combine_paths.back() += 1;)
             }
-            METRICS_TIME(ep_build_paths)
-            METRICS(level_time_build_paths.back() += get_seconds(sp_build_paths, ep_build_paths);)
 
             // process all paths
-            METRICS_TIME(sp_solve_paths)
             forall_gu(g, u)
                 {
                     if (IS_ONE_ENDPOINT(m_neighbors[u], u) && path_length[path_id[u]] > 0) {
@@ -290,8 +239,6 @@ namespace HeiProMap {
                     }
                 }
             endfor
-            METRICS_TIME(ep_solve_paths)
-            METRICS(level_time_solve_paths.back() += get_seconds(sp_solve_paths, ep_solve_paths);)
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matching.size(); ++i) {
@@ -315,7 +262,6 @@ namespace HeiProMap {
 
         template <typename PartitionManagerT>
         void compute_ratings(const graph_t& g, const PartitionManagerT& p_manager) {
-            METRICS_TIME(sp_compute_ratings)
 
             edges_size = 0;
 #pragma omp parallel num_threads(m_threads)
@@ -363,9 +309,6 @@ namespace HeiProMap {
                     }
                 }
             }
-            METRICS_TIME(ep_compute_ratings)
-            METRICS(level_time_compute_ratings.back() += get_seconds(sp_compute_ratings, ep_compute_ratings);)
-            METRICS(level_edges.back() += edges_size;)
         }
 
         f32 solve_path_length_1(const graph_t& g,
@@ -572,8 +515,6 @@ namespace HeiProMap {
         void random_matching(const size_t level,
                              const graph_t& g,
                              Matching& matching) {
-            METRICS_TIME(sp)
-
             std::vector<u8> is_matched(g.get_n(), 0);
 
             forall_gu(g, u)
@@ -598,8 +539,6 @@ namespace HeiProMap {
                 }
             endfor
 
-            METRICS_TIME(ep);
-            METRICS(level_time_random.back() += get_seconds(sp, ep);)
 
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matching.size(); ++i) {
@@ -619,65 +558,6 @@ namespace HeiProMap {
                 ASSERT(hit[v] == 1);
             }
 #endif
-        }
-
-        JSONString get_stats() {
-            std::string stats = "{ \n";
-#if COLLECT_METRICS
-            std::vector<f64> level_time(level_time_compute_ratings.size(), 0.0);
-            for (size_t i = 0; i < level_time_compute_ratings.size(); ++i) {
-                level_time[i] = level_time_compute_ratings[i] + level_time_sorting[i] + level_time_build_paths[i] + level_time_solve_paths[i] + level_time_solve_cycles[i] + level_time_random[i];
-            }
-
-            f64 global_time                 = sum<f64>(level_time);
-            f64 global_time_compute_ratings = sum<f64>(level_time_compute_ratings);
-            f64 global_time_sorting         = sum<f64>(level_time_sorting);
-            f64 global_time_build_paths     = sum<f64>(level_time_build_paths);
-            f64 global_time_solve_paths     = sum<f64>(level_time_solve_paths);
-            f64 global_time_solve_cycles    = sum<f64>(level_time_solve_cycles);
-            f64 global_time_random          = sum<f64>(level_time_random);
-
-            u64 global_edges               = sum<u64>(level_edges);
-            u64 global_edges_skipped       = sum<u64>(level_edges_skipped);
-            u64 global_edges_form_cycle    = sum<u64>(level_edges_form_cycle);
-            u64 global_edges_new_paths     = sum<u64>(level_edges_new_paths);
-            u64 global_edges_enlarge_path  = sum<u64>(level_edges_enlarge_path);
-            u64 global_edges_combine_paths = sum<u64>(level_edges_combine_paths);
-
-            stats += to_JSON_MACRO(global_time);
-            stats += to_JSON_MACRO(global_time_compute_ratings);
-            stats += to_JSON_MACRO(global_time_sorting);
-            stats += to_JSON_MACRO(global_time_build_paths);
-            stats += to_JSON_MACRO(global_time_solve_paths);
-            stats += to_JSON_MACRO(global_time_solve_cycles);
-            stats += to_JSON_MACRO(global_time_random);
-            stats += to_JSON_MACRO(global_edges);
-            stats += to_JSON_MACRO(global_edges_skipped);
-            stats += to_JSON_MACRO(global_edges_form_cycle);
-            stats += to_JSON_MACRO(global_edges_new_paths);
-            stats += to_JSON_MACRO(global_edges_enlarge_path);
-            stats += to_JSON_MACRO(global_edges_combine_paths);
-            stats += to_JSON_MACRO(level_time);
-            stats += to_JSON_MACRO(level_time_compute_ratings);
-            stats += to_JSON_MACRO(level_time_sorting);
-            stats += to_JSON_MACRO(level_time_build_paths);
-            stats += to_JSON_MACRO(level_time_solve_paths);
-            stats += to_JSON_MACRO(level_time_solve_cycles);
-            stats += to_JSON_MACRO(level_time_random);
-            stats += to_JSON_MACRO(level_edges);
-            stats += to_JSON_MACRO(level_edges_skipped);
-            stats += to_JSON_MACRO(level_edges_form_cycle);
-            stats += to_JSON_MACRO(level_edges_new_paths);
-            stats += to_JSON_MACRO(level_edges_enlarge_path);
-            stats += to_JSON_MACRO(level_edges_combine_paths);
-#endif
-            stats.pop_back();
-            stats.pop_back();
-            stats += "\n}";
-
-            JSONString json_stats;
-            json_stats.s = stats;
-            return json_stats;
         }
     };
 }

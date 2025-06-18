@@ -65,15 +65,6 @@ namespace HeiProMap {
 
         RandomEngine* random_engine                        = nullptr;
         const DeepLightningRefinementConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector               = nullptr;
-
-        METRICS(f64 global_time = 0;)
-        METRICS(f64 global_time_get_boundary = 0.0;)
-        METRICS(f64 global_time_iterate = 0.0;)
-
-        METRICS(s64 global_qap_delta = 0;)
-        METRICS(u64 global_n_pos_moves = 0;)
-        METRICS(u64 global_n_0gain_moves = 0;)
 
         s64 current_qap_delta  = 0;
         size_t current_n_moves = 0;
@@ -90,8 +81,7 @@ namespace HeiProMap {
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
                         RandomEngine& t_random_engine,
-                        const ISerialDeepRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const ISerialDeepRefinerConfiguration& i_config) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -101,7 +91,6 @@ namespace HeiProMap {
 
             random_engine    = &t_random_engine;
             config           = dynamic_cast<const DeepLightningRefinementConfiguration*>(&i_config);
-            m_stat_collector = &t_stat_collect;
 
             vertex_used.initialize(m_n, 0);
             block_used.initialize(m_k, 0);
@@ -299,10 +288,6 @@ namespace HeiProMap {
             // if no move found than revert one step
             return false;
         }
-
-        JSONString get_stats() override {
-            return {};
-        };
     };
 }
 

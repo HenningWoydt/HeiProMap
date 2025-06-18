@@ -47,12 +47,12 @@ int main(const int argc, char* argv[]) {
                     // {"--graph", "../data/training/PGPgiantcompo.graph"},
                     // {"--mapping", "../data/out/partition/PGPgiantcompo.txt"},
                     // {"--statistics", "../data/out/statistics/PGPgiantcompo.JSON"},
-                    // {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
-                    // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                    // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
-                    {"--graph", "../data/mapping/del26.graph"},
-                    {"--mapping", "../data/out/partition/del26.txt"},
-                    {"--statistics", "../data/out/statistics/del26.JSON"},
+                    {"--graph", "../data/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
+                    {"--mapping", "../data/out/partition/delaunay_n22.txt"},
+                    {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
+                    // {"--graph", "../data/mapping/del26.graph"},
+                    // {"--mapping", "../data/out/partition/del26.txt"},
+                    // {"--statistics", "../data/out/statistics/del26.JSON"},
                     // {"--graph", "../data/training/598a.graph"},
                     // {"--mapping", "../data/out/partition/598a.txt"},
                     // {"--statistics", "../data/out/statistics/598a.JSON"},

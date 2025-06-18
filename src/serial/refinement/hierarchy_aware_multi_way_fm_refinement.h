@@ -78,7 +78,6 @@ namespace HeiProMap {
 
         RandomEngine* random_engine                     = nullptr;
         const HierarchyAwareMultiWayFMConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector            = nullptr;
 
     public:
         HierarchyAwareMultiWayFMRefinement() = default;
@@ -93,8 +92,7 @@ namespace HeiProMap {
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
                         RandomEngine& t_random_engine,
-                        const ISerialRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const ISerialRefinerConfiguration& i_config) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -105,7 +103,6 @@ namespace HeiProMap {
 
             random_engine    = &t_random_engine;
             config           = dynamic_cast<const HierarchyAwareMultiWayFMConfiguration*>(&i_config);
-            m_stat_collector = &t_stat_collect;
 
             vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
@@ -116,7 +113,7 @@ namespace HeiProMap {
             moves.initialize(m_n);
             moves_size = 0;
 
-            k_way_rebalancer.initialize(t_n, t_m, t_k, t_lmax, t_hierarchy, t_distance, t_random_engine, t_stat_collect);
+            k_way_rebalancer.initialize(t_n, t_m, t_k, t_lmax, t_hierarchy, t_distance, t_random_engine);
         }
 
         void refine(const u64 level,
@@ -459,17 +456,6 @@ namespace HeiProMap {
                                   p_manager_t& p_manager,
                                   q_graph_t& q_graph,
                                   size_t layer) override {}
-
-        JSONString get_stats() override {
-            std::string stats = "{ \n";
-            stats.pop_back();
-            stats.pop_back();
-            stats += "\n}";
-
-            JSONString json_stats;
-            json_stats.s = stats;
-            return json_stats;
-        }
     };
 }
 

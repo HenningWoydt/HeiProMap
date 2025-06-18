@@ -41,44 +41,46 @@ namespace HeiProMap {
         u64 max_iteration = 5;
         f64 alpha         = 100.0;
         f64 beta          = 1.0;
+
+        f64 alpha_edge_cut = 100.0;
+        f64 beta_edge_cut  = 1.0;
     };
 
     class DeepQuotientGraphRefinement final : public ISerialDeepRefiner {
         vertex_t m_n    = 0;
         vertex_t m_m    = 0;
         partition_t m_k = 0;
+        u64 m_threads   = 16;
 
-        // priority queues
-        IndexedMaxHeap<s64> boundary_vertices_u;
-        IndexedMaxHeap<s64> boundary_vertices_v;
+        struct thread_info {
+            // priority queues
+            IndexedMaxHeap<s64> boundary_vertices_u;
+            IndexedMaxHeap<s64> boundary_vertices_v;
 
-        // store change
-        AlignedArray<vertex_t> moves;
-        size_t moves_size      = 0;
-        s64 curr_qap_gain      = 0;
-        s64 max_qap_gain       = 0;
-        s64 curr_edge_cut_gain = 0;
-        s64 max_edge_cut_gain  = 0;
-        size_t best_idx        = 0;
+            // store change
+            AlignedArray<vertex_t> moves;
+            size_t moves_size      = 0;
+            s64 curr_qap_gain      = 0;
+            s64 max_qap_gain       = 0;
+            s64 curr_edge_cut_gain = 0;
+            s64 max_edge_cut_gain  = 0;
+            size_t best_idx        = 0;
+
+            // store which vertices have been moved
+            AlignedArray<u32> vertex_used;
+            u32 vertex_mark = 0;
+        };
+
+        std::vector<thread_info> thread_infos;
+        std::mutex mutex;
+        f64 time = 0;
 
         // active block scheduling
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> active_next_round;
 
-        // store which vertices have been moved
-        AlignedArray<u32> vertex_used;
-        u32 vertex_mark = 0;
-
         RandomEngine* random_engine                            = nullptr;
         const DeepQuotientGraphRefinementConfiguration* config = nullptr;
-        StatisticCollector* m_stat_collector                   = nullptr;
-
-        METRICS(std::vector<std::vector<f64>> iteration_time;)
-        METRICS(std::vector<std::vector<f64>> iteration_time_get_pairs;)
-        METRICS(std::vector<std::vector<f64>> iteration_time_initialize;)
-        METRICS(std::vector<std::vector<f64>> iteration_time_queue;)
-        METRICS(std::vector<std::vector<f64>> iteration_time_moves;)
-        METRICS(std::vector<std::vector<s64>> iteration_qap_delta;)
 
     public:
         void initialize(const vertex_t t_n,
@@ -88,25 +90,25 @@ namespace HeiProMap {
                         const std::vector<partition_t>& t_hierarchy,
                         const std::vector<weight_t>& t_distance,
                         RandomEngine& t_random_engine,
-                        const ISerialDeepRefinerConfiguration& i_config,
-                        StatisticCollector& t_stat_collect) override {
+                        const ISerialDeepRefinerConfiguration& i_config) override {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
 
-            random_engine    = &t_random_engine;
-            config           = dynamic_cast<const DeepQuotientGraphRefinementConfiguration*>(&i_config);
-            m_stat_collector = &t_stat_collect;
+            random_engine = &t_random_engine;
+            config        = dynamic_cast<const DeepQuotientGraphRefinementConfiguration*>(&i_config);
 
-            // priority queues
-            boundary_vertices_u.initialize(m_n);
-            boundary_vertices_v.initialize(m_n);
+            thread_infos.resize(m_threads);
+            for (size_t i = 0; i < m_threads; ++i) {
+                thread_infos[i].boundary_vertices_u.initialize(m_n);
+                thread_infos[i].boundary_vertices_v.initialize(m_n);
 
-            vertex_mark = 0;
-            vertex_used.initialize(m_n, 0);
+                thread_infos[i].vertex_mark = 0;
+                thread_infos[i].vertex_used.initialize(m_n, 0);
 
-            moves.initialize(m_n);
-            moves_size = 0;
+                thread_infos[i].moves.initialize(m_n);
+                thread_infos[i].moves_size = 0;
+            }
 
             // active block scheduling
             active_this_round.initialize(m_k);
@@ -120,43 +122,24 @@ namespace HeiProMap {
                     deep_bv_manager_t& bv_manager,
                     deep_p_manager_t& p_manager,
                     deep_q_graph_t& q_graph) override {
-            METRICS(iteration_time.emplace_back();)
-            METRICS(iteration_time_get_pairs.emplace_back();)
-            METRICS(iteration_time_initialize.emplace_back();)
-            METRICS(iteration_time_queue.emplace_back();)
-            METRICS(iteration_time_moves.emplace_back();)
-            METRICS(iteration_qap_delta.emplace_back();)
-
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
 
             u64 iteration = 0;
             while (iteration < config->max_iteration) {
-                METRICS(iteration_time.back().push_back(0.0);)
-                METRICS(iteration_time_get_pairs.back().push_back(0.0);)
-                METRICS(iteration_time_initialize.back().push_back(0.0);)
-                METRICS(iteration_time_queue.back().push_back(0.0);)
-                METRICS(iteration_time_moves.back().push_back(0.0);)
-                METRICS(iteration_qap_delta.back().push_back(0);)
-
                 iteration += 1;
 
-                METRICS_TIME(sp_get_pairs)
-
                 // determine all pairs in the quotient graph
-                METRICS_TIME(ep_get_pairs)
-                METRICS(iteration_time_get_pairs.back().back() += get_seconds(sp_get_pairs, ep_get_pairs);)
-
-                size_t n_pairs = q_graph.n_pairs();
-                for (size_t j = 0; j < n_pairs; ++j) {
-                    auto [u_id, v_id] = q_graph.get_pair(j);
-
-                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) { continue; }
-
-                    if (d_oracle.last_level_pair(u_id, v_id)) {
-                        refine_blocks_edge_cut(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
-                    } else {
-                        refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
+                std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings = q_graph.get_distance_2_matchings(active_this_round);
+                for (auto& matching : matchings) {
+#pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    for (auto [u_id, v_id] : matching) {
+                        u64 thread_id = omp_get_thread_num();
+                        if (d_oracle.last_level_pair(u_id, v_id)) {
+                            refine_blocks_edge_cut(g, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
+                        } else {
+                            refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
+                        }
                     }
                 }
 
@@ -165,34 +148,38 @@ namespace HeiProMap {
             }
         }
 
-        void refine_blocks(const u64 level,
-                           const u64 max_level,
-                           const graph_t& g,
+        void refine_blocks(const graph_t& g,
                            deep_d_oracle_t& d_oracle,
                            deep_bv_manager_t& bv_manager,
                            deep_p_manager_t& p_manager,
                            deep_q_graph_t& q_graph,
                            partition_t u_id,
-                           partition_t v_id) {
-            METRICS(iteration_time.emplace_back();)
-            METRICS(iteration_time_get_pairs.emplace_back();)
-            METRICS(iteration_time_initialize.emplace_back();)
-            METRICS(iteration_time_queue.emplace_back();)
-            METRICS(iteration_time_moves.emplace_back();)
-            METRICS(iteration_qap_delta.emplace_back();)
-
-            METRICS_TIME(sp);
-            METRICS_TIME(sp_initialize)
-
+                           partition_t v_id,
+                           u64 thread_id) {
             f64 alpha = config->alpha;
             f64 beta  = std::log(g.get_n());
 
-            size_t max_n_swaps = 0;
+            // get data for thread
+            IndexedMaxHeap<s64>& boundary_vertices_u = thread_infos[thread_id].boundary_vertices_u;
+            IndexedMaxHeap<s64>& boundary_vertices_v = thread_infos[thread_id].boundary_vertices_v;
+
+            // store change
+            AlignedArray<vertex_t>& moves = thread_infos[thread_id].moves;
+            size_t& moves_size            = thread_infos[thread_id].moves_size;
+            s64& curr_qap_gain            = thread_infos[thread_id].curr_qap_gain;
+            s64& max_qap_gain             = thread_infos[thread_id].max_qap_gain;
+            size_t& best_idx              = thread_infos[thread_id].best_idx;
+
+            // store which vertices have been moved
+            AlignedArray<u32>& vertex_used = thread_infos[thread_id].vertex_used;
+            u32& vertex_mark               = thread_infos[thread_id].vertex_mark;
 
             // add all boundary vertices with gain
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
             vertex_mark += 1;
+
+            size_t max_n_swaps = 0;
             forall_bv_id_iu(bv_manager, u_id, k, u)
                 {
                     forall_guiv(g, u, i, v)
@@ -218,9 +205,6 @@ namespace HeiProMap {
                 }
             endfor
 
-            METRICS_TIME(ep_initialize)
-            METRICS(iteration_time_initialize.back().back() += get_seconds(sp_initialize, ep_initialize);)
-
             // start executing moves based on the TopGain method
             vertex_mark += 1;
             moves_size    = 0;
@@ -231,8 +215,6 @@ namespace HeiProMap {
             f64 steps_since_last_improvement = 0.0;
             f64 qap_gain_mean                = 0.0;
             f64 qap_gain_var                 = 0.0;
-
-            METRICS_TIME(sp_queue)
 
             while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
                 // determine from which block to choose
@@ -327,10 +309,6 @@ namespace HeiProMap {
                 while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
             }
 
-            METRICS_TIME(ep_queue)
-            METRICS(iteration_time_queue.back().back() += get_seconds(sp_queue, ep_queue);)
-
-            METRICS_TIME(sp_moves)
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
                 vertex_t vertex        = moves[moves_size - 1 - i];
@@ -342,6 +320,7 @@ namespace HeiProMap {
             }
 
             // make all moves to best index
+            mutex.lock();
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex        = moves[i];
                 weight_t vertex_weight = g.weight(vertex);
@@ -352,41 +331,38 @@ namespace HeiProMap {
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
-            METRICS_TIME(ep_moves)
-            METRICS(iteration_time_moves.back().back() += get_seconds(sp_moves, ep_moves);)
+            mutex.unlock();
 
             if (max_qap_gain > 0) {
                 active_next_round[u_id] = 1;
                 active_next_round[v_id] = 1;
             }
-
-            METRICS(iteration_qap_delta.back().back() += max_qap_gain;)
-
-            METRICS_TIME(ep)
-            METRICS(iteration_time.back().back() += get_seconds(sp, ep);)
         }
 
-        void refine_blocks_edge_cut(const u64 level,
-                                    const u64 max_level,
-                                    const graph_t& g,
-                                    deep_d_oracle_t& d_oracle,
+        void refine_blocks_edge_cut(const graph_t& g,
                                     deep_bv_manager_t& bv_manager,
                                     deep_p_manager_t& p_manager,
                                     deep_q_graph_t& q_graph,
                                     partition_t u_id,
-                                    partition_t v_id) {
-            METRICS(iteration_time.emplace_back();)
-            METRICS(iteration_time_get_pairs.emplace_back();)
-            METRICS(iteration_time_initialize.emplace_back();)
-            METRICS(iteration_time_queue.emplace_back();)
-            METRICS(iteration_time_moves.emplace_back();)
-            METRICS(iteration_qap_delta.emplace_back();)
-
-            METRICS_TIME(sp);
-            METRICS_TIME(sp_initialize)
-
-            f64 alpha = config->alpha;
+                                    partition_t v_id,
+                                    u64 thread_id) {
+            f64 alpha = config->alpha_edge_cut;
             f64 beta  = std::log(g.get_n());
+
+            // get data for thread
+            IndexedMaxHeap<s64>& boundary_vertices_u = thread_infos[thread_id].boundary_vertices_u;
+            IndexedMaxHeap<s64>& boundary_vertices_v = thread_infos[thread_id].boundary_vertices_v;
+
+            // store change
+            AlignedArray<vertex_t>& moves = thread_infos[thread_id].moves;
+            size_t& moves_size            = thread_infos[thread_id].moves_size;
+            s64& curr_edge_cut_gain       = thread_infos[thread_id].curr_edge_cut_gain;
+            s64& max_edge_cut_gain        = thread_infos[thread_id].max_edge_cut_gain;
+            size_t& best_idx              = thread_infos[thread_id].best_idx;
+
+            // store which vertices have been moved
+            AlignedArray<u32>& vertex_used = thread_infos[thread_id].vertex_used;
+            u32& vertex_mark               = thread_infos[thread_id].vertex_mark;
 
             size_t max_n_swaps = 0;
 
@@ -419,9 +395,6 @@ namespace HeiProMap {
                 }
             endfor
 
-            METRICS_TIME(ep_initialize)
-            METRICS(iteration_time_initialize.back().back() += get_seconds(sp_initialize, ep_initialize);)
-
             // start executing moves based on the TopGain method
             vertex_mark += 1;
             moves_size         = 0;
@@ -432,8 +405,6 @@ namespace HeiProMap {
             f64 steps_since_last_improvement = 0.0;
             f64 edge_cut_gain_mean           = 0.0;
             f64 edge_cut_gain_var            = 0.0;
-
-            METRICS_TIME(sp_queue)
 
             while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
                 // determine from which block to choose
@@ -528,10 +499,6 @@ namespace HeiProMap {
                 while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
             }
 
-            METRICS_TIME(ep_queue)
-            METRICS(iteration_time_queue.back().back() += get_seconds(sp_queue, ep_queue);)
-
-            METRICS_TIME(sp_moves)
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
                 vertex_t vertex        = moves[moves_size - 1 - i];
@@ -543,6 +510,7 @@ namespace HeiProMap {
             }
 
             // make all moves to best index
+            mutex.lock();
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex        = moves[i];
                 weight_t vertex_weight = g.weight(vertex);
@@ -553,72 +521,12 @@ namespace HeiProMap {
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
-            METRICS_TIME(ep_moves)
-            METRICS(iteration_time_moves.back().back() += get_seconds(sp_moves, ep_moves);)
+            mutex.unlock();
 
             if (max_edge_cut_gain > 0) {
                 active_next_round[u_id] = 1;
                 active_next_round[v_id] = 1;
             }
-
-            METRICS(iteration_qap_delta.back().back() += max_edge_cut_gain;)
-
-            METRICS_TIME(ep)
-            METRICS(iteration_time.back().back() += get_seconds(sp, ep);)
-        }
-
-        JSONString get_stats() override {
-            std::string stats = "{ \n";
-#if COLLECT_METRICS
-            std::vector<f64> level_time(iteration_time.size(), 0.0);
-            std::vector<f64> level_time_get_pairs(iteration_time.size(), 0.0);
-            std::vector<f64> level_time_initialize(iteration_time.size(), 0.0);
-            std::vector<f64> level_time_queue(iteration_time.size(), 0.0);
-            std::vector<f64> level_time_moves(iteration_time.size(), 0.0);
-            std::vector<s64> level_qap_delta(iteration_time.size(), 0);
-
-            for (size_t i = 0; i < iteration_time.size(); ++i) {
-                level_time[i]            = sum<f64>(iteration_time[i]);
-                level_time_get_pairs[i]  = sum<f64>(iteration_time_get_pairs[i]);
-                level_time_initialize[i] = sum<f64>(iteration_time_initialize[i]);
-                level_time_queue[i]      = sum<f64>(iteration_time_queue[i]);
-                level_time_moves[i]      = sum<f64>(iteration_time_moves[i]);
-                level_qap_delta[i]       = sum<s64>(iteration_qap_delta[i]);
-            }
-
-            f64 global_time            = sum<f64>(level_time);
-            f64 global_time_get_pairs  = sum<f64>(level_time_get_pairs);
-            f64 global_time_initialize = sum<f64>(level_time_initialize);
-            f64 global_time_queue      = sum<f64>(level_time_queue);
-            f64 global_time_moves      = sum<f64>(level_time_moves);
-            s64 global_qap_delta       = sum<s64>(level_qap_delta);
-
-            stats += to_JSON_MACRO(global_time);
-            stats += to_JSON_MACRO(global_time_get_pairs);
-            stats += to_JSON_MACRO(global_time_initialize);
-            stats += to_JSON_MACRO(global_time_queue);
-            stats += to_JSON_MACRO(global_time_moves);
-            stats += to_JSON_MACRO(global_qap_delta);
-            stats += to_JSON_MACRO(level_time);
-            stats += to_JSON_MACRO(level_time_get_pairs);
-            stats += to_JSON_MACRO(level_time_initialize);
-            stats += to_JSON_MACRO(level_time_queue);
-            stats += to_JSON_MACRO(level_time_moves);
-            stats += to_JSON_MACRO(level_qap_delta);
-            stats += to_JSON_MACRO(iteration_time);
-            stats += to_JSON_MACRO(iteration_time_get_pairs);
-            stats += to_JSON_MACRO(iteration_time_initialize);
-            stats += to_JSON_MACRO(iteration_time_queue);
-            stats += to_JSON_MACRO(iteration_time_moves);
-            stats += to_JSON_MACRO(iteration_qap_delta);
-#endif
-            stats.pop_back();
-            stats.pop_back();
-            stats += "\n}";
-
-            JSONString json_stats;
-            json_stats.s = stats;
-            return json_stats;
         }
     };
 }
