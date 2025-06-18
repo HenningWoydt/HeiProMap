@@ -39,7 +39,7 @@ namespace HeiProMap {
         vertex_t m_n = 0;
 
         AlignedArray<EdgeUV> matches;
-        size_t matches_size = 0;
+        size_t               matches_size = 0;
 
         AlignedArray<vertex_t> partner;
 
@@ -50,7 +50,7 @@ namespace HeiProMap {
 
         void initialize(vertex_t n) {
             vertex_t n_64 = round_up_64(n);
-            m_n           = n;
+            m_n = n;
 
             matches.initialize((n_64 / 2));
             matches_size = 0;
@@ -62,8 +62,8 @@ namespace HeiProMap {
         }
 
         // Move constructor
-        Matching(Matching&& other) noexcept {
-            m_n          = other.m_n;
+        Matching(Matching &&other) noexcept {
+            m_n = other.m_n;
             std::swap(matches, other.matches);
             matches_size = other.matches_size;
             std::swap(partner, other.partner);
@@ -71,17 +71,17 @@ namespace HeiProMap {
         }
 
         // Optionally disable copying.
-        Matching(const Matching&) = delete;
+        Matching(const Matching &) = delete;
 
-        Matching& operator=(const Matching&) = delete;
+        Matching &operator=(const Matching &) = delete;
 
         ~Matching() = default;
 
         void add(vertex_t u, vertex_t v) {
             ASSERT(matches_size < (m_n / 2));
             matches[matches_size++] = {u, v};
-            partner[u]  = v;
-            partner[v]  = u;
+            partner[u]              = v;
+            partner[v]              = u;
         }
 
         EdgeUV operator[](size_t i) const {
@@ -102,7 +102,7 @@ namespace HeiProMap {
         vertex_t get_partner(vertex_t u) const { return partner[u]; }
 
         void set_translation() {
-            vertex_t new_u = 0;
+            vertex_t      new_u = 0;
             for (vertex_t old_u = 0; old_u < m_n; ++old_u) {
                 if (old_u == partner[old_u] || old_u < partner[old_u]) {
                     tt.add(old_u, new_u);

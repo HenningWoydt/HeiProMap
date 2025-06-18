@@ -49,8 +49,8 @@ namespace HeiProMap {
         partition_t m_k     = 0;
         weight_t    m_l_max = 0;
 
-        const GreedyEdgeMatcherConfiguration *config           = nullptr;
-        RandomEngine                         *random_engine    = nullptr;
+        const GreedyEdgeMatcherConfiguration *config        = nullptr;
+        RandomEngine                         *random_engine = nullptr;
 
         AlignedArray<EdgeUVW> edges;
         size_t                edges_size = 0;
@@ -72,8 +72,8 @@ namespace HeiProMap {
             m_k     = t_k;
             m_l_max = t_l_max;
 
-            config           = dynamic_cast<const GreedyEdgeMatcherConfiguration *>(&i_config);
-            random_engine    = &t_random_engine;
+            config        = dynamic_cast<const GreedyEdgeMatcherConfiguration *>(&i_config);
+            random_engine = &t_random_engine;
 
             edges.initialize(m_m);
 
@@ -91,18 +91,18 @@ namespace HeiProMap {
             // first handle pendant vertices
             if (config->match_pendant_vertices_first) {
                 forall_gu(g, u)
-                {
-                    if (g.size(u) != 1) {
-                        continue;
-                    }
+                    {
+                        if (g.size(u) != 1) {
+                            continue;
+                        }
 
-                    const vertex_t v      = g.neighbor(u, 0);
-                    const weight_t ew     = g.weight(u, 0);
-                    const f32      rating = (f32) ew / (f32) (g.size(u) * g.size(v));
-                    edges[edges_size++] = {u, v, rating};
-                }
+                        const vertex_t v      = g.neighbor(u, 0);
+                        const weight_t ew     = g.weight(u, 0);
+                        const f32      rating = (f32) ew / (f32) (g.size(u) * g.size(v));
+                        edges[edges_size++] = {u, v, rating};
+                    }
                 endfor
-                        std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+                std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
                 for (size_t i = 0; i < edges_size; ++i) {
                     const auto &[u, v, w] = edges[i];
@@ -127,32 +127,32 @@ namespace HeiProMap {
 
             // handle all other vertices
             forall_gu(g, u)
-            {
-                weight_t u_w = g.weight(u);
-
-                if (used[u] == mark) {
-                    continue;
-                }
-
-                forall_guivw(g, u, j, v, w)
                 {
-                    weight_t v_w = g.weight(v);
+                    weight_t u_w = g.weight(u);
 
-                    if (used[v] == mark) {
+                    if (used[u] == mark) {
                         continue;
                     }
 
-                    if (g.weight(u) + g.weight(v) > m_l_max) {
-                        continue;
-                    }
+                    forall_guivw(g, u, j, v, w)
+                        {
+                            weight_t v_w = g.weight(v);
 
-                    const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
-                    edges[edges_size++] = {u, v, edge_rating};
+                            if (used[v] == mark) {
+                                continue;
+                            }
+
+                            if (g.weight(u) + g.weight(v) > m_l_max) {
+                                continue;
+                            }
+
+                            const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
+                            edges[edges_size++] = {u, v, edge_rating};
+                        }
+                    endfor
                 }
-                endfor
-            }
             endfor
-                    std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+            std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
             for (size_t i = 0; i < edges_size; ++i) {
                 const auto &[u, v, w] = edges[i];

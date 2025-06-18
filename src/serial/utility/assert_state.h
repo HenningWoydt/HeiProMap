@@ -181,7 +181,7 @@ namespace HeiProMap {
             }
         endfor
 
-        for(partition_t id = 0; id < k; ++id) {
+        for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> automatic;
             forall_bv_id_iu(bv_manager, id, i, u)
                 {

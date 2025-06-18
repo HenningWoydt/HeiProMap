@@ -719,10 +719,10 @@ namespace HeiProMap {
     };
 
     class FlowNetwork {
-        vertex_t                            n;
+        vertex_t             n;
         Graph<int, int, int> g;
-        vertex_t                            source;
-        vertex_t                            target;
+        vertex_t             source;
+        vertex_t             target;
 
         // std::vector<std::vector<EdgeVW>> adj;
 
@@ -786,7 +786,7 @@ namespace HeiProMap {
         void build_residual_network(ResidualFlowNetwork &residual_g) {
             residual_g.initialize(n);
 
-            int                                         n_edges = g.get_arc_num();
+            int                          n_edges = g.get_arc_num();
             Graph<int, int, int>::arc_id arc     = g.get_first_arc();
 
             unsigned int u, v;

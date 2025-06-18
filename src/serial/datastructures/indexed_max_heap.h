@@ -60,13 +60,13 @@ namespace HeiProMap {
     template<typename T>
     class IndexedMaxHeap {
     private:
-        size_t                                m_n         = 0;
-        size_t                                m_heap_size = 0;
-        AlignedArray <IndexedMaxHeapEntry<T>> m_heap;
-        AlignedArray <size_t>                 m_indices;
+        size_t                               m_n         = 0;
+        size_t                               m_heap_size = 0;
+        AlignedArray<IndexedMaxHeapEntry<T>> m_heap;
+        AlignedArray<size_t>                 m_indices;
 
-        u64                m_iteration = 0;
-        AlignedArray <u64> m_iteration_counter;
+        u64               m_iteration = 0;
+        AlignedArray<u64> m_iteration_counter;
 
     public:
         IndexedMaxHeap() = default;

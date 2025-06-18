@@ -32,11 +32,11 @@
 
 namespace HeiProMap {
 #ifndef ASSERT_ENABLED
-#define ASSERT_ENABLED true
+#define ASSERT_ENABLED false
 #endif
 
 #ifndef HEAVYASSERT_ENABLED
-#define HEAVYASSERT_ENABLED true
+#define HEAVYASSERT_ENABLED false
 #endif
 
 #if (ASSERT_ENABLED)
@@ -57,17 +57,17 @@ namespace HeiProMap {
 #ifdef __GNUC__  // (GCC or Clang)
 #define ASSUME_ALIGNED(dtype, ptr, alignment) (dtype) __builtin_assume_aligned((ptr), (alignment))
 #elif defined(_MSC_VER)  // MSVC
-    #include <intrin.h>
-  // MSVC does not have a direct equivalent to __builtin_assume_aligned,
-  // but we can at least use __assume to tell the compiler something
-  // about the pointer. This is not exactly the same, though.
-  inline void* ASSUME_ALIGNED(void* ptr, size_t /*alignment*/) {
-      __assume(ptr != nullptr);
-      return ptr;
-  }
+#include <intrin.h>
+    // MSVC does not have a direct equivalent to __builtin_assume_aligned,
+    // but we can at least use __assume to tell the compiler something
+    // about the pointer. This is not exactly the same, though.
+    inline void* ASSUME_ALIGNED(void* ptr, size_t /*alignment*/) {
+        __assume(ptr != nullptr);
+        return ptr;
+    }
 #else
-  // Fallback: do nothing
-  #define ASSUME_ALIGNED(dtype, ptr, alignment) (ptr)
+    // Fallback: do nothing
+#define ASSUME_ALIGNED(dtype, ptr, alignment) (ptr)
 #endif
 
 }

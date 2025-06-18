@@ -54,19 +54,19 @@ namespace HeiProMap {
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t>    m_distance;
 
-        AlignedArray <u32> vertex_used;
-        u32                vertex_marker = 0;
+        AlignedArray<u32> vertex_used;
+        u32               vertex_marker = 0;
 
-        AlignedArray <u32> block_used;
-        u32                block_marker = 0;
+        AlignedArray<u32> block_used;
+        u32               block_marker = 0;
 
         std::priority_queue<KWayFMMove> heap;
 
-        AlignedArray <Move> moves;
-        size_t              moves_size = 0;
+        AlignedArray<Move> moves;
+        size_t             moves_size = 0;
 
-        RandomEngine                        *random_engine    = nullptr;
-        const KWayFMRefinementConfiguration *config           = nullptr;
+        RandomEngine                        *random_engine = nullptr;
+        const KWayFMRefinementConfiguration *config        = nullptr;
 
     public:
         KWayFMRefinement() = default;
@@ -88,8 +88,8 @@ namespace HeiProMap {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
-            random_engine    = &t_random_engine;
-            config           = dynamic_cast<const KWayFMRefinementConfiguration *>(&i_config);
+            random_engine = &t_random_engine;
+            config        = dynamic_cast<const KWayFMRefinementConfiguration *>(&i_config);
 
             vertex_used.initialize(m_n, 0);
             vertex_marker = 0;
@@ -239,13 +239,13 @@ namespace HeiProMap {
         }
 
         void refine_layer(const u64 level,
-                                          const u64 max_level,
-                                          graph_t& g,
-                                          d_oracle_t& d_oracle,
-                                          bv_manager_t& bv_manager,
-                                          p_manager_t& p_manager,
-                                          q_graph_t& q_graph,
-                                          size_t layer) override {}
+                          const u64 max_level,
+                          graph_t &g,
+                          d_oracle_t &d_oracle,
+                          bv_manager_t &bv_manager,
+                          p_manager_t &p_manager,
+                          q_graph_t &q_graph,
+                          size_t layer) override {}
     };
 }
 

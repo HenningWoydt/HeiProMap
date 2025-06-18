@@ -33,17 +33,17 @@
 #include <string>
 
 namespace HeiProMap {
-    typedef int8_t s8;
+    typedef int8_t  s8;
     typedef int16_t s16;
     typedef int32_t s32;
     typedef int64_t s64;
 
-    typedef uint8_t u8;
+    typedef uint8_t  u8;
     typedef uint16_t u16;
     typedef uint32_t u32;
     typedef uint64_t u64;
 
-    typedef float f32;
+    typedef float  f32;
     typedef double f64;
 
     typedef u64 vertex_t;
@@ -58,7 +58,7 @@ namespace HeiProMap {
         std::string description;
         std::string default_val;
         std::string input;
-        bool is_set;
+        bool        is_set;
     };
 
     /**
@@ -75,11 +75,11 @@ namespace HeiProMap {
             this->w = w;
         }
 
-        bool operator<(const EdgeVW& y) const {
+        bool operator<(const EdgeVW &y) const {
             return v < y.v;
         }
 
-        bool operator==(const EdgeVW& y) const {
+        bool operator==(const EdgeVW &y) const {
             return v == y.v && w == y.w;
         }
     };
@@ -111,11 +111,11 @@ namespace HeiProMap {
             this->v = v;
         }
 
-        bool operator==(const EdgeUV& e) const {
+        bool operator==(const EdgeUV &e) const {
             return (u == e.u && v == e.v);
         }
 
-        bool operator<(const EdgeUV& e) const {
+        bool operator<(const EdgeUV &e) const {
             return u < e.u;
         }
     };
@@ -124,22 +124,22 @@ namespace HeiProMap {
     public:
         vertex_t u;
         vertex_t v;
-        f32 w;
+        f32      w;
 
     public:
         EdgeUVW() = default;
 
         EdgeUVW(const vertex_t u, const vertex_t v, const f32 w) : u(u), v(v), w(w) {}
 
-        bool operator<(const EdgeUVW& e) const {
+        bool operator<(const EdgeUVW &e) const {
             return w < e.w;
         }
 
-        bool operator>(const EdgeUVW& e) const {
+        bool operator>(const EdgeUVW &e) const {
             return w > e.w;
         }
 
-        bool operator==(const EdgeUVW& e) const {
+        bool operator==(const EdgeUVW &e) const {
             bool a = u == e.u && v == e.v && w == e.w;
             bool b = v == e.u && u == e.v && w == e.w;
             return a || b;
@@ -157,15 +157,15 @@ namespace HeiProMap {
 
         EdgeUVWeight(const vertex_t u, const vertex_t v, const weight_t w) : u(u), v(v), w(w) {}
 
-        bool operator<(const EdgeUVWeight& e) const {
+        bool operator<(const EdgeUVWeight &e) const {
             return w < e.w;
         }
 
-        bool operator>(const EdgeUVWeight& e) const {
+        bool operator>(const EdgeUVWeight &e) const {
             return w > e.w;
         }
 
-        bool operator==(const EdgeUVWeight& e) const {
+        bool operator==(const EdgeUVWeight &e) const {
             bool a = u == e.u && v == e.v && w == e.w;
             bool b = v == e.u && u == e.v && w == e.w;
             return a || b;
@@ -175,32 +175,32 @@ namespace HeiProMap {
     class Swap {
     public:
         vertex_t u;
-        s64 qap_delta;
+        s64      qap_delta;
 
     public:
         Swap() = default;
 
         Swap(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
 
-        bool operator>(const Swap& m) const {
+        bool operator>(const Swap &m) const {
             return qap_delta > m.qap_delta;
         }
 
-        bool operator<(const Swap& m) const {
+        bool operator<(const Swap &m) const {
             return qap_delta < m.qap_delta;
         }
 
-        bool operator<=(const Swap& m) const {
+        bool operator<=(const Swap &m) const {
             return qap_delta <= m.qap_delta;
         }
     };
 
     class KWayFMMove {
     public:
-        vertex_t u;
+        vertex_t    u;
         partition_t u_id;
         partition_t to_move_id;
-        s64 qap_delta;
+        s64         qap_delta;
 
         KWayFMMove() = default;
 
@@ -211,19 +211,19 @@ namespace HeiProMap {
             qap_delta  = t_qap_delta;
         }
 
-        bool operator>(const KWayFMMove& m) const {
+        bool operator>(const KWayFMMove &m) const {
             return qap_delta > m.qap_delta;
         }
 
-        bool operator>=(const KWayFMMove& m) const {
+        bool operator>=(const KWayFMMove &m) const {
             return qap_delta >= m.qap_delta;
         }
 
-        bool operator<(const KWayFMMove& m) const {
+        bool operator<(const KWayFMMove &m) const {
             return qap_delta < m.qap_delta;
         }
 
-        bool operator<=(const KWayFMMove& m) const {
+        bool operator<=(const KWayFMMove &m) const {
             return qap_delta <= m.qap_delta;
         }
     };
@@ -231,7 +231,7 @@ namespace HeiProMap {
     class SmallKWayFMMove {
     public:
         partition_t to_move_id;
-        s64 qap_delta;
+        s64         qap_delta;
 
         SmallKWayFMMove() = default;
 
@@ -240,26 +240,26 @@ namespace HeiProMap {
             qap_delta  = t_qap_delta;
         }
 
-        bool operator>(const SmallKWayFMMove& m) const {
+        bool operator>(const SmallKWayFMMove &m) const {
             return qap_delta > m.qap_delta;
         }
 
-        bool operator>=(const SmallKWayFMMove& m) const {
+        bool operator>=(const SmallKWayFMMove &m) const {
             return qap_delta >= m.qap_delta;
         }
 
-        bool operator<(const SmallKWayFMMove& m) const {
+        bool operator<(const SmallKWayFMMove &m) const {
             return qap_delta < m.qap_delta;
         }
 
-        bool operator<=(const SmallKWayFMMove& m) const {
+        bool operator<=(const SmallKWayFMMove &m) const {
             return qap_delta <= m.qap_delta;
         }
     };
 
     class Move {
     public:
-        vertex_t u;
+        vertex_t    u;
         partition_t u_id;
         partition_t to_move_id;
 

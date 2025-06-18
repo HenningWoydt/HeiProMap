@@ -62,7 +62,7 @@ namespace HeiProMap {
         bool has_edge(const partition_t u_id, const partition_t v_id) const {
             ASSERT(u_id != v_id);
 
-            for (auto& [id, w] : edges[u_id]) {
+            for (auto &[id, w]: edges[u_id]) {
                 if (id == v_id) {
                     return true;
                 }
@@ -74,7 +74,7 @@ namespace HeiProMap {
         weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
             ASSERT(u_id != v_id);
 
-            for (const auto& [id, w] : edges[u_id]) {
+            for (const auto &[id, w]: edges[u_id]) {
                 if (id == v_id) {
                     return w;
                 }
@@ -83,8 +83,8 @@ namespace HeiProMap {
             return 0;
         }
 
-        void move(const graph_t& g,
-                  const deep_p_manager_t& p_manager,
+        void move(const graph_t &g,
+                  const deep_p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
@@ -108,17 +108,17 @@ namespace HeiProMap {
         }
 
         void reset() {
-            for (auto& edge : edges) {
+            for (auto &edge: edges) {
                 edge.clear();
             }
         }
 
-        size_t n_pairs(AlignedArray<u8>& active) {
+        size_t n_pairs(AlignedArray<u8> &active) {
             size_t n = 0;
             pairs.clear();
 
             for (partition_t id1 = 0; id1 < m_k; ++id1) {
-                for (auto& [id2, w] : edges[id1]) {
+                for (auto &[id2, w]: edges[id1]) {
                     if (active[id1] == 0 && active[id2] == 0) { continue; }
                     if (w == 0) { continue; }
                     n += 1;
@@ -130,7 +130,7 @@ namespace HeiProMap {
 
         std::pair<partition_t, partition_t> get_pair(size_t idx) { return pairs[idx]; }
 
-        std::vector<std::vector<std::pair<partition_t, partition_t>>> get_distance_2_matchings(AlignedArray<u8>& active) {
+        std::vector<std::vector<std::pair<partition_t, partition_t>>> get_distance_2_matchings(AlignedArray<u8> &active) {
             std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings;
 
             size_t m = n_pairs(active);
@@ -146,10 +146,10 @@ namespace HeiProMap {
                     auto [u_id, v_id] = get_pair(i);
 
                     u64 neighbors_frozen = 0;
-                    for (auto& [id, w] : edges[u_id]) {
+                    for (auto &[id, w]: edges[u_id]) {
                         neighbors_frozen += vertex_frozen[id];
                     }
-                    for (auto& [id, w] : edges[v_id]) {
+                    for (auto &[id, w]: edges[v_id]) {
                         neighbors_frozen += vertex_frozen[id];
                     }
 
@@ -158,10 +158,10 @@ namespace HeiProMap {
                     matchings.back().emplace_back(u_id, v_id);
                     edge_included[i] = 1;
 
-                    for (auto& [id, w] : edges[u_id]) {
+                    for (auto &[id, w]: edges[u_id]) {
                         vertex_frozen[id] = 1;
                     }
-                    for (auto& [id, w] : edges[v_id]) {
+                    for (auto &[id, w]: edges[v_id]) {
                         vertex_frozen[id] = 1;
                     }
                 }
@@ -179,7 +179,7 @@ namespace HeiProMap {
 
     private:
         void add(const partition_t id1, const partition_t id2, const weight_t w) {
-            for (auto& [id, id_w] : edges[id1]) {
+            for (auto &[id, id_w]: edges[id1]) {
                 if (id == id2) {
                     id_w += w;
                     return;

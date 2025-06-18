@@ -44,8 +44,8 @@ namespace HeiProMap {
         partition_t m_k     = 0;
         weight_t    m_l_max = 0;
 
-        const RandomEdgeMatcherConfiguration *config           = nullptr;
-        RandomEngine                         *random_engine    = nullptr;
+        const RandomEdgeMatcherConfiguration *config        = nullptr;
+        RandomEngine                         *random_engine = nullptr;
 
         u32               mark = 0;
         AlignedArray<u32> used;
@@ -64,8 +64,8 @@ namespace HeiProMap {
             m_k     = t_k;
             m_l_max = t_l_max;
 
-            config           = dynamic_cast<const RandomEdgeMatcherConfiguration *>(&i_config);
-            random_engine    = &t_random_engine;
+            config        = dynamic_cast<const RandomEdgeMatcherConfiguration *>(&i_config);
+            random_engine = &t_random_engine;
 
             mark = 0;
             used.initialize(m_n, 0);

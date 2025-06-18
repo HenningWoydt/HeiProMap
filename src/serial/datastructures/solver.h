@@ -60,55 +60,55 @@ namespace HeiProMap {
      */
     class Solver {
         AlgorithmConfiguration ac;
-        RandomEngine random_engine;
+        RandomEngine           random_engine;
 
         // statistics
-        SmallStatisticCollector small_stat_collect;
-        s64 initial_qap                   = 0;
-        weight_t initial_max_block_weight = 0;
+        SmallStatisticCollector                        small_stat_collect;
+        s64                                            initial_qap              = 0;
+        weight_t                                       initial_max_block_weight = 0;
         std::chrono::high_resolution_clock::time_point sp;
 
-        std::vector<graph_t> graphs;
-        PartitionManager p_manager;
+        std::vector<graph_t>  graphs;
+        PartitionManager      p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
-        DistanceOracle d_oracle;
+        QuotientGraph         q_graph;
+        DistanceOracle        d_oracle;
 
         // balance
         weight_t lmax = 0;
 
         // matching
-        std::vector<Matching> matches;
-        GreedyEdgeMatcher ge_matcher;
-        HeavyEdgeMatcher he_matcher;
-        RandomEdgeMatcher rnd_matcher;
+        std::vector<Matching>      matches;
+        GreedyEdgeMatcher          ge_matcher;
+        HeavyEdgeMatcher           he_matcher;
+        RandomEdgeMatcher          rnd_matcher;
         GlobalPathAlgorithmMatcher gpa_matcher;
 
         // refinement
-        LabelPropagationRefinement lp_refine;
-        TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
+        LabelPropagationRefinement            lp_refine;
+        TwoVertexLabelPropagationRefinement   two_vertex_lp_refine;
         ThreeVertexLabelPropagationRefinement three_vertex_lp_refine;
-        QuotientGraphRefinement qg_refine;
-        KWayFMRefinement k_way_refine;
-        MultiTryFMRefinement multi_try_fm_refinement;
-        FlowBasedRefinement flow_based_refinement;
+        QuotientGraphRefinement               qg_refine;
+        KWayFMRefinement                      k_way_refine;
+        MultiTryFMRefinement                  multi_try_fm_refinement;
+        FlowBasedRefinement                   flow_based_refinement;
         // ILPRefinement ilp_refinement;
 
-        HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
+        HierarchyAwareMultiWayFMRefinement         hierarchy_aware_fm_refinement;
         HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
         // HierarchyAwareILPRefinement hierarchy_aware_ilp_refinement;
-        HierarchyAwareFlowBasedRefinement hierarchy_aware_flow_based_refinement;
-        HierarchyAwareQuotientGraphRefinement hierarchy_aware_quotient_graph_refinement;
+        HierarchyAwareFlowBasedRefinement          hierarchy_aware_flow_based_refinement;
+        HierarchyAwareQuotientGraphRefinement      hierarchy_aware_quotient_graph_refinement;
 
-        WaveRefinement wave_refinement;
+        WaveRefinement      wave_refinement;
         LightningRefinement lightning_refinement;
 
-        std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> refinements;
+        std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> refinements;
 
-        std::vector<std::pair<ISerialRefiner*, ISerialRefinerConfiguration*>> hierarchy_refinements;
+        std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *>> hierarchy_refinements;
 
     public:
-        explicit Solver(const AlgorithmConfiguration& t_ac) {
+        explicit Solver(const AlgorithmConfiguration &t_ac) {
             sp = std::chrono::high_resolution_clock::now();
 
             ac            = t_ac;
@@ -122,7 +122,7 @@ namespace HeiProMap {
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
             // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64)graphs[0].weight() / (f64)ac.k));
+            lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].weight() / (f64) ac.k));
 
             // manager
             p_manager.initialize(graphs[0].get_n(), ac.k, lmax);
@@ -159,13 +159,13 @@ namespace HeiProMap {
             refinements.emplace_back(&wave_refinement, &ac.wave_refinement_configuration);
             refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
 
-            for (auto& [refiner, config] : refinements) {
+            for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
                 }
             }
 
-            for (auto& [refiner, config] : hierarchy_refinements) {
+            for (auto &[refiner, config]: hierarchy_refinements) {
                 if (config->enabled) {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
                 }
@@ -181,13 +181,13 @@ namespace HeiProMap {
             weight_t qap = get_qap(graphs.back(), p_manager, d_oracle);
 
             std::vector<partition_t> p(graphs.back().get_n());
-            for (vertex_t u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
+            for (vertex_t            u = 0; u < graphs.back().get_n(); ++u) { p[u] = p_manager[u]; }
             write_partition(p, ac.mapping_out);
 
             small_stat_collect.print();
 
-            const auto ep = std::chrono::high_resolution_clock::now();
-            f64 duration  = get_seconds(sp, ep);
+            const auto ep       = std::chrono::high_resolution_clock::now();
+            f64        duration = get_seconds(sp, ep);
 
             std::cout << "Total time        : " << duration << std::endl;
             std::cout << "#Nodes            : " << graphs.back().get_n() << std::endl;
@@ -199,15 +199,15 @@ namespace HeiProMap {
             std::cout << "Final QAP         : " << qap << std::endl;
             std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
 
-            size_t n_empty_partitions      = 0;
-            size_t n_overloaded_partitions = 0;
-            weight_t sum_too_much          = 0;
-            for (partition_t id = 0; id < ac.k; ++id) {
+            size_t           n_empty_partitions      = 0;
+            size_t           n_overloaded_partitions = 0;
+            weight_t         sum_too_much            = 0;
+            for (partition_t id                      = 0; id < ac.k; ++id) {
                 n_empty_partitions += p_manager.get_bweight(id) == 0;
                 n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
                 sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
                 if (p_manager.get_bweight(id) > lmax) {
-                    std::cout << "oload: " << id << " " << p_manager.get_bweight(id) << " " << lmax<<  std::endl;
+                    std::cout << "oload: " << id << " " << p_manager.get_bweight(id) << " " << lmax << std::endl;
                 }
             }
             std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
@@ -219,8 +219,8 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
-            u64 n_v_cycle = 1;
-            for (u64 v_cycle = 0; v_cycle < n_v_cycle; ++v_cycle) {
+            u64      n_v_cycle = 1;
+            for (u64 v_cycle   = 0; v_cycle < n_v_cycle; ++v_cycle) {
                 u64 level     = 0;
                 u64 max_level = 0;
 
@@ -282,7 +282,7 @@ namespace HeiProMap {
                 forall_gu(graphs.back(), u)
                     {
                         const partition_t u_id = p_manager[u];
-                        const weight_t u_w     = graphs.back().weight(u);
+                        const weight_t    u_w  = graphs.back().weight(u);
                         p_manager.set(u, u_w, u_id);
 
                         forall_guivw(graphs.back(), u, i, v, w)
@@ -371,10 +371,10 @@ namespace HeiProMap {
 
             SMALL_METRICS(s64 qap_before = get_qap(graphs.back(), p_manager, d_oracle);)
 
-            u64 refinement_max_iterations = 1;
-            for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
+            u64      refinement_max_iterations = 1;
+            for (u64 refinement_i              = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
                 for (size_t i = 0; i < ac.hierarchy.size(); ++i) {
-                    for (auto [refiner, config] : hierarchy_refinements) {
+                    for (auto [refiner, config]: hierarchy_refinements) {
                         if (config->enabled) {
                             const auto sp = std::chrono::high_resolution_clock::now();
                             std::cout << ac.hierarchy.size() - 1 - i << " " << config->name << std::endl;
@@ -383,9 +383,9 @@ namespace HeiProMap {
                             print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
                             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
 
-                            const auto ep = std::chrono::high_resolution_clock::now();
+                            const auto        ep        = std::chrono::high_resolution_clock::now();
                             SMALL_METRICS(s64 qap_after = get_qap(graphs.back(), p_manager, d_oracle);)
-                            s64 qap_delta = 0;
+                            s64               qap_delta = 0;
                             SMALL_METRICS(qap_delta = qap_before - qap_after;)
 
                             small_stat_collect.add_refinement(config->name, get_seconds(sp, ep), qap_delta);

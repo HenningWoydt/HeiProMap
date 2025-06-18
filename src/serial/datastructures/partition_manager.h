@@ -92,7 +92,7 @@ namespace HeiProMap {
 
         void contract(const Matching &matching) {
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                if(u == matching.get_partner(u)){
+                if (u == matching.get_partner(u)) {
                     vertex_t new_u = matching.get_n(u);
                     partition_temp[new_u] = partition[u];
 

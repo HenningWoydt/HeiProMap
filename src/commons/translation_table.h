@@ -64,7 +64,7 @@ namespace HeiProMap {
 #endif
         }
 
-        void reserve(size_t n_space, size_t o_space){
+        void reserve(size_t n_space, size_t o_space) {
             m_translation_n_to_o.initialize(n_space);
             m_translation_o_to_n.initialize(o_space);
 
@@ -94,7 +94,7 @@ namespace HeiProMap {
             return m_translation_n_to_o[n];
         }
 
-        void swap(TranslationTable<T>& rhs){
+        void swap(TranslationTable<T> &rhs) {
             std::swap(m_translation_o_to_n, rhs.m_translation_o_to_n);
             std::swap(m_translation_n_to_o, rhs.m_translation_n_to_o);
 

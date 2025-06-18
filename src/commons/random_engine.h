@@ -34,11 +34,11 @@
 namespace HeiProMap {
     class RandomEngine {
     public:
-        std::uniform_int_distribution<s32> dis_s32;
-        std::uniform_int_distribution<u32> dis_u32;
+        std::uniform_int_distribution<s32>  dis_s32;
+        std::uniform_int_distribution<u32>  dis_u32;
         std::uniform_real_distribution<f32> dis_f32;
         std::uniform_real_distribution<f64> dis_f64;
-        std::mt19937 gen;
+        std::mt19937                        gen;
 
         RandomEngine() = default;
 
@@ -51,9 +51,11 @@ namespace HeiProMap {
         }
 
         f32 get_f32() { return dis_f32(gen); }
+
         f32 get_f32(const f32 low, const f32 high) { return low + dis_f32(gen) * (high - low); }
 
         f64 get_f64() { return dis_f64(gen); }
+
         f64 get_f64(const f64 low, const f64 high) { return low + dis_f64(gen) * (high - low); }
 
         s32 get_s32() { return dis_s32(gen); }

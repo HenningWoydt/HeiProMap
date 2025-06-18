@@ -35,16 +35,16 @@
 
 namespace HeiProMap {
     class DeepBoundaryVertexManager {
-        vertex_t m_n    = 0; // number of vertices in the graph
+        vertex_t    m_n = 0; // number of vertices in the graph
         partition_t m_k = 0; // number of partitions
 
         AlignedArray<vertex_t> m_boundary; // complete boundary
         AlignedArray<vertex_t> m_vertex_idx; // index of the vertex in the complete boundary array for each vertex
         AlignedArray<vertex_t> m_n_boundary_edges; // number of boundary edges for each vertex
-        size_t m_boundary_size = 0; // size of the complete boundary array
+        size_t                 m_boundary_size = 0; // size of the complete boundary array
 
         std::vector<std::vector<vertex_t>> m_sub_boundary; // boundary for each block
-        AlignedArray<vertex_t> m_sub_vertex_idx; // index of the vertex in the sub boundary array
+        AlignedArray<vertex_t>             m_sub_vertex_idx; // index of the vertex in the sub boundary array
 
     public:
         void initialize(const vertex_t t_n,
@@ -89,8 +89,8 @@ namespace HeiProMap {
             m_n_boundary_edges[u] += 1;
         }
 
-        void add_new(const graph_t& g,
-                     const deep_p_manager_t& p_manager,
+        void add_new(const graph_t &g,
+                     const deep_p_manager_t &p_manager,
                      const vertex_t u,
                      const partition_t u_id) {
             u64 n_neighbors = 0;
@@ -115,8 +115,8 @@ namespace HeiProMap {
             }
         }
 
-        void move_old(const graph_t& g,
-                      const deep_p_manager_t& p_manager,
+        void move_old(const graph_t &g,
+                      const deep_p_manager_t &p_manager,
                       const vertex_t u,
                       const partition_t old_id,
                       const partition_t new_id) {
@@ -143,8 +143,8 @@ namespace HeiProMap {
             }
         }
 
-        void move(const graph_t& g,
-                  const deep_p_manager_t& p_manager,
+        void move(const graph_t &g,
+                  const deep_p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
@@ -199,12 +199,12 @@ namespace HeiProMap {
             if (!u_was_boundary && m_n_boundary_edges[u] > 0) { emplace_in_complete(u); }
         }
 
-        void compute_from_scratch(const graph_t& g,
-                                  const deep_p_manager_t& p_manager) {
+        void compute_from_scratch(const graph_t &g,
+                                  const deep_p_manager_t &p_manager) {
             // compute all from scratch
             m_n_boundary_edges.initialize(m_n, 0);
             m_boundary_size = 0;
-            for (auto& vec : m_sub_boundary) { vec.clear(); }
+            for (auto &vec: m_sub_boundary) { vec.clear(); }
 
             forall_gu(g, u)
                 {
@@ -234,7 +234,7 @@ namespace HeiProMap {
         void reset() {
             m_n_boundary_edges.initialize(m_n, 0);
             m_boundary_size = 0;
-            for (auto& vec : m_sub_boundary) { vec.clear(); }
+            for (auto &vec: m_sub_boundary) { vec.clear(); }
         }
 
     private:
@@ -287,7 +287,7 @@ namespace HeiProMap {
 
             if (m_n_boundary_edges[u] == 1) {
                 // remove from the complete boundary
-                size_t idx                    = m_vertex_idx[u];
+                size_t idx = m_vertex_idx[u];
                 m_boundary[idx]               = m_boundary[m_boundary_size - 1];
                 m_vertex_idx[m_boundary[idx]] = idx;
                 m_boundary_size -= 1;
@@ -296,7 +296,7 @@ namespace HeiProMap {
 
             if (m_n_boundary_edges[v] == 1) {
                 // remove from the complete boundary
-                size_t idx                    = m_vertex_idx[v];
+                size_t idx = m_vertex_idx[v];
                 m_boundary[idx]               = m_boundary[m_boundary_size - 1];
                 m_vertex_idx[m_boundary[idx]] = idx;
                 m_boundary_size -= 1;
@@ -329,7 +329,7 @@ namespace HeiProMap {
         void remove(const vertex_t u,
                     const partition_t id) {
             vertex_t last_vertex = m_sub_boundary[id].back();
-            size_t u_idx         = m_sub_vertex_idx[u];
+            size_t   u_idx       = m_sub_vertex_idx[u];
 
             m_sub_boundary[id][u_idx]     = last_vertex;
             m_sub_vertex_idx[last_vertex] = u_idx;

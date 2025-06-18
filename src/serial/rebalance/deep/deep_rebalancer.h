@@ -34,11 +34,11 @@
 namespace HeiProMap {
     class DeepRebalancer {
     public:
-        static void rebalance(const graph_t& g,
-                       deep_p_manager_t& p_manager,
-                       deep_bv_manager_t& bv_manager,
-                       deep_q_graph_t& q_graph,
-                       partition_t k) {
+        static void rebalance(const graph_t &g,
+                              deep_p_manager_t &p_manager,
+                              deep_bv_manager_t &bv_manager,
+                              deep_q_graph_t &q_graph,
+                              partition_t k) {
             for (partition_t id = 0; id < k; ++id) {
                 if (p_manager.get_hierarchy_level(id) != k && p_manager.get_bweight(id) > p_manager.get_lmax(id)) {
                     // std::cout << id << " is unbalanced with " << p_manager.get_bweight(id) << " of " << p_manager.get_lmax(id) << std::endl;

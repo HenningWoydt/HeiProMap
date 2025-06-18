@@ -37,37 +37,38 @@ namespace HeiProMap {
     class TwoVertexLabelPropagationConfiguration final : public ISerialRefinerConfiguration {
     public:
         explicit TwoVertexLabelPropagationConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+
         u64 last_n_levels = 2;
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
     class TwoVertexLabelPropagationRefinement final : public ISerialRefiner {
-        vertex_t                 m_n    = 0;
-        vertex_t                 m_m    = 0;
-        partition_t              m_k    = 0;
-        f64 m_imbalance = 0.0;
-        weight_t                 m_lmax = 0;
+        vertex_t                 m_n         = 0;
+        vertex_t                 m_m         = 0;
+        partition_t              m_k         = 0;
+        f64                      m_imbalance = 0.0;
+        weight_t                 m_lmax      = 0;
         std::vector<partition_t> m_hierarchy;
         std::vector<weight_t>    m_distance;
-        u64                      m_seed = 0;
+        u64                      m_seed      = 0;
 
         AlignedArray<u32> vertex_used;
-        u32 vertex_marker = 0;
+        u32               vertex_marker = 0;
 
         AlignedArray<u32> block_used;
-        u32 block_marker = 0;
+        u32               block_marker = 0;
 
         AlignedArray<vertex_t> curr_boundary;
-        size_t curr_boundary_size = 0;
+        size_t                 curr_boundary_size = 0;
 
         AlignedArray<partition_t> u_move_ids;
-        size_t u_move_ids_size = 0;
+        size_t                    u_move_ids_size = 0;
 
         AlignedArray<partition_t> v_move_ids;
-        size_t v_move_ids_size = 0;
+        size_t                    v_move_ids_size = 0;
 
-        RandomEngine                                 *random_engine    = nullptr;
-        const TwoVertexLabelPropagationConfiguration *config           = nullptr;
+        RandomEngine                                 *random_engine = nullptr;
+        const TwoVertexLabelPropagationConfiguration *config        = nullptr;
 
     public:
         TwoVertexLabelPropagationRefinement() = default;
@@ -91,8 +92,8 @@ namespace HeiProMap {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
-            random_engine    = &t_random_engine;
-            config           = dynamic_cast<const TwoVertexLabelPropagationConfiguration *>(&i_config);
+            random_engine = &t_random_engine;
+            config        = dynamic_cast<const TwoVertexLabelPropagationConfiguration *>(&i_config);
 
             vertex_t    m_n_64 = round_up_64(m_n);
             partition_t m_k_64 = round_up_64(m_k);
@@ -237,13 +238,13 @@ namespace HeiProMap {
         }
 
         void refine_layer(const u64 level,
-                                  const u64 max_level,
-                                  graph_t& g,
-                                  d_oracle_t& d_oracle,
-                                  bv_manager_t& bv_manager,
-                                  p_manager_t& p_manager,
-                                  q_graph_t& q_graph,
-                                  size_t layer) override {}
+                          const u64 max_level,
+                          graph_t &g,
+                          d_oracle_t &d_oracle,
+                          bv_manager_t &bv_manager,
+                          p_manager_t &p_manager,
+                          q_graph_t &q_graph,
+                          size_t layer) override {}
 
     };
 }

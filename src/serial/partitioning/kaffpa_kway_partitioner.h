@@ -265,8 +265,6 @@ namespace HeiProMap {
 
         void determine_all_blocks(const graph_t& g,
                                   deep_p_manager_t& p_manager) {
-            if (blocks_up_to_date) { return; }
-
             for (partition_t id = 0; id < std::min((partition_t)blocks.size(), m_k); ++id) {
                 blocks[id].clear();
             }
@@ -280,7 +278,6 @@ namespace HeiProMap {
                     blocks[u_id].push_back(u);
                 }
             endfor
-            blocks_up_to_date = true;
         }
     };
 }

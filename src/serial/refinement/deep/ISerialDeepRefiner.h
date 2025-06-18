@@ -39,32 +39,35 @@
 namespace HeiProMap {
     class ISerialDeepRefinerConfiguration {
     public:
-        explicit ISerialDeepRefinerConfiguration(const std::string& t_name) { name = t_name; }
+        explicit ISerialDeepRefinerConfiguration(const std::string &t_name) { name = t_name; }
+
         virtual ~ISerialDeepRefinerConfiguration() = default;
 
         std::string name;
-        bool enabled = false;
+        bool        enabled = false;
     };
 
     class ISerialDeepRefiner {
     public:
         virtual ~ISerialDeepRefiner() = default;
+
         virtual void initialize(const vertex_t t_n,
                                 const vertex_t t_m,
                                 const partition_t t_k,
                                 const f64 t_imbalance,
+                                const u64 t_threads,
                                 const std::vector<partition_t> &t_hierarchy,
                                 const std::vector<weight_t> &t_distance,
-                                RandomEngine& t_random_engine,
-                                const ISerialDeepRefinerConfiguration& i_config) = 0;
+                                RandomEngine &t_random_engine,
+                                const ISerialDeepRefinerConfiguration &i_config) = 0;
 
         virtual void refine(u64 level,
                             u64 max_level,
-                            const graph_t& g,
-                            deep_d_oracle_t& d_oracle,
-                            deep_bv_manager_t& bv_manager,
-                            deep_p_manager_t& p_manager,
-                            deep_q_graph_t& q_graph) = 0;
+                            const graph_t &g,
+                            deep_d_oracle_t &d_oracle,
+                            deep_bv_manager_t &bv_manager,
+                            deep_p_manager_t &p_manager,
+                            deep_q_graph_t &q_graph) = 0;
     };
 }
 

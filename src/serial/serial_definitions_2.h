@@ -33,7 +33,7 @@
 namespace HeiProMap {
 
     typedef DeepPartitionManager deep_p_manager_t;
-    typedef PartitionManager p_manager_t;
+    typedef PartitionManager     p_manager_t;
 }
 
 #endif //HEIPROMAP_SERIAL_DEFINITIONS_2_H

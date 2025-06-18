@@ -37,37 +37,39 @@
 namespace HeiProMap {
     class DeepLightningRefinementConfiguration final : public ISerialDeepRefinerConfiguration {
     public:
-        explicit DeepLightningRefinementConfiguration(const std::string& t_name) : ISerialDeepRefinerConfiguration(t_name) {}
+        explicit DeepLightningRefinementConfiguration(const std::string &t_name) : ISerialDeepRefinerConfiguration(t_name) {}
+
         u64 max_iteration = 100; // how many iterations to run the algorithm at most
         u64 max_recursion = 10;
     };
 
     class DeepLightningRefinement final : public ISerialDeepRefiner {
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        f64 m_imbalance = 0.0;
+        vertex_t                 m_n         = 0;
+        vertex_t                 m_m         = 0;
+        partition_t              m_k         = 0;
+        u64                      m_threads   = 1;
+        f64                      m_imbalance = 0.0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
+        std::vector<weight_t>    m_distance;
 
         AlignedArray<u32> vertex_used;
-        u32 vertex_marker = 0;
+        u32               vertex_marker = 0;
 
         AlignedArray<u32> block_used;
-        u32 block_marker = 0;
+        u32               block_marker = 0;
 
         AlignedArray<vertex_t> curr_boundary;
-        size_t curr_boundary_size = 0;
+        size_t                 curr_boundary_size = 0;
 
         AlignedArray<partition_t> blocks;
-        AlignedArray<s64> blocks_qap_delta;
-        size_t blocks_size = 0;
+        AlignedArray<s64>         blocks_qap_delta;
+        size_t                    blocks_size = 0;
 
-        RandomEngine* random_engine                        = nullptr;
-        const DeepLightningRefinementConfiguration* config = nullptr;
+        RandomEngine                               *random_engine = nullptr;
+        const DeepLightningRefinementConfiguration *config        = nullptr;
 
-        s64 current_qap_delta  = 0;
-        size_t current_n_moves = 0;
+        s64    current_qap_delta = 0;
+        size_t current_n_moves   = 0;
 
     public:
         DeepLightningRefinement() = default;
@@ -78,19 +80,21 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const f64 t_imbalance,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
-                        RandomEngine& t_random_engine,
-                        const ISerialDeepRefinerConfiguration& i_config) override {
+                        const u64 t_threads,
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
+                        RandomEngine &t_random_engine,
+                        const ISerialDeepRefinerConfiguration &i_config) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
+            m_threads   = t_threads;
             m_imbalance = t_imbalance;
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
-            random_engine    = &t_random_engine;
-            config           = dynamic_cast<const DeepLightningRefinementConfiguration*>(&i_config);
+            random_engine = &t_random_engine;
+            config        = dynamic_cast<const DeepLightningRefinementConfiguration *>(&i_config);
 
             vertex_used.initialize(m_n, 0);
             block_used.initialize(m_k, 0);
@@ -105,11 +109,11 @@ namespace HeiProMap {
 
         void refine(u64 level,
                     u64 max_level,
-                    const graph_t& g,
-                    deep_d_oracle_t& d_oracle,
-                    deep_bv_manager_t& bv_manager,
-                    deep_p_manager_t& p_manager,
-                    deep_q_graph_t& q_graph) override {
+                    const graph_t &g,
+                    deep_d_oracle_t &d_oracle,
+                    deep_bv_manager_t &bv_manager,
+                    deep_p_manager_t &p_manager,
+                    deep_q_graph_t &q_graph) override {
             if (level + 3 < max_level) { return; }
 
             for (size_t i = 0; i < config->max_iteration; ++i) {
@@ -119,8 +123,8 @@ namespace HeiProMap {
 
                 forall_bv_iu(bv_manager, i, u)
                     {
-                        partition_t u_id  = p_manager[u];
-                        weight_t u_weight = g.weight(u);
+                        partition_t u_id     = p_manager[u];
+                        weight_t    u_weight = g.weight(u);
 
                         block_marker += 1;
                         forall_guiv(g, u, i, v)
@@ -148,7 +152,7 @@ namespace HeiProMap {
                 }
 
                 bool moves_found = false;
-                for (auto& move : possible_moves) {
+                for (auto &move: possible_moves) {
                     bv_manager.move(g, p_manager, move.u, move.u_id, move.to_move_id);
                     q_graph.move(g, p_manager, move.u, move.u_id, move.to_move_id);
                     p_manager.move(move.u, g.weight(move.u), move.u_id, move.to_move_id);
@@ -179,11 +183,11 @@ namespace HeiProMap {
 
         bool find_move(size_t depth,
                        partition_t id,
-                       const graph_t& g,
-                       deep_d_oracle_t& d_oracle,
-                       deep_bv_manager_t& bv_manager,
-                       deep_p_manager_t& p_manager,
-                       deep_q_graph_t& q_graph) {
+                       const graph_t &g,
+                       deep_d_oracle_t &d_oracle,
+                       deep_bv_manager_t &bv_manager,
+                       deep_p_manager_t &p_manager,
+                       deep_q_graph_t &q_graph) {
             if (depth > config->max_recursion) {
                 return false;
             }
@@ -195,7 +199,7 @@ namespace HeiProMap {
             // if no move found than revert one step
 
             std::vector<KWayFMMove> possible_moves;
-            KWayFMMove best_stop_move = {0, 0, std::numeric_limits<partition_t>::max(), -1};
+            KWayFMMove              best_stop_move = {0, 0, std::numeric_limits<partition_t>::max(), -1};
 
             forall_bv_id_iu(bv_manager, id, i, u)
                 {
@@ -213,7 +217,7 @@ namespace HeiProMap {
                             if (p_manager.get_bweight(id) - u_weight <= p_manager.get_lmax(id) && p_manager.get_bweight(v_id) + u_weight <= p_manager.get_lmax(v_id)) {
                                 if (qap_delta > best_stop_move.qap_delta) {
                                     block_used[v_id] = block_marker;
-                                    best_stop_move   = {u, id, v_id, qap_delta};
+                                    best_stop_move = {u, id, v_id, qap_delta};
                                 }
                             }
 
@@ -238,7 +242,7 @@ namespace HeiProMap {
 
             // std::cout << depth << " " << possible_moves.size() << " " << current_qap_delta << std::endl;
 
-            for (auto& move : possible_moves) {
+            for (auto &move: possible_moves) {
                 bv_manager.move(g, p_manager, move.u, move.u_id, move.to_move_id);
                 q_graph.move(g, p_manager, move.u, move.u_id, move.to_move_id);
                 p_manager.move(move.u, g.weight(move.u), move.u_id, move.to_move_id);

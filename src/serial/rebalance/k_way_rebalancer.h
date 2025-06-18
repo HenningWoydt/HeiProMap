@@ -37,20 +37,20 @@
 
 namespace HeiProMap {
     class KWayRebalancer {
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n    = 0;
+        vertex_t                 m_m    = 0;
+        partition_t              m_k    = 0;
+        weight_t                 m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
+        std::vector<weight_t>    m_distance;
 
         AlignedArray<u32> vertex_used;
-        u32 vertex_mark  = 0;
+        u32               vertex_mark = 0;
 
         AlignedArray<u32> block_used;
-        u32 block_marker = 0;
+        u32               block_marker = 0;
 
-        RandomEngine* random_engine          = nullptr;
+        RandomEngine *random_engine = nullptr;
 
     public:
         KWayRebalancer() = default;
@@ -59,9 +59,9 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
-                        RandomEngine& t_random_engine) {
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
+                        RandomEngine &t_random_engine) {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -75,16 +75,16 @@ namespace HeiProMap {
             block_used.initialize(m_k, 0);
             block_marker = 0;
 
-            random_engine    = &t_random_engine;
+            random_engine = &t_random_engine;
         }
 
         void rebalance(const u64 level,
                        const u64 max_level,
-                       const graph_t& g,
-                       d_oracle_t& d_oracle,
-                       bv_manager_t& bv_manager,
-                       p_manager_t& p_manager,
-                       q_graph_t& q_graph) {
+                       const graph_t &g,
+                       d_oracle_t &d_oracle,
+                       bv_manager_t &bv_manager,
+                       p_manager_t &p_manager,
+                       q_graph_t &q_graph) {
             while (p_manager.is_overloaded()) {
                 std::vector<std::priority_queue<KWayFMMove>> heaps(m_k);
 
@@ -114,8 +114,8 @@ namespace HeiProMap {
                 vertex_mark += 1;
                 while (p_manager.is_overloaded()) {
                     // determine the most overloaded block
-                    partition_t o_id  = std::numeric_limits<partition_t>::max();
-                    weight_t o_weight = -std::numeric_limits<weight_t>::max();
+                    partition_t o_id     = std::numeric_limits<partition_t>::max();
+                    weight_t    o_weight = -std::numeric_limits<weight_t>::max();
 
                     for (partition_t id = 0; id < m_k; ++id) {
                         if (p_manager.get_bweight(id) > m_lmax && p_manager.get_bweight(id) > o_weight && !heaps[id].empty()) {
@@ -132,17 +132,17 @@ namespace HeiProMap {
                         const KWayFMMove move = heaps[o_id].top();
                         heaps[o_id].pop();
 
-                        vertex_t vertex        = move.u;
-                        partition_t vertex_id  = p_manager[vertex];
-                        weight_t vertex_weight = g.weight(vertex);
-                        partition_t move_id    = move.to_move_id;
+                        vertex_t    vertex        = move.u;
+                        partition_t vertex_id     = p_manager[vertex];
+                        weight_t    vertex_weight = g.weight(vertex);
+                        partition_t move_id       = move.to_move_id;
 
                         if (vertex_used[vertex] == vertex_mark) { continue; }
                         if (vertex_id != move.u_id) { continue; }
                         if (!bv_manager.is_boundary(vertex)) { continue; }
 
                         bool is_connected_move_id;
-                        s64 temp_qap_delta = get_u_qap_delta_and_is_connected_to(g, vertex, vertex_id, move_id, is_connected_move_id, p_manager, d_oracle);
+                        s64  temp_qap_delta = get_u_qap_delta_and_is_connected_to(g, vertex, vertex_id, move_id, is_connected_move_id, p_manager, d_oracle);
                         if (!is_connected_move_id) { continue; }
                         if (temp_qap_delta != move.qap_delta) { continue; }
 
@@ -158,8 +158,8 @@ namespace HeiProMap {
                                 if (vertex_used[neighbor] == vertex_mark) { continue; }
                                 if (!bv_manager.is_boundary(neighbor)) { continue; }
 
-                                partition_t neighbor_id  = p_manager[neighbor];
-                                weight_t neighbor_weight = g.weight(neighbor);
+                                partition_t neighbor_id     = p_manager[neighbor];
+                                weight_t    neighbor_weight = g.weight(neighbor);
 
                                 block_marker += 1;
                                 forall_guiv(g, neighbor, j, v)

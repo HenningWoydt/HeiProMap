@@ -224,7 +224,7 @@ namespace HeiProMap {
     }
 
     template<typename T>
-    bool exists(T* const &arr, const size_t size, const T &x) {
+    bool exists(T *const &arr, const size_t size, const T &x) {
         for (size_t i = 0; i < size; ++i) {
             if (arr[i] == x) {
                 return true;
@@ -369,9 +369,9 @@ namespace HeiProMap {
 
         // Compute the symmetric difference: elements in sorted1 or sorted2 but not in both.
         std::set_symmetric_difference(
-            sorted1.begin(), sorted1.end(),
-            sorted2.begin(), sorted2.end(),
-            std::back_inserter(difference)
+                sorted1.begin(), sorted1.end(),
+                sorted2.begin(), sorted2.end(),
+                std::back_inserter(difference)
         );
 
         return difference;

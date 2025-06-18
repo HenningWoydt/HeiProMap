@@ -32,22 +32,22 @@
 
 namespace HeiProMap {
     class DeepPartitionManager {
-        vertex_t m_n    = 0;
+        vertex_t    m_n = 0;
         partition_t m_k = 0;
 
         AlignedArray<partition_t> partition;
         AlignedArray<partition_t> partition_temp;
-        AlignedArray<weight_t> bweights;
-        AlignedArray<size_t> n_vertices;
-        AlignedArray<weight_t> lmax;
+        AlignedArray<weight_t>    bweights;
+        AlignedArray<size_t>      n_vertices;
+        AlignedArray<weight_t>    lmax;
         AlignedArray<partition_t> hierarchy_level;
 
     public:
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t t_lmax) {
-            m_n  = t_n;
-            m_k  = t_k;
+            m_n = t_n;
+            m_k = t_k;
 
             partition.initialize(m_n);
             partition_temp.initialize(m_n);
@@ -58,7 +58,7 @@ namespace HeiProMap {
         }
 
         // read
-        const partition_t& operator[](const vertex_t u) const { return partition[u]; }
+        const partition_t &operator[](const vertex_t u) const { return partition[u]; }
 
         // write
         void set(const vertex_t u,
@@ -80,6 +80,8 @@ namespace HeiProMap {
         }
 
         partition_t get_hierarchy_level(const partition_t id) const { return hierarchy_level[id]; }
+
+        bool is_active(const partition_t id) { return hierarchy_level[id] != m_k; }
 
         /**
          * Moves a vertex from one block to another. This function is
@@ -110,15 +112,15 @@ namespace HeiProMap {
 
         std::vector<weight_t> get_bweights() const {
             std::vector<weight_t> weights(m_k);
-            for (size_t i = 0; i < m_k; ++i) {
+            for (size_t           i = 0; i < m_k; ++i) {
                 weights[i] = bweights[i];
             }
             return weights;
         }
 
-        void contract(const Matching& matching) {
+        void contract(const Matching &matching) {
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                if(u == matching.get_partner(u)){
+                if (u == matching.get_partner(u)) {
                     vertex_t new_u = matching.get_n(u);
                     partition_temp[new_u] = partition[u];
 
@@ -143,10 +145,10 @@ namespace HeiProMap {
             std::swap(partition, partition_temp);
         }
 
-        void uncontract(const Matching& matching) {
+        void uncontract(const Matching &matching) {
             for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
-                vertex_t old_u                = matching.get_o(new_u);
-                vertex_t old_u_partner        = matching.get_partner(old_u);
+                vertex_t old_u         = matching.get_o(new_u);
+                vertex_t old_u_partner = matching.get_partner(old_u);
                 partition_temp[old_u]         = partition[new_u];
                 partition_temp[old_u_partner] = partition[new_u];
                 if (old_u != old_u_partner) {

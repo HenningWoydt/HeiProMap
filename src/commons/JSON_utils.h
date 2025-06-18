@@ -60,18 +60,18 @@ namespace HeiProMap {
 
     std::string to_JSON_value(f64 x);
 
-    std::string to_JSON_value(const std::string& s);
+    std::string to_JSON_value(const std::string &s);
 
-    std::string to_JSON_value(const JSONString& s);
+    std::string to_JSON_value(const JSONString &s);
 
-    template <typename T1, typename T2>
-        std::string to_JSON_value(const std::map<T1, T2>& m) {
+    template<typename T1, typename T2>
+    std::string to_JSON_value(const std::map<T1, T2> &m) {
         if (m.empty()) {
             return "{}";
         }
         std::vector<T1> arg1;
         std::vector<T2> arg2;
-        for (auto const& x : m) {
+        for (auto const &x: m) {
             arg1.push_back(x.first);
             arg2.push_back(x.second);
         }
@@ -88,8 +88,8 @@ namespace HeiProMap {
         return s;
     }
 
-    template <typename T>
-    std::string to_JSON_value(const std::vector<T>& vec) {
+    template<typename T>
+    std::string to_JSON_value(const std::vector<T> &vec) {
         if (vec.empty()) {
             return "[]";
         }
@@ -105,8 +105,8 @@ namespace HeiProMap {
         return s;
     }
 
-    template <typename T>
-    std::string to_JSON_value(const std::pair<T, T>& p) {
+    template<typename T>
+    std::string to_JSON_value(const std::pair<T, T> &p) {
         std::string s = to_JSON_value(p.first);
         s += " : " + to_JSON_value(p.second);
         return s;

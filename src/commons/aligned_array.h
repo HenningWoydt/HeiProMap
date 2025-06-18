@@ -33,8 +33,8 @@
 namespace HeiProMap {
     template<typename T>
     class AlignedArray {
-        T *m_ptr = nullptr;
-        size_t m_n = 0;
+        T      *m_ptr = nullptr;
+        size_t m_n    = 0;
 
         static_assert(std::is_trivially_destructible<T>::value,
                       "AlignedArray requires trivially destructible types");
@@ -48,7 +48,7 @@ namespace HeiProMap {
             if (size > m_n) {
                 m_n = size;
                 free(m_ptr);
-                m_ptr = (T*) aligned_alloc(64, size * sizeof(T));
+                m_ptr = (T *) aligned_alloc(64, size * sizeof(T));
             }
         }
 
@@ -58,7 +58,7 @@ namespace HeiProMap {
             if (size > m_n) {
                 m_n = size;
                 free(m_ptr);
-                m_ptr = (T*) aligned_alloc(64, size * sizeof(T));
+                m_ptr = (T *) aligned_alloc(64, size * sizeof(T));
             }
             std::fill_n(m_ptr, size, fill_value);
         }
@@ -69,18 +69,18 @@ namespace HeiProMap {
         AlignedArray(const AlignedArray &other) {
             m_n = other.m_n;
             if (m_n > 0) {
-                m_ptr = (T*) aligned_alloc(64, m_n * sizeof(T));
+                m_ptr = (T *) aligned_alloc(64, m_n * sizeof(T));
                 std::memcpy(m_ptr, other.m_ptr, m_n * sizeof(T));
             }
         }
 
         // Copy assignment
-        AlignedArray& operator=(const AlignedArray &other) {
+        AlignedArray &operator=(const AlignedArray &other) {
             if (this != &other) {
                 if (m_n != other.m_n) {
                     free(m_ptr);
-                    m_n = other.m_n;
-                    m_ptr = m_n > 0 ? (T*) aligned_alloc(64, m_n * sizeof(T)) : nullptr;
+                    m_n   = other.m_n;
+                    m_ptr = m_n > 0 ? (T *) aligned_alloc(64, m_n * sizeof(T)) : nullptr;
                 }
                 if (m_n > 0) {
                     std::memcpy(m_ptr, other.m_ptr, m_n * sizeof(T));
@@ -95,10 +95,10 @@ namespace HeiProMap {
             m_n = 0;
 
             m_ptr = other.m_ptr;
-            m_n = other.m_n;
+            m_n   = other.m_n;
 
             other.m_ptr = nullptr;
-            other.m_n = 0;
+            other.m_n   = 0;
         }
 
         AlignedArray &operator=(AlignedArray &&other) noexcept {
@@ -107,10 +107,10 @@ namespace HeiProMap {
                 m_n = 0;
 
                 m_ptr = other.m_ptr;
-                m_n = other.m_n;
+                m_n   = other.m_n;
 
                 other.m_ptr = nullptr;
-                other.m_n = 0;
+                other.m_n   = 0;
             }
             return *this;
         }
@@ -119,11 +119,11 @@ namespace HeiProMap {
 
         const T &operator[](size_t index) const { return m_ptr[index]; }
 
-        T* get_ptr() { return m_ptr; }
+        T *get_ptr() { return m_ptr; }
     };
 
     template<typename T>
-    void swap(AlignedArray<T>& a, AlignedArray<T>& b) noexcept {
+    void swap(AlignedArray<T> &a, AlignedArray<T> &b) noexcept {
         using std::swap;
         swap(a.m_ptr, b.m_ptr);
         swap(a.m_n, b.m_n);

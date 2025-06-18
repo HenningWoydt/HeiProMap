@@ -39,23 +39,23 @@
 namespace HeiProMap {
     class HierarchyAwareQuotientGraphRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit HierarchyAwareQuotientGraphRefinementConfiguration(const std::string& t_name) : ISerialRefinerConfiguration(t_name) {}
+        explicit HierarchyAwareQuotientGraphRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
 
         u64 max_iteration = 5;
     };
 
     class HierarchyAwareQuotientGraphRefinement final : public ISerialRefiner {
     private:
-        vertex_t m_n    = 0;
-        vertex_t m_m    = 0;
-        partition_t m_k = 0;
-        f64 m_imbalance = 0.0;
-        weight_t m_lmax = 0;
+        vertex_t                 m_n         = 0;
+        vertex_t                 m_m         = 0;
+        partition_t              m_k         = 0;
+        f64                      m_imbalance = 0.0;
+        weight_t                 m_lmax      = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
+        std::vector<weight_t>    m_distance;
 
         AlignedArray<u32> vertex_used;
-        u32 vertex_marker = 0;
+        u32               vertex_marker = 0;
 
         // priority queues
         IndexedMaxHeap<s64> l_boundary_vertices;
@@ -63,15 +63,15 @@ namespace HeiProMap {
 
         // store change
         AlignedArray<Move> moves;
-        size_t moves_size      = 0;
-        s64 curr_qap_gain      = 0;
-        s64 max_qap_gain       = 0;
-        s64 curr_edge_cut_gain = 0;
-        s64 max_edge_cut_gain  = 0;
-        size_t best_idx        = 0;
+        size_t             moves_size         = 0;
+        s64                curr_qap_gain      = 0;
+        s64                max_qap_gain       = 0;
+        s64                curr_edge_cut_gain = 0;
+        s64                max_edge_cut_gain  = 0;
+        size_t             best_idx           = 0;
 
-        RandomEngine* random_engine                                      = nullptr;
-        const HierarchyAwareQuotientGraphRefinementConfiguration* config = nullptr;
+        RandomEngine                                             *random_engine = nullptr;
+        const HierarchyAwareQuotientGraphRefinementConfiguration *config        = nullptr;
 
     public:
         HierarchyAwareQuotientGraphRefinement() = default;
@@ -81,10 +81,10 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const f64 t_imbalance,
                         const weight_t t_lmax,
-                        const std::vector<partition_t>& t_hierarchy,
-                        const std::vector<weight_t>& t_distance,
-                        RandomEngine& t_random_engine,
-                        const ISerialRefinerConfiguration& i_config) override {
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
+                        RandomEngine &t_random_engine,
+                        const ISerialRefinerConfiguration &i_config) override {
             m_n         = t_n;
             m_m         = t_m;
             m_k         = t_k;
@@ -93,8 +93,8 @@ namespace HeiProMap {
             m_hierarchy = t_hierarchy;
             m_distance  = t_distance;
 
-            random_engine    = &t_random_engine;
-            config           = dynamic_cast<const HierarchyAwareQuotientGraphRefinementConfiguration*>(&i_config);
+            random_engine = &t_random_engine;
+            config        = dynamic_cast<const HierarchyAwareQuotientGraphRefinementConfiguration *>(&i_config);
 
             // priority queues
             l_boundary_vertices.initialize(m_n);
@@ -109,11 +109,11 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const u64 max_level,
-                    graph_t& g,
-                    d_oracle_t& d_oracle,
-                    bv_manager_t& bv_manager,
-                    p_manager_t& p_manager,
-                    q_graph_t& q_graph) override {
+                    graph_t &g,
+                    d_oracle_t &d_oracle,
+                    bv_manager_t &bv_manager,
+                    p_manager_t &p_manager,
+                    q_graph_t &q_graph) override {
             for (size_t rep = 0; rep < 1; ++rep) {
                 for (size_t i = 0; i < m_hierarchy.size(); ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);
@@ -123,16 +123,16 @@ namespace HeiProMap {
 
         void refine_layer(const u64 level,
                           const u64 max_level,
-                          graph_t& g,
-                          d_oracle_t& d_oracle,
-                          bv_manager_t& bv_manager,
-                          p_manager_t& p_manager,
-                          q_graph_t& q_graph,
+                          graph_t &g,
+                          d_oracle_t &d_oracle,
+                          bv_manager_t &bv_manager,
+                          p_manager_t &p_manager,
+                          q_graph_t &q_graph,
                           size_t layer) override {
             partition_t n_upper_total_super_blocks = 1;
             partition_t n_total_super_blocks       = m_hierarchy[layer];
-            for (size_t i = layer + 1; i < m_hierarchy.size(); ++i) { n_upper_total_super_blocks *= m_hierarchy[i]; }
-            partition_t ids_per_super_block = m_k / (n_upper_total_super_blocks * m_hierarchy[layer]);
+            for (size_t i                          = layer + 1; i < m_hierarchy.size(); ++i) { n_upper_total_super_blocks *= m_hierarchy[i]; }
+            partition_t ids_per_super_block        = m_k / (n_upper_total_super_blocks * m_hierarchy[layer]);
 
             for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
                 for (size_t i = 0; i < n_upper_total_super_blocks; ++i) {
@@ -150,9 +150,9 @@ namespace HeiProMap {
             }
         }
 
-        static bool is_connected(const graph_t& g,
-                                 bv_manager_t& bv_manager,
-                                 p_manager_t& p_manager,
+        static bool is_connected(const graph_t &g,
+                                 bv_manager_t &bv_manager,
+                                 p_manager_t &p_manager,
                                  partition_t l_start,
                                  partition_t r_start,
                                  partition_t ids_per_super_block) {
@@ -172,8 +172,8 @@ namespace HeiProMap {
             return false;
         }
 
-        bool is_connected(const graph_t& g,
-                          p_manager_t& p_manager,
+        bool is_connected(const graph_t &g,
+                          p_manager_t &p_manager,
                           vertex_t u,
                           partition_t id_start,
                           partition_t ids_per_super_block) {
@@ -190,11 +190,11 @@ namespace HeiProMap {
 
         void refine_blocks(const u64 level,
                            const u64 max_level,
-                           const graph_t& g,
-                           d_oracle_t& d_oracle,
-                           bv_manager_t& bv_manager,
-                           p_manager_t& p_manager,
-                           q_graph_t& q_graph,
+                           const graph_t &g,
+                           d_oracle_t &d_oracle,
+                           bv_manager_t &bv_manager,
+                           p_manager_t &p_manager,
+                           q_graph_t &q_graph,
                            partition_t l_start,
                            partition_t r_start,
                            partition_t ids_per_super_block,
@@ -207,7 +207,7 @@ namespace HeiProMap {
             for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
-                        s64 delta         = 0;
+                        s64  delta        = 0;
                         bool is_connected = false;
                         forall_guivw(g, u, j, v, w)
                             {
@@ -232,7 +232,7 @@ namespace HeiProMap {
             for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
                 forall_bv_id_iu(bv_manager, id, i, u)
                     {
-                        s64 delta         = 0;
+                        s64  delta        = 0;
                         bool is_connected = false;
                         forall_guivw(g, u, j, v, w)
                             {
@@ -255,17 +255,17 @@ namespace HeiProMap {
             }
 
             // get the weight of both superblocks
-            weight_t l_weight = 0;
-            weight_t r_weight = 0;
-            for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) { l_weight += p_manager.get_bweight(id); }
-            for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) { r_weight += p_manager.get_bweight(id); }
+            weight_t         l_weight = 0;
+            weight_t         r_weight = 0;
+            for (partition_t id       = l_start; id < l_start + ids_per_super_block; ++id) { l_weight += p_manager.get_bweight(id); }
+            for (partition_t id       = r_start; id < r_start + ids_per_super_block; ++id) { r_weight += p_manager.get_bweight(id); }
 
             // start executing moves based on the TopGain method
             vertex_marker += 1;
-            moves_size         = 0;
-            best_idx           = 0;
-            curr_qap_gain      = 0;
-            max_qap_gain       = 0;
+            moves_size                = 0;
+            best_idx                  = 0;
+            curr_qap_gain             = 0;
+            max_qap_gain              = 0;
             size_t max_n_swaps = 100000000;
 
             f64 steps_since_last_improvement = 0.0;
@@ -293,13 +293,13 @@ namespace HeiProMap {
                 }
 
                 // choose the priority queue
-                IndexedMaxHeap<s64>& boundary_vertices = choose_l ? l_boundary_vertices : r_boundary_vertices;
+                IndexedMaxHeap<s64> &boundary_vertices = choose_l ? l_boundary_vertices : r_boundary_vertices;
 
-                vertex_t vertex        = boundary_vertices.top_key();
-                s64 qap_delta          = boundary_vertices.top();
-                weight_t vertex_weight = g.weight(vertex);
-                partition_t vertex_id  = p_manager[vertex];
-                partition_t move_id    = choose_l ? r_start : l_start;
+                vertex_t    vertex        = boundary_vertices.top_key();
+                s64         qap_delta     = boundary_vertices.top();
+                weight_t    vertex_weight = g.weight(vertex);
+                partition_t vertex_id     = p_manager[vertex];
+                partition_t move_id       = choose_l ? r_start : l_start;
                 boundary_vertices.pop();
 
                 // greedy way where to put the vertex
@@ -308,7 +308,7 @@ namespace HeiProMap {
                     for (partition_t id = r_start; id < r_start + ids_per_super_block; ++id) {
                         s64 real_qap_delta = get_u_qap_delta(g, vertex, vertex_id, id, p_manager, d_oracle);
                         if (real_qap_delta > move_qap_delta && p_manager.get_bweight(id) + vertex_weight <= m_lmax) {
-                            move_id = id;
+                            move_id        = id;
                             move_qap_delta = real_qap_delta;
                         }
                     }
@@ -316,7 +316,7 @@ namespace HeiProMap {
                     for (partition_t id = l_start; id < l_start + ids_per_super_block; ++id) {
                         s64 real_qap_delta = get_u_qap_delta(g, vertex, vertex_id, id, p_manager, d_oracle);
                         if (real_qap_delta > move_qap_delta && p_manager.get_bweight(id) + vertex_weight <= m_lmax) {
-                            move_id = id;
+                            move_id        = id;
                             move_qap_delta = real_qap_delta;
                         }
                     }
@@ -347,8 +347,8 @@ namespace HeiProMap {
                 vertex_used[vertex] = vertex_marker;
 
                 steps_since_last_improvement += 1.0;
-                f64 new_qap_gain_mean = qap_gain_mean + ((f64)qap_delta - qap_gain_mean) / steps_since_last_improvement;
-                f64 new_qap_gain_var  = (qap_gain_var + ((f64)qap_delta - qap_gain_mean) * ((f64)qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
+                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / steps_since_last_improvement;
+                f64 new_qap_gain_var  = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
 
                 qap_gain_mean = new_qap_gain_mean;
                 qap_gain_var  = new_qap_gain_var;
@@ -367,7 +367,7 @@ namespace HeiProMap {
                         if (!(in_l || in_r)) { continue; }
 
                         if (in_l) {
-                            s64 delta         = 0;
+                            s64  delta        = 0;
                             bool is_connected = false;
                             forall_guivw(g, neighbor, j, v, w)
                                 {
@@ -385,7 +385,7 @@ namespace HeiProMap {
                                 l_boundary_vertices.push_update(neighbor, delta);
                             }
                         } else {
-                            s64 delta         = 0;
+                            s64  delta        = 0;
                             bool is_connected = false;
                             forall_guivw(g, neighbor, j, v, w)
                                 {
@@ -417,10 +417,10 @@ namespace HeiProMap {
 
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
-                vertex_t vertex        = moves[moves_size - 1 - i].u;
-                weight_t vertex_weight = g.weight(vertex);
-                partition_t vertex_id  = moves[moves_size - 1 - i].to_move_id;
-                partition_t move_id    = moves[moves_size - 1 - i].u_id;
+                vertex_t    vertex        = moves[moves_size - 1 - i].u;
+                weight_t    vertex_weight = g.weight(vertex);
+                partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
+                partition_t move_id       = moves[moves_size - 1 - i].u_id;
 
                 ASSERT(p_manager[vertex] == vertex_id);
 
@@ -429,10 +429,10 @@ namespace HeiProMap {
 
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
-                vertex_t vertex        = moves[i].u;
-                weight_t vertex_weight = g.weight(vertex);
-                partition_t vertex_id  = moves[i].u_id;
-                partition_t move_id    = moves[i].to_move_id;
+                vertex_t    vertex        = moves[i].u;
+                weight_t    vertex_weight = g.weight(vertex);
+                partition_t vertex_id     = moves[i].u_id;
+                partition_t move_id       = moves[i].to_move_id;
 
                 ASSERT(p_manager[vertex] == vertex_id);
 

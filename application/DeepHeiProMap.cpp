@@ -155,7 +155,7 @@ int main(const int argc, char* argv[]) {
                 std::strcpy(argv[i], args[i].c_str());
             }
 
-            AlgorithmConfiguration ac(argc, argv);
+            DeepAlgorithmConfiguration ac(argc, argv);
 
             DeepSolver solver(ac);
             solver.solve();
@@ -164,7 +164,7 @@ int main(const int argc, char* argv[]) {
             delete[] argv;
         }
     } else {
-        AlgorithmConfiguration ac(argc, argv);
+        DeepAlgorithmConfiguration ac(argc, argv);
 
         DeepSolver solver(ac);
         solver.solve();

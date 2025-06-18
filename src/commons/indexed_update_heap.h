@@ -39,19 +39,22 @@ namespace HeiProMap {
         s64         qap_delta;
 
         bool operator>(const IndexedUpdateHeapEntry &m) const { return qap_delta > m.qap_delta; }
+
         bool operator>=(const IndexedUpdateHeapEntry &m) const { return qap_delta >= m.qap_delta; }
+
         bool operator<(const IndexedUpdateHeapEntry &m) const { return qap_delta < m.qap_delta; }
+
         bool operator<=(const IndexedUpdateHeapEntry &m) const { return qap_delta <= m.qap_delta; }
     };
 
     class IndexedUpdateHeap {
-        size_t                                m_n         = 0;
-        size_t                                m_heap_size = 0;
-        AlignedArray <IndexedUpdateHeapEntry> m_heap;
-        AlignedArray <size_t>                 m_indices;
+        size_t                               m_n         = 0;
+        size_t                               m_heap_size = 0;
+        AlignedArray<IndexedUpdateHeapEntry> m_heap;
+        AlignedArray<size_t>                 m_indices;
 
-        u64                m_iteration = 0;
-        AlignedArray <u64> m_iteration_counter;
+        u64               m_iteration = 0;
+        AlignedArray<u64> m_iteration_counter;
 
     public:
         IndexedUpdateHeap() = default;
@@ -99,9 +102,13 @@ namespace HeiProMap {
         }
 
         vertex_t top_u() const { return m_heap[0].u; }
+
         partition_t top_id() const { return m_heap[0].id; }
+
         s64 top_qap_delta() const { return m_heap[0].qap_delta; }
+
         bool empty() const { return m_heap_size == 0; }
+
         size_t size() const { return m_heap_size; }
 
         void pop() {

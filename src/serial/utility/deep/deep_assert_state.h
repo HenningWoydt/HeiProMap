@@ -36,7 +36,7 @@
 #include "../../../serial/serial_definitions_3.h"
 
 namespace HeiProMap {
-    bool deep_assert_no_self_loops(const graph_t& g) {
+    bool deep_assert_no_self_loops(const graph_t &g) {
         forall_gu(g, u)
             {
                 for (size_t i = 0; i < g.size(u); ++i) {
@@ -49,7 +49,7 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_no_double_edges(const graph_t& g) {
+    bool deep_assert_no_double_edges(const graph_t &g) {
         std::vector<vertex_t> manual;
         forall_gu(g, u)
             {
@@ -64,8 +64,8 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_correct_partition_size(const graph_t& g,
-                                            const deep_p_manager_t& p_manager,
+    bool deep_assert_correct_partition_size(const graph_t &g,
+                                            const deep_p_manager_t &p_manager,
                                             const partition_t k) {
         std::vector<size_t> sizes(k, 0);
 
@@ -82,8 +82,8 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_bweights(const graph_t& g,
-                              const deep_p_manager_t& p_manager,
+    bool deep_assert_bweights(const graph_t &g,
+                              const deep_p_manager_t &p_manager,
                               const partition_t k) {
         std::vector<weight_t> weights(k, 0);
         forall_gu(g, u)
@@ -101,9 +101,9 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_n_boundary_vertices(const graph_t& g,
-                                         const deep_p_manager_t& p_manager,
-                                         const deep_bv_manager_t& bv_manager) {
+    bool deep_assert_n_boundary_vertices(const graph_t &g,
+                                         const deep_p_manager_t &p_manager,
+                                         const deep_bv_manager_t &bv_manager) {
         vertex_t count = 0;
         forall_gu(g, u)
             {
@@ -128,9 +128,9 @@ namespace HeiProMap {
         return count == bv_manager.size();
     }
 
-    bool deep_assert_correct_vertices_boundary(const graph_t& g,
-                                               const deep_p_manager_t& p_manager,
-                                               const deep_bv_manager_t& bv_manager) {
+    bool deep_assert_correct_vertices_boundary(const graph_t &g,
+                                               const deep_p_manager_t &p_manager,
+                                               const deep_bv_manager_t &bv_manager) {
         std::vector<vertex_t> manual;
         forall_gu(g, u)
             {
@@ -162,9 +162,9 @@ namespace HeiProMap {
         return manual == automatic;
     }
 
-    bool deep_assert_correct_vertices_boundary_per_block(const graph_t& g,
-                                                         const deep_p_manager_t& p_manager,
-                                                         deep_bv_manager_t& bv_manager,
+    bool deep_assert_correct_vertices_boundary_per_block(const graph_t &g,
+                                                         const deep_p_manager_t &p_manager,
+                                                         deep_bv_manager_t &bv_manager,
                                                          const partition_t k) {
         std::vector<std::vector<vertex_t>> manual(k);
 
@@ -202,9 +202,9 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_correct_boundary(const graph_t& g,
-                                      const deep_p_manager_t& p_manager,
-                                      deep_bv_manager_t& bv_manager,
+    bool deep_assert_correct_boundary(const graph_t &g,
+                                      const deep_p_manager_t &p_manager,
+                                      deep_bv_manager_t &bv_manager,
                                       const partition_t k) {
         ASSERT(deep_assert_n_boundary_vertices(g, p_manager, bv_manager));
         ASSERT(deep_assert_correct_vertices_boundary(g, p_manager, bv_manager));
@@ -212,9 +212,9 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_correct_quotient_graph(const graph_t& g,
-                                            const deep_p_manager_t& p_manager,
-                                            const deep_q_graph_t& q_graph,
+    bool deep_assert_correct_quotient_graph(const graph_t &g,
+                                            const deep_p_manager_t &p_manager,
+                                            const deep_q_graph_t &q_graph,
                                             const partition_t k) {
         std::map<std::pair<partition_t, partition_t>, weight_t> manual;
 
@@ -232,7 +232,7 @@ namespace HeiProMap {
             }
         endfor
 
-        for (auto [pair, w] : manual) {
+        for (auto [pair, w]: manual) {
             partition_t id1 = pair.first;
             partition_t id2 = pair.second;
 
@@ -245,8 +245,8 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_state_pre_partitioning(const graph_t& g,
-                                            const deep_p_manager_t& p_manager,
+    bool deep_assert_state_pre_partitioning(const graph_t &g,
+                                            const deep_p_manager_t &p_manager,
                                             const partition_t k) {
         // check no self-loops
         ASSERT(deep_assert_no_self_loops(g));
@@ -260,10 +260,10 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_state_after_partitioning(const graph_t& g,
-                                              const deep_p_manager_t& p_manager,
-                                              deep_bv_manager_t& bv_manager,
-                                              const deep_q_graph_t& q_graph,
+    bool deep_assert_state_after_partitioning(const graph_t &g,
+                                              const deep_p_manager_t &p_manager,
+                                              deep_bv_manager_t &bv_manager,
+                                              const deep_q_graph_t &q_graph,
                                               const partition_t k) {
         // check no self-loops
         ASSERT(deep_assert_no_self_loops(g));
@@ -292,8 +292,8 @@ namespace HeiProMap {
         return true;
     }
 
-    bool deep_assert_state_after_partitioning(const graph_t& g,
-                                              const deep_p_manager_t& p_manager,
+    bool deep_assert_state_after_partitioning(const graph_t &g,
+                                              const deep_p_manager_t &p_manager,
                                               const partition_t k) {
         // check no self-loops
         ASSERT(deep_assert_no_self_loops(g));
