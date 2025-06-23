@@ -394,8 +394,8 @@ namespace HeiProMap {
                 endfor
             }
 
-            std::shuffle(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine->gen);
-            std::shuffle(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine->gen);
+            std::shuffle(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine->generator);
+            std::shuffle(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine->generator);
         }
 
         void determine_regions(const graph_t &g,

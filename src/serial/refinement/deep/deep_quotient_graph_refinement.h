@@ -50,7 +50,7 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        u64 m_threads = 16;
+        u64 m_threads = 1;
 
         struct thread_info {
             // priority queues
@@ -69,6 +69,8 @@ namespace HeiProMap {
             // store which vertices have been moved
             AlignedArray<u32> vertex_used;
             u32 vertex_mark = 0;
+
+            RandomEngine random_engine;
         };
 
         std::vector<thread_info> thread_infos;
@@ -79,7 +81,6 @@ namespace HeiProMap {
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> active_next_round;
 
-        RandomEngine *random_engine = nullptr;
         const DeepQuotientGraphRefinementConfiguration *config = nullptr;
 
     public:
@@ -97,7 +98,6 @@ namespace HeiProMap {
             m_k = t_k;
             m_threads = t_threads;
 
-            random_engine = &t_random_engine;
             config = dynamic_cast<const DeepQuotientGraphRefinementConfiguration *>(&i_config);
 
             thread_infos.resize(m_threads);
@@ -110,6 +110,8 @@ namespace HeiProMap {
 
                 thread_infos[i].moves.initialize(m_n);
                 thread_infos[i].moves_size = 0;
+
+                thread_infos[i].random_engine = RandomEngine(t_random_engine.get_u32());
             }
 
             // active block scheduling
@@ -132,7 +134,7 @@ namespace HeiProMap {
                 iteration += 1;
 
                 // determine all pairs in the quotient graph
-                std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings = q_graph.get_distance_2_matchings(active_this_round);
+                std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings = q_graph.get_distance_3_matchings(active_this_round);
                 for (auto &matching: matchings) {
 #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (auto [u_id, v_id]: matching) {
@@ -175,6 +177,8 @@ namespace HeiProMap {
             // store which vertices have been moved
             AlignedArray<u32> &vertex_used = thread_infos[thread_id].vertex_used;
             u32 &vertex_mark = thread_infos[thread_id].vertex_mark;
+
+            RandomEngine &random_engine = thread_infos[thread_id].random_engine;
 
             // add all boundary vertices with gain
             boundary_vertices_u.clear();
@@ -229,7 +233,7 @@ namespace HeiProMap {
                     if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
                         choose_u = false;
                     } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                        choose_u = random_engine->get_f32() < 0.5;
+                        choose_u = random_engine.get_f32() < 0.5;
                     }
 
                     // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
@@ -240,7 +244,7 @@ namespace HeiProMap {
 
                     if (u_id_weight > u_id_lmax && u_id_weight > v_id_weight) { choose_u = true; }
                     if (v_id_weight > v_id_lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > u_id_lmax && v_id_weight > v_id_lmax && u_id_weight == v_id_weight) { choose_u = random_engine->get_f32() < 0.5; }
+                    if (u_id_weight > u_id_lmax && v_id_weight > v_id_lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
@@ -322,7 +326,6 @@ namespace HeiProMap {
             }
 
             // make all moves to best index
-            mutex.lock();
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex = moves[i];
                 weight_t vertex_weight = g.weight(vertex);
@@ -333,7 +336,6 @@ namespace HeiProMap {
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
-            mutex.unlock();
 
             if (max_qap_gain > 0) {
                 active_next_round[u_id] = 1;
@@ -365,6 +367,8 @@ namespace HeiProMap {
             // store which vertices have been moved
             AlignedArray<u32> &vertex_used = thread_infos[thread_id].vertex_used;
             u32 &vertex_mark = thread_infos[thread_id].vertex_mark;
+
+            RandomEngine &random_engine = thread_infos[thread_id].random_engine;
 
             size_t max_n_swaps = 0;
 
@@ -419,7 +423,7 @@ namespace HeiProMap {
                     if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
                         choose_u = false;
                     } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                        choose_u = random_engine->get_f32() < 0.5;
+                        choose_u = random_engine.get_f32() < 0.5;
                     }
 
                     // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
@@ -430,7 +434,7 @@ namespace HeiProMap {
 
                     if (u_id_weight > u_id_lmax && u_id_weight > v_id_weight) { choose_u = true; }
                     if (v_id_weight > v_id_lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > u_id_lmax && v_id_weight > v_id_lmax && u_id_weight == v_id_weight) { choose_u = random_engine->get_f32() < 0.5; }
+                    if (u_id_weight > u_id_lmax && v_id_weight > v_id_lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
@@ -512,7 +516,7 @@ namespace HeiProMap {
             }
 
             // make all moves to best index
-            mutex.lock();
+            // mutex.lock();
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex = moves[i];
                 weight_t vertex_weight = g.weight(vertex);
@@ -523,7 +527,7 @@ namespace HeiProMap {
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
-            mutex.unlock();
+            // mutex.unlock();
 
             if (max_edge_cut_gain > 0) {
                 active_next_round[u_id] = 1;

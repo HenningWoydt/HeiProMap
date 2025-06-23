@@ -150,14 +150,14 @@ namespace HeiProMap {
             global_path_algorithm_config.random_level = 0;
 
             // refinement
-            deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 5;
+            deep_quotient_graph_refinement_config.enabled = false;
+            deep_quotient_graph_refinement_config.max_iteration = 3;
             deep_quotient_graph_refinement_config.alpha = 1000.0;
             deep_quotient_graph_refinement_config.beta_factor = 1.0;
-            deep_quotient_graph_refinement_config.alpha_edge_cut = 10.0;
+            deep_quotient_graph_refinement_config.alpha_edge_cut = 5.0;
             deep_quotient_graph_refinement_config.beta_factor_edge_cut = 1.0;
 
-            deep_flow_based_refinement_config.enabled = true;
+            deep_flow_based_refinement_config.enabled = false;
             deep_flow_based_refinement_config.min_level = 0;
             deep_flow_based_refinement_config.max_level = 100;
             deep_flow_based_refinement_config.max_global_iteration = 2;
@@ -165,7 +165,7 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.alpha = 2.0;
             deep_flow_based_refinement_config.alpha_upper_bound = 16.0;
             deep_flow_based_refinement_config.alpha_modifier = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set = false;
+            deep_flow_based_refinement_config.use_closed_vertex_set = true;
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
         }
 

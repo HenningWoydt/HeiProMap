@@ -208,7 +208,7 @@ namespace HeiProMap {
                     }
                 endfor
             }
-            std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->gen);
+            std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->generator);
 
             vertex_marker += 1;
             for (size_t ii = 0; ii < curr_boundary_size; ++ii) {

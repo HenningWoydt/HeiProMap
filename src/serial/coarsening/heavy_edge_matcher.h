@@ -131,33 +131,6 @@ namespace HeiProMap {
                     }
                 }
             endfor
-
-#if ASSERT_ENABLED
-            for (size_t i = 0; i < matching.size(); ++i) {
-                const auto& [u, v] = matching[i];
-                ASSERT(u != v);
-            }
-#endif
-
-#if ASSERT_ENABLED
-            std::vector<u8> hit(g.get_n(), 0);
-            for (size_t i = 0; i < matching.size(); ++i) {
-                const auto& [u, v] = matching[i];
-                hit[u] += 1;
-                hit[v] += 1;
-
-                if (hit[u] == 2) {
-                    ASSERT(false);
-                }
-                if (hit[v] == 2) {
-                    ASSERT(false);
-                }
-            }
-#endif
-        }
-
-        JSONString get_stats() {
-            return {};
         }
     };
 }

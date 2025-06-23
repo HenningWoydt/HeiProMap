@@ -101,31 +101,6 @@ namespace HeiProMap {
         return true;
     }
 
-    bool assert_n_boundary_vertices(const graph_t &g,
-                                    const p_manager_t &p_manager,
-                                    const bv_manager_t &bv_manager) {
-        vertex_t count = 0;
-        forall_gu(g, u)
-            {
-                partition_t u_id = p_manager[u];
-
-                forall_guiv(g, u, i, v)
-                    {
-                        partition_t v_id = p_manager[v];
-
-                        if (u_id != v_id) {
-                            count += 1;
-                            break;
-                        }
-                    }
-                endfor
-            }
-        endfor
-
-        ASSERT(count == bv_manager.size());
-        return count == bv_manager.size();
-    }
-
     bool assert_correct_vertices_boundary(const graph_t &g,
                                           const p_manager_t &p_manager,
                                           const bv_manager_t &bv_manager) {
@@ -145,11 +120,13 @@ namespace HeiProMap {
         endfor
 
         std::vector<vertex_t> automatic;
-        forall_bv_iu(bv_manager, i, u)
+        for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
+            forall_bv_id_iu(bv_manager, id, i, u)
             {
                 automatic.push_back(u);
             }
-        endfor
+            endfor
+        }
 
         std::sort(manual.begin(), manual.end());
         std::sort(automatic.begin(), automatic.end());
@@ -204,7 +181,6 @@ namespace HeiProMap {
                                  const p_manager_t &p_manager,
                                  bv_manager_t &bv_manager,
                                  const partition_t k) {
-        ASSERT(assert_n_boundary_vertices(g, p_manager, bv_manager));
         ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager));
         ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
         return true;
@@ -274,9 +250,6 @@ namespace HeiProMap {
 
         // check the correct block weights
         ASSERT(assert_bweights(g, p_manager, k));
-
-        // check the correct number of partitions
-        ASSERT(assert_n_boundary_vertices(g, p_manager, bv_manager));
 
         // check the right vertices are boundary
         ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager));

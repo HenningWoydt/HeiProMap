@@ -128,12 +128,14 @@ namespace HeiProMap {
                 positive_move_occurred = false;
 
                 curr_boundary_size = 0;
-                forall_bv_iu(bv_manager, i, u)
+                for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
+                    forall_bv_id_iu(bv_manager, id, i, u)
                     {
                         curr_boundary[curr_boundary_size++] = u;
                     }
-                endfor
-                std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->gen);
+                    endfor
+                }
+                std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine->generator);
 
 
                 vertex_mark += 1;

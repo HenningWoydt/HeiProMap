@@ -115,7 +115,8 @@ namespace HeiProMap {
                 heap = std::priority_queue<KWayFMMove>();
 
                 // insert all boundary vertices
-                forall_bv_iu(bv_manager, j, u)
+                for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
+                    forall_bv_id_iu(bv_manager, id, j, u)
                     {
                         partition_t u_id     = p_manager[u];
                         weight_t    u_weight = g.weight(u);
@@ -123,20 +124,21 @@ namespace HeiProMap {
                         // find all connected partitions to u
                         block_marker += 1;
                         forall_guiv(g, u, i, v)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (v_id == u_id) { continue; }
-                                if (block_used[v_id] == block_marker) { continue; }
-                                if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
+                        {
+                            partition_t v_id = p_manager[v];
+                            if (v_id == u_id) { continue; }
+                            if (block_used[v_id] == block_marker) { continue; }
+                            if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
 
-                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                                heap.emplace(u, u_id, v_id, qap_delta);
+                            s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                            heap.emplace(u, u_id, v_id, qap_delta);
 
-                                block_used[v_id] = block_marker;
-                            }
+                            block_used[v_id] = block_marker;
+                        }
                         endfor
                     }
-                endfor
+                    endfor
+                }
 
                 moves_size = 0;
                 size_t best_idx      = 0;

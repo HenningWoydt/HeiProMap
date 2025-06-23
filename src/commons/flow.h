@@ -331,7 +331,7 @@ namespace HeiProMap {
                     if (is_active[scc_u] == 0) { continue; }
                     if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
                 }
-                std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
+                std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
 
                 // determine the random topological order
                 std::vector<vertex_t> topo_order;
@@ -346,7 +346,7 @@ namespace HeiProMap {
                         in_deg[scc_v] -= 1;
                         if (in_deg[scc_v] == 0) { stack.push_back(scc_v); }
                     }
-                    std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
+                    std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
                 }
 
                 // go through the order and determine the best closure
@@ -429,7 +429,7 @@ namespace HeiProMap {
                 for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
                     if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
                 }
-                std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
+                std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
 
                 std::vector<vertex_t> topo_order;
                 while (!stack.empty()) {
@@ -442,7 +442,7 @@ namespace HeiProMap {
                         in_deg[scc_v] -= 1;
                         if (in_deg[scc_v] == 0) { stack.push_back(scc_v); }
                     }
-                    std::shuffle(stack.begin(), stack.end(), rnd_engine.gen);
+                    std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
                 }
 
                 weight_t        closure_weight = 0;

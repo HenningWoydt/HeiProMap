@@ -121,30 +121,32 @@ namespace HeiProMap {
                 current_n_moves   = 0;
                 current_qap_delta = 0;
 
-                forall_bv_iu(bv_manager, i, u)
+                for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
+                    forall_bv_id_iu(bv_manager, id, i, u)
                     {
                         partition_t u_id     = p_manager[u];
                         weight_t    u_weight = g.weight(u);
 
                         block_marker += 1;
                         forall_guiv(g, u, i, v)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (u_id == v_id) { continue; }
-                                if (block_used[v_id] == block_marker) { continue; }
+                        {
+                            partition_t v_id = p_manager[v];
+                            if (u_id == v_id) { continue; }
+                            if (block_used[v_id] == block_marker) { continue; }
 
-                                if (p_manager.get_bweight(v_id) + u_weight > p_manager.get_lmax(v_id)) {
-                                    // would overload
-                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                                    // if (qap_delta < 0) { continue; }
+                            if (p_manager.get_bweight(v_id) + u_weight > p_manager.get_lmax(v_id)) {
+                                // would overload
+                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                // if (qap_delta < 0) { continue; }
 
-                                    possible_moves.push_back({u, u_id, v_id, qap_delta});
-                                    block_used[v_id] = block_marker;
-                                }
+                                possible_moves.push_back({u, u_id, v_id, qap_delta});
+                                block_used[v_id] = block_marker;
                             }
+                        }
                         endfor
                     }
-                endfor
+                    endfor
+                }
 
                 std::sort(possible_moves.begin(), possible_moves.end(), std::greater<KWayFMMove>());
                 if (possible_moves.size() > 10) {
