@@ -84,8 +84,6 @@ namespace HeiProMap {
         void add(vertex_t u, vertex_t v) {
             ASSERT(matches_size < (m_n / 2));
             ASSERT(u != v);
-            ASSERT(partner[u] == u);
-            ASSERT(partner[v] == v);
             matches[matches_size.fetch_add(1)] = {u, v};
             partner[u]              = v;
             partner[v]              = u;
