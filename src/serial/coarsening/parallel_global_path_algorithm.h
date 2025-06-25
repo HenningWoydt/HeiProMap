@@ -95,8 +95,8 @@ namespace HeiProMap {
             AlignedArray<u8> dp_take;
             AlignedArray<vertex_t> dp_edges;
 
-            Matching dp_cycle_matches1;
-            Matching dp_cycle_matches2;
+            std::vector<std::pair<vertex_t, vertex_t>> dp_cycle_matches1;
+            std::vector<std::pair<vertex_t, vertex_t>> dp_cycle_matches2;
         };
 
         std::vector<thread_info> thread_infos;
@@ -129,8 +129,8 @@ namespace HeiProMap {
                 thread_infos[i].dp_take.initialize(m_n);
                 thread_infos[i].dp_edges.initialize(m_n);
 
-                thread_infos[i].dp_cycle_matches1.initialize(m_n);
-                thread_infos[i].dp_cycle_matches2.initialize(m_n);
+                // thread_infos[i].dp_cycle_matches1.initialize(m_n);
+                // thread_infos[i].dp_cycle_matches2.initialize(m_n);
             }
         }
 
@@ -148,12 +148,12 @@ namespace HeiProMap {
             auto sp_ratings = std::chrono::high_resolution_clock::now();
             compute_ratings(g, p_manager);
             auto ep_ratings = std::chrono::high_resolution_clock::now();
-            std::cout << "ratings: " << get_seconds(sp_ratings, ep_ratings) << std::endl;
+            // std::cout << "ratings: " << get_seconds(sp_ratings, ep_ratings) << std::endl;
 
             auto sp_sort = std::chrono::high_resolution_clock::now();
             sort_ratings();
             auto ep_sort = std::chrono::high_resolution_clock::now();
-            std::cout << "sort: " << get_seconds(sp_sort, ep_sort) << std::endl;
+            // std::cout << "sort: " << get_seconds(sp_sort, ep_sort) << std::endl;
 
 #pragma omp parallel for num_threads(m_threads)
             for (vertex_t u = 0; u < g.get_n(); ++u) {
@@ -166,6 +166,8 @@ namespace HeiProMap {
             for (size_t i = 0; i < m_threads; ++i) {
                 if (!thread_infos[i].edges.empty()) { edge_queue.push(HeapEntry{i, 0, thread_infos[i].edges[0]}); }
             }
+
+            cycles.clear();
 
             // Extraction loop
             auto sp_build = std::chrono::high_resolution_clock::now();
@@ -242,9 +244,9 @@ namespace HeiProMap {
                         m_neighbors[v].w2 = w;
 
                         // solve the cycle
-                        solve_cycle(g, u, path_length[u_id], matching, 0);
-                        path_length[u_id] = 0;
-                        // cycles.push_back(u);
+                        // solve_cycle(g, u, path_length[u_id], matching, 0);
+                        // path_length[u_id] = 0;
+                        cycles.push_back(u);
                     }
                     continue;
                 }
@@ -278,7 +280,7 @@ namespace HeiProMap {
                 path_id[v2] = id1;
             }
             auto ep_build = std::chrono::high_resolution_clock::now();
-            std::cout << "build: " << get_seconds(sp_build, ep_build) << std::endl;
+            // std::cout << "build: " << get_seconds(sp_build, ep_build) << std::endl;
 
             // process all paths
             auto sp_path = std::chrono::high_resolution_clock::now();
@@ -302,14 +304,16 @@ namespace HeiProMap {
                 }
             endfor
             auto ep_path = std::chrono::high_resolution_clock::now();
-            std::cout << "path: " << get_seconds(sp_path, ep_path) << std::endl;
+            // std::cout << "path: " << get_seconds(sp_path, ep_path) << std::endl;
 
             auto sp_cycle = std::chrono::high_resolution_clock::now();
+#pragma omp parallel for num_threads(m_threads) schedule(static)
             for (vertex_t u : cycles) {
-                solve_cycle(g, u, path_length[path_id[u]], matching, 0);
+                u64 thread_id = omp_get_thread_num();
+                solve_cycle(g, u, path_length[path_id[u]], matching, thread_id);
             }
             auto ep_cycle = std::chrono::high_resolution_clock::now();
-            std::cout << "cycle: " << get_seconds(sp_cycle, ep_cycle) << std::endl;
+            // std::cout << "cycle: " << get_seconds(sp_cycle, ep_cycle) << std::endl;
         }
 
         template <typename PartitionManagerT>
@@ -510,13 +514,165 @@ namespace HeiProMap {
             return dp_w[i - 1];
         }
 
+        f32 solve_path_length_1(const graph_t& g,
+                                const vertex_t u,
+                                std::vector<std::pair<vertex_t, vertex_t>>& matching) {
+            vertex_t uu = u;
+            vertex_t vv = m_neighbors[u].n1;
+            f32 w       = m_neighbors[u].w1;
+
+            matching.emplace_back(uu, vv);
+
+            return w;
+        }
+
+        f32 solve_path_length_2(const graph_t& g,
+                                const vertex_t u,
+                                std::vector<std::pair<vertex_t, vertex_t>>& matching) {
+            vertex_t v1 = u;
+            vertex_t v2 = m_neighbors[u].n1;
+            vertex_t v3;
+            f32 w1 = m_neighbors[u].w1;
+            f32 w2;
+
+            if (m_neighbors[v2].n1 == v1) {
+                v3 = m_neighbors[v2].n2;
+                w2 = m_neighbors[v2].w2;
+            } else {
+                v3 = m_neighbors[v2].n1;
+                w2 = m_neighbors[v2].w1;
+            }
+
+            vertex_t uu, vv;
+            f32 w;
+            if (w1 > w2) {
+                uu = v1;
+                vv = v2;
+                w  = w1;
+            } else {
+                uu = v2;
+                vv = v3;
+                w  = w2;
+            }
+
+            matching.emplace_back(uu, vv);
+            return w;
+        }
+
+        f32 solve_path(const graph_t& g,
+                       const vertex_t u,
+                       const u32 length,
+                       std::vector<std::pair<vertex_t, vertex_t>>& matching,
+                       u64 thread_id) {
+            AlignedArray<f32>& dp_w          = thread_infos[thread_id].dp_w;
+            AlignedArray<s64>& dp_m          = thread_infos[thread_id].dp_m;
+            AlignedArray<u8>& dp_take        = thread_infos[thread_id].dp_take;
+            AlignedArray<vertex_t>& dp_edges = thread_infos[thread_id].dp_edges;
+
+            // special case of length 1
+            if (length == 1) {
+                return solve_path_length_1(g, u, matching);
+            }
+
+            // special case of length 2
+            if (length == 2) {
+                return solve_path_length_2(g, u, matching);
+            }
+
+            vertex_t v1, v2, v3;
+            f32 w;
+
+            s64 i = 0;
+
+            // first edge of the path
+            v1          = u;
+            dp_edges[i] = v1;
+            if (m_neighbors[v1].n1 == v1) {
+                v2 = m_neighbors[u].n2;
+                w  = m_neighbors[u].w2;
+            } else {
+                v2 = m_neighbors[u].n1;
+                w  = m_neighbors[u].w1;
+            }
+            dp_edges[i + 1] = v2; // save edge
+
+            // init dp
+            dp_w[i]    = w;
+            dp_m[i]    = -1;
+            dp_take[i] = 1;
+            i += 1;
+
+            // second edge of the path
+            if (m_neighbors[v2].n1 == v1) {
+                v3 = m_neighbors[v2].n2;
+                w  = m_neighbors[v2].w2;
+            } else {
+                v3 = m_neighbors[v2].n1;
+                w  = m_neighbors[v2].w1;
+            }
+            dp_edges[i + 1] = v3; // save edge
+
+            // init dp
+            if (w > dp_w[i - 1]) {
+                dp_w[i]    = w;
+                dp_m[i]    = -1;
+                dp_take[i] = 1;
+            } else {
+                dp_w[i]    = dp_w[i - 1];
+                dp_m[i]    = 0;
+                dp_take[i] = 0;
+            }
+            i += 1;
+
+            // all other edges of the path
+            v1 = v2;
+            v2 = v3;
+            while (m_neighbors[v2].n1 != v2 && m_neighbors[v2].n2 != v2) {
+                if (m_neighbors[v2].n1 == v1) {
+                    v3 = m_neighbors[v2].n2;
+                    w  = m_neighbors[v2].w2;
+                } else {
+                    v3 = m_neighbors[v2].n1;
+                    w  = m_neighbors[v2].w1;
+                }
+                dp_edges[i + 1] = v3; // save edge
+
+                // dp
+                if (w + dp_w[i - 2] > dp_w[i - 1]) {
+                    dp_w[i]    = w + dp_w[i - 2];
+                    dp_m[i]    = i - 2;
+                    dp_take[i] = 1;
+                } else {
+                    dp_w[i]    = dp_w[i - 1];
+                    dp_m[i]    = i - 1;
+                    dp_take[i] = 0;
+                }
+
+                v1 = v2;
+                v2 = v3;
+                i += 1;
+            }
+
+            s64 idx = i - 1;
+            while (idx != -1) {
+                if (dp_take[idx]) {
+                    vertex_t uu = dp_edges[idx];
+                    vertex_t vv = dp_edges[idx + 1];
+
+                    matching.emplace_back(uu, vv);
+                }
+                idx = dp_m[idx];
+            }
+            return dp_w[i - 1];
+        }
+
         void solve_cycle(const graph_t& g,
                          const vertex_t u,
                          const u32 length,
                          Matching& matching,
                          u64 thread_id) {
-            Matching& dp_cycle_matches1 = thread_infos[thread_id].dp_cycle_matches1;
-            Matching& dp_cycle_matches2 = thread_infos[thread_id].dp_cycle_matches2;
+            std::vector<std::pair<vertex_t, vertex_t>>& dp_cycle_matches1 = thread_infos[thread_id].dp_cycle_matches1;
+            std::vector<std::pair<vertex_t, vertex_t>>& dp_cycle_matches2 = thread_infos[thread_id].dp_cycle_matches2;
 
             vertex_t n1           = m_neighbors[u].n1;
             vertex_t n2           = m_neighbors[u].n2;
@@ -559,13 +715,14 @@ namespace HeiProMap {
             m_neighbors[u]   = original_u;
             m_neighbors[n2]  = original_n2;
 
-            Matching* dp_cycle_matches = &dp_cycle_matches1;
-            if (matching_weight2 > matching_weight1) {
-                dp_cycle_matches = &dp_cycle_matches2;
-            }
-
-            for (size_t i = 0; i < dp_cycle_matches->size(); ++i) {
-                matching.add((*dp_cycle_matches)[i].u, (*dp_cycle_matches)[i].v);
+            if(matching_weight1 > matching_weight2){
+                for(auto [uu, vv] : dp_cycle_matches1){
+                    matching.add(uu, vv);
+                }
+            } else{
+                for(auto [uu, vv] : dp_cycle_matches2){
+                    matching.add(uu, vv);
+                }
             }
         }
 

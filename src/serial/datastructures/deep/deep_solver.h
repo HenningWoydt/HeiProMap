@@ -94,8 +94,8 @@ namespace HeiProMap {
 
         // matching
         std::vector<Matching> matches;
-        GlobalPathAlgorithmMatcher gpa_matcher;
-        // ParallelGlobalPathAlgorithmMatcher parallel_gpa_matcher;
+        // GlobalPathAlgorithmMatcher gpa_matcher;
+        ParallelGlobalPathAlgorithmMatcher parallel_gpa_matcher;
 
         // refinement
         std::vector<std::pair<ISerialDeepRefiner*, ISerialDeepRefinerConfiguration*>> refinements;
@@ -141,7 +141,6 @@ namespace HeiProMap {
                     p_manager.set(u, graphs.back().weight(u), 0);
                 }
             endfor
-
             partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
             deep_rebalancer.initialize(random_engine);
 
@@ -152,8 +151,8 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance, ac.threads);
 
             // matching
-            gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
-            // parallel_gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
+            // gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
+            parallel_gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
 
             refinements.emplace_back(&deep_quotient_graph_refinement, &ac.deep_quotient_graph_refinement_config);
             refinements.emplace_back(&deep_flow_based_refinement, &ac.deep_flow_based_refinement_config);
@@ -224,7 +223,7 @@ namespace HeiProMap {
 
                 coarsening(level);
                 auto ep = std::chrono::high_resolution_clock::now();
-                std::cout << level << " " << graphs.back().get_n() << " " << get_seconds(sp, ep) << std::endl;
+                // std::cout << level << " " << graphs.back().get_n() << " " << get_seconds(sp, ep) << std::endl;
 
                 level += 1;
             }
@@ -233,8 +232,8 @@ namespace HeiProMap {
 
             partition();
             rebalance(level);
-            std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << std::endl;
-            print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
+            // std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << std::endl;
+            // print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
 
             while (level > 0) {
                 auto sp = std::chrono::high_resolution_clock::now();
@@ -247,8 +246,8 @@ namespace HeiProMap {
                 refinement(level, max_level);
                 auto ep = std::chrono::high_resolution_clock::now();
 
-                std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_seconds(sp, ep) << std::endl;
-                print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size(), ac.threads));
+                // std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_seconds(sp, ep) << std::endl;
+                // print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size(), ac.threads));
             }
         }
 
@@ -278,7 +277,7 @@ namespace HeiProMap {
                 }
             }
 
-            std::cout << "number partitions: " << ids.size() << std::endl;
+            // std::cout << "number partitions: " << ids.size() << std::endl;
             partitioner.determine_all_blocks(graphs.back(), p_manager);
 #pragma omp parallel for num_threads(ac.threads) schedule(dynamic)
             for (size_t i = 0; i < ids.size(); ++i) {
@@ -299,8 +298,8 @@ namespace HeiProMap {
             matches.emplace_back();
             matches.back().initialize(graphs.back().get_n());
 
-            gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
-            // parallel_gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+            // gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+            parallel_gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("matching", get_seconds(sp_match, ep_match));
@@ -312,7 +311,7 @@ namespace HeiProMap {
             const auto sp_coarse = std::chrono::high_resolution_clock::now();
 
             graphs.emplace_back(); // coarse the graph
-            graphs.back().initialize(graphs[graphs.size() - 2], matches.back());
+            graphs.back().parallel_initialize(graphs[graphs.size() - 2], matches.back(), ac.threads);
             p_manager.contract(matches.back());
 
             const auto ep_coarse = std::chrono::high_resolution_clock::now();
@@ -325,9 +324,9 @@ namespace HeiProMap {
             const auto sp_uncoarse = std::chrono::high_resolution_clock::now();
 
             p_manager.uncontract(matches.back());
-            bv_manager.compute_from_scratch(graphs[graphs.size() - 2], p_manager);
-            graphs.pop_back(); // this is doing uncontraction
             matches.pop_back();
+            graphs.pop_back();
+            bv_manager.compute_from_scratch(graphs.back(), p_manager);
 
             const auto ep_uncoarse = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("uncoarsening", get_seconds(sp_uncoarse, ep_uncoarse));

@@ -52,6 +52,10 @@ namespace HeiProMap {
         partition_t m_k = 0;
         u64 m_threads = 1;
 
+        // store which vertices have been moved
+        AlignedArray<u32> vertex_used;
+        std::atomic<u32> global_vertex_mark = 0;
+
         struct thread_info {
             // priority queues
             IndexedMaxHeap<s64> boundary_vertices_u;
@@ -66,16 +70,10 @@ namespace HeiProMap {
             s64 max_edge_cut_gain = 0;
             size_t best_idx = 0;
 
-            // store which vertices have been moved
-            AlignedArray<u32> vertex_used;
-            u32 vertex_mark = 0;
-
             RandomEngine random_engine;
         };
 
         std::vector<thread_info> thread_infos;
-        std::mutex mutex;
-        f64 time = 0;
 
         // active block scheduling
         AlignedArray<u8> active_this_round;
@@ -100,13 +98,13 @@ namespace HeiProMap {
 
             config = dynamic_cast<const DeepQuotientGraphRefinementConfiguration *>(&i_config);
 
+            global_vertex_mark = 0;
+            vertex_used.initialize(m_n, 0);
+
             thread_infos.resize(m_threads);
             for (size_t i = 0; i < m_threads; ++i) {
                 thread_infos[i].boundary_vertices_u.initialize(m_n);
                 thread_infos[i].boundary_vertices_v.initialize(m_n);
-
-                thread_infos[i].vertex_mark = 0;
-                thread_infos[i].vertex_used.initialize(m_n, 0);
 
                 thread_infos[i].moves.initialize(m_n);
                 thread_infos[i].moves_size = 0;
@@ -174,15 +172,12 @@ namespace HeiProMap {
             s64 &max_qap_gain = thread_infos[thread_id].max_qap_gain;
             size_t &best_idx = thread_infos[thread_id].best_idx;
 
-            // store which vertices have been moved
-            AlignedArray<u32> &vertex_used = thread_infos[thread_id].vertex_used;
-            u32 &vertex_mark = thread_infos[thread_id].vertex_mark;
-
             RandomEngine &random_engine = thread_infos[thread_id].random_engine;
 
             // add all boundary vertices with gain
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
+            u32 vertex_mark = global_vertex_mark.fetch_add(1);
             vertex_mark += 1;
 
             size_t max_n_swaps = 0;
@@ -364,10 +359,6 @@ namespace HeiProMap {
             s64 &max_edge_cut_gain = thread_infos[thread_id].max_edge_cut_gain;
             size_t &best_idx = thread_infos[thread_id].best_idx;
 
-            // store which vertices have been moved
-            AlignedArray<u32> &vertex_used = thread_infos[thread_id].vertex_used;
-            u32 &vertex_mark = thread_infos[thread_id].vertex_mark;
-
             RandomEngine &random_engine = thread_infos[thread_id].random_engine;
 
             size_t max_n_swaps = 0;
@@ -375,7 +366,9 @@ namespace HeiProMap {
             // add all boundary vertices with gain
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
+            u32 vertex_mark = global_vertex_mark.fetch_add(1);
             vertex_mark += 1;
+
             forall_bv_id_iu(bv_manager, u_id, k, u)
                 {
                     forall_guiv(g, u, i, v)

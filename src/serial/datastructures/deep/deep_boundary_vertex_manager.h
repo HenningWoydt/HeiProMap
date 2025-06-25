@@ -134,32 +134,24 @@ namespace HeiProMap {
         void compute_from_scratch(const graph_t& g,
                                   const deep_p_manager_t& p_manager) {
             // compute all from scratch
-            m_n_boundary_edges.initialize(m_n, 0);
             for (auto& vec : m_sub_boundary) { vec.clear(); }
 
             forall_gu(g, u)
                 {
                     partition_t u_id = p_manager[u];
+                    vertex_t n_edges = 0;
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
-                            if (u_id != v_id) {
-                                if (m_n_boundary_edges[u] == 0) {
-                                    // add to the new sub boundary
-                                    m_sub_boundary[u_id].emplace_back(u);
-                                    m_sub_vertex_idx[u] = m_sub_boundary[u_id].size() - 1;
-                                }
-                                m_n_boundary_edges[u] += 1;
-                            }
+                            n_edges += u_id != v_id;
                         }
                     endfor
+                    m_n_boundary_edges[u] = n_edges;
+                    if(n_edges != 0){
+                        emplace_in_sub(u, u_id);
+                    }
                 }
             endfor
-        }
-
-        void reset() {
-            m_n_boundary_edges.initialize(m_n, 0);
-            for (auto& vec : m_sub_boundary) { vec.clear(); }
         }
 
     private:
