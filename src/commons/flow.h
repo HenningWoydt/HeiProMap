@@ -101,31 +101,6 @@ namespace HeiProMap {
         vertex_t get_target() const { return target; }
 
         const std::vector<EdgeVW> &operator[](vertex_t i) const { return edges[i]; }
-
-        void print() const {
-            std::cout << "Residual Flow Network:\n";
-            std::cout << "------------------------\n";
-            std::cout << "Total Nodes (excluding source/target): " << n << "\n";
-            std::cout << "Source ID: " << source << "\n";
-            std::cout << "Target ID: " << target << "\n\n";
-
-            for (vertex_t u = 0; u < n + 2; ++u) {
-                if (u == source) {
-                    std::cout << "Source (" << u << "): ";
-                } else if (u == target) {
-                    std::cout << "Target (" << u << "): ";
-                } else {
-                    std::cout << "Node " << u << ": ";
-                }
-
-                for (const auto &edge: edges[u]) {
-                    std::cout << edge.v << "(w=" << edge.w << ") ";
-                }
-                std::cout << "\n";
-            }
-
-            std::cout << "------------------------\n";
-        }
     };
 
     class SCCGraph {
@@ -152,6 +127,13 @@ namespace HeiProMap {
         vertex_t                           n_scc     = 0;
 
         const ResidualFlowNetwork *temp_g = nullptr;
+
+        std::vector<vertex_t> stack;
+        std::vector<u8> best_closure;
+        std::vector<u8> is_active;
+        std::vector<vertex_t> in_deg;
+        std::vector<vertex_t> topo_order;
+        std::vector<u8> in_closure;
 
     public:
         SCCGraph() = default;
@@ -307,16 +289,18 @@ namespace HeiProMap {
                                std::vector<u8> &is_left) {
             bool            closure_found = false;
             weight_t        best_diff     = -1;
-            std::vector<u8> best_closure(n_scc);
+            best_closure.resize(n_scc);
 
             // determine which sccs do not have to be considered
-            std::vector<u8> is_active(n_scc, 1);
+            is_active.resize(n_scc);
+            std::fill(is_active.begin(), is_active.end(), 1);
             for (vertex_t   scc_u: scc_s_successors) { is_active[scc_u] = 0; }
             for (vertex_t   scc_u: scc_t_predecessors) { is_active[scc_u] = 0; }
 
             for (size_t i = 0; i < repeats; ++i) {
                 // determine in degree of each vertex
-                std::vector<vertex_t> in_deg(n_scc, 0);
+                in_deg.resize(n_scc);
+                std::fill(in_deg.begin(), in_deg.end(), 0);
                 for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
                     if (is_active[scc_u] == 0) { continue; }
                     for (vertex_t scc_v: edges[scc_u]) {
@@ -326,7 +310,7 @@ namespace HeiProMap {
                 }
 
                 // push roots into stack
-                std::vector<vertex_t> stack;
+                stack.clear();
                 for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
                     if (is_active[scc_u] == 0) { continue; }
                     if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
@@ -334,7 +318,7 @@ namespace HeiProMap {
                 std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
 
                 // determine the random topological order
-                std::vector<vertex_t> topo_order;
+                topo_order.clear();
                 while (!stack.empty()) {
                     vertex_t scc_u = stack.back();
                     stack.pop_back();
@@ -351,7 +335,8 @@ namespace HeiProMap {
 
                 // go through the order and determine the best closure
                 weight_t        closure_weight = 0;
-                std::vector<u8> in_closure(n_scc, 0);
+                in_closure.resize(n_scc);
+                std::fill(in_closure.begin(), in_closure.end(), 0);
                 for (vertex_t   scc_u: scc_s_successors) {
                     in_closure[scc_u] = 1;
                     closure_weight += scc_weights[scc_u];
@@ -407,151 +392,6 @@ namespace HeiProMap {
             return closure_found;
         }
 
-        std::vector<std::vector<u8>> get_all_closures(weight_t left_non_region_weight,
-                                                      weight_t right_non_region_weight,
-                                                      weight_t lmax,
-                                                      size_t repeats,
-                                                      RandomEngine &rnd_engine) {
-            std::vector<std::vector<u8>> all_closures;
-
-            // Determine which SCCs do not have to be considered
-            std::vector<u8> is_active(n_scc, 1);
-            for (vertex_t   scc_u: scc_s_successors) { is_active[scc_u] = 0; }
-            for (vertex_t   scc_u: scc_t_predecessors) { is_active[scc_u] = 0; }
-
-            for (size_t i = 0; i < repeats; ++i) {
-                std::vector<vertex_t> in_deg(n_scc, 0);
-                for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
-                    for (vertex_t scc_v: edges[scc_u]) { in_deg[scc_v] += 1; }
-                }
-
-                std::vector<vertex_t> stack;
-                for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
-                    if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
-                }
-                std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
-
-                std::vector<vertex_t> topo_order;
-                while (!stack.empty()) {
-                    vertex_t scc_u = stack.back();
-                    stack.pop_back();
-
-                    topo_order.push_back(scc_u);
-
-                    for (vertex_t scc_v: edges[scc_u]) {
-                        in_deg[scc_v] -= 1;
-                        if (in_deg[scc_v] == 0) { stack.push_back(scc_v); }
-                    }
-                    std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
-                }
-
-                weight_t        closure_weight = 0;
-                std::vector<u8> in_closure(n_scc, 0);
-                for (vertex_t   scc_u: scc_s_successors) {
-                    in_closure[scc_u] = 1;
-                    closure_weight += scc_weights[scc_u];
-                }
-
-                for (vertex_t scc_u: topo_order) {
-                    if (is_active[scc_u] == 0) { continue; }
-
-                    in_closure[scc_u] = 1;
-                    closure_weight += scc_weights[scc_u];
-                }
-
-                weight_t      complement_weight = 0;
-                for (vertex_t scc_u: scc_t_predecessors) {
-                    in_closure[scc_u] = 0;
-                    complement_weight += scc_weights[scc_u];
-                }
-
-                if (right_non_region_weight + complement_weight > lmax) { continue; }
-
-                if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
-                    std::vector<u8> is_left(n - 2);
-                    for (vertex_t   u = 0; u < n - 2; ++u) {
-                        is_left[u] = in_closure[scc_id[u]];
-                    }
-                    all_closures.push_back(is_left);
-                }
-
-                for (vertex_t scc_u: topo_order) {
-                    if (is_active[scc_u] == 0) { continue; }
-
-                    in_closure[scc_u] = 0;
-                    closure_weight -= scc_weights[scc_u];
-                    complement_weight += scc_weights[scc_u];
-
-                    if (left_non_region_weight + closure_weight > lmax) { break; }
-
-                    if (left_non_region_weight + closure_weight <= lmax && right_non_region_weight + complement_weight <= lmax) {
-                        std::vector<u8> is_left(n - 2);
-                        for (vertex_t   u = 0; u < n - 2; ++u) {
-                            is_left[u] = in_closure[scc_id[u]];
-                        }
-                        all_closures.push_back(is_left);
-                    }
-                }
-            }
-
-            return all_closures;
-        }
-
-        void print() const {
-            std::cout << "SCCGraph\n";
-            std::cout << "=========\n";
-            std::cout << "Total Nodes (incl. source/target): " << n << "\n";
-            std::cout << "Number of SCCs: " << n_scc << "\n";
-            std::cout << "Original Source: " << source << ", Target: " << target << "\n";
-            std::cout << "SCC Source ID: " << scc_source << ", SCC Target ID: " << scc_target << "\n\n";
-
-            // Print node to SCC mapping
-            std::cout << "Node -> SCC Mapping:\n";
-            for (vertex_t u = 0; u < n; ++u) {
-                std::cout << "  Node " << u << " -> SCC " << scc_id[u] << "\n";
-            }
-
-            // Print SCC weights
-            std::cout << "\nSCC Weights:\n";
-            for (vertex_t i = 0; i < n_scc; ++i) {
-                std::cout << "  SCC " << i << ": weight = " << scc_weights[i] << "\n";
-            }
-
-            // Print SCC DAG
-            std::cout << "\nSCC Edges (DAG):\n";
-            for (vertex_t u = 0; u < edges.size(); ++u) {
-                std::cout << "  SCC " << u << " -> ";
-                for (vertex_t v: edges[u]) {
-                    std::cout << v << " ";
-                }
-                std::cout << "\n";
-            }
-
-            // Optionally: Print reversed DAG
-            std::cout << "\nReversed SCC Edges:\n";
-            for (vertex_t u = 0; u < rev_edges.size(); ++u) {
-                std::cout << "  SCC " << u << " <- ";
-                for (vertex_t v: rev_edges[u]) {
-                    std::cout << v << " ";
-                }
-                std::cout << "\n";
-            }
-
-            // Print reachable SCCs from source
-            std::cout << "\nSCCs reachable from SCC source:\n";
-            for (vertex_t u: scc_s_successors) {
-                std::cout << "  SCC " << u << "\n";
-            }
-
-            // Print SCCs reaching target
-            std::cout << "\nSCCs that reach SCC target:\n";
-            for (vertex_t u: scc_t_predecessors) {
-                std::cout << "  SCC " << u << "\n";
-            }
-
-            std::cout << "=========\n";
-        }
-
     private:
         void dfs(vertex_t v, const ResidualFlowNetwork &residual_flow_network) {
             index[v] = idx++;
@@ -583,15 +423,15 @@ namespace HeiProMap {
         }
 
         void dfs_non_recursive(vertex_t start, const ResidualFlowNetwork &residual_flow_network) {
-            std::stack<std::pair<vertex_t, size_t>> stack; // (node, next neighbor index)
+            std::stack<std::pair<vertex_t, size_t>> dfs_stack; // (node, next neighbor index)
 
-            stack.push({start, 0});
+            dfs_stack.push({start, 0});
             index[start] = idx++;
             S.push_back(start);
             P.push_back(start);
 
-            while (!stack.empty()) {
-                auto       &[v, i]    = stack.top();  // current node and index into its neighbors
+            while (!dfs_stack.empty()) {
+                auto       &[v, i]    = dfs_stack.top();  // current node and index into its neighbors
                 const auto &neighbors = residual_flow_network[v];
 
                 if (i < neighbors.size()) {
@@ -600,7 +440,7 @@ namespace HeiProMap {
                         index[u] = idx++;
                         S.push_back(u);
                         P.push_back(u);
-                        stack.push({u, 0});  // dive deeper
+                        dfs_stack.push({u, 0});  // dive deeper
                     } else if (scc_id[u] == UNVISITED) {
                         while (!P.empty() && index[P.back()] > index[u]) {
                             P.pop_back();
@@ -620,99 +460,7 @@ namespace HeiProMap {
                         P.pop_back();
                         ++n_scc;
                     }
-                    stack.pop();
-                }
-            }
-        }
-
-        bool assert_scc_correct(const ResidualFlowNetwork &residual_flow_network) {
-            // asserts that all found scc are correct
-            return true;
-
-            // every vertex is contained in one scc
-            // and no vertex is contained in two sccs
-            check_unique_membership();
-
-            // a vertex in a scc can reach all other vertices in the scc and vice versa
-            check_strong_connectivity(residual_flow_network);
-
-            // two vertices in different sccs can not reach themselves simultaneously
-            check_no_bidirectional_between_sccs(residual_flow_network);
-
-            return true;
-        }
-
-        void check_unique_membership() const {
-            std::vector<u8> seen(n, 0);
-            for (const auto &scc: vertex_per_scc) {
-                for (vertex_t u: scc) {
-                    ASSERT(u < n);
-                    ASSERT(seen[u] == 0);
-                    seen[u] += 1;
-                }
-            }
-            for (vertex_t   u = 0; u < n; ++u) {
-                ASSERT(seen[u] == 1);
-            }
-        }
-
-        static bool can_reach_all(const ResidualFlowNetwork &g, vertex_t u, const std::unordered_set<vertex_t> &group) {
-            std::unordered_set<vertex_t> visited;
-            std::queue<vertex_t>         q;
-            q.push(u);
-            visited.insert(u);
-
-            while (!q.empty()) {
-                vertex_t v = q.front();
-                q.pop();
-                for (auto [u, _]: g[v]) {
-                    if (group.count(u) && visited.insert(u).second) {
-                        q.push(u);
-                    }
-                }
-            }
-
-            return visited.size() == group.size();
-        }
-
-        void check_strong_connectivity(const ResidualFlowNetwork &g) {
-            for (const auto &scc: vertex_per_scc) {
-                std::unordered_set<vertex_t> group(scc.begin(), scc.end());
-                for (vertex_t                u: scc) {
-                    ASSERT(can_reach_all(g, u, group));
-                }
-            }
-        }
-
-        static bool is_reachable(const ResidualFlowNetwork &g, vertex_t u_start, vertex_t u_end) {
-            std::unordered_set<vertex_t> visited;
-            std::queue<vertex_t>         q;
-            q.push(u_start);
-
-            while (!q.empty()) {
-                vertex_t u = q.front();
-                q.pop();
-                visited.insert(u);
-                for (auto [v, w]: g[u]) {
-                    if (v == u_end) { return true; }
-                    if (visited.count(v) > 0) { continue; }
-                    q.push(v);
-                }
-            }
-
-            return false;
-        }
-
-        void check_no_bidirectional_between_sccs(const ResidualFlowNetwork &g) {
-            for (size_t i = 0; i < vertex_per_scc.size(); ++i) {
-                for (size_t j = i + 1; j < vertex_per_scc.size(); ++j) {
-                    for (vertex_t u: vertex_per_scc[i]) {
-                        for (vertex_t v: vertex_per_scc[j]) {
-                            bool u_reach_v = is_reachable(g, u, v);
-                            bool v_reach_u = is_reachable(g, v, u);
-                            ASSERT(!(u_reach_v && v_reach_u));
-                        }
-                    }
+                    dfs_stack.pop();
                 }
             }
         }

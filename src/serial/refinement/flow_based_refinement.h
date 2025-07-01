@@ -264,22 +264,6 @@ namespace HeiProMap {
 
                 std::vector<u8> is_left;
                 if (config->use_closed_vertex_set) {
-#if HEAVYASSERT_ENABLED
-                    // get the first cut for comparison
-                    flow_network.get_cut(is_left);
-
-                    if (cut_is_valid(g, p_manager, left_id, right_id, is_left)) {
-                        // make the changes
-                        weight_t qap            = get_qap(g, p_manager, d_oracle);
-                        std::vector<u8> changed = change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
-                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
-
-
-                        revert_boundary(g, bv_manager, p_manager, q_graph, changed, left_id, right_id);
-                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
-                    }
-#endif
-
                     // build residual network
                     flow_network.build_residual_network(residual_flow_network);
 
@@ -293,95 +277,6 @@ namespace HeiProMap {
                     weight_t left_non_region_weight  = p_manager.get_bweight(left_id) - left_region_weight;
                     weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
                     bool     closure_found           = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, m_lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
-/*
-#if HEAVYASSERT_ENABLED
-                    std::vector<std::vector<u8>> all_is_left = scc_graph.get_all_closures(left_non_region_weight, right_non_region_weight, m_lmax, 10, *random_engine);
-                    std::vector<weight_t> qap_deltas;
-                    // make the changes
-                    weight_t qap = get_qap(g, p_manager, d_oracle);
-                    for (auto& is_left : all_is_left) {
-                        std::vector<u8> changed = change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
-                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
-
-                        qap_deltas.push_back(qap - get_qap(g, p_manager, d_oracle));
-
-                        revert_boundary(g, bv_manager, p_manager, q_graph, changed, left_id, right_id);
-                        HEAVYASSERT(assert_correct_boundary(g, p_manager, bv_manager, m_k));
-                    }
-                    for (size_t i = 0; i < qap_deltas.size(); ++i) {
-                        if (qap_deltas[0] != qap_deltas[i]) {
-                            print(qap_deltas);
-                            std::cout << "original flow cut: " << qap_normal_change << std::endl;
-                            print(is_left);
-                            for (auto vec : all_is_left) {
-                                print(vec);
-                            }
-
-                            flow_network.print();
-                            residual_flow_network.print();
-                            scc_graph.print();
-
-                            exit(1);
-                        }
-                    }
-#endif
- */
-
-                    if (left_region_size == 5 && right_region_size == 5 && scc_graph.get_n_scc() >= 4 && false) {
-                        std::cout << "Left-Region" << std::endl;
-                        for (size_t i = 0; i < left_region_size; ++i) {
-                            vertex_t    u    = left_region[i];
-                            weight_t    u_w  = g.weight(u);
-                            partition_t u_id = p_manager[u];
-                            std::cout << "(" << u << ", " << u_w << ", " << u_id << ") : ";
-                            forall_guivw(g, u, j, v, w)
-                                {
-                                    partition_t v_id = p_manager[v];
-                                    std::cout << "(" << v << ", " << w << ", " << d_oracle.get(u_id, v_id) << ", " << v_id << ") ";
-                                }
-                            endfor
-                            std::cout << std::endl;
-                        }
-
-                        std::cout << "Right-Region" << std::endl;
-                        for (size_t i = 0; i < right_region_size; ++i) {
-                            vertex_t    u    = right_region[i];
-                            weight_t    u_w  = g.weight(u);
-                            partition_t u_id = p_manager[u];
-                            std::cout << "(" << u << ", " << u_w << ", " << u_id << ") : ";
-                            forall_guivw(g, u, j, v, w)
-                                {
-                                    partition_t v_id = p_manager[v];
-                                    std::cout << "(" << v << ", " << w << ", " << d_oracle.get(u_id, v_id) << ", " << v_id << ") ";
-                                }
-                            endfor
-                            std::cout << std::endl;
-                        }
-
-                        std::cout << "Left-Region Penalties" << std::endl;
-                        for (size_t i = 0; i < left_region_size; ++i) {
-                            vertex_t u         = left_region[i];
-                            weight_t l_penalty = left_penalties[u];
-                            weight_t r_penalty = right_penalties[u];
-                            std::cout << u << " : " << l_penalty << " -- " << r_penalty << std::endl;
-                        }
-
-                        std::cout << "Right-Region Penalties" << std::endl;
-                        for (size_t i = 0; i < right_region_size; ++i) {
-                            vertex_t u         = right_region[i];
-                            weight_t l_penalty = left_penalties[u];
-                            weight_t r_penalty = right_penalties[u];
-                            std::cout << u << " : " << l_penalty << " -- " << r_penalty << std::endl;
-                        }
-
-                        flow_network.print();
-                        residual_flow_network.print();
-                        scc_graph.print();
-
-                        std::cout << "best found closure: ";
-                        print(is_left);
-                        exit(1);
-                    }
 
                     if (!closure_found) {
                         if (alpha == 1.0) { return; }
