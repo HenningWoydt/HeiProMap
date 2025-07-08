@@ -28,16 +28,18 @@
 #define HEIPROMAP_DEEP_QUOTIENT_GRAPH_H
 
 
+#include <unordered_set>
+
 #include "../../commons/definitions.h"
 
 namespace HeiProMap {
     class DeepQuotientGraph {
         partition_t m_k = 0;
-        std::vector<partition_t> m_hierarchy;                               // O(l)
+        std::vector<partition_t> m_hierarchy; // O(l)
 
-        std::vector<std::vector<std::pair<partition_t, weight_t>>> edges;   // ~O(k) can worst case grow to O(k*k)
+        std::vector<std::vector<std::pair<partition_t, weight_t>>> edges; // ~O(k) can worst case grow to O(k*k)
 
-        std::vector<std::pair<partition_t, partition_t>> pairs;             // ~O(k) can worst case grow to O(k*k)
+        std::vector<std::pair<partition_t, partition_t>> pairs; // ~O(k) can worst case grow to O(k*k)
 
     public:
         void initialize(const std::vector<partition_t>& t_hierarchy,
@@ -203,6 +205,41 @@ namespace HeiProMap {
             }
 
             return matchings;
+        }
+
+        bool is_valid_distance_3_matching(const std::vector<std::pair<partition_t, partition_t>>& matching) {
+            std::vector<u8> global_vertex_frozen(m_k, 0);
+
+            for (auto &[u_id, v_id] : matching) {
+
+                std::vector<u8> vertex_frozen(m_k, 0);
+                vertex_frozen[u_id] = 1;
+                vertex_frozen[v_id] = 1;
+                for (auto& [id, w] : edges[u_id]) {
+                    vertex_frozen[id] = 1;
+                    for (auto& [id2, w2] : edges[id]) {
+                        vertex_frozen[id2] = 1;
+                    }
+                }
+                for (auto& [id, w] : edges[v_id]) {
+                    vertex_frozen[id] = 1;
+                    for (auto& [id2, w2] : edges[id]) {
+                        vertex_frozen[id2] = 1;
+                    }
+                }
+
+                for (size_t i = 0; i < m_k; ++i) {
+                    global_vertex_frozen[i] += vertex_frozen[i];
+                }
+            }
+
+            for (size_t i = 0; i < m_k; ++i) {
+                if (global_vertex_frozen[i] > 1) {
+                    std::cout << "not valid 3 distance matching" << std::endl;
+                    return false;
+                }
+            }
+            return true;
         }
 
     private:

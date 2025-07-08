@@ -318,7 +318,7 @@ namespace HeiProMap {
                 }
             }
 
-            // std::cout << "number partitions: " << ids.size() << std::endl;
+            std::cout << "number partitions: " << ids.size() << std::endl;
             partitioner.determine_all_blocks(graphs.back(), p_manager);
 #pragma omp parallel for num_threads(ac.threads) schedule(dynamic)
             for (size_t i = 0; i < ids.size(); ++i) {
