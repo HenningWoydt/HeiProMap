@@ -68,7 +68,7 @@ namespace HeiProMap {
          * @param i_config The configuration.
          * @param t_stat_collect The statistic collector.
          */
-        void partition(const graph_t& g,
+        void partition(const deep_graph_t& g,
                        deep_p_manager_t& p_manager,
                        deep_bv_manager_t& bv_manager,
                        deep_q_graph_t& q_graph,
@@ -137,7 +137,7 @@ namespace HeiProMap {
             }
         }
 
-        void partition_full_balance(const graph_t& g,
+        void partition_full_balance(const deep_graph_t& g,
                                     deep_p_manager_t& p_manager,
                                     deep_bv_manager_t& bv_manager,
                                     deep_q_graph_t& q_graph,

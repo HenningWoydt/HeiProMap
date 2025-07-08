@@ -49,8 +49,8 @@ namespace HeiProMap {
         return false;
     }
 
-    template<typename PartitionManagerT>
-    inline bool is_connected_to(const graph_t &g,
+    template<typename GraphT, typename PartitionManagerT>
+    inline bool is_connected_to(const GraphT &g,
                                 const PartitionManagerT &p_manager,
                                 vertex_t u,
                                 partition_t id) {

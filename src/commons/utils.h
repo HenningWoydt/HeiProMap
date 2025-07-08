@@ -35,6 +35,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <string>
 
 #include "definitions.h"
 
@@ -375,6 +378,24 @@ namespace HeiProMap {
         );
 
         return difference;
+    }
+
+    inline size_t get_memory_usage_kb() {
+        std::ifstream status_file("/proc/self/status");
+        std::string line;
+
+        while (std::getline(status_file, line)) {
+            if (line.rfind("VmRSS:", 0) == 0) { // Resident Set Size
+                size_t kb;
+                sscanf(line.c_str(), "VmRSS: %zu kB", &kb);
+                return kb;
+            }
+        }
+        return 0; // fallback
+    }
+
+    inline double get_memory_usage_gb() {
+        return (double) get_memory_usage_kb() / 1024.0 / 1024.0;
     }
 
 }

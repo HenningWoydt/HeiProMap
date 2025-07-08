@@ -64,45 +64,45 @@ namespace HeiProMap {
         partition_t m_k = 0;
         u64 m_threads = 1;
         f64 m_imbalance = 0.0;
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
-        std::vector<partition_t> k_rem;
+        std::vector<partition_t> m_hierarchy;       // O(l)
+        std::vector<weight_t> m_distance;           // O(l)
+        std::vector<partition_t> k_rem;             // O(l)
 
         // active block scheduling
-        AlignedArray<u8> active_this_round;
-        AlignedArray<u8> active_next_round;
+        AlignedArray<u8> active_this_round;         // O(k)
+        AlignedArray<u8> active_next_round;         // O(k)
 
         struct thread_info {
             // array for boundary
-            AlignedArray<vertex_t> left_boundary;
+            AlignedArray<vertex_t> left_boundary;       // O(n)
             size_t left_boundary_size = 0;
 
-            AlignedArray<vertex_t> right_boundary;
+            AlignedArray<vertex_t> right_boundary;      // O(n)
             size_t right_boundary_size = 0;
 
             // array for regions
-            AlignedArray<vertex_t> left_region;
+            AlignedArray<vertex_t> left_region;         // O(n)
             size_t left_region_size = 0;
 
-            AlignedArray<vertex_t> right_region;
+            AlignedArray<vertex_t> right_region;        // O(n)
             size_t right_region_size = 0;
 
-            AlignedArray<u32> is_left_region;
-            AlignedArray<u32> is_right_region;
+            AlignedArray<u32> is_left_region;           // O(n)
+            AlignedArray<u32> is_right_region;          // O(n)
             u32 is_region_mark = 0;
 
-            AlignedArray<vertex_t> queue;
+            AlignedArray<vertex_t> queue;               // O(n)
             size_t queue_size = 0;
 
-            AlignedArray<u32> seen;
+            AlignedArray<u32> seen;                     // O(n)
             u32 seen_mark = 0;
 
             // array for penalties
-            AlignedArray<weight_t> left_penalties;
-            AlignedArray<weight_t> right_penalties;
+            AlignedArray<weight_t> left_penalties;      // O(n)
+            AlignedArray<weight_t> right_penalties;     // O(n)
 
             //Translation Table for mapping
-            TranslationTable<vertex_t> translation_table;
+            TranslationTable<vertex_t> translation_table;   // O(n)
 
             FlowNetwork flow_network;
             ResidualFlowNetwork residual_flow_network;
@@ -121,7 +121,7 @@ namespace HeiProMap {
             f64 time_search_scc = 0;
             f64 time_change_boundary = 0;
         };
-        std::vector<thread_info> thread_infos;
+        std::vector<thread_info> thread_infos;      // O(t * n) too big
 
         const DeepFlowBasedRefinementConfiguration *config = nullptr;
 
@@ -196,7 +196,7 @@ namespace HeiProMap {
 
         void refine(u64 level,
                     u64 max_level,
-                    const graph_t &g,
+                    const deep_graph_t &g,
                     deep_d_oracle_t &d_oracle,
                     deep_bv_manager_t &bv_manager,
                     deep_p_manager_t &p_manager,
@@ -291,7 +291,7 @@ namespace HeiProMap {
                       << std::setw(11) << "100.00%\n";
         }
 
-        void refine_blocks(const graph_t &g,
+        void refine_blocks(const deep_graph_t &g,
                            deep_d_oracle_t &d_oracle,
                            deep_bv_manager_t &bv_manager,
                            deep_p_manager_t &p_manager,
@@ -437,7 +437,7 @@ namespace HeiProMap {
             }
         }
 
-        void determine_boundary_vertices(const graph_t &g,
+        void determine_boundary_vertices(const deep_graph_t &g,
                                          const deep_bv_manager_t &bv_manager,
                                          const deep_p_manager_t &p_manager,
                                          partition_t left_id,
@@ -477,7 +477,7 @@ namespace HeiProMap {
             endfor
         }
 
-        void determine_regions(const graph_t &g,
+        void determine_regions(const deep_graph_t &g,
                                const deep_p_manager_t &p_manager,
                                partition_t left_id,
                                weight_t left_max_add_weight,
@@ -586,7 +586,7 @@ namespace HeiProMap {
             *right_region_weight = right_curr_weight;
         }
 
-        void determine_penalties(const graph_t &g,
+        void determine_penalties(const deep_graph_t &g,
                                  const deep_p_manager_t &p_manager,
                                  deep_d_oracle_t &d_oracle,
                                  partition_t left_id,
@@ -638,7 +638,7 @@ namespace HeiProMap {
             }
         }
 
-        void build_flow_network(const graph_t &g,
+        void build_flow_network(const deep_graph_t &g,
                                 deep_d_oracle_t &d_oracle,
                                 partition_t left_id,
                                 partition_t right_id,
@@ -733,7 +733,7 @@ namespace HeiProMap {
             }
         }
 
-        void build_flow_network_lowest_level(const graph_t &g,
+        void build_flow_network_lowest_level(const deep_graph_t &g,
                                              deep_d_oracle_t &d_oracle,
                                              deep_p_manager_t &p_manager,
                                              partition_t left_id,
@@ -855,7 +855,7 @@ namespace HeiProMap {
             }
         }
 
-        bool cut_is_valid(const graph_t &g,
+        bool cut_is_valid(const deep_graph_t &g,
                           deep_p_manager_t &p_manager,
                           partition_t left_id,
                           partition_t right_id,
@@ -922,7 +922,7 @@ namespace HeiProMap {
             return false;
         }
 
-        void change_boundary(const graph_t &g,
+        void change_boundary(const deep_graph_t &g,
                              deep_bv_manager_t &bv_manager,
                              deep_p_manager_t &p_manager,
                              deep_q_graph_t &q_graph,
@@ -969,7 +969,7 @@ namespace HeiProMap {
             }
         }
 
-        void revert_boundary(const graph_t &g,
+        void revert_boundary(const deep_graph_t &g,
                              deep_bv_manager_t &bv_manager,
                              deep_p_manager_t &p_manager,
                              deep_q_graph_t &q_graph,

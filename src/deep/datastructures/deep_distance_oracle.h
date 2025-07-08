@@ -27,20 +27,19 @@
 #ifndef HEIPROMAP_DEEP_DISTANCE_ORACLE_H
 #define HEIPROMAP_DEEP_DISTANCE_ORACLE_H
 
-
 #include "../../commons/definitions.h"
 #include "../../commons/macros.h"
 #include "../../commons/utils.h"
 
 namespace HeiProMap {
     class DeepDistanceOracle {
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
+        std::vector<partition_t> m_hierarchy;           // O(l)
+        std::vector<weight_t>    m_distance;            // O(l)
         partition_t              m_k = 0;
 
         u64 m_threads = 1;
 
-        std::vector<AlignedArray<partition_t>> locs;
+        std::vector<AlignedArray<partition_t>> locs;    // O(k * l)
 
     public:
         void initialize(const std::vector<partition_t> &t_hierarchy,

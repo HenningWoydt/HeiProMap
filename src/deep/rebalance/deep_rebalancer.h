@@ -45,7 +45,7 @@ namespace HeiProMap {
             random_engine = &t_random_engine;
         }
 
-        void rebalance(const graph_t& g,
+        void rebalance(const deep_graph_t& g,
                        deep_p_manager_t& p_manager,
                        deep_bv_manager_t& bv_manager,
                        deep_q_graph_t& q_graph,
@@ -118,7 +118,7 @@ namespace HeiProMap {
             }
         }
 
-        void rebalance_last_layer(const graph_t& g,
+        void rebalance_last_layer(const deep_graph_t& g,
                                   deep_p_manager_t& p_manager,
                                   deep_bv_manager_t& bv_manager,
                                   deep_q_graph_t& q_graph,

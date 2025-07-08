@@ -33,11 +33,11 @@
 namespace HeiProMap {
     class DeepQuotientGraph {
         partition_t m_k = 0;
-        std::vector<partition_t> m_hierarchy;
+        std::vector<partition_t> m_hierarchy;                               // O(l)
 
-        std::vector<std::vector<std::pair<partition_t, weight_t>>> edges;
+        std::vector<std::vector<std::pair<partition_t, weight_t>>> edges;   // ~O(k) can worst case grow to O(k*k)
 
-        std::vector<std::pair<partition_t, partition_t>> pairs;
+        std::vector<std::pair<partition_t, partition_t>> pairs;             // ~O(k) can worst case grow to O(k*k)
 
     public:
         void initialize(const std::vector<partition_t>& t_hierarchy,
@@ -112,7 +112,7 @@ namespace HeiProMap {
          * @param old_id Old ID of the vertex.
          * @param new_id New ID of the vertex.
          */
-        void move(const graph_t& g,
+        void move(const deep_graph_t& g,
                   const deep_p_manager_t& p_manager,
                   const vertex_t u,
                   const partition_t old_id,

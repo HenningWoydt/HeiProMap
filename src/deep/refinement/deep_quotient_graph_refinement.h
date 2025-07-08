@@ -53,16 +53,16 @@ namespace HeiProMap {
         u64 m_threads = 1;
 
         // store which vertices have been moved
-        AlignedArray<u32> vertex_used;
+        AlignedArray<u32> vertex_used;                  // O(n)
         std::atomic<u32> global_vertex_mark = 0;
 
         struct thread_info {
             // priority queues
-            IndexedMaxHeap<s64> boundary_vertices_u;
-            IndexedMaxHeap<s64> boundary_vertices_v;
+            IndexedMaxHeap<s64> boundary_vertices_u;    // O(n)
+            IndexedMaxHeap<s64> boundary_vertices_v;    // O(n)
 
             // store change
-            AlignedArray<vertex_t> moves;
+            AlignedArray<vertex_t> moves;               // O(n)
             size_t moves_size = 0;
             s64 curr_qap_gain = 0;
             s64 max_qap_gain = 0;
@@ -73,11 +73,11 @@ namespace HeiProMap {
             RandomEngine random_engine;
         };
 
-        std::vector<thread_info> thread_infos;
+        std::vector<thread_info> thread_infos;      // O(t * n)
 
         // active block scheduling
-        AlignedArray<u8> active_this_round;
-        AlignedArray<u8> active_next_round;
+        AlignedArray<u8> active_this_round;         // O(k)
+        AlignedArray<u8> active_next_round;         // O(k)
 
         const DeepQuotientGraphRefinementConfiguration *config = nullptr;
 
@@ -119,7 +119,7 @@ namespace HeiProMap {
 
         void refine(const u64 level,
                     const u64 max_level,
-                    const graph_t &g,
+                    const deep_graph_t &g,
                     deep_d_oracle_t &d_oracle,
                     deep_bv_manager_t &bv_manager,
                     deep_p_manager_t &p_manager,
@@ -150,7 +150,7 @@ namespace HeiProMap {
             }
         }
 
-        void refine_blocks(const graph_t &g,
+        void refine_blocks(const deep_graph_t &g,
                            deep_d_oracle_t &d_oracle,
                            deep_bv_manager_t &bv_manager,
                            deep_p_manager_t &p_manager,
@@ -338,7 +338,7 @@ namespace HeiProMap {
             }
         }
 
-        void refine_blocks_edge_cut(const graph_t &g,
+        void refine_blocks_edge_cut(const deep_graph_t &g,
                                     deep_bv_manager_t &bv_manager,
                                     deep_p_manager_t &p_manager,
                                     deep_q_graph_t &q_graph,

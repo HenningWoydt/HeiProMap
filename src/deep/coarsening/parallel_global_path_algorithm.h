@@ -32,7 +32,7 @@
 #include <queue>
 #include <vector>
 
-#include "global_path_algorithm.h"
+#include "../../serial/coarsening/global_path_algorithm.h"
 #include "../../commons/definitions.h"
 #include "../../commons/JSON_utils.h"
 #include "../../commons/random_engine.h"
@@ -136,7 +136,7 @@ namespace HeiProMap {
 
         template <typename PartitionManagerT>
         void match(const size_t level,
-                   const graph_t& g,
+                   const deep_graph_t& g,
                    const PartitionManagerT& p_manager,
                    Matching& matching) {
             if (level < config->random_level) {
@@ -154,6 +154,8 @@ namespace HeiProMap {
             sort_ratings();
             auto ep_sort = std::chrono::high_resolution_clock::now();
             // std::cout << "sort: " << get_seconds(sp_sort, ep_sort) << std::endl;
+
+            std::cout << level << " after sorting " << get_memory_usage_gb() << std::endl;
 
 #pragma omp parallel for num_threads(m_threads)
             for (vertex_t u = 0; u < g.get_n(); ++u) {
@@ -314,10 +316,15 @@ namespace HeiProMap {
             }
             auto ep_cycle = std::chrono::high_resolution_clock::now();
             // std::cout << "cycle: " << get_seconds(sp_cycle, ep_cycle) << std::endl;
+
+            // free space
+            for (size_t i = 0; i < m_threads; ++i) {
+                std::vector<EdgeUVW>().swap(thread_infos[i].edges);
+            }
         }
 
         template <typename PartitionManagerT>
-        void compute_ratings(const graph_t& g, const PartitionManagerT& p_manager) {
+        void compute_ratings(const deep_graph_t& g, const PartitionManagerT& p_manager) {
             for (size_t i = 0; i < m_threads; ++i) { thread_infos[i].edges.clear(); }
 
 #pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
@@ -362,7 +369,7 @@ namespace HeiProMap {
             }
         }
 
-        f32 solve_path_length_1(const graph_t& g,
+        f32 solve_path_length_1(const deep_graph_t& g,
                                 const vertex_t u,
                                 Matching& matching) {
             vertex_t uu = u;
@@ -374,7 +381,7 @@ namespace HeiProMap {
             return w;
         }
 
-        f32 solve_path_length_2(const graph_t& g,
+        f32 solve_path_length_2(const deep_graph_t& g,
                                 const vertex_t u,
                                 Matching& matching) {
             vertex_t v1 = u;
@@ -407,7 +414,7 @@ namespace HeiProMap {
             return w;
         }
 
-        f32 solve_path(const graph_t& g,
+        f32 solve_path(const deep_graph_t& g,
                        const vertex_t u,
                        const u32 length,
                        Matching& matching,
@@ -514,7 +521,7 @@ namespace HeiProMap {
             return dp_w[i - 1];
         }
 
-        f32 solve_path_length_1(const graph_t& g,
+        f32 solve_path_length_1(const deep_graph_t& g,
                                 const vertex_t u,
                                 std::vector<std::pair<vertex_t, vertex_t>>& matching) {
             vertex_t uu = u;
@@ -526,7 +533,7 @@ namespace HeiProMap {
             return w;
         }
 
-        f32 solve_path_length_2(const graph_t& g,
+        f32 solve_path_length_2(const deep_graph_t& g,
                                 const vertex_t u,
                                 std::vector<std::pair<vertex_t, vertex_t>>& matching) {
             vertex_t v1 = u;
@@ -559,7 +566,7 @@ namespace HeiProMap {
             return w;
         }
 
-        f32 solve_path(const graph_t& g,
+        f32 solve_path(const deep_graph_t& g,
                        const vertex_t u,
                        const u32 length,
                        std::vector<std::pair<vertex_t, vertex_t>>& matching,
@@ -666,7 +673,7 @@ namespace HeiProMap {
             return dp_w[i - 1];
         }
 
-        void solve_cycle(const graph_t& g,
+        void solve_cycle(const deep_graph_t& g,
                          const vertex_t u,
                          const u32 length,
                          Matching& matching,
@@ -727,7 +734,7 @@ namespace HeiProMap {
         }
 
         void random_matching(const size_t level,
-                             const graph_t& g,
+                             const deep_graph_t& g,
                              Matching& matching) {
             std::vector<u8> is_matched(g.get_n(), 0);
 

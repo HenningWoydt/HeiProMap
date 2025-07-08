@@ -32,15 +32,15 @@
 
 namespace HeiProMap {
     class DeepPartitionManager {
-        vertex_t    m_n = 0;
+        vertex_t m_n = 0;
         partition_t m_k = 0;
 
-        AlignedArray<partition_t> partition;
-        AlignedArray<partition_t> partition_temp;
-        AlignedArray<weight_t>    bweights;
-        AlignedArray<size_t>      n_vertices;
-        AlignedArray<weight_t>    lmax;
-        AlignedArray<partition_t> hierarchy_level;
+        AlignedArray<partition_t> partition;            // O(n)
+        AlignedArray<partition_t> partition_temp;       // O(n)
+        AlignedArray<weight_t> bweights;             // O(k)
+        AlignedArray<size_t> n_vertices;           // O(k)
+        AlignedArray<weight_t> lmax;                 // O(k)
+        AlignedArray<partition_t> hierarchy_level;      // O(k)
 
     public:
         void initialize(const vertex_t t_n,
@@ -112,7 +112,7 @@ namespace HeiProMap {
 
         std::vector<weight_t> get_bweights() const {
             std::vector<weight_t> weights(m_k);
-            for (size_t           i = 0; i < m_k; ++i) {
+            for (size_t i = 0; i < m_k; ++i) {
                 weights[i] = bweights[i];
             }
             return weights;
@@ -145,14 +145,33 @@ namespace HeiProMap {
             std::swap(partition, partition_temp);
         }
 
-        void uncontract(const Matching &matching) {
+        /*
+        void uncontract_old(const Matching &matching) {
             for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
-                vertex_t old_u         = matching.get_o(new_u);
+                vertex_t old_u = matching.get_o(new_u);
                 vertex_t old_u_partner = matching.get_partner(old_u);
-                partition_temp[old_u]         = partition[new_u];
+                partition_temp[old_u] = partition[new_u];
                 partition_temp[old_u_partner] = partition[new_u];
                 if (old_u != old_u_partner) {
                     n_vertices[partition[new_u]] += 1;
+                }
+            }
+            std::swap(partition, partition_temp);
+        }
+         */
+
+        void uncontract(const Matching &matching) {
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                vertex_t v = matching.get_partner(u);
+                vertex_t u_new = matching.get_n(u);
+                vertex_t v_new = matching.get_n(v);
+
+                if (u == v || u < v) {
+                    partition_temp[u] = partition[u_new];
+                    partition_temp[v] = partition[v_new];
+                }
+                if (u < v) {
+                    n_vertices[partition[u_new]] += 1;
                 }
             }
             std::swap(partition, partition_temp);

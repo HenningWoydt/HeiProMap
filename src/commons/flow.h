@@ -138,8 +138,9 @@ namespace HeiProMap {
     public:
         SCCGraph() = default;
 
+        template<typename GraphT>
         void initialize(const ResidualFlowNetwork &residual_flow_network,
-                        const graph_t &g,
+                        const GraphT &g,
                         const TranslationTable<vertex_t> &tt) {
             temp_g = &residual_flow_network;
 

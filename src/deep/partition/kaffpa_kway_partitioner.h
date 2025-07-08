@@ -139,7 +139,7 @@ namespace HeiProMap {
          * @param k The number of partitions.
          * @param lmax The maximum weight of a partition.
          */
-        void partition(const graph_t& g,
+        void partition(const deep_graph_t& g,
                        deep_p_manager_t& p_manager,
                        deep_bv_manager_t& bv_manager,
                        deep_q_graph_t& q_graph,
@@ -263,7 +263,7 @@ namespace HeiProMap {
             }
         }
 
-        void determine_all_blocks(const graph_t& g,
+        void determine_all_blocks(const deep_graph_t& g,
                                   deep_p_manager_t& p_manager) {
             for (partition_t id = 0; id < std::min((partition_t)blocks.size(), m_k); ++id) {
                 blocks[id].clear();

@@ -39,12 +39,12 @@ namespace HeiProMap {
     private:
         vertex_t m_n = 0;
 
-        AlignedArray<EdgeUV> matches;
+        AlignedArray<EdgeUV> matches;           // O(n)
         std::atomic<size_t> matches_size = 0;
 
-        AlignedArray<vertex_t> partner;
+        AlignedArray<vertex_t> partner;         // O(n)
 
-        TranslationTable<vertex_t> tt;
+        TranslationTable<vertex_t> tt;          // O(n)
 
     public:
         Matching() = default;

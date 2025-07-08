@@ -32,8 +32,8 @@
 #include "../datastructures/distance_oracle.h"
 
 namespace HeiProMap {
-    template<typename PartitionManagerT, typename DistanceOracleT>
-    inline weight_t get_qap(graph_t &g,
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline weight_t get_qap(GraphT &g,
                             PartitionManagerT &p_manager,
                             DistanceOracleT &d_oracle,
                             u64 threads = 1) {
@@ -104,8 +104,8 @@ namespace HeiProMap {
     }
 
 
-    template<typename PartitionManagerT, typename DistanceOracleT>
-    inline s64 get_u_qap_delta(const graph_t &g,
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline s64 get_u_qap_delta(const GraphT &g,
                                const vertex_t u,
                                const partition_t old_id,
                                const partition_t new_id,
@@ -126,8 +126,8 @@ namespace HeiProMap {
         return qap_delta;
     }
 
-    template<typename PartitionManagerT>
-    inline s64 get_u_edge_cut_delta(const graph_t &g,
+    template<typename  GraphT, typename PartitionManagerT>
+    inline s64 get_u_edge_cut_delta(const GraphT &g,
                                     const vertex_t u,
                                     const partition_t old_id,
                                     const partition_t new_id,
@@ -323,8 +323,8 @@ namespace HeiProMap {
         return qap_delta;
     }
 
-    template<typename PartitionManagerT, typename DistanceOracleT>
-    inline s64 get_u_qap_delta_and_is_connected_to(const graph_t &g,
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline s64 get_u_qap_delta_and_is_connected_to(const GraphT &g,
                                                    const vertex_t u,
                                                    const partition_t old_id,
                                                    const partition_t new_id,
@@ -351,8 +351,8 @@ namespace HeiProMap {
         return qap_delta;
     }
 
-    template<typename PartitionManagerT>
-    inline s64 get_u_edge_cut_delta_and_is_connected_to(const graph_t &g,
+    template<typename GraphT, typename PartitionManagerT>
+    inline s64 get_u_edge_cut_delta_and_is_connected_to(const GraphT &g,
                                                         const vertex_t u,
                                                         const partition_t old_id,
                                                         const partition_t new_id,

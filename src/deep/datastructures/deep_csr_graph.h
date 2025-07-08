@@ -24,9 +24,10 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_CSR_GRAPH_H
-#define HEIPROMAP_CSR_GRAPH_H
+#ifndef HEIPROMAP_DEEP_CSR_GRAPH_H
+#define HEIPROMAP_DEEP_CSR_GRAPH_H
 
+#include <omp.h>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
@@ -43,7 +44,7 @@ namespace HeiProMap {
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
-    class CSRGraph {
+    class DeepCSRGraph {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
 
@@ -55,9 +56,9 @@ namespace HeiProMap {
         AlignedArray<weight_t> m_edges_w;
 
     public:
-        CSRGraph() = default;
+        DeepCSRGraph() = default;
 
-        explicit CSRGraph(const std::string &graph_in) {
+        explicit DeepCSRGraph(const std::string &graph_in) {
             // Open the file
             int fd = open(graph_in.c_str(), O_RDONLY);
             if (fd == -1) {
@@ -263,7 +264,7 @@ namespace HeiProMap {
             close(fd);
         }
 
-        void initialize(const CSRGraph &g,
+        void initialize(const DeepCSRGraph &g,
                         Matching &matching) {
             matching.set_translation();
 
@@ -363,8 +364,193 @@ namespace HeiProMap {
             m_m = curr_m;
         }
 
+        void parallel_initialize(const DeepCSRGraph &g,
+                                 Matching &matching,
+                                 u64 threads) {
+            auto sp_setup = std::chrono::high_resolution_clock::now();
+            matching.set_translation();
+
+            m_n = matching.get_n_coarse_nodes();
+            const vertex_t temp_m = g.get_m() + 1;
+
+            m_graph_weight = g.m_graph_weight;
+            m_v_weights.initialize(m_n + 1);
+
+            m_neighborhoods.initialize(m_n + 1);
+            m_edges_v.initialize(temp_m);
+            m_edges_w.initialize(temp_m);
+
+            struct thread_info{
+                vertex_t start_vertex = 0;
+                vertex_t n_assigned_vertices = 0;
+                vertex_t n_actual_vertices = 0;
+                vertex_t curr_m = 0;
+                std::vector<size_t> neighborhood;
+                std::vector<vertex_t> edges_v;
+                std::vector<weight_t> edges_w;
+            };
+            std::vector<thread_info> thread_infos(threads);
+
+            double alpha = 2.0; // example scaling parameter > 1.0
+
+            // Step 1: Compute weights
+            std::vector<double> weights(threads);
+            double total_weight = 0.0;
+            for (size_t i = 0; i < threads; ++i) {
+                weights[i] = std::pow(static_cast<double>(i + 1), alpha);
+                total_weight += weights[i];
+            }
+
+            vertex_t n_total_vertices = g.get_n();
+            vertex_t base = n_total_vertices / threads;
+            vertex_t rem = n_total_vertices % threads;
+
+            // Step 2: Assign number of vertices per thread
+            vertex_t current_start = 0;
+            vertex_t assigned_total = 0;
+            for (size_t i = 0; i < threads; ++i) {
+                double fraction = weights[i] / total_weight;
+                vertex_t n_assign = static_cast<vertex_t>(std::round(fraction * n_total_vertices));
+
+                // Ensure last thread takes any rounding residual
+                if (i == threads - 1) {
+                    n_assign = n_total_vertices - assigned_total;
+                }
+
+                thread_infos[i].start_vertex = current_start;
+                thread_infos[i].n_assigned_vertices = n_assign;
+                current_start += n_assign;
+                assigned_total += n_assign;
+            }
+            auto ep_setup = std::chrono::high_resolution_clock::now();
+            // std::cout << "setup: " << get_seconds(sp_setup, ep_setup) << std::endl;
+
+            auto sp_threads_neighborhood = std::chrono::high_resolution_clock::now();
+            // each thread determines the neighborhood one their assigned vertices
+#pragma omp parallel num_threads(threads)
+            {
+                u64 t_id = omp_get_thread_num();
+                thread_infos[t_id].neighborhood.push_back(0);
+                for (vertex_t old_u = thread_infos[t_id].start_vertex; old_u < thread_infos[t_id].start_vertex + thread_infos[t_id].n_assigned_vertices; ++old_u) {
+                    vertex_t old_v = matching.get_partner(old_u);
+
+                    if (old_u > old_v) { continue; }
+
+                    for (size_t i = 0; i < g.size(old_u); ++i) {
+                        vertex_t vv = g.neighbor(old_u, i);
+                        weight_t ww = g.weight(old_u, i);
+                        vertex_t vv_partner = matching.get_partner(vv);
+                        if (vv == old_v) { continue; }
+
+                        // if the vv vertex is matched, then make an edge to the neighbor vertex
+                        vv = std::min(vv, vv_partner);
+
+                        // map to the new node range
+                        vv = matching.get_n(vv);
+
+                        bool found = false;
+                        for(size_t j = thread_infos[t_id].neighborhood.back(); j < thread_infos[t_id].curr_m; ++j){
+                            if(thread_infos[t_id].edges_v[j] == vv){
+                                thread_infos[t_id].edges_w[j] += ww;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(!found){
+                            thread_infos[t_id].edges_v.push_back(vv);
+                            thread_infos[t_id].edges_w.push_back(ww);
+                            thread_infos[t_id].curr_m += 1;
+                        }
+                    }
+
+                    if (old_u < old_v) {
+                        for (size_t i = 0; i < g.size(old_v); ++i) {
+                            vertex_t vv = g.neighbor(old_v, i);
+                            vertex_t vv_partner = matching.get_partner(vv);
+                            weight_t ww = g.weight(old_v, i);
+                            // do not add edge to matched vertex
+                            if (vv == old_u) { continue; }
+
+                            // if the vv vertex is matched, then make an edge to the neighbor vertex
+                            vv = std::min(vv, vv_partner);
+
+                            // map to the new node range
+                            vv = matching.get_n(vv);
+
+                            bool found = false;
+                            for(size_t j = thread_infos[t_id].neighborhood.back(); j < thread_infos[t_id].curr_m; ++j){
+                                if(thread_infos[t_id].edges_v[j] == vv){
+                                    thread_infos[t_id].edges_w[j] += ww;
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if(!found){
+                                thread_infos[t_id].edges_v.push_back(vv);
+                                thread_infos[t_id].edges_w.push_back(ww);
+                                thread_infos[t_id].curr_m += 1;
+                            }
+                        }
+                    }
+                    thread_infos[t_id].neighborhood.push_back(thread_infos[t_id].curr_m);
+                }
+                thread_infos[t_id].n_actual_vertices = thread_infos[t_id].neighborhood.size() - 1;
+            }
+            auto ep_threads_neighborhood = std::chrono::high_resolution_clock::now();
+            // std::cout << "threads neighborhoods: " << get_seconds(sp_threads_neighborhood, ep_threads_neighborhood) << std::endl;
+
+            // each thread copies its data to the correct place in the real neighborhood
+            auto sp_copy = std::chrono::high_resolution_clock::now();
+            m_neighborhoods[0] = 0;
+#pragma omp parallel num_threads(threads)
+            {
+                u64 t_id = omp_get_thread_num();
+
+                // determine how many vertices and edges come before
+                vertex_t previous_m = 0;
+                vertex_t previous_n = 0;
+                for(size_t i = 0; i < t_id; ++i){
+                    previous_m += thread_infos[i].curr_m;
+                    previous_n += thread_infos[i].n_actual_vertices;
+                }
+
+                // copy neighborhood sizes
+                for(size_t i = 0; i < thread_infos[t_id].n_actual_vertices; ++i){
+                    m_neighborhoods[previous_n + i + 1] = thread_infos[t_id].neighborhood[i + 1] + previous_m;
+                }
+
+                // copy all edges
+                for(size_t i = 0; i < thread_infos[t_id].curr_m; ++i){
+                    m_edges_v[previous_m + i] = thread_infos[t_id].edges_v[i];
+                    m_edges_w[previous_m + i] = thread_infos[t_id].edges_w[i];
+                }
+
+                if(t_id == threads - 1){
+                    m_m = thread_infos[t_id].curr_m + previous_m;
+                }
+
+            }
+            auto ep_copy = std::chrono::high_resolution_clock::now();
+            // std::cout << "threads copy: " << get_seconds(sp_copy, ep_copy) << std::endl;
+
+            auto sp_weights = std::chrono::high_resolution_clock::now();
+// #pragma omp parallel for num_threads(threads)
+            for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
+                vertex_t old_v = matching.get_partner(old_u);
+                if (old_u == old_v) {
+                    vertex_t new_u = matching.get_n(old_u);
+                    m_v_weights[new_u] = g.weight(old_u);
+                } else if (old_u < old_v) {
+                    vertex_t new_u = matching.get_n(old_u);
+                    m_v_weights[new_u] = g.weight(old_u) + g.weight(old_v);
+                }
+            }
+            auto ep_weights = std::chrono::high_resolution_clock::now();
+            // std::cout << "weights: " << get_seconds(sp_weights, ep_weights) << std::endl;
+        }
+
         // Move constructor
-        CSRGraph(CSRGraph &&other) noexcept {
+        DeepCSRGraph(DeepCSRGraph &&other) noexcept {
             m_n = other.m_n;
             m_m = other.m_m;
 
@@ -377,9 +563,9 @@ namespace HeiProMap {
         }
 
         // Optionally disable copying.
-        CSRGraph(const CSRGraph &) = delete;
+        DeepCSRGraph(const DeepCSRGraph &) = delete;
 
-        CSRGraph &operator=(const CSRGraph &) = delete;
+        DeepCSRGraph &operator=(const DeepCSRGraph &) = delete;
 
         vertex_t get_n() const { return m_n; }
 
@@ -410,4 +596,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_CSR_GRAPH_H
+#endif //HEIPROMAP_DEEP_CSR_GRAPH_H

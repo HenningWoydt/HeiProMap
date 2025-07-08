@@ -63,7 +63,7 @@ namespace HeiProMap {
 
         virtual void refine(u64 level,
                             u64 max_level,
-                            const graph_t &g,
+                            const deep_graph_t &g,
                             deep_d_oracle_t &d_oracle,
                             deep_bv_manager_t &bv_manager,
                             deep_p_manager_t &p_manager,

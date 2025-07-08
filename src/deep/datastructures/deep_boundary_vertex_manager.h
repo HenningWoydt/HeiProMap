@@ -40,10 +40,10 @@ namespace HeiProMap {
         vertex_t m_n    = 0; // number of vertices in the graph
         partition_t m_k = 0; // number of partitions
 
-        AlignedArray<vertex_t> m_n_boundary_edges; // number of boundary edges for each vertex
+        AlignedArray<vertex_t> m_n_boundary_edges; // number of boundary edges for each vertex          // O(n)
 
-        std::vector<std::vector<vertex_t>> m_sub_boundary; // boundary for each block
-        AlignedArray<vertex_t> m_sub_vertex_idx; // index of the vertex in the sub boundary array
+        std::vector<std::vector<vertex_t>> m_sub_boundary; // boundary for each block                   // ~O(n) can worst case grow too O(k*n)
+        AlignedArray<vertex_t> m_sub_vertex_idx; // index of the vertex in the sub boundary array       // O(n)
 
     public:
         void initialize(const vertex_t t_n,
@@ -62,7 +62,7 @@ namespace HeiProMap {
         vertex_t get(const partition_t id, const size_t i) const { return m_sub_boundary[id][i]; }
         bool is_boundary(const vertex_t u) const { return m_n_boundary_edges[u] > 0; }
 
-        void add_new(const graph_t& g,
+        void add_new(const deep_graph_t& g,
                      const deep_p_manager_t& p_manager,
                      const vertex_t u,
                      const partition_t u_id) {
@@ -89,7 +89,7 @@ namespace HeiProMap {
             }
         }
 
-        void move(const graph_t& g,
+        void move(const deep_graph_t& g,
                   const deep_p_manager_t& p_manager,
                   const vertex_t u,
                   const partition_t old_id,
@@ -133,7 +133,7 @@ namespace HeiProMap {
             if (m_n_boundary_edges[u] > 0) { emplace_in_sub(u, new_id); } // emplace u into the sub-boundary
         }
 
-        void compute_from_scratch(const graph_t& g,
+        void compute_from_scratch(const deep_graph_t& g,
                                   const deep_p_manager_t& p_manager) {
             // compute all from scratch
             for (auto& vec : m_sub_boundary) { vec.clear(); }
