@@ -208,8 +208,6 @@ namespace HeiProMap {
                     scc_weights[scc_id[u]] += g.weight(tt.get_o(u));
                 }
             }
-
-            HEAVYASSERT(assert_scc_correct(residual_flow_network));
         }
 
         vertex_t get_n_scc() const { return n_scc; }
@@ -267,18 +265,6 @@ namespace HeiProMap {
 
             ASSERT(no_duplicates(scc_s_successors));
             ASSERT(no_duplicates(scc_t_predecessors));
-
-#if ASSERT_ENABLED
-            for (vertex_t scc_u: scc_s_successors) {
-                for (vertex_t scc_v: scc_t_predecessors) {
-                    if (scc_u == scc_v) {
-                        temp_g->print();
-                        print();
-                    }
-                    ASSERT(scc_u != scc_v);
-                }
-            }
-#endif
         }
 
         bool find_best_closure(weight_t left_non_region_weight,

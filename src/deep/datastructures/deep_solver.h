@@ -84,7 +84,7 @@ namespace HeiProMap {
         deep_bv_manager_t bv_manager;
         deep_q_graph_t q_graph;
 
-        KaffpaKWayPartitioner partitioner;
+        // KaffpaKWayPartitioner partitioner;
         DeepRebalancer deep_rebalancer;
 
         // balance
@@ -146,7 +146,7 @@ namespace HeiProMap {
 
             std::cout << "init p-manager " << get_memory_usage_gb() << std::endl;
 
-            partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
+            // partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
 
             std::cout << "init partitioner " << get_memory_usage_gb() << std::endl;
 
@@ -255,18 +255,30 @@ namespace HeiProMap {
 
             partition();
             rebalance(level);
-            std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_memory_usage_gb() << std::endl;
-            // print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
+            std::cout << level << " First partition " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_memory_usage_gb() << std::endl;
+            print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
 
             while (level > 0) {
                 auto sp = std::chrono::high_resolution_clock::now();
                 level -= 1;
+
+                std::cout << level << " A " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
+
                 uncoarsening(level);
 
+                std::cout << level << " B " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
+
                 partition_subgraphs(level, threshold);
+
+                std::cout << level << " C " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
+
                 rebalance(level);
 
+                std::cout << level << " D " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
+
                 refinement(level, max_level);
+
+                std::cout << level << " E " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
                 auto ep = std::chrono::high_resolution_clock::now();
 
                 // std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_seconds(sp, ep) << std::endl;
@@ -276,6 +288,9 @@ namespace HeiProMap {
 
         void partition() {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
+
+            KaffpaKWayPartitioner partitioner;
+            partitioner.initialize(graphs[0].get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
 
             partition_t id = 0;
             u64 thread_id  = 0;
@@ -292,6 +307,9 @@ namespace HeiProMap {
 
         void partition_subgraphs(const u64 level, const u64 threshold) {
             const auto sp_partition = std::chrono::high_resolution_clock::now();
+
+            KaffpaKWayPartitioner partitioner;
+            partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
 
             std::vector<partition_t> ids;
             for (partition_t id = 0; id < ac.k; ++id) {

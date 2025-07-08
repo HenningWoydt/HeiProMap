@@ -63,6 +63,12 @@ namespace HeiProMap {
             std::fill_n(m_ptr, size, fill_value);
         }
 
+        void free_memory(){
+            free(m_ptr);
+            m_ptr = nullptr;
+            m_n = 0;
+        }
+
         ~AlignedArray() { free(m_ptr); }
 
         // Copy constructor

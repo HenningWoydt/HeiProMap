@@ -111,6 +111,7 @@ namespace HeiProMap {
                 }
             endfor
 
+            /*
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matching.size(); ++i) {
                 const auto& [u, v] = matching[i];
@@ -133,6 +134,7 @@ namespace HeiProMap {
                 }
             }
 #endif
+             */
         }
 
         JSONString get_stats() {

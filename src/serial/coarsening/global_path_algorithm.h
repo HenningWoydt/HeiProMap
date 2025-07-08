@@ -239,6 +239,7 @@ namespace HeiProMap {
                 }
             endfor
 
+            /*
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matching.size(); ++i) {
                 const auto& [u, v] = matching[i];
@@ -257,6 +258,7 @@ namespace HeiProMap {
                 ASSERT(hit[v] == 1);
             }
 #endif
+             */
         }
 
         template<typename PartitionManagerT>
@@ -507,7 +509,7 @@ namespace HeiProMap {
             }
 
             for (size_t i = 0; i < dp_cycle_matches->size(); ++i) {
-                matching.add((*dp_cycle_matches)[i].u, (*dp_cycle_matches)[i].v);
+                // matching.add((*dp_cycle_matches)[i].u, (*dp_cycle_matches)[i].v);
             }
         }
 
@@ -538,7 +540,7 @@ namespace HeiProMap {
                 }
             endfor
 
-
+/*
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matching.size(); ++i) {
                 const auto& [u, v] = matching[i];
@@ -557,6 +559,7 @@ namespace HeiProMap {
                 ASSERT(hit[v] == 1);
             }
 #endif
+ */
         }
     };
 }

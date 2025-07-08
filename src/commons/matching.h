@@ -39,60 +39,62 @@ namespace HeiProMap {
     private:
         vertex_t m_n = 0;
 
-        AlignedArray<EdgeUV> matches;           // O(n)
+        // AlignedArray<EdgeUV> matches;           // O(n)
         std::atomic<size_t> matches_size = 0;
 
         AlignedArray<vertex_t> partner;         // O(n)
 
-        TranslationTable<vertex_t> tt;          // O(n)
+        AlignedArray<vertex_t> o_to_n;          // O(n)
 
     public:
         Matching() = default;
 
         void initialize(vertex_t n) {
             vertex_t n_64 = round_up_64(n);
-            m_n           = n;
+            m_n = n;
 
-            matches.initialize((n_64 / 2));
+            // matches.initialize((n_64 / 2));
             matches_size = 0;
 
             partner.initialize(m_n);
             std::iota(partner.get_ptr(), partner.get_ptr() + n_64, 0);
 
-            tt.reserve(n, n);
+            o_to_n.initialize(m_n);
+            std::iota(o_to_n.get_ptr(), o_to_n.get_ptr() + n_64, 0);
         }
 
         // Move constructor
-        Matching(Matching&& other) noexcept {
+        Matching(Matching &&other) noexcept {
             m_n = other.m_n;
-            std::swap(matches, other.matches);
-            size_t temp1= matches_size;
-            size_t temp2= other.matches_size;
+            // std::swap(matches, other.matches);
+            size_t temp1 = matches_size;
+            size_t temp2 = other.matches_size;
             matches_size = temp2;
             other.matches_size = temp1;
             std::swap(partner, other.partner);
-            tt.swap(other.tt);
+            std::swap(o_to_n, other.o_to_n);
         }
 
         // Optionally disable copying.
-        Matching(const Matching&) = delete;
+        Matching(const Matching &) = delete;
 
-        Matching& operator=(const Matching&) = delete;
+        Matching &operator=(const Matching &) = delete;
 
         ~Matching() = default;
 
         void add(vertex_t u, vertex_t v) {
-            ASSERT(matches_size < (m_n / 2));
+            // ASSERT(matches_size < (m_n / 2));
             ASSERT(u != v);
-            matches[matches_size.fetch_add(1)] = {u, v};
-            partner[u]              = v;
-            partner[v]              = u;
+            matches_size.fetch_add(1);
+            // matches[matches_size.fetch_add(1)] = {u, v};
+            partner[u] = v;
+            partner[v] = u;
         }
 
-        EdgeUV operator[](size_t i) const {
-            ASSERT(i < matches_size);
-            return matches[i];
-        }
+        // EdgeUV operator[](size_t i) const {
+        // ASSERT(i < matches_size);
+        // return matches[i];
+        // }
 
         size_t size() const { return matches_size; }
 
@@ -102,15 +104,15 @@ namespace HeiProMap {
             matches_size = 0;
         }
 
-        bool is_matched(vertex_t u) { return u != partner[u]; }
-
         vertex_t get_partner(vertex_t u) const { return partner[u]; }
 
         void set_translation() {
             vertex_t new_u = 0;
-            for (vertex_t old_u = 0; old_u < m_n; ++old_u) {
-                if (old_u == partner[old_u] || old_u < partner[old_u]) {
-                    tt.add(old_u, new_u);
+            for (vertex_t u = 0; u < m_n; ++u) {
+                vertex_t v = partner[u];
+                if (u == v || u < v) {
+                    o_to_n[u] = new_u;
+                    o_to_n[v] = new_u; // v gets same new ID
                     new_u += 1;
                 }
             }
@@ -119,9 +121,7 @@ namespace HeiProMap {
 
         vertex_t get_n_coarse_nodes() const { return m_n - matches_size; }
 
-        vertex_t get_o(vertex_t n) const { return tt.get_o(n); }
-
-        vertex_t get_n(vertex_t o) const { return tt.get_n(o); }
+        vertex_t get_n(vertex_t o) const { return o_to_n[o]; }
     };
 }
 

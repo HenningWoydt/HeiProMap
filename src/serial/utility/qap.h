@@ -65,8 +65,8 @@ namespace HeiProMap {
         return qap;
     }
 
-    template<typename PartitionManagerT, typename DistanceOracleT>
-    inline std::vector<weight_t> get_qap_per_layer(const graph_t &g,
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline std::vector<weight_t> get_qap_per_layer(const GraphT &g,
                                                    const PartitionManagerT &p_manager,
                                                    DistanceOracleT &d_oracle,
                                                    const partition_t l,

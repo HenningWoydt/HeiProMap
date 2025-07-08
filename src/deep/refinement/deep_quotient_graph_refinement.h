@@ -32,6 +32,7 @@
 #include "../../serial/datastructures/indexed_max_heap.h"
 #include "../../serial/utility/functions.h"
 #include "../../serial/utility/qap.h"
+#include "../utility/deep_assert_state.h"
 
 namespace HeiProMap {
     class DeepQuotientGraphRefinementConfiguration final : public ISerialDeepRefinerConfiguration {
@@ -73,6 +74,7 @@ namespace HeiProMap {
             RandomEngine random_engine;
         };
 
+        std::mutex mutex;
         std::vector<thread_info> thread_infos;      // O(t * n)
 
         // active block scheduling
@@ -137,11 +139,14 @@ namespace HeiProMap {
 #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (auto [u_id, v_id]: matching) {
                         u64 thread_id = omp_get_thread_num();
+                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
+                        /*
                         if (d_oracle.last_level_pair(u_id, v_id)) {
                             refine_blocks_edge_cut(g, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
                         } else {
                             refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
                         }
+                         */
                     }
                 }
 
@@ -321,6 +326,7 @@ namespace HeiProMap {
             }
 
             // make all moves to best index
+            mutex.lock(); // TODO: would be cool if removed
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex = moves[i];
                 weight_t vertex_weight = g.weight(vertex);
@@ -331,6 +337,7 @@ namespace HeiProMap {
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
+            mutex.unlock();
 
             if (max_qap_gain > 0) {
                 active_next_round[u_id] = 1;
