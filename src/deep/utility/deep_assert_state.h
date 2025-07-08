@@ -29,11 +29,11 @@
 
 #include <map>
 
-#include "../../../commons/definitions.h"
-#include "../../../commons/utils.h"
-#include "../../../serial/serial_definitions_1.h"
-#include "../../../serial/serial_definitions_2.h"
-#include "../../../serial/serial_definitions_3.h"
+#include "../../commons/definitions.h"
+#include "../../commons/utils.h"
+#include "../../serial/serial_definitions_1.h"
+#include "../../serial/serial_definitions_2.h"
+#include "../../serial/serial_definitions_3.h"
 
 namespace HeiProMap {
     inline bool deep_assert_no_self_loops(const graph_t& g) {

@@ -27,8 +27,8 @@
 #ifndef HEIPROMAP_DEEP_PARTITION_MANAGER_H
 #define HEIPROMAP_DEEP_PARTITION_MANAGER_H
 
-#include "../../../commons/aligned_array.h"
-#include "../../../commons/definitions.h"
+#include "../../commons/aligned_array.h"
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
     class DeepPartitionManager {

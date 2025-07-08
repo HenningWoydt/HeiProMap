@@ -29,12 +29,12 @@
 
 #include <vector>
 
-#include "../../serial_definitions_1.h"
-#include "../../serial_definitions_2.h"
-#include "../../serial_definitions_3.h"
-#include "../../../commons/definitions.h"
-#include "../../../commons/random_engine.h"
-#include "../../../commons/statistic_collector.h"
+#include "../../serial/serial_definitions_1.h"
+#include "../../serial/serial_definitions_2.h"
+#include "../../serial/serial_definitions_3.h"
+#include "../../commons/definitions.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
 
 namespace HeiProMap {
     class ISerialDeepRefinerConfiguration {

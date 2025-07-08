@@ -47,8 +47,6 @@
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/random_edge_matcher.h"
 #include "../partitioning/kaffpa_partitioner.h"
-#include "../partitioning/greedy_kway_partitioner.h"
-#include "../partitioning/kaffpa_kway_partitioner.h"
 #include "../refinement/lightning_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"

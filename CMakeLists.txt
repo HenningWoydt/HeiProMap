@@ -52,13 +52,17 @@ file(GLOB_RECURSE HEADERS_SERIAL CONFIGURE_DEPENDS "src/serial/*.h")
 file(GLOB_RECURSE SOURCES_PARALLEL CONFIGURE_DEPENDS "src/parallel/*.cpp")
 file(GLOB_RECURSE HEADERS_PARALLEL CONFIGURE_DEPENDS "src/parallel/*.h")
 
+# Find all parallel source and header files
+file(GLOB_RECURSE SOURCES_DEEP CONFIGURE_DEPENDS "src/deep/*.cpp")
+file(GLOB_RECURSE HEADERS_DEEP CONFIGURE_DEPENDS "src/deep/*.h")
+
 # Find all maxflow files
 file(GLOB_RECURSE MAXFLOW_SOURCES CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.cpp")
 file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.h")
 
 # add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 # add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
-add_executable(DeepHeiProMap application/DeepHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
+add_executable(DeepHeiProMap application/DeepHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_DEEP} ${SOURCES_DEEP} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 
 # Link OpenMP library
 find_package(OpenMP REQUIRED)

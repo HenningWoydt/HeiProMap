@@ -30,9 +30,9 @@
 #include <algorithm>
 
 #include "ISerialDeepRefiner.h"
-#include "../flow_based_refinement.h"
-#include "../../../commons/random_engine.h"
-#include "../../../commons/utils.h"
+#include "../../serial/refinement/flow_based_refinement.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/utils.h"
 
 #define PROFILE(var, statement) \
     do { \

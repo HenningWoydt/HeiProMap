@@ -3,10 +3,10 @@
 
 #include <vector>
 
-#include "../../../commons/definitions.h"
-#include "../algorithm_configuration.h"
-#include "../../refinement/deep/deep_quotient_graph_refinement.h"
-#include "../../refinement/deep/deep_flow_based_refinement.h"
+#include "../../commons/definitions.h"
+#include "../../serial/utility/algorithm_configuration.h"
+#include "../refinement/deep_quotient_graph_refinement.h"
+#include "../refinement/deep_flow_based_refinement.h"
 
 namespace HeiProMap {
 

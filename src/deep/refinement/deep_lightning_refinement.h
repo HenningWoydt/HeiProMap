@@ -28,11 +28,11 @@
 #define HEIPROMAP_DEEP_LIGHTNING_REFINEMENT_H
 
 #include "ISerialDeepRefiner.h"
-#include "../../../commons/definitions.h"
-#include "../../../commons/JSON_utils.h"
-#include "../../../commons/random_engine.h"
-#include "../../../commons/statistic_collector.h"
-#include "../../utility/qap.h"
+#include "../../commons/definitions.h"
+#include "../../commons/JSON_utils.h"
+#include "../../commons/random_engine.h"
+#include "../../commons/statistic_collector.h"
+#include "../../serial/utility/qap.h"
 
 namespace HeiProMap {
     class DeepLightningRefinementConfiguration final : public ISerialDeepRefinerConfiguration {

@@ -29,7 +29,7 @@
 
 #include "../../src/commons/definitions.h"
 #include "../src/commons/utils.h"
-#include "../src/serial/datastructures/deep/deep_solver.h"
+#include "../src/deep/datastructures/deep_solver.h"
 #include "../src/serial/utility/algorithm_configuration.h"
 
 using namespace HeiProMap;

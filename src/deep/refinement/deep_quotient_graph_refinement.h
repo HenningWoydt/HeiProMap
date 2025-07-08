@@ -28,10 +28,10 @@
 #define HEIPROMAP_DEEP_QUOTIENT_GRAPH_REFINEMENT_H
 
 #include "ISerialDeepRefiner.h"
-#include "../../../commons/utils.h"
-#include "../../datastructures/indexed_max_heap.h"
-#include "../../utility/functions.h"
-#include "../../utility/qap.h"
+#include "../../commons/utils.h"
+#include "../../serial/datastructures/indexed_max_heap.h"
+#include "../../serial/utility/functions.h"
+#include "../../serial/utility/qap.h"
 
 namespace HeiProMap {
     class DeepQuotientGraphRefinementConfiguration final : public ISerialDeepRefinerConfiguration {

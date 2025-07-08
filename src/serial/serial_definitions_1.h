@@ -28,13 +28,11 @@
 #define HEIPROMAP_SERIAL_DEFINITIONS_1_H
 
 #include "datastructures/distance_oracle.h"
-#include "datastructures/deep/deep_distance_oracle.h"
 #include "datastructures/csr_graph.h"
 
 namespace HeiProMap {
     typedef CSRGraph graph_t;
 
-    typedef DeepDistanceOracle deep_d_oracle_t;
     typedef DistanceOracle     d_oracle_t;
 
     // Macro to iterate over the neighborhood of vertex u of a graph

@@ -27,11 +27,13 @@
 #ifndef HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H
 #define HEIPROMAP_DEEP_BOUNDARY_VERTEX_MANAGER_H
 
-#include "../distance_oracle.h"
-#include "../../serial_definitions_1.h"
-#include "../../serial_definitions_2.h"
-#include "../../../commons/definitions.h"
-#include "../../../commons/macros.h"
+#include "../../serial/datastructures/distance_oracle.h"
+#include "../../serial/serial_definitions_1.h"
+#include "../../serial/serial_definitions_2.h"
+#include "../deep_definitions_1.h"
+#include "../deep_definitions_2.h"
+#include "../../commons/definitions.h"
+#include "../../commons/macros.h"
 
 namespace HeiProMap {
     class DeepBoundaryVertexManager {

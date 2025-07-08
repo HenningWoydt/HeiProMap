@@ -24,20 +24,21 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_SERIAL_DEFINITIONS_3_H
-#define HEIPROMAP_SERIAL_DEFINITIONS_3_H
+#ifndef HEIPROMAP_DEEP_DEFINITIONS_1_H
+#define HEIPROMAP_DEEP_DEFINITIONS_1_H
 
-#include "datastructures/boundary_vertex_manger.h"
-#include "datastructures/quotient_graph.h"
+#include "../deep/datastructures/deep_distance_oracle.h"
 
 namespace HeiProMap {
 
-    typedef BoundaryVertexManager     bv_manager_t;
-    typedef QuotientGraph             q_graph_t;
+    typedef DeepDistanceOracle deep_d_oracle_t;
 
-    // Macro to iterate over all boundary vertices
-// #define forall_bv_iu(bv_manager, i, u) for(partition_t id = 0; id < k; ++id) { for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
-#define forall_bv_id_iu(bv_manager, id, i, u) for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
+    // Macro to iterate over the neighborhood of vertex u of a graph
+#define forall_guivw(g, u, i, v, w) for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.weight(u, i);
+#define forall_guiv(g, u, i, v)  for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i);
+#define forall_gu(g, u) for (vertex_t u = 0; u < g.get_n(); ++u) {
+
+#define endfor }
 }
 
-#endif //HEIPROMAP_SERIAL_DEFINITIONS_3_H
+#endif //HEIPROMAP_DEEP_DEFINITIONS_1_H

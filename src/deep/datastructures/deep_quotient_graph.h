@@ -28,7 +28,7 @@
 #define HEIPROMAP_DEEP_QUOTIENT_GRAPH_H
 
 
-#include "../../../commons/definitions.h"
+#include "../../commons/definitions.h"
 
 namespace HeiProMap {
     class DeepQuotientGraph {

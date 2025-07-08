@@ -27,10 +27,10 @@
 #ifndef HEIPROMAP_DEEP_REBALANCER_H
 #define HEIPROMAP_DEEP_REBALANCER_H
 
-#include "../../serial_definitions_1.h"
-#include "../../serial_definitions_2.h"
-#include "../../serial_definitions_3.h"
-#include "../../utility/qap.h"
+#include "../../serial/serial_definitions_1.h"
+#include "../../serial/serial_definitions_2.h"
+#include "../../serial/serial_definitions_3.h"
+#include "../../serial/utility/qap.h"
 
 namespace HeiProMap {
     /**
