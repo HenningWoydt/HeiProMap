@@ -39,7 +39,7 @@ namespace HeiProMap {
         size_t m_l = 0;
         partition_t m_k = 0;
 
-        std::vector<partition_t> divisor;
+        std::vector<partition_t> divisor;               // O(l)
 
     public:
         void initialize(const std::vector<partition_t> &t_hierarchy,

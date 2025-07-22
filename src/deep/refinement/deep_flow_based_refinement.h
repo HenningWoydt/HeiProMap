@@ -206,14 +206,20 @@ namespace HeiProMap {
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
 
-            for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings = q_graph.get_distance_3_matchings(active_this_round);
+            AlignedArray<u8> used_this_round;
+            used_this_round.initialize(m_k, 0);
 
-                for (auto &matching: matchings) {
+            std::vector<std::pair<partition_t, partition_t> > matching;
+
+            u64 iteration = 0;
+            while (iteration < config->max_global_iteration) {
+                iteration += 1;
+
+                while (q_graph.find_distance_3_matching(active_this_round, used_this_round, matching)) {
 #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (auto [u_id, v_id]: matching) {
                         u64 thread_id = omp_get_thread_num();
-                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
+                            refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id);
                     }
                 }
 

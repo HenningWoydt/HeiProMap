@@ -37,14 +37,14 @@ namespace HeiProMap {
         partition_t m_k = 0;
         std::vector<partition_t> m_hierarchy; // O(l)
 
-        std::vector<std::vector<std::pair<partition_t, weight_t>>> edges; // ~O(k) can worst case grow to O(k*k)
+        std::vector<std::vector<std::pair<partition_t, weight_t> > > edges; // ~O(k) can worst case grow to O(k*k)
 
-        std::vector<std::pair<partition_t, partition_t>> pairs; // ~O(k) can worst case grow to O(k*k)
+        std::vector<std::pair<partition_t, partition_t> > pairs; // ~O(k) can worst case grow to O(k*k)
 
     public:
-        void initialize(const std::vector<partition_t>& t_hierarchy,
+        void initialize(const std::vector<partition_t> &t_hierarchy,
                         const partition_t t_k) {
-            m_k         = t_k;
+            m_k = t_k;
             m_hierarchy = t_hierarchy;
 
             edges.resize(m_k);
@@ -67,7 +67,7 @@ namespace HeiProMap {
         bool has_edge(const partition_t u_id, const partition_t v_id) const {
             ASSERT(u_id != v_id);
 
-            for (auto& [id, w] : edges[u_id]) {
+            for (auto &[id, w]: edges[u_id]) {
                 if (id == v_id) {
                     return true;
                 }
@@ -76,7 +76,7 @@ namespace HeiProMap {
             return false;
         }
 
-        std::vector<std::pair<partition_t, weight_t>>& neighborhood(const partition_t id) {
+        std::vector<std::pair<partition_t, weight_t> > &neighborhood(const partition_t id) {
             return edges[id];
         }
 
@@ -95,7 +95,7 @@ namespace HeiProMap {
         weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
             ASSERT(u_id != v_id);
 
-            for (const auto& [id, w] : edges[u_id]) {
+            for (const auto &[id, w]: edges[u_id]) {
                 if (id == v_id) {
                     return w;
                 }
@@ -114,16 +114,15 @@ namespace HeiProMap {
          * @param old_id Old ID of the vertex.
          * @param new_id New ID of the vertex.
          */
-        void move(const deep_graph_t& g,
-                  const deep_p_manager_t& p_manager,
+        void move(const deep_graph_t &g,
+                  const deep_p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
             ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 
-            forall_guivw(g, u, i, v, w)
-                {
+            forall_guivw(g, u, i, v, w) {
                     partition_t v_id = p_manager[v];
 
                     // remove old edge, if existed
@@ -139,17 +138,17 @@ namespace HeiProMap {
         }
 
         void reset() {
-            for (auto& edge : edges) {
+            for (auto &edge: edges) {
                 edge.clear();
             }
         }
 
-        size_t n_pairs(AlignedArray<u8>& active) {
+        size_t n_pairs(AlignedArray<u8> &active) {
             size_t n = 0;
             pairs.clear();
 
             for (partition_t id1 = 0; id1 < m_k; ++id1) {
-                for (auto& [id2, w] : edges[id1]) {
+                for (auto &[id2, w]: edges[id1]) {
                     if (active[id1] == 0 && active[id2] == 0) { continue; }
                     n += 1;
                     pairs.emplace_back(id1, id2);
@@ -160,83 +159,75 @@ namespace HeiProMap {
 
         std::pair<partition_t, partition_t> get_pair(size_t idx) { return pairs[idx]; }
 
-        std::vector<std::vector<std::pair<partition_t, partition_t>>> get_distance_3_matchings(AlignedArray<u8>& active) {
-            std::vector<std::vector<std::pair<partition_t, partition_t>>> matchings;
-
+        bool find_distance_3_matching(AlignedArray<u8> &active, AlignedArray<u8> &used, std::vector<std::pair<partition_t, partition_t> > &matching) {
+            matching.clear();
             size_t m = n_pairs(active);
 
-            std::vector<u8> edge_included(m, 0);
             std::vector<u8> vertex_frozen(m_k, 0);
 
-            while (true) {
-                matchings.emplace_back();
+            for (size_t i = 0; i < m; ++i) {
+                auto [u_id, v_id] = get_pair(i);
 
-                for (size_t i = 0; i < m; ++i) {
-                    if (edge_included[i] == 1) { continue; }
-                    auto [u_id, v_id] = get_pair(i);
+                if (vertex_frozen[u_id] == 1 || vertex_frozen[v_id] == 1) { continue; }
+                if (used[u_id] == 1 || used[v_id] == 1) { continue; }
 
-                    if (vertex_frozen[u_id] == 1 || vertex_frozen[v_id] == 1) { continue; }
+                matching.emplace_back(u_id, v_id);
+                used[u_id] = 1;
+                used[v_id] = 1;
 
-                    matchings.back().emplace_back(u_id, v_id);
-                    edge_included[i] = 1;
-
-                    vertex_frozen[u_id] = 1;
-                    vertex_frozen[v_id] = 1;
-                    for (auto& [id, w] : edges[u_id]) {
-                        vertex_frozen[id] = 1;
-                        for (auto& [id2, w2] : edges[id]) {
-                            vertex_frozen[id2] = 1;
-                        }
-                    }
-                    for (auto& [id, w] : edges[v_id]) {
-                        vertex_frozen[id] = 1;
-                        for (auto& [id2, w2] : edges[id]) {
-                            vertex_frozen[id2] = 1;
-                        }
-                    }
-                }
-
-                if (matchings.back().empty()) {
-                    matchings.pop_back();
-                    break;
-                }
-
-                std::fill_n(vertex_frozen.begin(), m_k, 0);
-            }
-
-            return matchings;
-        }
-
-        bool is_valid_distance_3_matching(const std::vector<std::pair<partition_t, partition_t>>& matching) {
-            std::vector<u8> global_vertex_frozen(m_k, 0);
-
-            for (auto &[u_id, v_id] : matching) {
-
-                std::vector<u8> vertex_frozen(m_k, 0);
                 vertex_frozen[u_id] = 1;
                 vertex_frozen[v_id] = 1;
-                for (auto& [id, w] : edges[u_id]) {
+                for (auto &[id, w]: edges[u_id]) {
                     vertex_frozen[id] = 1;
-                    for (auto& [id2, w2] : edges[id]) {
+                    for (auto &[id2, w2]: edges[id]) {
                         vertex_frozen[id2] = 1;
                     }
                 }
-                for (auto& [id, w] : edges[v_id]) {
+                for (auto &[id, w]: edges[v_id]) {
                     vertex_frozen[id] = 1;
-                    for (auto& [id2, w2] : edges[id]) {
+                    for (auto &[id2, w2]: edges[id]) {
                         vertex_frozen[id2] = 1;
                     }
-                }
-
-                for (size_t i = 0; i < m_k; ++i) {
-                    global_vertex_frozen[i] += vertex_frozen[i];
                 }
             }
 
-            for (size_t i = 0; i < m_k; ++i) {
-                if (global_vertex_frozen[i] > 1) {
-                    std::cout << "not valid 3 distance matching" << std::endl;
-                    return false;
+            if (matching.empty()) {
+                return false;
+            }
+            return true;
+        }
+
+        bool is_valid_distance_3_matching(const std::vector<std::pair<partition_t, partition_t> > &matching) {
+            std::vector<u8> is_in_matching(m_k, 0);
+
+            for (auto &[u_id, v_id]: matching) {
+                is_in_matching[u_id] = 1;
+                is_in_matching[v_id] = 1;
+            }
+
+            for (auto &[u_id, v_id]: matching) {
+                for (auto &[id, w]: edges[u_id]) {
+                    for (auto &[id2, w2]: edges[id]) {
+                        bool b1 = id != u_id && id != v_id && is_in_matching[id] == 1;
+                        bool b2 = id2 != u_id && id2 != v_id && is_in_matching[id2] == 1;
+
+                        if (b1 || b2) {
+                            std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                            return false;
+                        }
+                    }
+                }
+
+                for (auto &[id, w]: edges[v_id]) {
+                    for (auto &[id2, w2]: edges[id]) {
+                        bool b1 = id != u_id && id != v_id && is_in_matching[id] == 1;
+                        bool b2 = id2 != u_id && id2 != v_id && is_in_matching[id2] == 1;
+
+                        if (b1 || b2) {
+                            std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                            return false;
+                        }
+                    }
                 }
             }
             return true;
@@ -249,7 +240,7 @@ namespace HeiProMap {
         }
 
         void add(const partition_t id1, const partition_t id2, const weight_t w) {
-            for (auto& [id, id_w] : edges[id1]) {
+            for (auto &[id, id_w]: edges[id1]) {
                 if (id == id2) {
                     id_w += w;
                     return;
