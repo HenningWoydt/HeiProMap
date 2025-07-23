@@ -284,6 +284,127 @@ namespace HeiProMap {
             for (vertex_t   scc_u: scc_s_successors) { is_active[scc_u] = 0; }
             for (vertex_t   scc_u: scc_t_predecessors) { is_active[scc_u] = 0; }
 
+            // determine in degree of each vertex
+            in_deg.resize(n_scc);
+            std::fill(in_deg.begin(), in_deg.end(), 0);
+            for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
+                if (is_active[scc_u] == 0) { continue; }
+                for (vertex_t scc_v: edges[scc_u]) {
+                    if (is_active[scc_v] == 0) { continue; }
+                    in_deg[scc_v] += 1;
+                }
+            }
+            std::vector<vertex_t> temp_in_deg(in_deg);
+
+            for (size_t i = 0; i < repeats; ++i) {
+                std::copy(temp_in_deg.begin(), temp_in_deg.end(), in_deg.begin());
+
+                // push roots into stack
+                stack.clear();
+                for (vertex_t         scc_u = 0; scc_u < n_scc; ++scc_u) {
+                    if (is_active[scc_u] == 0) { continue; }
+                    if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
+                }
+                std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
+
+                // determine the random topological order
+
+                topo_order.clear();
+                while (!stack.empty()) {
+                    vertex_t scc_u = stack.back();
+                    stack.pop_back();
+
+                    topo_order.push_back(scc_u);
+
+                    for (vertex_t scc_v: edges[scc_u]) {
+                        if (is_active[scc_v] == 0) { continue; }
+                        in_deg[scc_v] -= 1;
+                        if (in_deg[scc_v] == 0) {
+                            stack.push_back(scc_v);
+                            size_t idx = rnd_engine.get_u32() % stack.size();
+                            std::swap(stack[idx], stack.back());
+                        }
+                    }
+                    // std::shuffle(new_nodes.begin(), new_nodes.end(), rnd_engine.generator);
+                    // stack.insert(stack.end(), new_nodes.begin(), new_nodes.end());
+                }
+
+                // go through the order and determine the best closure
+                weight_t        closure_weight = 0;
+                in_closure.resize(n_scc);
+                std::fill(in_closure.begin(), in_closure.end(), 0);
+                for (vertex_t   scc_u: scc_s_successors) {
+                    in_closure[scc_u] = 1;
+                    closure_weight += scc_weights[scc_u];
+                }
+
+                for (vertex_t scc_u: topo_order) {
+                    if (is_active[scc_u] == 0) { continue; }
+
+                    in_closure[scc_u] = 1;
+                    closure_weight += scc_weights[scc_u];
+                }
+
+                weight_t      complement_weight = 0;
+                for (vertex_t scc_u: scc_t_predecessors) {
+                    in_closure[scc_u] = 0;
+                    complement_weight += scc_weights[scc_u];
+                }
+
+                if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
+                    weight_t left  = left_non_region_weight + closure_weight;
+                    weight_t right = right_non_region_weight + complement_weight;
+                    weight_t diff  = std::min(left_lmax - left, right_lmax - right);
+                    if (diff > best_diff) {
+                        closure_found = true;
+                        best_diff     = diff;
+                        best_closure  = in_closure;
+                    }
+                }
+
+                for (vertex_t scc_u: topo_order) {
+                    if (is_active[scc_u] == 0) { continue; }
+
+                    in_closure[scc_u] = 0;
+                    closure_weight -= scc_weights[scc_u];
+                    complement_weight += scc_weights[scc_u];
+
+                    if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
+                        weight_t left  = left_non_region_weight + closure_weight;
+                        weight_t right = right_non_region_weight + complement_weight;
+                        weight_t diff  = std::min(left_lmax - left, right_lmax - right);
+                        if (diff > best_diff) {
+                            closure_found = true;
+                            best_diff     = diff;
+                            best_closure  = in_closure;
+                        }
+                    }
+                }
+            }
+
+            is_left.resize(n - 2);
+            for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
+
+            return closure_found;
+        }
+
+        bool find_best_closure_old(weight_t left_non_region_weight,
+                               weight_t right_non_region_weight,
+                               weight_t left_lmax,
+                               weight_t right_lmax,
+                               size_t repeats,
+                               RandomEngine &rnd_engine,
+                               std::vector<u8> &is_left) {
+            bool            closure_found = false;
+            weight_t        best_diff     = -1;
+            best_closure.resize(n_scc);
+
+            // determine which sccs do not have to be considered
+            is_active.resize(n_scc);
+            std::fill(is_active.begin(), is_active.end(), 1);
+            for (vertex_t   scc_u: scc_s_successors) { is_active[scc_u] = 0; }
+            for (vertex_t   scc_u: scc_t_predecessors) { is_active[scc_u] = 0; }
+
             for (size_t i = 0; i < repeats; ++i) {
                 // determine in degree of each vertex
                 in_deg.resize(n_scc);

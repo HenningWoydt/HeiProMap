@@ -78,7 +78,7 @@ int main(const int argc, char *argv[]) {
                 // {"--distance", "1:2:10:50:100"},
                 {"--imbalance", "0.03"},
                 {"--config", "experimental"},
-                {"--threads", "32"},
+                {"--threads", "16"},
                 {"--seed", "0"},
 
                 // coarsening
