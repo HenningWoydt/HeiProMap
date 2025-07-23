@@ -98,6 +98,9 @@ namespace HeiProMap {
                   const partition_t old_id,
                   const partition_t new_id) {
             ASSERT(old_id != new_id);
+            ASSERT(n_vertices[old_id] >= 1);
+            ASSERT(bweights[old_id] >= w);
+            ASSERT(partition[u] == old_id);
 
             n_vertices[old_id] -= 1;
             n_vertices[new_id] += 1;

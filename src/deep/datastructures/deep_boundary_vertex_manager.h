@@ -66,6 +66,7 @@ namespace HeiProMap {
                      const deep_p_manager_t& p_manager,
                      const vertex_t u,
                      const partition_t u_id) {
+            ASSERT(m_n_boundary_edges[u] == 0);
             m_n_boundary_edges[u] = 0;
             forall_guiv(g, u, i, v)
                 {

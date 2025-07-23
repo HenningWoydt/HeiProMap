@@ -115,8 +115,6 @@ namespace HeiProMap {
             const auto ep_graph_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("graph_io", get_seconds(sp_graph_io, ep_graph_io));
 
-            std::cout << ac.k << " Read graph " << get_memory_usage_gb() << std::endl;
-
             const auto sp_io = std::chrono::high_resolution_clock::now();
 
             // balance
@@ -144,34 +142,16 @@ namespace HeiProMap {
                 }
             endfor
 
-            std::cout << "init p-manager " << get_memory_usage_gb() << std::endl;
-
             // partitioner.initialize(graphs.back().get_n(), ac.k, ac.threads, random_engine, ac.kaffpa_kway_partitioner_config);
 
-            std::cout << "init partitioner " << get_memory_usage_gb() << std::endl;
-
             deep_rebalancer.initialize(random_engine);
-
-            std::cout << "init rebalancer " << get_memory_usage_gb() << std::endl;
-
             bv_manager.initialize(graphs[0].get_n(), ac.k);
-
-            std::cout << "bv manager " << get_memory_usage_gb() << std::endl;
-
             q_graph.initialize(ac.hierarchy, ac.k);
-
-            std::cout << "init qgraph " << get_memory_usage_gb() << std::endl;
-
             // distance
             d_oracle.initialize(ac.hierarchy, ac.distance, ac.threads);
 
-            std::cout << "init d_oracle " << get_memory_usage_gb() << std::endl;
-
             // matching
-            // gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
             parallel_gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
-
-            std::cout << "init parallel gpa " << get_memory_usage_gb() << std::endl;
 
             refinements.emplace_back(&deep_quotient_graph_refinement, &ac.deep_quotient_graph_refinement_config);
             refinements.emplace_back(&deep_flow_based_refinement, &ac.deep_flow_based_refinement_config);
@@ -181,8 +161,6 @@ namespace HeiProMap {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, ac.threads, ac.hierarchy, ac.distance, random_engine, *config);
                 }
             }
-
-            std::cout << "init refinements " << get_memory_usage_gb() << std::endl;
 
             const auto ep_io = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("io", get_seconds(sp_io, ep_io));
@@ -241,8 +219,6 @@ namespace HeiProMap {
                     matches.pop_back();
                     break;
                 }
-
-                std::cout << level << " matching " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
 
                 coarsening(level);
                 auto ep = std::chrono::high_resolution_clock::now();
@@ -336,17 +312,10 @@ namespace HeiProMap {
         void matching(const u64 level) {
             const auto sp_match = std::chrono::high_resolution_clock::now();
 
-            std::cout << level << " before matching " << get_memory_usage_gb() << std::endl;
-
             matches.emplace_back();
             matches.back().initialize(graphs.back().get_n());
 
-            std::cout << level << " after matching init " << get_memory_usage_gb() << std::endl;
-
-            // gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
             parallel_gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
-
-            std::cout << level << " after matching " << get_memory_usage_gb() << std::endl;
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("matching", get_seconds(sp_match, ep_match));

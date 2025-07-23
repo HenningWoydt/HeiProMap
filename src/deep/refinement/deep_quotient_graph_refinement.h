@@ -540,6 +540,8 @@ namespace HeiProMap {
         partition_t m_k = 0;
         u64 m_threads = 1;
 
+        std::mutex mutex;
+
         const DeepQuotientGraphRefinementConfiguration *config = nullptr;
 
     public:
@@ -571,7 +573,7 @@ namespace HeiProMap {
             AlignedArray<u8> active_next_round;
             AlignedArray<u8> used_this_round;
 
-            active_this_round.initialize(m_k, 0);
+            active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
             used_this_round.initialize(m_k, 0);
 
@@ -587,6 +589,7 @@ namespace HeiProMap {
 #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (auto [u_id, v_id]: matching) {
                         u64 thread_id = omp_get_thread_num();
+                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id, active_next_round);
                         if (d_oracle.last_level_pair(u_id, v_id)) {
                             refine_blocks_edge_cut(g, bv_manager, p_manager, q_graph, u_id, v_id, thread_id, active_next_round);
                         } else {
@@ -742,12 +745,17 @@ namespace HeiProMap {
                     }
                 endfor
 
-                // remove vertex from u if it is not boundary, or it does not have correct comm cost
+                // remove vertex from u if it is not boundary, or it does not have the correct comm cost, or if it was already used
                 while (!boundary_vertices_u.empty()) {
                     vertex_t u = boundary_vertices_u.top().u;
                     s64 curr_qap_delta = boundary_vertices_u.top().qap_delta;
                     partition_t old_id = u_id;
                     partition_t new_id = v_id;
+
+                    if (used_vertices.find(u) != used_vertices.end()) {
+                        boundary_vertices_u.pop();
+                        continue;
+                    }
 
                     bool is_connected;
                     s64 actual_qap_delta = get_u_qap_delta_and_is_connected_to(g, u, old_id, new_id, is_connected, p_manager, d_oracle);
@@ -760,12 +768,17 @@ namespace HeiProMap {
                     break;
                 }
 
-                // remove vertex from v if it is not boundary, or it does not have correct comm cost
-                while (!boundary_vertices_u.empty()) {
+                // remove vertex from v if it is not boundary, or it does not have the correct comm cost
+                while (!boundary_vertices_v.empty()) {
                     vertex_t v = boundary_vertices_v.top().u;
                     s64 curr_qap_delta = boundary_vertices_v.top().qap_delta;
                     partition_t old_id = v_id;
                     partition_t new_id = u_id;
+
+                    if (used_vertices.find(v) != used_vertices.end()) {
+                        boundary_vertices_v.pop();
+                        continue;
+                    }
 
                     bool is_connected;
                     s64 actual_qap_delta = get_u_qap_delta_and_is_connected_to(g, v, old_id, new_id, is_connected, p_manager, d_oracle);
@@ -954,6 +967,11 @@ namespace HeiProMap {
                     partition_t old_id = u_id;
                     partition_t new_id = v_id;
 
+                    if (used_vertices.find(u) != used_vertices.end()) {
+                        boundary_vertices_u.pop();
+                        continue;
+                    }
+
                     bool is_connected;
                     s64 actual_edge_cut_delta = get_u_edge_cut_delta_and_is_connected_to(g, u, old_id, new_id, is_connected, p_manager);
 
@@ -966,11 +984,16 @@ namespace HeiProMap {
                 }
 
                 // remove vertex from v if it is not boundary, or it does not have correct comm cost
-                while (!boundary_vertices_u.empty()) {
+                while (!boundary_vertices_v.empty()) {
                     vertex_t v = boundary_vertices_v.top().u;
                     s64 curr_edge_cut_delta = boundary_vertices_v.top().qap_delta;
                     partition_t old_id = v_id;
                     partition_t new_id = u_id;
+
+                    if (used_vertices.find(v) != used_vertices.end()) {
+                        boundary_vertices_v.pop();
+                        continue;
+                    }
 
                     bool is_connected;
                     s64 actual_edge_cut_delta = get_u_edge_cut_delta_and_is_connected_to(g, v, old_id, new_id, is_connected, p_manager);
