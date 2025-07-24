@@ -235,7 +235,6 @@ namespace HeiProMap {
             print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size()));
 
             while (level > 0) {
-                auto sp = std::chrono::high_resolution_clock::now();
                 level -= 1;
 
                 std::cout << level << " A " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
@@ -255,7 +254,6 @@ namespace HeiProMap {
                 refinement(level, max_level);
 
                 std::cout << level << " E " << graphs.back().get_n() << " " << get_memory_usage_gb() << std::endl;
-                auto ep = std::chrono::high_resolution_clock::now();
 
                 // std::cout << level << " " << graphs.back().get_n() << " " << get_qap(graphs.back(), p_manager, d_oracle, ac.threads) << " " << get_seconds(sp, ep) << std::endl;
                 // print(get_qap_per_layer(graphs.back(), p_manager, d_oracle, ac.hierarchy.size(), ac.threads));

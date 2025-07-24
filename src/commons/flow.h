@@ -37,6 +37,7 @@
 #include "macros.h"
 #include "random_engine.h"
 #include "translation_table.h"
+#include "small_translation_table.h"
 #include "../../extern/maxflow-v3.04.src/graph.h"
 #include "../serial/serial_definitions_1.h"
 
@@ -210,6 +211,78 @@ namespace HeiProMap {
             }
         }
 
+        template<typename GraphT>
+        void initialize(const ResidualFlowNetwork &residual_flow_network,
+                        const GraphT &g,
+                        const SmallTranslationTable<vertex_t> &tt) {
+            temp_g = &residual_flow_network;
+
+            n      = residual_flow_network.get_n() + 2;
+            source = residual_flow_network.get_source();
+            target = residual_flow_network.get_target();
+
+            index.clear();
+            index.resize(n, UNVISITED);
+            idx = 0;
+
+            scc_id.clear();
+            scc_id.resize(n, UNVISITED);
+            n_scc = 0;
+
+            S.clear();
+            P.clear();
+
+            vertex_per_scc.clear();
+
+            // === Gabow's Algorithm ===
+            for (vertex_t v = 0; v < n; ++v) {
+                // if (index[v] == UNVISITED) { dfs(v, residual_flow_network); }
+                if (index[v] == UNVISITED) { dfs_non_recursive(v, residual_flow_network); }
+            }
+
+            // clear old edges
+            edges.clear();
+            edges.resize(n_scc);
+
+            rev_edges.clear();
+            rev_edges.resize(n_scc);
+
+            // build the graph and the reversed graph
+            for (vertex_t u = 0; u < n; ++u) {
+                vertex_t scc_u = scc_id[u];
+                for (const auto [v, w]: residual_flow_network[u]) {
+                    vertex_t scc_v = scc_id[v];
+                    if (scc_u == scc_v) { continue; }
+                    edges[scc_u].emplace_back(scc_v);
+                    rev_edges[scc_v].emplace_back(scc_u);
+                }
+            }
+
+            // make each edge list unique
+            for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
+                std::sort(edges[scc_u].begin(), edges[scc_u].end());
+                edges[scc_u].erase(unique(edges[scc_u].begin(), edges[scc_u].end()), edges[scc_u].end());
+            }
+
+            for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
+                std::sort(rev_edges[scc_u].begin(), rev_edges[scc_u].end());
+                rev_edges[scc_u].erase(unique(rev_edges[scc_u].begin(), rev_edges[scc_u].end()), rev_edges[scc_u].end());
+            }
+
+            // set special scc
+            scc_source = scc_id[source];
+            scc_target = scc_id[target];
+
+            // determine the weight of each scc in the graph
+            scc_weights.clear();
+            scc_weights.resize(n_scc, 0);
+            for (vertex_t u = 0; u < n; ++u) {
+                if (u != source && u != target) {
+                    scc_weights[scc_id[u]] += g.weight(tt.get_o(u));
+                }
+            }
+        }
+
         vertex_t get_n_scc() const { return n_scc; }
 
         void reduce() {
@@ -308,7 +381,6 @@ namespace HeiProMap {
                 std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
 
                 // determine the random topological order
-
                 topo_order.clear();
                 while (!stack.empty()) {
                     vertex_t scc_u = stack.back();
@@ -325,8 +397,6 @@ namespace HeiProMap {
                             std::swap(stack[idx], stack.back());
                         }
                     }
-                    // std::shuffle(new_nodes.begin(), new_nodes.end(), rnd_engine.generator);
-                    // stack.insert(stack.end(), new_nodes.begin(), new_nodes.end());
                 }
 
                 // go through the order and determine the best closure

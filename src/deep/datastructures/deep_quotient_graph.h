@@ -122,7 +122,8 @@ namespace HeiProMap {
             ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 
-            forall_guivw(g, u, i, v, w) {
+            forall_guivw(g, u, i, v, w)
+                {
                     partition_t v_id = p_manager[v];
 
                     // remove old edge, if existed
@@ -143,58 +144,43 @@ namespace HeiProMap {
             }
         }
 
-        size_t n_pairs(AlignedArray<u8> &active) {
-            size_t n = 0;
-            pairs.clear();
-
-            for (partition_t id1 = 0; id1 < m_k; ++id1) {
-                for (auto &[id2, w]: edges[id1]) {
-                    if (active[id1] == 0 && active[id2] == 0) { continue; }
-                    n += 1;
-                    pairs.emplace_back(id1, id2);
-                }
-            }
-            return n;
-        }
-
-        std::pair<partition_t, partition_t> get_pair(size_t idx) { return pairs[idx]; }
-
-        bool find_distance_3_matching(AlignedArray<u8> &active, AlignedArray<u8> &used, std::vector<std::pair<partition_t, partition_t> > &matching) {
+        bool find_distance_3_matching(AlignedArray<u8> &active_this_round,
+                                      AlignedArray<u8> &used_this_round,
+                                      std::vector<std::pair<partition_t, partition_t> > &matching) {
             matching.clear();
-            size_t m = n_pairs(active);
 
             std::vector<u8> vertex_frozen(m_k, 0);
 
-            for (size_t i = 0; i < m; ++i) {
-                auto [u_id, v_id] = get_pair(i);
+            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                for (auto &[v_id, _]: edges[u_id]) {
+                    if (v_id < u_id) { continue; }
+                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) { continue; }
 
-                if (vertex_frozen[u_id] == 1 || vertex_frozen[v_id] == 1) { continue; }
-                if (used[u_id] == 1 || used[v_id] == 1) { continue; }
+                    if (vertex_frozen[u_id] == 1 || vertex_frozen[v_id] == 1) { continue; }
+                    if (used_this_round[u_id] == 1 || used_this_round[v_id] == 1) { continue; }
 
-                matching.emplace_back(u_id, v_id);
-                used[u_id] = 1;
-                used[v_id] = 1;
+                    matching.emplace_back(u_id, v_id);
+                    used_this_round[u_id] = 1;
+                    used_this_round[v_id] = 1;
 
-                vertex_frozen[u_id] = 1;
-                vertex_frozen[v_id] = 1;
-                for (auto &[id, w]: edges[u_id]) {
-                    vertex_frozen[id] = 1;
-                    for (auto &[id2, w2]: edges[id]) {
-                        vertex_frozen[id2] = 1;
+                    vertex_frozen[u_id] = 1;
+                    vertex_frozen[v_id] = 1;
+                    for (auto &[id, w]: edges[u_id]) {
+                        vertex_frozen[id] = 1;
+                        for (auto &[id2, w2]: edges[id]) {
+                            vertex_frozen[id2] = 1;
+                        }
                     }
-                }
-                for (auto &[id, w]: edges[v_id]) {
-                    vertex_frozen[id] = 1;
-                    for (auto &[id2, w2]: edges[id]) {
-                        vertex_frozen[id2] = 1;
+                    for (auto &[id, w]: edges[v_id]) {
+                        vertex_frozen[id] = 1;
+                        for (auto &[id2, w2]: edges[id]) {
+                            vertex_frozen[id2] = 1;
+                        }
                     }
                 }
             }
 
-            if (matching.empty()) {
-                return false;
-            }
-            return true;
+            return !matching.empty();
         }
 
         bool is_valid_distance_3_matching(const std::vector<std::pair<partition_t, partition_t> > &matching) {
