@@ -373,8 +373,8 @@ namespace HeiProMap {
         }
 
         void parallel_initialize_slower(const DeepCSRGraph &g,
-                                 Matching &matching,
-                                 u64 threads) {
+                                        Matching &matching,
+                                        u64 threads) {
             matching.set_translation();
 
             m_n = matching.get_n_coarse_nodes();
@@ -526,10 +526,10 @@ namespace HeiProMap {
             m_edges_w.initialize(m_m);
 
 #pragma omp parallel for default(none) shared(hash_offset, hash_keys, hash_vals)
-            for(vertex_t u = 0; u < m_n; ++u){
+            for (vertex_t u = 0; u < m_n; ++u) {
                 size_t idx = m_neighborhoods[u];
-                for(u64 i = hash_offset[u]; i < hash_offset[u + 1]; ++i){
-                    if(hash_keys[i] != m_n){
+                for (u64 i = hash_offset[u]; i < hash_offset[u + 1]; ++i) {
+                    if (hash_keys[i] != m_n) {
                         m_edges_v[idx] = hash_keys[i];
                         m_edges_w[idx] = hash_vals[i];
                         idx += 1;
@@ -539,22 +539,17 @@ namespace HeiProMap {
         }
 
         void parallel_initialize(const DeepCSRGraph &g,
-                                     Matching &matching,
-                                     u64 threads) {
+                                 Matching &matching,
+                                 u64 threads) {
             matching.set_translation();
 
             m_n = matching.get_n_coarse_nodes();
-            const vertex_t temp_m = g.get_m() + 1;
-
             m_graph_weight = g.m_graph_weight;
-            m_v_weights.initialize(m_n + 1);
-
+            m_v_weights.initialize(m_n);
             m_neighborhoods.initialize(m_n + 1);
-            m_edges_v.initialize(temp_m);
-            m_edges_w.initialize(temp_m);
 
             struct thread_info {
-                vertex_t start_vertex = 0;
+                vertex_t s_vertex = 0;
                 vertex_t n_assigned_vertices = 0;
                 vertex_t n_actual_vertices = 0;
                 vertex_t curr_m = 0;
@@ -562,50 +557,51 @@ namespace HeiProMap {
                 std::vector<vertex_t> edges_v;
                 std::vector<weight_t> edges_w;
             };
-            std::vector<thread_info> thread_infos(threads);
+            std::vector<thread_info> t_infos(threads);
 
-            double alpha = 2.0; // example scaling parameter > 1.0
+            f64 alpha = 2.0; // example scaling parameter > 1.0
 
             // Step 1: Compute weights
-            std::vector<double> weights(threads);
-            double total_weight = 0.0;
+            std::vector<f64> weights(threads);
+            f64 total_weight = 0.0;
             for (size_t i = 0; i < threads; ++i) {
-                weights[i] = std::pow(static_cast<double>(i + 1), alpha);
+                weights[i] = std::pow((f64) (i + 1), alpha);
                 total_weight += weights[i];
             }
 
             vertex_t n_total_vertices = g.get_n();
-            vertex_t base = n_total_vertices / threads;
-            vertex_t rem = n_total_vertices % threads;
 
             // Step 2: Assign number of vertices per thread
             vertex_t current_start = 0;
             vertex_t assigned_total = 0;
             for (size_t i = 0; i < threads; ++i) {
-                double fraction = weights[i] / total_weight;
-                vertex_t n_assign = static_cast<vertex_t>(std::round(fraction * n_total_vertices));
+                f64 fraction = weights[i] / total_weight;
+                vertex_t n_assign = (vertex_t) (std::round(fraction * (f64) n_total_vertices));
 
                 // Ensure last thread takes any rounding residual
-                if (i == threads - 1) {
-                    n_assign = n_total_vertices - assigned_total;
-                }
+                if (i == threads - 1) { n_assign = n_total_vertices - assigned_total; }
 
-                thread_infos[i].start_vertex = current_start;
-                thread_infos[i].n_assigned_vertices = n_assign;
+                t_infos[i].s_vertex = current_start;
+                t_infos[i].n_assigned_vertices = n_assign;
                 current_start += n_assign;
                 assigned_total += n_assign;
             }
 
-            // each thread determines the neighborhood one their assigned vertices
-#pragma omp parallel num_threads(threads)
+            // each thread determines the neighborhood of their assigned vertices
+#pragma omp parallel num_threads(threads) default(none) shared(g, t_infos, matching)
             {
                 u64 t_id = omp_get_thread_num();
-                thread_infos[t_id].neighborhood.push_back(0);
-                for (vertex_t old_u = thread_infos[t_id].start_vertex;
-                     old_u < thread_infos[t_id].start_vertex + thread_infos[t_id].n_assigned_vertices; ++old_u) {
+                t_infos[t_id].neighborhood.push_back(0);
+                for (vertex_t old_u = t_infos[t_id].s_vertex; old_u < t_infos[t_id].s_vertex + t_infos[t_id].n_assigned_vertices; ++old_u) {
                     vertex_t old_v = matching.get_partner(old_u);
 
                     if (old_u > old_v) { continue; }
+
+                    weight_t old_u_w = g.weight(old_u);
+                    weight_t old_v_w = old_u == old_v ? 0 : g.weight(old_v);
+
+                    vertex_t new_u = matching.get_n(old_u);
+                    m_v_weights[new_u] = old_u_w + old_v_w;
 
                     for (size_t i = 0; i < g.size(old_u); ++i) {
                         vertex_t vv = g.neighbor(old_u, i);
@@ -620,17 +616,17 @@ namespace HeiProMap {
                         vv = matching.get_n(vv);
 
                         bool found = false;
-                        for (size_t j = thread_infos[t_id].neighborhood.back(); j < thread_infos[t_id].curr_m; ++j) {
-                            if (thread_infos[t_id].edges_v[j] == vv) {
-                                thread_infos[t_id].edges_w[j] += ww;
+                        for (size_t j = t_infos[t_id].neighborhood.back(); j < t_infos[t_id].curr_m; ++j) {
+                            if (t_infos[t_id].edges_v[j] == vv) {
+                                t_infos[t_id].edges_w[j] += ww;
                                 found = true;
                                 break;
                             }
                         }
                         if (!found) {
-                            thread_infos[t_id].edges_v.push_back(vv);
-                            thread_infos[t_id].edges_w.push_back(ww);
-                            thread_infos[t_id].curr_m += 1;
+                            t_infos[t_id].edges_v.push_back(vv);
+                            t_infos[t_id].edges_w.push_back(ww);
+                            t_infos[t_id].curr_m += 1;
                         }
                     }
 
@@ -649,29 +645,37 @@ namespace HeiProMap {
                             vv = matching.get_n(vv);
 
                             bool found = false;
-                            for (size_t j = thread_infos[t_id].neighborhood.back();
-                                 j < thread_infos[t_id].curr_m; ++j) {
-                                if (thread_infos[t_id].edges_v[j] == vv) {
-                                    thread_infos[t_id].edges_w[j] += ww;
+                            for (size_t j = t_infos[t_id].neighborhood.back();
+                                 j < t_infos[t_id].curr_m; ++j) {
+                                if (t_infos[t_id].edges_v[j] == vv) {
+                                    t_infos[t_id].edges_w[j] += ww;
                                     found = true;
                                     break;
                                 }
                             }
                             if (!found) {
-                                thread_infos[t_id].edges_v.push_back(vv);
-                                thread_infos[t_id].edges_w.push_back(ww);
-                                thread_infos[t_id].curr_m += 1;
+                                t_infos[t_id].edges_v.push_back(vv);
+                                t_infos[t_id].edges_w.push_back(ww);
+                                t_infos[t_id].curr_m += 1;
                             }
                         }
                     }
-                    thread_infos[t_id].neighborhood.push_back(thread_infos[t_id].curr_m);
+                    t_infos[t_id].neighborhood.push_back(t_infos[t_id].curr_m);
                 }
-                thread_infos[t_id].n_actual_vertices = thread_infos[t_id].neighborhood.size() - 1;
+                t_infos[t_id].n_actual_vertices = t_infos[t_id].neighborhood.size() - 1;
             }
+
+            // determine the number of edges
+            m_m = 0;
+            for (size_t i = 0; i < threads; ++i) {
+                m_m += t_infos[i].curr_m;
+            }
+            m_edges_v.initialize(m_m);
+            m_edges_w.initialize(m_m);
 
             // each thread copies its data to the correct place in the real neighborhood
             m_neighborhoods[0] = 0;
-#pragma omp parallel num_threads(threads)
+#pragma omp parallel num_threads(threads) default(none) shared(t_infos) firstprivate(threads)
             {
                 u64 t_id = omp_get_thread_num();
 
@@ -679,37 +683,25 @@ namespace HeiProMap {
                 vertex_t previous_m = 0;
                 vertex_t previous_n = 0;
                 for (size_t i = 0; i < t_id; ++i) {
-                    previous_m += thread_infos[i].curr_m;
-                    previous_n += thread_infos[i].n_actual_vertices;
+                    previous_m += t_infos[i].curr_m;
+                    previous_n += t_infos[i].n_actual_vertices;
                 }
 
                 // copy neighborhood sizes
-                for (size_t i = 0; i < thread_infos[t_id].n_actual_vertices; ++i) {
-                    m_neighborhoods[previous_n + i + 1] = thread_infos[t_id].neighborhood[i + 1] + previous_m;
+                for (size_t i = 0; i < t_infos[t_id].n_actual_vertices; ++i) {
+                    m_neighborhoods[previous_n + i + 1] = t_infos[t_id].neighborhood[i + 1] + previous_m;
                 }
 
                 // copy all edges
-                for (size_t i = 0; i < thread_infos[t_id].curr_m; ++i) {
-                    m_edges_v[previous_m + i] = thread_infos[t_id].edges_v[i];
-                    m_edges_w[previous_m + i] = thread_infos[t_id].edges_w[i];
+                for (size_t i = 0; i < t_infos[t_id].curr_m; ++i) {
+                    m_edges_v[previous_m + i] = t_infos[t_id].edges_v[i];
+                    m_edges_w[previous_m + i] = t_infos[t_id].edges_w[i];
                 }
 
                 if (t_id == threads - 1) {
-                    m_m = thread_infos[t_id].curr_m + previous_m;
+                    m_m = t_infos[t_id].curr_m + previous_m;
                 }
 
-            }
-
-// #pragma omp parallel for num_threads(threads)
-            for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
-                vertex_t old_v = matching.get_partner(old_u);
-                if (old_u == old_v) {
-                    vertex_t new_u = matching.get_n(old_u);
-                    m_v_weights[new_u] = g.weight(old_u);
-                } else if (old_u < old_v) {
-                    vertex_t new_u = matching.get_n(old_u);
-                    m_v_weights[new_u] = g.weight(old_u) + g.weight(old_v);
-                }
             }
         }
 
