@@ -303,9 +303,6 @@ namespace HeiProMap {
                 path_id[v2] = id1;
             }
 
-            auto ep = std::chrono::high_resolution_clock::now();
-            std::cout << "time " << get_seconds(sp, ep) << std::endl;
-
             // process all paths
 #pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
             forall_gu(g, u)
