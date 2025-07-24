@@ -372,9 +372,175 @@ namespace HeiProMap {
             m_m = curr_m;
         }
 
-        void parallel_initialize(const DeepCSRGraph &g,
+        void parallel_initialize_slower(const DeepCSRGraph &g,
                                  Matching &matching,
                                  u64 threads) {
+            matching.set_translation();
+
+            m_n = matching.get_n_coarse_nodes();
+            m_m = g.get_m();
+
+            m_graph_weight = g.m_graph_weight;
+            m_v_weights.initialize(m_n);
+
+            m_neighborhoods.initialize(m_n + 1);
+
+            // determine maximum neighborhood size
+            std::vector<size_t> max_neighborhood_size(m_n);
+#pragma omp parallel num_threads(threads) default(none) shared(g, matching, max_neighborhood_size)
+            for (vertex_t u = 0; u < g.m_n; ++u) {
+                vertex_t u_partner = matching.get_partner(u);
+
+                if (u > u_partner) { continue; }
+
+                vertex_t new_u = matching.get_n(u);
+
+                u64 size_u = g.size(u);
+                u64 size_v = (u == u_partner) ? 0 : g.size(u_partner);
+                max_neighborhood_size[new_u] = size_u + size_v;
+
+                weight_t u_weight = g.weight(u);
+                weight_t v_weight = (u == u_partner) ? 0 : g.weight(u_partner);
+                m_v_weights[new_u] = u_weight + v_weight;
+            }
+
+            // determine the offsets into the hashing array
+            std::vector<size_t> hash_offset(m_n + 1);
+            hash_offset[0] = 0;
+            for (size_t i = 0; i < m_n; ++i) {
+                hash_offset[i + 1] = hash_offset[i] + max_neighborhood_size[i];
+            }
+
+            std::vector<u64> real_neighborhood_size(m_n);
+            std::vector<u64> hash_keys(m_m, m_n);
+            std::vector<weight_t> hash_vals(m_m);
+
+#pragma omp parallel for num_threads(threads) default(none) shared(g, matching, hash_offset, hash_keys, hash_vals, real_neighborhood_size) schedule(dynamic)
+            forall_gu(g, u)
+                {
+                    vertex_t u_partner = matching.get_partner(u);
+                    if (u > u_partner) { continue; } // another iteration will handle it
+                    if (u == u_partner) {
+                        // vertex was not matched, only consider its neighbors
+                        vertex_t u_new = matching.get_n(u);
+
+                        // we need to insert v_new into the hash table of u_new
+                        u64 offset = hash_offset[u_new];
+                        u64 hash_table_size = hash_offset[u_new + 1] - hash_offset[u_new];
+                        u64 n_neighbors = 0;
+                        forall_guivw(g, u, i, v, w)
+                            {
+                                vertex_t v_new = matching.get_n(v);
+                                u64 key = (v_new * 11400714819323198485ull) % hash_table_size;
+
+                                // linear probing to find empty position or the key
+                                for (u64 j = 0; j < hash_table_size; ++j) {
+                                    u64 idx = offset + ((key + j) % hash_table_size);
+
+                                    if (hash_keys[idx] == m_n) {
+                                        hash_keys[idx] = v_new;
+                                        hash_vals[idx] = w;
+                                        n_neighbors += 1;
+                                        break;
+                                    } else if (hash_keys[idx] == v_new) {
+                                        hash_vals[idx] += w;
+                                        break;
+                                    }
+                                }
+
+                            }
+                        endfor
+                        real_neighborhood_size[u_new] = n_neighbors;
+                    } else {
+                        // vertex was matched to u_partner, consider both neighbors
+                        vertex_t u_new = matching.get_n(u);
+
+                        // we need to insert v_new into the hash table of u_new
+                        u64 offset = hash_offset[u_new];
+                        u64 hash_table_size = hash_offset[u_new + 1] - hash_offset[u_new];
+                        u64 n_neighbors = 0;
+                        forall_guivw(g, u, i, v, w)
+                            {
+                                if (u_partner == v) { continue; } // this edge vanishes since it is matched
+
+                                vertex_t v_new = matching.get_n(v);
+                                u64 key = (v_new * 11400714819323198485ull) % hash_table_size;
+
+                                // linear probing to find empty position or the key
+                                for (u64 j = 0; j < hash_table_size; ++j) {
+                                    u64 idx = offset + ((key + j) % hash_table_size);
+
+                                    if (hash_keys[idx] == m_n) {
+                                        hash_keys[idx] = v_new;
+                                        hash_vals[idx] = w;
+                                        n_neighbors += 1;
+                                        break;
+                                    } else if (hash_keys[idx] == v_new) {
+                                        hash_vals[idx] += w;
+                                        break;
+                                    }
+                                }
+
+                            }
+                        endfor
+
+                        forall_guivw(g, u_partner, i, v, w)
+                            {
+                                if (u == v) { continue; } // this edge vanishes since it is matched
+
+                                vertex_t v_new = matching.get_n(v);
+                                u64 key = (v_new * 11400714819323198485ull) % hash_table_size;
+
+                                // linear probing to find empty position or the key
+                                for (u64 j = 0; j < hash_table_size; ++j) {
+                                    u64 idx = offset + ((key + j) % hash_table_size);
+
+                                    if (hash_keys[idx] == m_n) {
+                                        hash_keys[idx] = v_new;
+                                        hash_vals[idx] = w;
+                                        n_neighbors += 1;
+                                        break;
+                                    } else if (hash_keys[idx] == v_new) {
+                                        hash_vals[idx] += w;
+                                        break;
+                                    }
+                                }
+
+                            }
+                        endfor
+                        real_neighborhood_size[u_new] = n_neighbors;
+                    }
+                }
+            endfor
+
+            // prefix sum to create new neighborhoods
+            m_neighborhoods[0] = 0;
+            for (size_t i = 0; i < m_n; ++i) {
+                m_neighborhoods[i + 1] = m_neighborhoods[i] + real_neighborhood_size[i];
+            }
+
+            // set true m
+            m_m = m_neighborhoods[m_n];
+
+            m_edges_v.initialize(m_m);
+            m_edges_w.initialize(m_m);
+
+#pragma omp parallel for default(none) shared(hash_offset, hash_keys, hash_vals)
+            for(vertex_t u = 0; u < m_n; ++u){
+                size_t idx = m_neighborhoods[u];
+                for(u64 i = hash_offset[u]; i < hash_offset[u + 1]; ++i){
+                    if(hash_keys[i] != m_n){
+                        m_edges_v[idx] = hash_keys[i];
+                        m_edges_w[idx] = hash_vals[i];
+                        idx += 1;
+                    }
+                }
+            }
+        }
+
+        void parallel_initialize(const DeepCSRGraph &g,
+                                     Matching &matching,
+                                     u64 threads) {
             matching.set_translation();
 
             m_n = matching.get_n_coarse_nodes();
