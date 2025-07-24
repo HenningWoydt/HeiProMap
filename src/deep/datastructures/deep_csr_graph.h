@@ -592,6 +592,9 @@ namespace HeiProMap {
             {
                 u64 t_id = omp_get_thread_num();
                 t_infos[t_id].neighborhood.push_back(0);
+
+                std::unordered_map<vertex_t, size_t> saved_idx;
+
                 for (vertex_t old_u = t_infos[t_id].s_vertex; old_u < t_infos[t_id].s_vertex + t_infos[t_id].n_assigned_vertices; ++old_u) {
                     vertex_t old_v = matching.get_partner(old_u);
 
@@ -603,60 +606,44 @@ namespace HeiProMap {
                     vertex_t new_u = matching.get_n(old_u);
                     m_v_weights[new_u] = old_u_w + old_v_w;
 
+                    saved_idx.clear();
                     for (size_t i = 0; i < g.size(old_u); ++i) {
                         vertex_t vv = g.neighbor(old_u, i);
                         weight_t ww = g.weight(old_u, i);
-                        vertex_t vv_partner = matching.get_partner(vv);
                         if (vv == old_v) { continue; }
-
-                        // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        vv = std::min(vv, vv_partner);
 
                         // map to the new node range
                         vv = matching.get_n(vv);
 
-                        bool found = false;
-                        for (size_t j = t_infos[t_id].neighborhood.back(); j < t_infos[t_id].curr_m; ++j) {
-                            if (t_infos[t_id].edges_v[j] == vv) {
-                                t_infos[t_id].edges_w[j] += ww;
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
+                        auto it = saved_idx.find(vv);
+                        if (it == saved_idx.end()) {
                             t_infos[t_id].edges_v.push_back(vv);
                             t_infos[t_id].edges_w.push_back(ww);
+                            saved_idx[vv] = t_infos[t_id].curr_m;
                             t_infos[t_id].curr_m += 1;
+                        } else {
+                            t_infos[t_id].edges_w[it->second] += ww;
                         }
                     }
 
                     if (old_u < old_v) {
                         for (size_t i = 0; i < g.size(old_v); ++i) {
                             vertex_t vv = g.neighbor(old_v, i);
-                            vertex_t vv_partner = matching.get_partner(vv);
                             weight_t ww = g.weight(old_v, i);
                             // do not add edge to matched vertex
                             if (vv == old_u) { continue; }
 
-                            // if the vv vertex is matched, then make an edge to the neighbor vertex
-                            vv = std::min(vv, vv_partner);
-
                             // map to the new node range
                             vv = matching.get_n(vv);
 
-                            bool found = false;
-                            for (size_t j = t_infos[t_id].neighborhood.back();
-                                 j < t_infos[t_id].curr_m; ++j) {
-                                if (t_infos[t_id].edges_v[j] == vv) {
-                                    t_infos[t_id].edges_w[j] += ww;
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found) {
+                            auto it = saved_idx.find(vv);
+                            if (it == saved_idx.end()) {
                                 t_infos[t_id].edges_v.push_back(vv);
                                 t_infos[t_id].edges_w.push_back(ww);
+                                saved_idx[vv] = t_infos[t_id].curr_m;
                                 t_infos[t_id].curr_m += 1;
+                            } else {
+                                t_infos[t_id].edges_w[it->second] += ww;
                             }
                         }
                     }
