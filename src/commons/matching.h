@@ -39,7 +39,6 @@ namespace HeiProMap {
     private:
         vertex_t m_n = 0;
 
-        // AlignedArray<EdgeUV> matches;           // O(n)
         std::atomic<size_t> matches_size = 0;
 
         AlignedArray<vertex_t> partner;         // O(n)
@@ -53,7 +52,6 @@ namespace HeiProMap {
             vertex_t n_64 = round_up_64(n);
             m_n = n;
 
-            // matches.initialize((n_64 / 2));
             matches_size = 0;
 
             partner.initialize(m_n);
@@ -83,18 +81,11 @@ namespace HeiProMap {
         ~Matching() = default;
 
         void add(vertex_t u, vertex_t v) {
-            // ASSERT(matches_size < (m_n / 2));
             ASSERT(u != v);
             matches_size.fetch_add(1);
-            // matches[matches_size.fetch_add(1)] = {u, v};
             partner[u] = v;
             partner[v] = u;
         }
-
-        // EdgeUV operator[](size_t i) const {
-        // ASSERT(i < matches_size);
-        // return matches[i];
-        // }
 
         size_t size() const { return matches_size; }
 
@@ -104,7 +95,9 @@ namespace HeiProMap {
             matches_size = 0;
         }
 
-        vertex_t get_partner(vertex_t u) const { return partner[u]; }
+        vertex_t get_partner(const vertex_t u) const { return partner[u]; }
+
+        bool is_matched(const vertex_t u) const { return partner[u] != u; }
 
         void set_translation() {
             vertex_t new_u = 0;

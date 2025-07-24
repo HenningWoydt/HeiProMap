@@ -303,6 +303,9 @@ namespace HeiProMap {
                 path_id[v2] = id1;
             }
 
+            auto ep = std::chrono::high_resolution_clock::now();
+            std::cout << "time " << get_seconds(sp, ep) << std::endl;
+
             // process all paths
 #pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
             forall_gu(g, u)
@@ -743,23 +746,17 @@ namespace HeiProMap {
 
         void random_matching(const size_t level,
                              const deep_graph_t &g,
-                             Matching &matching) {
-            std::vector<u8> is_matched(g.get_n(), 0);
-
+                             Matching &matching) const {
             forall_gu(g, u)
                 {
-                    if (is_matched[u]) { continue; }
+                    if (matching.is_matched(u)) { continue; }
                     weight_t u_w = g.weight(u);
 
-                    forall_guiv(g, u, j, v)
-                        {
-                            if (is_matched[v]) { continue; }
+                    forall_guiv(g, u, j, v) {
+                            if (matching.is_matched(v)) { continue; }
                             weight_t v_w = g.weight(v);
 
                             if (u_w + v_w > m_l_max) { continue; }
-
-                            is_matched[u] = 1;
-                            is_matched[v] = 1;
 
                             matching.add(u, v);
                             break;
