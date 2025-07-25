@@ -44,6 +44,8 @@
 #include "../../serial/coarsening/greedy_edge_matcher.h"
 #include "../../serial/coarsening/heavy_edge_matcher.h"
 #include "../coarsening/parallel_global_path_algorithm.h"
+#include "../coarsening/suitor_algorithm.h"
+#include "../coarsening/heavy_edge_matching.h"
 #include "../../serial/coarsening/random_edge_matcher.h"
 #include "../../serial/partitioning/global_multisection.h"
 #include "../partition/greedy_kway_partitioner.h"
@@ -96,6 +98,8 @@ namespace HeiProMap {
         std::vector<Matching> matches;
         // GlobalPathAlgorithmMatcher gpa_matcher;
         ParallelGlobalPathAlgorithmMatcher parallel_gpa_matcher;
+        SuitorMatcher suitor_matcher;
+        ParallelHeavyEdgeMatching heavy_edge_matcher;
 
         // refinement
         std::vector<std::pair<ISerialDeepRefiner*, ISerialDeepRefinerConfiguration*>> refinements;
@@ -152,6 +156,8 @@ namespace HeiProMap {
 
             // matching
             parallel_gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.global_path_algorithm_config);
+            suitor_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, SuitorMatcherConfiguration());
+            heavy_edge_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax_vec.back(), ac.threads, random_engine, ac.parallel_heavy_edge_matching_configuration);
 
             refinements.emplace_back(&deep_quotient_graph_refinement, &ac.deep_quotient_graph_refinement_config);
             refinements.emplace_back(&deep_flow_based_refinement, &ac.deep_flow_based_refinement_config);
@@ -222,7 +228,7 @@ namespace HeiProMap {
 
                 coarsening(level);
                 auto ep = std::chrono::high_resolution_clock::now();
-                std::cout << level << " " << graphs.back().get_n() << " " << get_seconds(sp, ep) << " " << get_memory_usage_gb() << std::endl;
+                std::cout << level << " " << graphs.back().get_n() << " " << matches.back().size() << " " << get_seconds(sp, ep) << " " << get_memory_usage_gb() << std::endl;
 
                 level += 1;
             }
@@ -313,7 +319,10 @@ namespace HeiProMap {
             matches.emplace_back();
             matches.back().initialize(graphs.back().get_n());
 
-            parallel_gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+            // parallel_gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+            std::cout << "matching level: " << level << std::endl;
+            // suitor_matcher.match(level, graphs.back(), p_manager, matches.back());
+            heavy_edge_matcher.match(level, graphs.back(), p_manager, matches.back());
 
             const auto ep_match = std::chrono::high_resolution_clock::now();
             small_stat_collect.add("matching", get_seconds(sp_match, ep_match));

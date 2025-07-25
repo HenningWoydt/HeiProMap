@@ -54,6 +54,7 @@ namespace HeiProMap {
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
 
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
+        ParallelHeavyEdgeMatchingConfiguration parallel_heavy_edge_matching_configuration;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;
