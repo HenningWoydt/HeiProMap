@@ -254,7 +254,6 @@ namespace HeiProMap {
 
         GlobalMultisectionConfiguration    global_multisection_config;
         KaffpaPartitionerConfiguration     kaffpa_partitioner_config;
-        GreedyKWayPartitionerConfiguration greedy_kway_partitioner_config;
         KaffpaKWayPartitionerConfiguration kaffpa_kway_partitioner_config;
 
         // rebalance algorithm

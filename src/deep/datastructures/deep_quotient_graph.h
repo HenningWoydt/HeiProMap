@@ -80,16 +80,12 @@ namespace HeiProMap {
             return edges[id];
         }
 
-        std::vector<partition_t> lowest_level_neighborhood(const partition_t id) {
-            std::vector<partition_t> neighborhood;
+        partition_t lowest_level_neighborhood_start(const partition_t id) const {
+            return (id / m_hierarchy[0]) * m_hierarchy[0];
+        }
 
-            partition_t temp = (id / m_hierarchy[0]) * m_hierarchy[0];
-            for (partition_t i = 0; i < m_hierarchy[0]; i++) {
-                if (temp + i == id) { continue; }
-                neighborhood.push_back(temp + i);
-            }
-
-            return neighborhood;
+        partition_t lowest_level_neighborhood_end(const partition_t id) const {
+            return (1 + (id / m_hierarchy[0])) * m_hierarchy[0];
         }
 
         weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
@@ -122,8 +118,7 @@ namespace HeiProMap {
             ASSERT(new_id < m_k);
             ASSERT(new_id != old_id);
 
-            forall_guivw(g, u, i, v, w)
-                {
+            forall_guivw(g, u, i, v, w) {
                     partition_t v_id = p_manager[v];
 
                     // remove old edge, if existed
@@ -134,6 +129,26 @@ namespace HeiProMap {
                     if (new_id != v_id) {
                         add_edge(new_id, v_id, w);
                     }
+                }
+            endfor
+        }
+
+        void compute_from_scratch(const deep_graph_t &g,
+                                  const deep_p_manager_t &p_manager) {
+            for (auto &edge: edges) {
+                edge.clear();
+            }
+
+            forall_gu(g, u)
+                {
+                    partition_t u_id = p_manager[u];
+                    forall_guivw(g, u, i, v, w) {
+                            partition_t v_id = p_manager[v];
+                            if (u_id != v_id) {
+                                add(u_id, v_id, w);
+                            }
+                        }
+                    endfor
                 }
             endfor
         }

@@ -37,6 +37,7 @@
 #include "../../serial/serial_definitions_3.h"
 #include "../../commons/random_engine.h"
 #include "../../commons/statistic_collector.h"
+#include "../../src/commons/small_translation_table.h"
 
 namespace HeiProMap {
     enum KaffpaKWayPartitionerMode {
@@ -91,15 +92,12 @@ namespace HeiProMap {
             size_t n_vertices = 0;
             size_t n_edges = 0;
 
-            TranslationTable<vertex_t> tt;
+            SmallTranslationTable<vertex_t> tt;
         };
 
         std::vector<KaffpaVars> m_kaffpa_vars;
 
-        std::atomic<bool> blocks_up_to_date = false;
         std::vector<std::vector<vertex_t> > blocks;
-
-        std::mutex m_mutex;
 
         RandomEngine *random_engine = nullptr;
         const KaffpaKWayPartitionerConfiguration *config = nullptr;
@@ -141,67 +139,56 @@ namespace HeiProMap {
          */
         void partition(const deep_graph_t &g,
                        deep_p_manager_t &p_manager,
-                       deep_bv_manager_t &bv_manager,
-                       deep_q_graph_t &q_graph,
                        u64 thread_id,
                        partition_t id,
                        partition_t id_increment,
                        partition_t k,
                        weight_t lmax,
                        partition_t hierarchy_level) {
-            KaffpaVars &var = m_kaffpa_vars[thread_id];
 
-            var.tt.reserve(g.get_n(), g.get_n());
-
-            vertex_t subgraph_n_vertices = 0;
-            vertex_t subgraph_n_edges = 0;
-            weight_t subgraph_weight = 0;
-            // step 1: extract the number of vertices and edges, build tt
-            forall_gu(g, u)
-                {
-                    if (p_manager[u] == id) {
-                        var.tt.add(u, subgraph_n_vertices);
-                        subgraph_n_vertices += 1;
-                        subgraph_weight += g.weight(u);
-                        forall_guiv(g, u, i, v) {
-                                if (p_manager[v] == id) { subgraph_n_edges += 1; }
-                            }
-                        endfor
-                    }
-                }
-            endfor
-
-            if (subgraph_n_vertices == 0) {
+            if (blocks[id].empty()) {
                 for (partition_t i = 0; i < k; ++i) {
                     partition_t move_id = id + id_increment * i;
                     p_manager.set_lmax(move_id, lmax);
                     p_manager.set_hierarchy_level(move_id, hierarchy_level - 1);
                 }
-                return;
             }
 
+            KaffpaVars &var = m_kaffpa_vars[thread_id];
+
+            var.tt.clear();
+
+            vertex_t subgraph_n_vertices = 0;
+            vertex_t subgraph_n_edges = 0;
+            weight_t subgraph_weight = 0;
+            // step 1: extract the number of vertices and edges, build tt
+            for (vertex_t u: blocks[id]) {
+                var.tt.add(u, subgraph_n_vertices);
+                subgraph_n_vertices += 1;
+                subgraph_weight += g.weight(u);
+                forall_guiv(g, u, i, v) {
+                        if (p_manager[v] == id) { subgraph_n_edges += 1; }
+                    }
+                endfor
+            }
 
             allocate(subgraph_n_vertices, subgraph_n_edges, thread_id);
             var.xadj[0] = 0;
             // step 2: build graph in kaffpa variables
-            forall_gu(g, u)
-                {
-                    if (p_manager[u] == id) {
-                        vertex_t new_u = var.tt.get_n(u);
-                        var.vwgt[new_u] = g.weight(u);
-                        var.xadj[new_u + 1] = var.xadj[new_u];
-                        forall_guivw(g, u, i, v, w) {
-                                if (p_manager[v] == id) {
-                                    vertex_t new_v = var.tt.get_n(v);
-                                    var.adjncy[var.xadj[new_u + 1]] = (int) new_v;
-                                    var.adjcwgt[var.xadj[new_u + 1]] = w;
-                                    var.xadj[new_u + 1] += 1;
-                                }
-                            }
-                        endfor
+            for (vertex_t u: blocks[id]) {
+                vertex_t new_u = var.tt.get_n(u);
+                var.vwgt[new_u] = (int) g.weight(u);
+                var.xadj[new_u + 1] = var.xadj[new_u];
+                forall_guivw(g, u, i, v, w) {
+                        if (p_manager[v] == id) {
+                            vertex_t new_v = var.tt.get_n(v);
+                            var.adjncy[var.xadj[new_u + 1]] = (int) new_v;
+                            var.adjcwgt[var.xadj[new_u + 1]] = (int) w;
+                            var.xadj[new_u + 1] += 1;
+                        }
                     }
-                }
-            endfor
+                endfor
+            }
 
             // step 3: calculate allowed imbalance
             f64 imbalance = ((f64) (lmax * k) / (f64) subgraph_weight) - 1.0;
@@ -218,7 +205,7 @@ namespace HeiProMap {
 
             kaffpa(&n, var.vwgt, var.xadj, var.adjcwgt, var.adjncy, &n_parts, &imbalance, true, 0, FAST, &edge_cut, var.part);
 
-            m_mutex.lock();
+            // m_mutex.lock();
             // step 5: extract partition into p_manager
             for (vertex_t kaffpa_vertex = 0; kaffpa_vertex < subgraph_n_vertices; ++kaffpa_vertex) {
                 if (var.part[kaffpa_vertex] == 0) { continue; }
@@ -228,19 +215,17 @@ namespace HeiProMap {
                 vertex_t vertex = var.tt.get_o(kaffpa_vertex);
                 weight_t vertex_weight = g.weight(vertex);
 
-                bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
-                q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                // bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                // q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
-            m_mutex.unlock();
+            // m_mutex.unlock();
 
             for (partition_t i = 0; i < k; ++i) {
                 partition_t move_id = id + id_increment * i;
                 p_manager.set_lmax(move_id, lmax);
                 p_manager.set_hierarchy_level(move_id, hierarchy_level - 1);
             }
-
-            blocks_up_to_date = false;
         }
 
         void allocate(size_t new_n_vertices,
@@ -273,11 +258,10 @@ namespace HeiProMap {
 
         void determine_all_blocks(const deep_graph_t &g,
                                   deep_p_manager_t &p_manager) {
-            for (partition_t id = 0; id < std::min((partition_t) blocks.size(), m_k); ++id) {
+            blocks.resize(m_k);
+
+            for (partition_t id = 0; id < m_k; ++id) {
                 blocks[id].clear();
-            }
-            if (blocks.size() < m_k) {
-                blocks.resize(m_k);
             }
 
             forall_gu(g, u)

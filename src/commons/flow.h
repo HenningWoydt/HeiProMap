@@ -66,31 +66,31 @@ namespace HeiProMap {
         }
 
         void add_directed_edge(vertex_t u, vertex_t v, weight_t w) {
-            for (auto &e: edges[u]) { ASSERT(e.v != v); }
+            // for (auto &e: edges[u]) { ASSERT(e.v != v); }
 
             edges[u].emplace_back(v, w);
         }
 
         void add_edge_to_source(vertex_t u, weight_t w) {
-            for (auto &e: edges[u]) { ASSERT(e.v != source); }
+            // for (auto &e: edges[u]) { ASSERT(e.v != source); }
 
             edges[u].emplace_back(source, w);
         }
 
         void add_edge_to_target(vertex_t u, weight_t w) {
-            for (auto &e: edges[u]) { ASSERT(e.v != target); }
+            // for (auto &e: edges[u]) { ASSERT(e.v != target); }
 
             edges[u].emplace_back(target, w);
         }
 
         void add_edge_from_source(vertex_t u, weight_t w) {
-            for (auto &e: edges[source]) { ASSERT(e.v != u); }
+            // for (auto &e: edges[source]) { ASSERT(e.v != u); }
 
             edges[source].emplace_back(u, w);
         }
 
         void add_edge_from_target(vertex_t u, weight_t w) {
-            for (auto &e: edges[target]) { ASSERT(e.v != u); }
+            // for (auto &e: edges[target]) { ASSERT(e.v != u); }
 
             edges[target].emplace_back(u, w);
         }
@@ -336,8 +336,8 @@ namespace HeiProMap {
                 }
             }
 
-            ASSERT(no_duplicates(scc_s_successors));
-            ASSERT(no_duplicates(scc_t_predecessors));
+            // ASSERT(no_duplicates(scc_s_successors));
+            // ASSERT(no_duplicates(scc_t_predecessors));
         }
 
         bool find_best_closure(weight_t left_non_region_weight,

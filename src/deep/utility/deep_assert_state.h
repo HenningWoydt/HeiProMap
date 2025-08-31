@@ -202,10 +202,6 @@ namespace HeiProMap {
             partition_t id1 = pair.first;
             partition_t id2 = pair.second;
 
-            if(w != q_graph.get_weight(id1, id2)){
-                std::cout << id1 << " " << id2 << " " << w << " " << q_graph.get_weight(id1, id2) << std::endl;
-            }
-
             ASSERT(w == q_graph.get_weight(id1, id2));
         }
         return true;

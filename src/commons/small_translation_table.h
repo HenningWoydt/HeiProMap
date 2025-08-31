@@ -75,6 +75,11 @@ namespace HeiProMap {
             std::swap(m_translation_o_to_n, rhs.m_translation_o_to_n);
             std::swap(m_translation_n_to_o, rhs.m_translation_n_to_o);
         }
+
+        void clear() {
+            m_translation_o_to_n.clear();
+            m_translation_n_to_o.clear();
+        }
     };
 }
 

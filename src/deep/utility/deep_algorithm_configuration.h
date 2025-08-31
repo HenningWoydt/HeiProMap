@@ -157,7 +157,29 @@ namespace HeiProMap {
         }
 
         void set_eco() {
+            // set GPA matching algorithm
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
+            // configurate global-paths algorithm
+            global_path_algorithm_config.random_level = 0;
+
+            // refinement
+            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.max_iteration = 3;
+            deep_quotient_graph_refinement_config.alpha = 1000.0;
+            deep_quotient_graph_refinement_config.beta_factor = 1.0;
+            deep_quotient_graph_refinement_config.alpha_edge_cut = 5.0;
+            deep_quotient_graph_refinement_config.beta_factor_edge_cut = 1.0;
+
+            deep_flow_based_refinement_config.enabled = false;
+            deep_flow_based_refinement_config.max_global_iteration = 2;
+            deep_flow_based_refinement_config.max_local_iteration = 5;
+            deep_flow_based_refinement_config.alpha = 2.0;
+            deep_flow_based_refinement_config.alpha_upper_bound = 16.0;
+            deep_flow_based_refinement_config.alpha_modifier = 2.0;
+            deep_flow_based_refinement_config.use_closed_vertex_set = true;
+            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
         }
 
         void set_strong() {
