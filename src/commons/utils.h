@@ -398,6 +398,27 @@ namespace HeiProMap {
         return (double) get_memory_usage_kb() / 1024.0 / 1024.0;
     }
 
+    inline constexpr u64 bitsNeeded64(u64 x) {
+        if (x == 0) return 1;
+        return 64u - static_cast<unsigned>(__builtin_clzll(x));
+    }
+
+    // Generic for any unsigned type
+    template <typename T>
+    std::string toBinary(T value) {
+        static_assert(std::is_unsigned<T>::value, "Use unsigned types for bit printing");
+
+        constexpr size_t bits = std::numeric_limits<T>::digits; // number of value bits
+        std::string out;
+        out.reserve(bits);
+
+        for (size_t i = 0; i < bits; ++i) {
+            // Check bit from MSB (bits-1) down to LSB (0)
+            size_t shift = bits - 1 - i;
+            out.push_back((value & (T{1} << shift)) ? '1' : '0');
+        }
+        return out;
+    }
 }
 
 #endif //HEIPROMAP_UTILS_H

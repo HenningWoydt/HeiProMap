@@ -53,7 +53,7 @@ namespace HeiProMap {
             divisor.resize(m_l);
             partition_t p = 1;
             for (size_t i = 0; i < m_l; ++i) {
-                p += m_hierarchy[m_l - 1 - i];
+                p *= m_hierarchy[m_l - 1 - i];
                 divisor[m_l - 1 - i] = m_k / p;
             }
         }

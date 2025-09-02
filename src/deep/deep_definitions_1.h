@@ -30,12 +30,14 @@
 #include "../deep/datastructures/deep_csr_graph.h"
 #include "../deep/datastructures/deep_distance_oracle.h"
 #include "../deep/datastructures/deep_distance_oracle_division_based.h"
+#include "../deep/datastructures/deep_distance_oracle_binary.h"
 
 namespace HeiProMap {
     typedef DeepCSRGraph deep_graph_t;
 
     // typedef DeepDistanceOracle deep_d_oracle_t;
-    typedef DeepDistanceOracleDivisionBased deep_d_oracle_t;
+    // typedef DeepDistanceOracleDivisionBased deep_d_oracle_t;
+    typedef DeepDistanceOracleBinaryBased deep_d_oracle_t;
 
     // Macro to iterate over the neighborhood of vertex u of a graph
 #define forall_guivw(g, u, i, v, w) for (size_t i = 0; i < g.size(u); ++i) { const vertex_t v = g.neighbor(u, i); const weight_t w = g.weight(u, i);
