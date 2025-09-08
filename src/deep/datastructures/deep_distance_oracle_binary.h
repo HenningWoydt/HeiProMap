@@ -39,6 +39,8 @@ namespace HeiProMap {
         size_t m_l = 0;
         partition_t m_k = 0;
 
+        std::vector<partition_t> m_system_sizes; // O(l)
+
         std::vector<u64> identifier; // O(k)
         std::vector<weight_t> dist_lookup; // O(64)
         std::vector<partition_t> hierarchy_lookup; // O(64)
@@ -51,6 +53,13 @@ namespace HeiProMap {
             m_distance = t_distance;
             m_l = m_hierarchy.size();
             m_k = prod<partition_t>(m_hierarchy);
+
+            m_system_sizes.resize(m_l);
+            partition_t product = 1;
+            for (size_t i = 0; i < m_hierarchy.size(); ++i) {
+                product *= m_hierarchy[i];
+                m_system_sizes[i] = product;
+            }
 
             std::vector<u64> bit_sizes;
             bit_sizes.reserve(m_hierarchy.size());
@@ -68,11 +77,6 @@ namespace HeiProMap {
                 std::exit(EXIT_FAILURE);
             }
 
-            // --- MSB-first packing plan ---
-            // We place the packed region in the top total_bits of the 64-bit word.
-            // This makes clz(xor) equal to "number of equal leading bits" before first difference.
-            const u64 msb_start = 64 - total_bits;
-
             identifier.resize(m_k);
             std::vector<partition_t> loc;
             loc.resize(m_hierarchy.size());
@@ -86,12 +90,7 @@ namespace HeiProMap {
                     ident |= loc[m_hierarchy.size() - 1 - i];
                 }
 
-                // print(m_hierarchy);
-                // print(bit_sizes);
-                // print(loc);
-                // std::cout << id << std::endl;
-                // std::cout << toBinary(ident) << std::endl;
-                identifier[id] = ident; // high bits [0..msb_start-1] are zero
+                identifier[id] = ident;
             }
 
             dist_lookup.assign(64, m_distance.back());
@@ -114,12 +113,6 @@ namespace HeiProMap {
             const u64 x = identifier[u_id] ^ identifier[v_id];
             const int lz = __builtin_clzll(x); // 0..64, x!=0 here
 
-            // std::cout << u_id << " " << v_id << std::endl;
-            // std::cout << toBinary(identifier[u_id]) << std::endl;
-            // std::cout << toBinary(identifier[v_id]) << std::endl;
-            // std::cout << toBinary(x) << std::endl;
-            // std::cout << lz << " " << dist_lookup[lz] << std::endl;
-
             return dist_lookup[lz];
         }
 
@@ -136,6 +129,12 @@ namespace HeiProMap {
         bool last_level_pair(const partition_t u_id,
                              const partition_t v_id) const {
             return (u_id / m_hierarchy[0]) == (v_id / m_hierarchy[0]);
+        }
+
+        bool are_neighbors(const partition_t u_id,
+                           const partition_t v_id,
+                           const partition_t level) const {
+            return (u_id / m_system_sizes[level]) == (v_id / m_system_sizes[level]);
         }
 
     private:

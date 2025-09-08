@@ -196,6 +196,9 @@ namespace HeiProMap {
 
                 FlowNetwork flow_network;
 
+                partition_t u_level = p_manager.get_hierarchy_level(left_id);
+                partition_t v_level = p_manager.get_hierarchy_level(right_id);
+                // u_level == v_level && d_oracle.are_neighbors(left_id, right_id, u_level)
                 if (d_oracle.last_level_pair(left_id, right_id)) {
                     // build flownetwork
                     build_flow_network_lowest_level(g, d_oracle, p_manager, left_id, left_region, right_id, right_region, small_translation_table, flow_network, thread_id);

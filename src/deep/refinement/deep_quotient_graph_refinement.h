@@ -588,6 +588,9 @@ namespace HeiProMap {
                 while (q_graph.find_distance_3_matching(active_this_round, used_this_round, matching)) {
 #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (auto [u_id, v_id]: matching) {
+                        partition_t u_level = p_manager.get_hierarchy_level(u_id);
+                        partition_t v_level = p_manager.get_hierarchy_level(v_id);
+                        // u_level == v_level && d_oracle.are_neighbors(u_id, v_id, u_level)
                         u64 thread_id = omp_get_thread_num();
                         refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, thread_id, active_next_round);
                         if (d_oracle.last_level_pair(u_id, v_id)) {
