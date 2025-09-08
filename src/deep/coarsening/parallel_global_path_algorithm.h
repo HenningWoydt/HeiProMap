@@ -41,7 +41,6 @@
 #include "../../serial/serial_definitions_3.h"
 
 namespace HeiProMap {
-
 #define IS_ENDPOINT(n, u) n.n2 == u
 #define IS_NOT_ENDPOINT(n, u) n.n2 != u
 #define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
@@ -89,6 +88,7 @@ namespace HeiProMap {
 
         struct thread_info {
             std::vector<EdgeUVW> edges;
+            size_t idx = 0;
 
             // for DP
             AlignedArray<f32> dp_w;
@@ -166,10 +166,10 @@ namespace HeiProMap {
             std::vector<thread_info>().swap(thread_infos);
         }
 
-        void internal_match(const size_t level,
-                            const deep_graph_t &g,
-                            const deep_p_manager_t &p_manager,
-                            Matching &matching) {
+        void internal_match_old(const size_t level,
+                                const deep_graph_t &g,
+                                const deep_p_manager_t &p_manager,
+                                Matching &matching) {
             if (level < config->random_level) {
                 // use a random matching
                 random_matching(level, g, matching);
@@ -331,6 +331,99 @@ namespace HeiProMap {
             }
         }
 
+        void internal_match(const size_t level,
+                            const deep_graph_t &g,
+                            const deep_p_manager_t &p_manager,
+                            Matching &matching) {
+            if (level < config->random_level) {
+                // use a random matching
+                random_matching(level, g, matching);
+                return;
+            }
+
+            compute_ratings(g, p_manager);
+            sort_ratings();
+
+#pragma omp parallel for num_threads(m_threads)
+            for (vertex_t u = 0; u < g.get_n(); ++u) {
+                m_neighbors[u].n1 = u;
+                m_neighbors[u].n2 = u;
+            }
+
+            cycles.clear();
+
+            bool done = false;
+#pragma omp parallel num_threads(m_threads) shared(done)
+            {
+                u64 thread_id = omp_get_thread_num();
+                while (true) {
+                    // one thread adds the edge
+#pragma omp single
+                    {
+                        vertex_t u;
+                        vertex_t v;
+                        f32 w = -std::numeric_limits<f32>::max();
+                        for (u64 i = 0; i < m_threads; ++i) {
+                            size_t idx = thread_infos[i].idx;
+                            if (idx >= thread_infos[i].edges.size()) { continue; }
+                            if (thread_infos[i].edges[idx].w > w) {
+                                u = thread_infos[i].edges[idx].u;
+                                v = thread_infos[i].edges[idx].v;
+                                w = thread_infos[i].edges[idx].w;
+                            }
+                        }
+
+                        done = true;
+                        if (w != -std::numeric_limits<f32>::max()) {
+                            done = false;
+
+                            add_edge(u, v, w);
+                        }
+                    }
+
+                    if (done) break;
+
+                    while (thread_infos[thread_id].idx < thread_infos[thread_id].edges.size()) {
+                        vertex_t u = thread_infos[thread_id].edges[thread_infos[thread_id].idx].u;
+                        vertex_t v = thread_infos[thread_id].edges[thread_infos[thread_id].idx].v;
+                        if (IS_NOT_ENDPOINT(m_neighbors[u], u) || IS_NOT_ENDPOINT(m_neighbors[v], v)) {
+                            thread_infos[thread_id].idx += 1;
+                        } else {
+                            break;
+                        }
+                    }
+#pragma omp barrier
+                }
+            }
+
+            // process all paths
+#pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
+            forall_gu(g, u)
+                {
+                    u64 thread_id = omp_get_thread_num();
+                    if (IS_ONE_ENDPOINT(m_neighbors[u], u)) {
+                        // check if the other endpoint has a grater index
+                        vertex_t v1 = u;
+                        vertex_t v2 = m_neighbors[u].n1;
+                        while (m_neighbors[v2].n2 != v2) {
+                            vertex_t temp_last_vertex = v1;
+                            v1 = v2;
+                            v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                        }
+                        if (u < v2) {
+                            solve_path(g, u, path_length[path_id[u]], matching, thread_id);
+                        }
+                    }
+                }
+            endfor
+
+#pragma omp parallel for num_threads(m_threads) schedule(static)
+            for (vertex_t u: cycles) {
+                u64 thread_id = omp_get_thread_num();
+                solve_cycle(g, u, path_length[path_id[u]], matching, thread_id);
+            }
+        }
+
         void compute_ratings(const deep_graph_t &g,
                              const deep_p_manager_t &p_manager) {
             for (size_t i = 0; i < m_threads; ++i) { thread_infos[i].edges.clear(); }
@@ -376,781 +469,88 @@ namespace HeiProMap {
             }
         }
 
-        f32 solve_path_length_1(const deep_graph_t &g,
-                                const vertex_t u,
-                                Matching &matching) {
-            vertex_t uu = u;
-            vertex_t vv = m_neighbors[u].n1;
-            f32 w = m_neighbors[u].w1;
-
-            matching.add(uu, vv);
-
-            return w;
-        }
-
-        f32 solve_path_length_2(const deep_graph_t &g,
-                                const vertex_t u,
-                                Matching &matching) {
-            vertex_t v1 = u;
-            vertex_t v2 = m_neighbors[u].n1;
-            vertex_t v3;
-            f32 w1 = m_neighbors[u].w1;
-            f32 w2;
-
-            if (m_neighbors[v2].n1 == v1) {
-                v3 = m_neighbors[v2].n2;
-                w2 = m_neighbors[v2].w2;
-            } else {
-                v3 = m_neighbors[v2].n1;
-                w2 = m_neighbors[v2].w1;
-            }
-
-            vertex_t uu, vv;
-            f32 w;
-            if (w1 > w2) {
-                uu = v1;
-                vv = v2;
-                w = w1;
-            } else {
-                uu = v2;
-                vv = v3;
-                w = w2;
-            }
-
-            matching.add(uu, vv);
-            return w;
-        }
-
-        f32 solve_path(const deep_graph_t &g,
-                       const vertex_t u,
-                       const u32 length,
-                       Matching &matching,
-                       u64 thread_id) {
-            AlignedArray<f32> &dp_w = thread_infos[thread_id].dp_w;
-            AlignedArray<s64> &dp_m = thread_infos[thread_id].dp_m;
-            AlignedArray<u8> &dp_take = thread_infos[thread_id].dp_take;
-            AlignedArray<vertex_t> &dp_edges = thread_infos[thread_id].dp_edges;
-
-            // special case of length 1
-            if (length == 1) {
-                return solve_path_length_1(g, u, matching);
-            }
-
-            // special case of length 2
-            if (length == 2) {
-                return solve_path_length_2(g, u, matching);
-            }
-
-            vertex_t v1, v2, v3;
-            f32 w;
-
-            s64 i = 0;
-
-            // first edge of the path
-            v1 = u;
-            dp_edges[i] = v1;
-            if (m_neighbors[v1].n1 == v1) {
-                v2 = m_neighbors[u].n2;
-                w = m_neighbors[u].w2;
-            } else {
-                v2 = m_neighbors[u].n1;
-                w = m_neighbors[u].w1;
-            }
-            dp_edges[i + 1] = v2; // save edge
-
-            // init dp
-            dp_w[i] = w;
-            dp_m[i] = -1;
-            dp_take[i] = 1;
-            i += 1;
-
-            // second edge of the path
-            if (m_neighbors[v2].n1 == v1) {
-                v3 = m_neighbors[v2].n2;
-                w = m_neighbors[v2].w2;
-            } else {
-                v3 = m_neighbors[v2].n1;
-                w = m_neighbors[v2].w1;
-            }
-            dp_edges[i + 1] = v3; // save edge
-
-            // init dp
-            if (w > dp_w[i - 1]) {
-                dp_w[i] = w;
-                dp_m[i] = -1;
-                dp_take[i] = 1;
-            } else {
-                dp_w[i] = dp_w[i - 1];
-                dp_m[i] = 0;
-                dp_take[i] = 0;
-            }
-            i += 1;
-
-            // all other edges of the path
-            v1 = v2;
-            v2 = v3;
-            while (m_neighbors[v2].n1 != v2 && m_neighbors[v2].n2 != v2) {
-                if (m_neighbors[v2].n1 == v1) {
-                    v3 = m_neighbors[v2].n2;
-                    w = m_neighbors[v2].w2;
-                } else {
-                    v3 = m_neighbors[v2].n1;
-                    w = m_neighbors[v2].w1;
-                }
-                dp_edges[i + 1] = v3; // save edge
-
-                // dp
-                if (w + dp_w[i - 2] > dp_w[i - 1]) {
-                    dp_w[i] = w + dp_w[i - 2];
-                    dp_m[i] = i - 2;
-                    dp_take[i] = 1;
-                } else {
-                    dp_w[i] = dp_w[i - 1];
-                    dp_m[i] = i - 1;
-                    dp_take[i] = 0;
-                }
-
-                v1 = v2;
-                v2 = v3;
-                i += 1;
-            }
-
-            s64 idx = i - 1;
-            while (idx != -1) {
-                if (dp_take[idx]) {
-                    vertex_t uu = dp_edges[idx];
-                    vertex_t vv = dp_edges[idx + 1];
-
-                    matching.add(uu, vv);
-                }
-                idx = dp_m[idx];
-            }
-            return dp_w[i - 1];
-        }
-
-        f32 solve_path_length_1(const deep_graph_t &g,
-                                const vertex_t u,
-                                std::vector<std::pair<vertex_t, vertex_t> > &matching) {
-            vertex_t uu = u;
-            vertex_t vv = m_neighbors[u].n1;
-            f32 w = m_neighbors[u].w1;
-
-            matching.emplace_back(uu, vv);
-
-            return w;
-        }
-
-        f32 solve_path_length_2(const deep_graph_t &g,
-                                const vertex_t u,
-                                std::vector<std::pair<vertex_t, vertex_t> > &matching) {
-            vertex_t v1 = u;
-            vertex_t v2 = m_neighbors[u].n1;
-            vertex_t v3;
-            f32 w1 = m_neighbors[u].w1;
-            f32 w2;
-
-            if (m_neighbors[v2].n1 == v1) {
-                v3 = m_neighbors[v2].n2;
-                w2 = m_neighbors[v2].w2;
-            } else {
-                v3 = m_neighbors[v2].n1;
-                w2 = m_neighbors[v2].w1;
-            }
-
-            vertex_t uu, vv;
-            f32 w;
-            if (w1 > w2) {
-                uu = v1;
-                vv = v2;
-                w = w1;
-            } else {
-                uu = v2;
-                vv = v3;
-                w = w2;
-            }
-
-            matching.emplace_back(uu, vv);
-            return w;
-        }
-
-        f32 solve_path(const deep_graph_t &g,
-                       const vertex_t u,
-                       const u32 length,
-                       std::vector<std::pair<vertex_t, vertex_t> > &matching,
-                       u64 thread_id) {
-            AlignedArray<f32> &dp_w = thread_infos[thread_id].dp_w;
-            AlignedArray<s64> &dp_m = thread_infos[thread_id].dp_m;
-            AlignedArray<u8> &dp_take = thread_infos[thread_id].dp_take;
-            AlignedArray<vertex_t> &dp_edges = thread_infos[thread_id].dp_edges;
-
-            // special case of length 1
-            if (length == 1) {
-                return solve_path_length_1(g, u, matching);
-            }
-
-            // special case of length 2
-            if (length == 2) {
-                return solve_path_length_2(g, u, matching);
-            }
-
-            vertex_t v1, v2, v3;
-            f32 w;
-
-            s64 i = 0;
-
-            // first edge of the path
-            v1 = u;
-            dp_edges[i] = v1;
-            if (m_neighbors[v1].n1 == v1) {
-                v2 = m_neighbors[u].n2;
-                w = m_neighbors[u].w2;
-            } else {
-                v2 = m_neighbors[u].n1;
-                w = m_neighbors[u].w1;
-            }
-            dp_edges[i + 1] = v2; // save edge
-
-            // init dp
-            dp_w[i] = w;
-            dp_m[i] = -1;
-            dp_take[i] = 1;
-            i += 1;
-
-            // second edge of the path
-            if (m_neighbors[v2].n1 == v1) {
-                v3 = m_neighbors[v2].n2;
-                w = m_neighbors[v2].w2;
-            } else {
-                v3 = m_neighbors[v2].n1;
-                w = m_neighbors[v2].w1;
-            }
-            dp_edges[i + 1] = v3; // save edge
-
-            // init dp
-            if (w > dp_w[i - 1]) {
-                dp_w[i] = w;
-                dp_m[i] = -1;
-                dp_take[i] = 1;
-            } else {
-                dp_w[i] = dp_w[i - 1];
-                dp_m[i] = 0;
-                dp_take[i] = 0;
-            }
-            i += 1;
-
-            // all other edges of the path
-            v1 = v2;
-            v2 = v3;
-            while (m_neighbors[v2].n1 != v2 && m_neighbors[v2].n2 != v2) {
-                if (m_neighbors[v2].n1 == v1) {
-                    v3 = m_neighbors[v2].n2;
-                    w = m_neighbors[v2].w2;
-                } else {
-                    v3 = m_neighbors[v2].n1;
-                    w = m_neighbors[v2].w1;
-                }
-                dp_edges[i + 1] = v3; // save edge
-
-                // dp
-                if (w + dp_w[i - 2] > dp_w[i - 1]) {
-                    dp_w[i] = w + dp_w[i - 2];
-                    dp_m[i] = i - 2;
-                    dp_take[i] = 1;
-                } else {
-                    dp_w[i] = dp_w[i - 1];
-                    dp_m[i] = i - 1;
-                    dp_take[i] = 0;
-                }
-
-                v1 = v2;
-                v2 = v3;
-                i += 1;
-            }
-
-            s64 idx = i - 1;
-            while (idx != -1) {
-                if (dp_take[idx]) {
-                    vertex_t uu = dp_edges[idx];
-                    vertex_t vv = dp_edges[idx + 1];
-
-                    matching.emplace_back(uu, vv);
-                }
-                idx = dp_m[idx];
-            }
-            return dp_w[i - 1];
-        }
-
-        void solve_cycle(const deep_graph_t &g,
-                         const vertex_t u,
-                         const u32 length,
-                         Matching &matching,
-                         u64 thread_id) {
-            std::vector<std::pair<vertex_t, vertex_t> > &dp_cycle_matches1 = thread_infos[thread_id].dp_cycle_matches1;
-            std::vector<std::pair<vertex_t, vertex_t> > &dp_cycle_matches2 = thread_infos[thread_id].dp_cycle_matches2;
-
-            vertex_t n1 = m_neighbors[u].n1;
-            vertex_t n2 = m_neighbors[u].n2;
-            Neighbors original_u = m_neighbors[u];
-            Neighbors original_n1 = m_neighbors[n1];
-            Neighbors original_n2 = m_neighbors[n2];
-
-            f32 matching_weight1 = 0.0;
-            f32 matching_weight2 = 0.0;
-            dp_cycle_matches1.clear();
-            dp_cycle_matches2.clear();
-
-            // cut connection between u and n1, n2 should point to self,
-            m_neighbors[u].n1 = original_u.n2;
-            m_neighbors[u].w1 = original_u.w2;
-            m_neighbors[u].n2 = u;
-
-            if (m_neighbors[n1].n1 == u) {
-                m_neighbors[n1].n1 = original_n1.n2;
-                m_neighbors[n1].w1 = original_n1.w2;
-                m_neighbors[n1].n2 = n1;
-            } else {
-                m_neighbors[n1].n2 = n1;
-            }
-            matching_weight1 = solve_path(g, u, length - 1, dp_cycle_matches1, thread_id);
-            m_neighbors[u] = original_u;
-            m_neighbors[n1] = original_n1;
-
-            // cut connection between u and n2
-            m_neighbors[u].n2 = u;
-
-            if (m_neighbors[n2].n1 == u) {
-                m_neighbors[n2].n1 = original_n2.n2;
-                m_neighbors[n2].w1 = original_n2.w2;
-                m_neighbors[n2].n2 = n2;
-            } else {
-                m_neighbors[n2].n2 = n2;
-            }
-            matching_weight2 = solve_path(g, u, length - 1, dp_cycle_matches2, thread_id);
-            m_neighbors[u] = original_u;
-            m_neighbors[n2] = original_n2;
-
-            if (matching_weight1 > matching_weight2) {
-                for (auto [uu, vv]: dp_cycle_matches1) {
-                    matching.add(uu, vv);
-                }
-            } else {
-                for (auto [uu, vv]: dp_cycle_matches2) {
-                    matching.add(uu, vv);
-                }
-            }
-        }
-
-        void random_matching(const size_t level,
-                             const deep_graph_t &g,
-                             Matching &matching) const {
-            forall_gu(g, u)
-                {
-                    if (matching.is_matched(u)) { continue; }
-                    weight_t u_w = g.weight(u);
-
-                    forall_guiv(g, u, j, v) {
-                            if (matching.is_matched(v)) { continue; }
-                            weight_t v_w = g.weight(v);
-
-                            if (u_w + v_w > m_l_max) { continue; }
-
-                            matching.add(u, v);
-                            break;
-                        }
-                    endfor
-                }
-            endfor
-        }
-    };
-
-    template<typename T>
-    class MaxQueueOfQueues {
-        std::vector<std::priority_queue<T> > pqs;
-
-    public:
-        MaxQueueOfQueues() = default;
-
-        explicit MaxQueueOfQueues(u64 t_size) {
-            pqs.resize(t_size);
-        }
-
-        std::priority_queue<T> &get(u64 index) {
-            return pqs[index];
-        }
-
-        T top() {
-            bool found = false;
-            size_t best_idx = 0;
-            T best_value;
-
-            for (size_t i = 0; i < pqs.size(); ++i) {
-                if (!pqs[i].empty()) {
-                    if (!found || pqs[i].top() > best_value) {
-                        best_value = pqs[i].top();
-                        found = true;
-                    }
-                }
-            }
-
-            // if (!found) { std::cout << "Nothing found" << std::endl; exit(1); }
-            // std::cout << "Best value is at idx " << best_idx  << " size " << pqs[best_idx].size() << std::endl;
-
-            return best_value;
-        }
-
-        void pop() {
-            size_t best_index = -1;
-            bool found = false;
-            T best_value;
-
-            for (size_t i = 0; i < pqs.size(); ++i) {
-                if (!pqs[i].empty()) {
-                    if (!found || pqs[i].top() > best_value) {
-                        best_value = pqs[i].top();
-                        best_index = i;
-                        found = true;
-                    }
-                }
-            }
-
-            pqs[best_index].pop();
-        }
-
-        void swap_pq(std::priority_queue<T> &pq_new, u64 index) {
-            std::swap(pqs[index], pq_new);
-        }
-
-        bool empty() {
-            for (const auto &q: pqs) {
-                if (!q.empty()) return false;
-            }
-            return true;
-        }
-    };
-
-    /*
-    class ParallelGlobalPathAlgorithmMatcher {
-        struct Neighbors {
-            vertex_t n1;
-            vertex_t n2;
-            f32 w1;
-            f32 w2;
-        };
-
-        struct HeapEntry {
-            size_t thread_idx;
-            size_t edge_idx;
-            EdgeUVW edge;
-
-            bool operator<(const HeapEntry &other) const {
-                // reverse order for max-heap behavior
-                return edge < other.edge; // assuming EdgeUVW supports operator<
-            }
-        };
-
-        vertex_t m_n = 0;
-        vertex_t m_m = 0;
-        partition_t m_k = 0;
-        weight_t m_l_max = 0;
-        u64 m_threads = 1;
-
-        const GlobalPathAlgorithmConfiguration *config = nullptr;
-        RandomEngine *random_engine = nullptr;
-
-        AlignedArray<Neighbors> m_neighbors;
-        AlignedArray<u32> path_id;
-        AlignedArray<u32> path_length;
-
-        std::vector<vertex_t> cycles;
-
-        MaxQueueOfQueues<EdgeUVW> pqs;
-
-        struct thread_info {
-            // std::vector<EdgeUVW> edges;
-
-            // for DP
-            AlignedArray<f32> dp_w;
-            AlignedArray<s64> dp_m;
-            AlignedArray<u8> dp_take;
-            AlignedArray<vertex_t> dp_edges;
-
-            std::vector<std::pair<vertex_t, vertex_t> > dp_cycle_matches1;
-            std::vector<std::pair<vertex_t, vertex_t> > dp_cycle_matches2;
-        };
-
-        std::vector<thread_info> thread_infos;
-
-    public:
-        void initialize(const vertex_t t_n,
-                        const vertex_t t_m,
-                        const partition_t t_k,
-                        const weight_t t_l_max,
-                        const u64 t_threads,
-                        RandomEngine &t_random_engine,
-                        const GlobalPathAlgorithmConfiguration &i_config) {
-            m_n = t_n;
-            m_m = t_m;
-            m_k = t_k;
-            m_l_max = t_l_max;
-            m_threads = t_threads;
-
-            config = dynamic_cast<const GlobalPathAlgorithmConfiguration *>(&i_config);
-            random_engine = &t_random_engine;
-        }
-
-        void match(const size_t level,
-                   const deep_graph_t &g,
-                   const deep_p_manager_t &p_manager,
-                   Matching &matching) {
-            allocate();
-            internal_match(level, g, p_manager, matching);
-            free();
-        }
-
-    private:
-        void allocate() {
-            m_neighbors.initialize(m_n);
-            path_id.initialize(m_n);
-            path_length.initialize(m_n);
-
-            thread_infos.resize(m_threads);
-            for (size_t i = 0; i < m_threads; ++i) {
-                thread_infos[i].dp_w.initialize(m_n);
-                thread_infos[i].dp_m.initialize(m_n);
-                thread_infos[i].dp_take.initialize(m_n);
-                thread_infos[i].dp_edges.initialize(m_n);
-            }
-        }
-
-        void free() {
-            m_neighbors.free_memory();
-            path_id.free_memory();
-            path_length.free_memory();
-
-            std::vector<vertex_t>().swap(cycles);
-
-            for (size_t i = 0; i < thread_infos.size(); ++i) {
-                // std::vector<EdgeUVW>().swap(thread_infos[i].edges);
-
-                thread_infos[i].dp_w.free_memory();
-                thread_infos[i].dp_m.free_memory();
-                thread_infos[i].dp_take.free_memory();
-                thread_infos[i].dp_edges.free_memory();
-
-                std::vector<std::pair<vertex_t, vertex_t> >().swap(thread_infos[i].dp_cycle_matches1);
-                std::vector<std::pair<vertex_t, vertex_t> >().swap(thread_infos[i].dp_cycle_matches2);
-            }
-
-            std::vector<thread_info>().swap(thread_infos);
-        }
-
-        void internal_match(const size_t level,
-                            const deep_graph_t &g,
-                            const deep_p_manager_t &p_manager,
-                            Matching &matching) {
-            if (level < config->random_level) {
-                // use a random matching
-                random_matching(level, g, matching);
+        void add_edge(vertex_t u, vertex_t v, weight_t w) {
+            bool u_unmatched = IS_UNMATCHED(m_neighbors[u], u);
+            bool v_unmatched = IS_UNMATCHED(m_neighbors[v], v);
+
+            if (u_unmatched && v_unmatched) {
+                // both are unmatched, only one new path of length 1
+                m_neighbors[u].n1 = v;
+                m_neighbors[u].w1 = w;
+                m_neighbors[v].n1 = u;
+                m_neighbors[v].w1 = w;
+                path_id[u] = u;
+                path_id[v] = u;
+                path_length[u] = 1;
                 return;
             }
 
-            pqs = MaxQueueOfQueues<EdgeUVW>(m_threads);
+            u32 u_id = path_id[u];
+            u32 v_id = path_id[v];
 
-            compute_ratings(g, p_manager);
-            sort_ratings();
-
-#pragma omp parallel for num_threads(m_threads)
-            for (vertex_t u = 0; u < g.get_n(); ++u) {
-                m_neighbors[u].n1 = u;
-                m_neighbors[u].n2 = u;
-            }
-
-            cycles.clear();
-
-            // Extraction loop
-            while (!pqs.empty()) {
-// #pragma omp parallel for num_threads(m_threads)
-                for (u64 t_id = 0; t_id < m_threads; ++t_id) {
-                    std::priority_queue<EdgeUVW> new_pq;
-                    std::priority_queue<EdgeUVW> &pq = pqs.get(t_id);
-                    while (!pq.empty()) {
-                        EdgeUVW temp_top = pq.top();
-                        vertex_t uu = temp_top.u;
-                        vertex_t vv = temp_top.v;
-                        pq.pop();
-
-                        if (!(IS_NOT_ENDPOINT(m_neighbors[uu], uu) || IS_NOT_ENDPOINT(m_neighbors[vv], vv))) {
-                            new_pq.push(temp_top);
-                        }
-                    }
-                    pqs.swap_pq(new_pq, t_id);
+            if (u_unmatched || v_unmatched) {
+                if (v_unmatched) {
+                    std::swap(u, v);
+                    std::swap(u_id, v_id);
                 }
-                if (pqs.empty()) { break; }
-
-                EdgeUVW top = pqs.top();
-                pqs.pop();
-                vertex_t u = top.u;
-                vertex_t v = top.v;
-                f32 w = top.w;
-
-                if (IS_NOT_ENDPOINT(m_neighbors[u], u) || IS_NOT_ENDPOINT(m_neighbors[v], v)) {
-                    continue;
-                }
-
-                bool u_unmatched = IS_UNMATCHED(m_neighbors[u], u);
-                bool v_unmatched = IS_UNMATCHED(m_neighbors[v], v);
-
-                if (u_unmatched && v_unmatched) {
-                    // both are unmatched, only one new path of length 1
-                    m_neighbors[u].n1 = v;
-                    m_neighbors[u].w1 = w;
-                    m_neighbors[v].n1 = u;
-                    m_neighbors[v].w1 = w;
-                    path_id[u] = u;
-                    path_id[v] = u;
-                    path_length[u] = 1;
-                    continue;
-                }
-
-                u32 u_id = path_id[u];
-                u32 v_id = path_id[v];
-
-                if (u_unmatched || v_unmatched) {
-                    if (v_unmatched) {
-                        std::swap(u, v);
-                        std::swap(u_id, v_id);
-                    }
-                    // only one unmatched, enlarge path
-                    m_neighbors[u].n1 = v;
-                    m_neighbors[u].w1 = w;
-                    m_neighbors[v].n2 = u;
-                    m_neighbors[v].w2 = w;
-                    path_id[u] = v_id;
-                    path_length[v_id] += 1;
-                    continue;
-                }
-
-                // cycle
-                if (u_id == v_id) {
-                    if (path_length[u_id] & 1) {
-                        // same path and odd length size, close the cycle
-                        path_length[u_id] += 1; // increase path length
-
-                        // for u set v as a neighbor
-                        m_neighbors[u].n2 = v;
-                        m_neighbors[u].w2 = w;
-
-                        // for v set u as a neighbor
-                        m_neighbors[v].n2 = u;
-                        m_neighbors[v].w2 = w;
-
-                        // solve the cycle
-                        // solve_cycle(g, u, path_length[u_id], matching, 0);
-                        // path_length[u_id] = 0;
-                        cycles.push_back(u);
-                    }
-                    continue;
-                }
-
-                // two paths, both u and v connect larger paths
-
-                // for u set v as a neighbor
-                m_neighbors[u].n2 = v;
-                m_neighbors[u].w2 = w;
-
-                // for v set u as a neighbor
+                // only one unmatched, enlarge path
+                m_neighbors[u].n1 = v;
+                m_neighbors[u].w1 = w;
                 m_neighbors[v].n2 = u;
                 m_neighbors[v].w2 = w;
+                path_id[u] = v_id;
+                path_length[v_id] += 1;
+                return;
+            }
 
-                vertex_t v1 = v;
-                vertex_t v2 = u;
-                u32 id1 = v_id;
-                u32 id2 = u_id;
-                if (path_length[u_id] > path_length[v_id]) {
-                    std::swap(v1, v2);
-                    std::swap(id1, id2);
-                }
+            // cycle
+            if (u_id == v_id) {
+                if (path_length[u_id] & 1) {
+                    // same path and odd length size, close the cycle
+                    path_length[u_id] += 1; // increase path length
 
-                path_length[id1] += 1 + path_length[id2];
-                while (m_neighbors[v2].n2 != v2) {
-                    path_id[v2] = id1;
-                    vertex_t temp_last_vertex = v1;
-                    v1 = v2;
-                    v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                    // for u set v as a neighbor
+                    m_neighbors[u].n2 = v;
+                    m_neighbors[u].w2 = w;
+
+                    // for v set u as a neighbor
+                    m_neighbors[v].n2 = u;
+                    m_neighbors[v].w2 = w;
+
+                    // solve the cycle
+                    // solve_cycle(g, u, path_length[u_id], matching, 0);
+                    // path_length[u_id] = 0;
+                    cycles.push_back(u);
                 }
+                return;
+            }
+            // two paths, both u and v connect larger paths
+
+            // for u set v as a neighbor
+            m_neighbors[u].n2 = v;
+            m_neighbors[u].w2 = w;
+
+            // for v set u as a neighbor
+            m_neighbors[v].n2 = u;
+            m_neighbors[v].w2 = w;
+
+            vertex_t v1 = v;
+            vertex_t v2 = u;
+            u32 id1 = v_id;
+            u32 id2 = u_id;
+            if (path_length[u_id] > path_length[v_id]) {
+                std::swap(v1, v2);
+                std::swap(id1, id2);
+            }
+
+            path_length[id1] += 1 + path_length[id2];
+            while (m_neighbors[v2].n2 != v2) {
                 path_id[v2] = id1;
+                vertex_t temp_last_vertex = v1;
+                v1 = v2;
+                v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
             }
-
-            // process all paths
-#pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
-            forall_gu(g, u)
-                {
-                    u64 thread_id = omp_get_thread_num();
-                    if (IS_ONE_ENDPOINT(m_neighbors[u], u)) {
-                        // check if the other endpoint has a grater index
-                        vertex_t v1 = u;
-                        vertex_t v2 = m_neighbors[u].n1;
-                        while (m_neighbors[v2].n2 != v2) {
-                            vertex_t temp_last_vertex = v1;
-                            v1 = v2;
-                            v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
-                        }
-                        if (u < v2) {
-                            solve_path(g, u, path_length[path_id[u]], matching, thread_id);
-                        }
-                    }
-                }
-            endfor
-
-#pragma omp parallel for num_threads(m_threads) schedule(static)
-            for (vertex_t u: cycles) {
-                u64 thread_id = omp_get_thread_num();
-                solve_cycle(g, u, path_length[path_id[u]], matching, thread_id);
-            }
-        }
-
-        void compute_ratings(const deep_graph_t &g,
-                             const deep_p_manager_t &p_manager) {
-#pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
-            forall_gu(g, u)
-                {
-                    u64 thread_id = omp_get_thread_num();
-                    weight_t u_w = g.weight(u);
-
-                    forall_guivw(g, u, j, v, w) {
-                            if (u > v) { continue; }
-                            if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.weight(v);
-
-                            // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-                            // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-
-                            if (u_w + v_w > m_l_max) { continue; }
-
-                            f32 edge_rating;
-
-                            // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
-                            // edge_rating = (f32) w / (f32) (u_w * v_w);
-                            edge_rating = ((f32) (w * w)) / ((f32) (u_w * v_w));
-                            // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
-                            // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
-                            // edge_rating = (f32) w / (f32) (u_w * v_w * u_w * v_w);
-                            // edge_rating = (f32)w;
-
-                            // edges[edges_size++] = {u, v, edge_rating};
-                            pqs.get(thread_id).emplace(u, v, edge_rating);
-                            // thread_infos[thread_id].edges.emplace_back(u, v, edge_rating);
-                        }
-                    endfor
-                }
-            endfor
-        }
-
-        void sort_ratings() {
-#pragma omp parallel for num_threads(m_threads) schedule(static, 1)
-            for (size_t i = 0; i < m_threads; ++i) {
-                // std::sort(thread_infos[i].edges.begin(), thread_infos[i].edges.end(), std::greater<>());
-            }
+            path_id[v2] = id1;
         }
 
         f32 solve_path_length_1(const deep_graph_t &g,
@@ -1538,7 +938,7 @@ namespace HeiProMap {
                 }
             endfor
         }
-    }; */
+    };
 }
 
 #endif //HEIPROMAP_PARALLEL_GLOBAL_PATH_ALGORITHM_H
