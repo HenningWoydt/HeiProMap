@@ -59,6 +59,10 @@ namespace HeiProMap {
         // partitioning algorithm
         std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
+        vertex_t initial_C = 16;
+        u64 initial_kappa = 10;
+        vertex_t intermediate_C = 16;
+        u64 intermediate_kappa = 1;
 
         KaffpaKWayPartitionerConfiguration kaffpa_kway_partitioner_config;
 
@@ -139,7 +143,7 @@ namespace HeiProMap {
             global_path_algorithm_config.random_level = 0;
 
             // refinement
-            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.enabled = false;
             deep_quotient_graph_refinement_config.max_iteration = 3;
             deep_quotient_graph_refinement_config.alpha = 1000.0;
             deep_quotient_graph_refinement_config.beta_factor = 1.0;
