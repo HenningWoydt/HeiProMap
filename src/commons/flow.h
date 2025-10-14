@@ -38,7 +38,7 @@
 #include "random_engine.h"
 #include "translation_table.h"
 #include "small_translation_table.h"
-#include "../../extern/maxflow-v3.04.src/graph.h"
+#include "../../extern/maxflow/graph.h"
 #include "../serial/serial_definitions_1.h"
 
 namespace HeiProMap {
@@ -715,7 +715,7 @@ namespace HeiProMap {
             int                          n_edges = g.get_arc_num();
             Graph<int, int, int>::arc_id arc     = g.get_first_arc();
 
-            unsigned int u, v;
+            int u, v;
             for (int     i = 0; i < n_edges; ++i) {
                 g.get_arc_ends(arc, u, v);
                 weight_t w = g.get_rcap(arc);

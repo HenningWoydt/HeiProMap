@@ -30,7 +30,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-#include "../../extern/maxflow-v3.04.src/graph.h"
+#include "../../../extern/maxflow/graph.h"
 
 #include "flow_based_refinement.h"
 #include "ISerialRefiner.h"

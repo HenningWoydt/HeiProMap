@@ -29,7 +29,7 @@
 
 #include "../../commons/definitions.h"
 #include "../../commons/utils.h"
-#include "interface/kaHIP_interface.h"
+#include "../../../extern/local/kahip/include/kaHIP_interface.h"
 
 namespace HeiProMap {
     enum GlobalMultisectionMode {

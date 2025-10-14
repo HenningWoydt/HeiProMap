@@ -32,7 +32,7 @@
 #include "kaHIP_interface.h"
 
 #include "../../commons/random_engine.h"
-#include "../../src/commons/small_translation_table.h"
+#include "../../commons/small_translation_table.h"
 
 namespace HeiProMap {
     enum KaffpaKWayPartitionerMode {

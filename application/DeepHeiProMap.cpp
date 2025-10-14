@@ -27,7 +27,7 @@
 #include <cstring>
 #include <iostream>
 
-#include "../../src/commons/definitions.h"
+#include "../src/commons/definitions.h"
 #include "../src/commons/utils.h"
 #include "../src/deep/datastructures/deep_solver.h"
 

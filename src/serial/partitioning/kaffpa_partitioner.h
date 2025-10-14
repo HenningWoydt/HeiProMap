@@ -28,7 +28,7 @@
 #define HEIPROMAP_KAFFPA_PARTITIONER_H
 
 #include "../../commons/definitions.h"
-#include "interface/kaHIP_interface.h"
+#include "../../../extern/local/kahip/include/kaHIP_interface.h"
 
 namespace HeiProMap {
     enum KaffpaPartitionerMode {

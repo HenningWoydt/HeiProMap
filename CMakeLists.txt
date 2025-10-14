@@ -12,11 +12,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 enable_language(CXX)
 set(CXX ON)
 
-# KaHIP library
-set(NOMPI ON CACHE BOOL "For KaHIP: disable all targets that depend on MPI (kaffpaE, ParHIP)")
-include_directories(extern/KaHIP)
-link_directories(extern/KaHIP)
-add_subdirectory(extern/KaHIP)
+# --- KaHIP library ---
+set(KaHIP_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/local/kahip")
+find_library(KAHIP_LIBRARY
+        NAMES kahip libkahip
+        PATHS ${KaHIP_ROOT}/lib
+        NO_DEFAULT_PATH
+)
+find_path(KAHIP_INCLUDE_DIR
+        NAMES kaHIP_interface.h
+        PATHS ${KaHIP_ROOT}/include
+        NO_DEFAULT_PATH
+)
+
+message(STATUS "Found KaHIP: ${KAHIP_LIBRARY}")
+include_directories(${KAHIP_INCLUDE_DIR})
 
 # if(NOT GUROBI_DIR)
 #     message(FATAL_ERROR "GUROBI_DIR not set — please pass it using -DGUROBI_DIR=/opt/gurobi1201/linux64")
@@ -57,8 +67,8 @@ file(GLOB_RECURSE SOURCES_DEEP CONFIGURE_DEPENDS "src/deep/*.cpp")
 file(GLOB_RECURSE HEADERS_DEEP CONFIGURE_DEPENDS "src/deep/*.h")
 
 # Find all maxflow files
-file(GLOB_RECURSE MAXFLOW_SOURCES CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.cpp")
-file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow-v3.04.src/*.h")
+file(GLOB_RECURSE MAXFLOW_SOURCES CONFIGURE_DEPENDS "extern/maxflow/*.cpp")
+file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow/*.h")
 
 # add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 # add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
@@ -75,7 +85,8 @@ endif ()
 # Link KaHIP library
 # target_link_libraries(HeiProMap kahip)
 # target_link_libraries(MtHeiProMap kahip)
-target_link_libraries(DeepHeiProMap kahip)
+target_link_libraries(DeepHeiProMap
+                      ${KAHIP_LIBRARY})
 
 # target_link_libraries(HeiProMap ${GUROBI_CXX_LIBRARY})
 # target_link_libraries(HeiProMap ${GUROBI_LIBRARY})
