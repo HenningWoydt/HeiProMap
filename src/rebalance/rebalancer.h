@@ -94,7 +94,7 @@ namespace HeiProMap {
         RebalancerMove get_best_move(vertex_t u,
                                      const graph_t &g,
                                      const p_manager_t &p_manager,
-                                     const q_graph_t &q_graph,
+                                     [[maybe_unused]] const q_graph_t &q_graph,
                                      const d_oracle_t &d_oracle,
                                      const u64 state_id) const {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);

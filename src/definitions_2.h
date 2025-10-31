@@ -30,7 +30,6 @@
 #include "datastructures/partition_manager.h"
 
 namespace HeiProMap {
-
     typedef PartitionManager     p_manager_t;
 }
 

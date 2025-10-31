@@ -24,15 +24,38 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_SERIAL_DEFINITIONS_1_H
-#define HEIPROMAP_SERIAL_DEFINITIONS_1_H
+#ifndef HEIPROMAP_MAPPING_H
+#define HEIPROMAP_MAPPING_H
 
-#include "datastructures/distance_oracle.h"
-#include "datastructures/csr_graph.h"
+#include <numeric>
+
+#include "aligned_array.h"
+#include "../definitions.h"
 
 namespace HeiProMap {
-    typedef CSRGraph graph_t;
-    typedef DistanceOracle     d_oracle_t;
+    class Mapping {
+        vertex_t old_n = 0;
+        vertex_t coarse_n = 0;
+        AlignedArray<vertex_t> map;
+
+    public:
+        explicit Mapping() = default;
+
+        void initialize(vertex_t n) {
+            old_n = n;
+            map.initialize(n);
+        }
+
+        void map_to_self() {
+            std::iota(map.get_ptr(), map.get_ptr() + old_n, 0);
+        }
+
+        void set_u(vertex_t u, vertex_t v) { map[u] = v; }
+        vertex_t get_map_u(vertex_t u) const { return map[u]; }
+        void set_coarse_n(vertex_t n) { coarse_n = n; }
+        vertex_t get_coarse_n() const { return coarse_n; }
+        vertex_t get_old_n() const { return old_n; }
+    };
 }
 
-#endif //HEIPROMAP_SERIAL_DEFINITIONS_1_H
+#endif //HEIPROMAP_MAPPING_H

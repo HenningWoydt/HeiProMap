@@ -85,8 +85,10 @@ namespace HeiProMap {
         void match([[maybe_unused]] const size_t level,
                    const graph_t &g,
                    [[maybe_unused]] p_manager_t &p_manager,
-                   Matching &matching) {
+                   Mapping &mapping) {
             ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "match");
+            Matching matching;
+            matching.initialize(g.get_n());
 
             mark += 1;
             edges_size = 0;
@@ -167,6 +169,12 @@ namespace HeiProMap {
                     matching.add(u, v);
                 }
 
+            }
+
+            matching.set_translation();
+            mapping.set_coarse_n(matching.get_n_coarse_nodes());
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                mapping.set_u(u, matching.get_n(u));
             }
         }
     };

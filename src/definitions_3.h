@@ -34,10 +34,6 @@ namespace HeiProMap {
 
     typedef BoundaryVertexManager     bv_manager_t;
     typedef QuotientGraph             q_graph_t;
-
-    // Macro to iterate over all boundary vertices
-// #define forall_bv_iu(bv_manager, i, u) for(partition_t id = 0; id < k; ++id) { for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
-#define forall_bv_id_iu(bv_manager, id, i, u) for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
 }
 
 #endif //HEIPROMAP_SERIAL_DEFINITIONS_3_H

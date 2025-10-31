@@ -93,67 +93,33 @@ namespace HeiProMap {
             return weights;
         }
 
-        void contract(const Matching &matching) {
+        void contract(const Mapping &mapping) {
             ScopedTimer _t("contraction", "PartitionManager", "contract");
 
-            for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                if (u == matching.get_partner(u)) {
-                    vertex_t new_u = matching.get_n(u);
-                    partition_temp[new_u] = partition[u];
-
-                    ASSERT(u < m_n);
-                    ASSERT(partition[u] == partition[matching.get_partner(u)]);
-                    ASSERT(new_u < m_n);
-                    ASSERT(n_vertices[partition[u]] != std::numeric_limits<size_t>::max());
-                }
-
-                if (u < matching.get_partner(u)) {
-                    vertex_t new_u = matching.get_n(u);
-                    partition_temp[new_u] = partition[u];
-                    n_vertices[partition[u]] -= 1;
-
-                    ASSERT(u < m_n);
-                    ASSERT(partition[u] == partition[matching.get_partner(u)]);
-                    ASSERT(new_u < m_n);
-                    ASSERT(n_vertices[partition[u]] != std::numeric_limits<size_t>::max());
-                }
-            }
-
-            std::swap(partition, partition_temp);
-        }
-
-        /*
-        void uncontract_old(const Matching &matching) {
-            for (vertex_t new_u = 0; new_u < matching.get_n_coarse_nodes(); ++new_u) {
-                vertex_t old_u         = matching.get_o(new_u);
-                vertex_t old_u_partner = matching.get_partner(old_u);
-                partition_temp[old_u]         = partition[new_u];
-                partition_temp[old_u_partner] = partition[new_u];
-                if (old_u != old_u_partner) {
-                    n_vertices[partition[new_u]] += 1;
-                }
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get_map_u(u);
+                partition_temp[map_u] = partition[u];
             }
             std::swap(partition, partition_temp);
-        }
-         */
 
-        void uncontract(const Matching &matching) {
+            n_vertices.initialize(m_k, 0);
+            for (vertex_t u = 0; u < mapping.get_coarse_n(); ++u) {
+                n_vertices[partition[u]] += 1;
+            }
+        }
+
+        void uncontract(const Mapping &mapping) {
             ScopedTimer _t("uncontraction", "PartitionManager", "uncontract");
-
-            for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                vertex_t v = matching.get_partner(u);
-                vertex_t u_new = matching.get_n(u);
-                vertex_t v_new = matching.get_n(v);
-
-                if (u == v || u < v) {
-                    partition_temp[u] = partition[u_new];
-                    partition_temp[v] = partition[v_new];
-                }
-                if (u < v) {
-                    n_vertices[partition[u_new]] += 1;
-                }
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get_map_u(u);
+                partition_temp[u] = partition[map_u];
             }
             std::swap(partition, partition_temp);
+
+            n_vertices.initialize(m_k, 0);
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                n_vertices[partition[u]] += 1;
+            }
         }
 
         bool is_overloaded() {

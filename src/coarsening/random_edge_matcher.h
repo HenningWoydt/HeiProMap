@@ -76,8 +76,10 @@ namespace HeiProMap {
         void match([[maybe_unused]] const size_t level,
                    const graph_t &g,
                    PartitionManagerT &p_manager,
-                   Matching &matching) {
+                   Mapping &mapping) {
             ScopedTimer _t("coarsening", "RandomEdgeMatcher", "match");
+            Matching matching;
+            matching.initialize(g.get_n());
 
             mark += 1;
 
@@ -137,6 +139,12 @@ namespace HeiProMap {
             }
 #endif
              */
+
+            matching.set_translation();
+            mapping.set_coarse_n(matching.get_n_coarse_nodes());
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                mapping.set_u(u, matching.get_n(u));
+            }
         }
 
         JSONString get_stats() {

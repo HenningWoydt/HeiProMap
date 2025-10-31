@@ -37,10 +37,24 @@
 #include "../utility/aligned_array.h"
 #include "../definitions.h"
 #include "../utility/matching.h"
+#include "../utility/mapping.h"
 #include "../utility/utils.h"
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
+    static inline uint64_t splitmix64(uint64_t x) {
+        x += 0x9E3779B97F4A7C15ull;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+        return x ^ (x >> 31);
+    }
+
+    // Hash a vertex id (optionally salted by map_u)
+    static inline uint64_t hash_vertex(vertex_t v, vertex_t salt = 0) {
+        uint64_t x = static_cast<uint64_t>(v) ^ (static_cast<uint64_t>(salt) * 0x9E3779B97F4A7C15ull);
+        return splitmix64(x);
+    }
+
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
@@ -51,320 +65,270 @@ namespace HeiProMap {
         weight_t m_graph_weight = 0;
 
         AlignedArray<weight_t> m_v_weights;
-        AlignedArray<size_t>   m_neighborhoods;
+        AlignedArray<size_t> m_neighborhoods;
         AlignedArray<vertex_t> m_edges_v;
         AlignedArray<weight_t> m_edges_w;
 
     public:
         CSRGraph() = default;
 
-        explicit CSRGraph(const std::string &graph_in) {
-            ScopedTimer _t("io", "CSRGraph", "read");
-            // Open the file
-            int fd = open(graph_in.c_str(), O_RDONLY);
-            if (fd == -1) {
-                std::cerr << "File " << graph_in << " does not exist!" << std::endl;
+        explicit CSRGraph(const std::string &file_path) {
+            ScopedTimer _t_allocate("io", "CSRGraph", "allocate");
+            if (!file_exists(file_path)) {
+                std::cerr << "File " << file_path << " does not exist!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 
-            // Get the file size
-            struct stat fileInfo{};
-            if (fstat(fd, &fileInfo) == -1) {
-                std::cerr << "File " << graph_in << " Could not get file size!" << std::endl;
-                close(fd);
-                exit(EXIT_FAILURE);
-            }
-            size_t file_size = fileInfo.st_size;
+            // mmap the whole file
+            MMap mm = mmap_file_ro(file_path);
+            char *p = mm.data;
+            const char *end = mm.data + mm.size; // (tiny fix: don't do -1)
 
-            // Memory-map the file
-            char *file_arr = static_cast<char *>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
-            if (file_arr == MAP_FAILED) {
-                std::cerr << "File " << graph_in << " Could not map the file!" << std::endl;
-                close(fd);
-                exit(EXIT_FAILURE);
+            _t_allocate.stop();
+            ScopedTimer _t_read_header("io", "CSRGraph", "read_header");
+
+            // skip comment lines
+            while (*p == '%') {
+                while (*p != '\n') { ++p; }
+                ++p;
             }
 
-            size_t i = 0;
-            while (file_arr[i] == '%') {
-                // skip line, since it is a comment
-                move_while_not(file_arr, i, '\n', file_size);
-                ++i;
-            }
+            // skip whitespace
+            while (*p == ' ') { ++p; }
 
-            // skip leading white spaces
-            move_while(file_arr, i, ' ', file_size);
-
-            // read n
+            // read number of vertices
             m_n = 0;
-            while (file_arr[i] != ' ') { m_n = m_n * 10 + (file_arr[i++] - '0'); }
+            while (*p != ' ' && *p != '\n') {
+                m_n = m_n * 10 + (vertex_t) (*p - '0');
+                ++p;
+            }
 
-            // skip whitespaces
-            move_while(file_arr, i, ' ', file_size);
+            // skip whitespace
+            while (*p == ' ') { ++p; }
 
-            // read m
+            // read number of edges
             m_m = 0;
-            while (file_arr[i] != ' ' && file_arr[i] != '\n') { m_m = m_m * 10 + (file_arr[i++] - '0'); }
+            while (*p != ' ' && *p != '\n') {
+                m_m = m_m * 10 + (vertex_t) (*p - '0');
+                ++p;
+            }
             m_m *= 2;
 
-            // skip whitespaces
-            move_while(file_arr, i, ' ', file_size);
-
-            // read fmt, since its optional special code
-            // char fmt_0 = '0';
-            char fmt_1 = '0';
-            char fmt_2 = '0';
-            while (file_arr[i] != '\n') {
-                if (file_arr[i] != ' ') {
-                    // found one fmt number
-                    fmt_2 = file_arr[i++];
-
-                    if (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') {
-                        fmt_1 = fmt_2;
-                        fmt_2 = file_arr[i++];
-
-                        if (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') {
-                            // fmt_0 = fmt_1;
-                            fmt_1 = fmt_2;
-                            fmt_2 = file_arr[i++];
-                        }
+            // search end of line or fmt
+            std::string fmt = "000";
+            bool has_v_weights = false;
+            bool has_e_weights = false;
+            while (*p == ' ') { ++p; }
+            if (*p != '\n') {
+                // found fmt
+                fmt[0] = *p;
+                ++p;
+                if (*p != '\n') {
+                    // found fmt
+                    fmt[1] = *p;
+                    ++p;
+                    if (*p != '\n') {
+                        // found fmt
+                        fmt[2] = *p;
+                        ++p;
                     }
-                    break;
                 }
-                i += 1;
+                // skip whitespaces
+                while (*p == ' ') { ++p; }
             }
-            // now only ' ' expected until '\n'
-            move_while(file_arr, i, ' ', file_size);
-            ++i; // now on the next line
-
+            m_graph_weight = 0;
+            m_v_weights.initialize(m_n);
             m_neighborhoods.initialize(m_n + 1);
             m_neighborhoods[0] = 0;
-            m_edges_v.initialize(m_m + 1);
-            m_edges_w.initialize(m_m + 1);
+            m_edges_v.initialize(m_m);
+            m_edges_w.initialize(m_m);
+            has_v_weights = fmt[1] == '1';
+            has_e_weights = fmt[2] == '1';
 
-            size_t   curr_m = 0;
-            vertex_t u      = 0;
-            if (fmt_1 == '0' && fmt_2 == '0') {
-                m_v_weights.initialize(m_n + 1, 1);
+            _t_read_header.stop();
+            ScopedTimer _t_read_edges("io", "CSRGraph", "read_edges");
 
-                m_graph_weight = (weight_t) m_n;
-                while (true) {
-                    if (file_arr[i] == '%') {
-                        // this line is a comment, ignore it
-                        while (file_arr[i] != '\n') { ++i; }
-                        ++i;
-                        continue;
-                    }
-                    // this line contains vertex information
-
-                    while (file_arr[i] == ' ') { ++i; }
-
-                    while (file_arr[i] != '\n') {
-                        // read in the edges
-                        vertex_t v = 0;
-                        while (file_arr[i] != ' ' && file_arr[i] != '\n') { v = v * 10 + (file_arr[i++] - '0'); }
-                        while (file_arr[i] == ' ') { ++i; }
-
-                        m_edges_v[curr_m] = v - 1;
-                        m_edges_w[curr_m] = 1;
-                        curr_m += 1;
-                    }
-
-                    ++i;
-                    m_neighborhoods[u + 1] = curr_m;
-                    u += 1;
-
-                    if (u + 32 >= m_n) {
-                        break;
-                    }
+            ++p;
+            vertex_t u = 0;
+            size_t curr_m = 0;
+            while (p < end) {
+                // skip comment lines
+                while (*p == '%') {
+                    while (*p != '\n') { ++p; }
+                    ++p;
                 }
-                while (true) {
-                    if (file_arr[i] == '%') {
-                        // this line is a comment, ignore it
-                        while (i < file_size && file_arr[i] != '\n') { ++i; }
-                        // move_while_not(file_arr, i, '\n', file_size);
-                        ++i;
-                        continue;
-                    }
-                    // this line contains vertex information
 
-                    while (i < file_size && file_arr[i] == ' ') { ++i; }
+                // skip whitespaces
+                while (*p == ' ') { ++p; }
 
-                    while (i < file_size && file_arr[i] != '\n') {
-                        // read in the edges
-                        vertex_t v = 0;
-                        for (; i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n'; ++i) { v = v * 10 + (file_arr[i] - '0'); }
-                        while (i < file_size && file_arr[i] == ' ') { ++i; }
-
-                        m_edges_v[curr_m] = v - 1;
-                        m_edges_w[curr_m] = 1;
-                        curr_m += 1;
+                // read in vertex weight
+                weight_t vw = 1;
+                if (has_v_weights) {
+                    vw = 0;
+                    while (*p != ' ' && *p != '\n') {
+                        vw = vw * 10 + (weight_t) (*p - '0');
+                        ++p;
                     }
 
-                    ++i;
-                    m_neighborhoods[u + 1] = curr_m;
-                    u += 1;
-
-                    if (u == m_n) {
-                        break;
-                    }
+                    // skip whitespaces
+                    while (*p == ' ') { ++p; }
                 }
-            } else {
-                m_v_weights.initialize(m_n + 1, 0);
+                m_v_weights[u] = vw;
+                m_graph_weight += vw;
 
-                while (true) {
-                    if (file_arr[i] == '%') {
-                        // this line is a comment, ignore it
-                        move_while_not(file_arr, i, '\n', file_size);
-                        ++i;
-                        continue;
+                // read in edges
+                while (*p != '\n') {
+                    vertex_t v = 0;
+                    weight_t w = 1;
+
+                    while (*p != ' ' && *p != '\n') {
+                        v = v * 10 + (vertex_t) (*p - '0');
+                        ++p;
                     }
-                    // this line contains vertex information
 
-                    move_while(file_arr, i, ' ', file_size); // skip leading whitespaces
+                    // skip whitespaces
+                    while (*p == ' ') { ++p; }
 
-                    weight_t u_w = 1;
-                    if (fmt_1 == '1') {
-                        // read in vertex weight
-                        u_w = 0;
-                        while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { u_w = u_w * 10 + (file_arr[i++] - '0'); }
-                        move_while(file_arr, i, ' ', file_size); // move to the next number
-                    }
-                    m_v_weights[u] = u_w;
-                    m_graph_weight += u_w;
-
-                    while (i < file_size && file_arr[i] != '\n') {
-                        // read in the edges
-                        vertex_t v = 0;
-                        while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { v = v * 10 + (file_arr[i++] - '0'); }
-                        move_while(file_arr, i, ' ', file_size); // move to the next number
-
-                        weight_t w = 1;
-                        if (fmt_2 == '1') {
-                            w = 0;
-                            while (i < file_size && file_arr[i] != ' ' && file_arr[i] != '\n') { w = w * 10 + (file_arr[i++] - '0'); }
-                            move_while(file_arr, i, ' ', file_size); // move to the next number
+                    if (has_e_weights) {
+                        w = 0;
+                        while (*p != ' ' && *p != '\n') {
+                            w = w * 10 + (weight_t) (*p - '0');
+                            ++p;
                         }
 
-                        m_edges_v[curr_m] = v - 1;
-                        m_edges_w[curr_m] = w;
-                        curr_m += 1;
+                        // skip whitespaces
+                        while (*p == ' ') { ++p; }
                     }
 
-                    ++i;
-                    m_neighborhoods[u + 1] = curr_m;
-                    u += 1;
-
-                    if (u == m_n) {
-                        break;
-                    }
+                    m_edges_v[curr_m] = v - 1;
+                    m_edges_w[curr_m] = w;
+                    ++curr_m;
                 }
+                m_neighborhoods[u + 1] = curr_m;
+                ++u;
+                ++p;
             }
 
-            // Clean up
-            munmap(file_arr, file_size);
-            close(fd);
+            if (curr_m != m_m) {
+                std::cerr << "Number of expected edges " << m_m << " not equal to number edges " << curr_m << " found!\n";
+                munmap_file(mm);
+                exit(EXIT_FAILURE);
+            }
+
+            _t_read_edges.stop();
+            // done with the file
+            munmap_file(mm);
         }
 
         void initialize(const CSRGraph &g,
-                        Matching &matching) {
-            ScopedTimer _t("contraction", "CSRGraph", "contract");
+                        const Mapping &mapping) {
+            ScopedTimer _t_allocate("contraction", "CSRGraph", "allocate");
 
-            matching.set_translation();
-
-            m_n = matching.get_n_coarse_nodes();
-            const vertex_t temp_m = g.get_m() + 1;
-
+            m_n = mapping.get_coarse_n();
             m_graph_weight = g.m_graph_weight;
-            m_v_weights.initialize(m_n + 1);
+            m_v_weights.initialize(m_n, 0);
 
-            m_neighborhoods.initialize(m_n + 1);
-            m_edges_v.initialize(temp_m);
-            m_edges_w.initialize(temp_m);
+            _t_allocate.stop();
+            ScopedTimer _t_overest_sizes("contraction", "CSRGraph", "overest_sizes");
 
-            struct IdxMark {
-                vertex_t idx;
-                u32      mark;
-            };
+            AlignedArray<vertex_t> overest_sizes;
+            overest_sizes.initialize(m_n, 0);
 
-            AlignedArray<IdxMark> idx_mark;
-            idx_mark.initialize(m_n, {0, 0});
-            u32 mark = 0;
+            // overestimate neighborhood sizes and collect weights
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get_map_u(u);
+                overest_sizes[map_u] += g.size(u);
+                m_v_weights[map_u] += g.weight(u);
+            }
 
-            size_t curr_m = 0;
-            m_neighborhoods[0] = 0;
-            for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
-                vertex_t old_v = matching.get_partner(old_u);
+            _t_overest_sizes.stop();
+            ScopedTimer _t_prefix_sum("contraction", "CSRGraph", "prefix_sum");
 
-                if (old_u > old_v) { continue; }
-                vertex_t new_u = matching.get_n(old_u);
+            // prefix-sum on overestimated neighborhood
+            AlignedArray<vertex_t> overest_neighborhood;
+            overest_neighborhood.initialize(m_n + 1);
+            overest_neighborhood[0] = 0;
+            for (vertex_t map_u = 0; map_u < m_n; ++map_u) {
+                overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
+            }
 
-                mark += 1;
+            _t_prefix_sum.stop();
+            ScopedTimer _t_insert_edges("contraction", "CSRGraph", "insert_edges");
 
-                for (size_t i = 0; i < g.size(old_u); ++i) {
-                    vertex_t vv         = g.neighbor(old_u, i);
-                    weight_t ww         = g.weight(old_u, i);
-                    vertex_t vv_partner = matching.get_partner(vv);
-                    if (vv == old_v) { continue; }
+            // insert edges in overestimated array
+            m_m = 0;
+            AlignedArray<vertex_t> edges_v;
+            AlignedArray<weight_t> edges_w;
+            edges_v.initialize(overest_neighborhood[m_n], g.get_n());
+            edges_w.initialize(overest_neighborhood[m_n]);
 
-                    // if the vv vertex is matched, then make an edge to the neighbor vertex
-                    vv = std::min(vv, vv_partner);
+            AlignedArray<vertex_t> sizes;
+            sizes.initialize(m_n, 0);
 
-                    // map to the new node range
-                    vv = matching.get_n(vv);
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get_map_u(u);
 
-                    if (idx_mark[vv].mark == mark) {
-                        size_t idx = idx_mark[vv].idx;
-                        m_edges_w[idx] += ww;
-                    } else {
-                        idx_mark[vv].idx  = curr_m;
-                        idx_mark[vv].mark = mark;
-                        m_edges_v[curr_m] = vv;
-                        m_edges_w[curr_m] = ww;
-                        curr_m += 1;
-                    }
-                }
+                forall_guivw(g, u, i, v, w) {
+                    vertex_t map_v = mapping.get_map_u(v);
+                    if (map_u == map_v) { continue; }
 
-                if (old_u < old_v) {
-                    for (size_t i = 0; i < g.size(old_v); ++i) {
-                        vertex_t vv         = g.neighbor(old_v, i);
-                        vertex_t vv_partner = matching.get_partner(vv);
-                        weight_t ww         = g.weight(old_v, i);
-                        // do not add edge to matched vertex
-                        if (vv == old_u) { continue; }
+                    vertex_t beg = overest_neighborhood[map_u];
+                    vertex_t end = overest_neighborhood[map_u + 1];
+                    vertex_t len = end - beg;
+                    if (len == 0) { continue; }
 
-                        // if the vv vertex is matched, then make an edge to the neighbor vertex
-                        vv = std::min(vv, vv_partner);
-
-                        // map to the new node range
-                        vv = matching.get_n(vv);
-
-                        if (idx_mark[vv].mark == mark) {
-                            size_t idx = idx_mark[vv].idx;
-                            m_edges_w[idx] += ww;
-                        } else {
-                            idx_mark[vv].idx  = curr_m;
-                            idx_mark[vv].mark = mark;
-                            m_edges_v[curr_m] = vv;
-                            m_edges_w[curr_m] = ww;
-                            curr_m += 1;
+                    // insert map_v
+                    vertex_t j = beg + (hash_vertex(map_v) % len);
+                    while (true) {
+                        if (j == end) { j = beg; }
+                        if (edges_v[j] == map_v) {
+                            edges_w[j] += w;
+                            break;
                         }
+                        if (edges_v[j] == g.get_n()) {
+                            edges_v[j] = map_v;
+                            edges_w[j] = w;
+                            m_m += 1;
+                            sizes[map_u] += 1;
+                            break;
+                        }
+                        j += 1;
                     }
                 }
-                m_neighborhoods[new_u + 1] = curr_m;
+                endfor
             }
 
-            for (vertex_t old_u = 0; old_u < g.get_n(); ++old_u) {
-                if (old_u == matching.get_partner(old_u)) {
-                    vertex_t new_u = matching.get_n(old_u);
-                    m_v_weights[new_u] = g.weight(old_u);
-                } else if (old_u < matching.get_partner(old_u)) {
-                    vertex_t new_u = matching.get_n(old_u);
-                    vertex_t old_v = matching.get_partner(old_u);
-                    m_v_weights[new_u] = g.weight(old_u) + g.weight(old_v);
+            _t_insert_edges.stop();
+            ScopedTimer _t_real_neighborhood("contraction", "CSRGraph", "real_neighborhood");
+
+            // insert edges in real array
+            m_neighborhoods.initialize(m_n + 1);
+            m_neighborhoods[0] = 0;
+            for (vertex_t map_u = 0; map_u < m_n; ++map_u) {
+                m_neighborhoods[map_u + 1] = m_neighborhoods[map_u] + sizes[map_u];
+            }
+
+            _t_real_neighborhood.stop();
+            ScopedTimer _t_copy_edges("contraction", "CSRGraph", "copy_edges");
+
+            m_edges_v.initialize(m_m);
+            m_edges_w.initialize(m_m);
+
+            for (vertex_t map_u = 0; map_u < mapping.get_coarse_n(); ++map_u) {
+                size_t cursor = m_neighborhoods[map_u];
+                for (vertex_t j = overest_neighborhood[map_u]; j < overest_neighborhood[map_u + 1]; ++j) {
+                    vertex_t map_v = edges_v[j];
+                    weight_t map_w = edges_w[j];
+
+                    if (map_v != g.get_n()) {
+                        m_edges_v[cursor] = map_v;
+                        m_edges_w[cursor] = map_w;
+                        cursor += 1;
+                    }
                 }
             }
 
-            m_m = curr_m;
+            _t_copy_edges.stop();
         }
 
         // Move constructor

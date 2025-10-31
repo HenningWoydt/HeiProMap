@@ -34,7 +34,6 @@
 #include "quotient_graph.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
-#include "../utility/matching.h"
 #include "../utility/random_engine.h"
 #include "../utility/utils.h"
 #include "../coarsening/global_path_algorithm.h"
@@ -71,7 +70,7 @@ namespace HeiProMap {
         weight_t lmax = 0;
 
         // matching
-        std::vector<Matching> matches;
+        std::vector<Mapping> mappings;
         GreedyEdgeMatcher ge_matcher;
         HeavyEdgeMatcher he_matcher;
         RandomEdgeMatcher rnd_matcher;
@@ -211,11 +210,10 @@ namespace HeiProMap {
 
                 while (graphs.back().get_n() > ac.k * mult) {
                     matching(level, v_cycle);
-                    if (matches.back().size() == 0) {
-                        matches.pop_back();
+                    if (mappings.back().get_coarse_n() >= 0.9 * graphs.back().get_n()) {
+                        mappings.pop_back();
                         break;
                     }
-
                     coarsening(level);
 
                     level += 1;
@@ -280,24 +278,24 @@ namespace HeiProMap {
         }
 
         void matching(const u64 level, u64 v_cycle) {
-            matches.emplace_back();
-            matches.back().initialize(graphs.back().get_n());
+            mappings.emplace_back();
+            mappings.back().initialize(graphs.back().get_n());
 
             if (v_cycle == 0) {
                 if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                    ge_matcher.match(level, graphs.back(), p_manager, matches.back());
+                    ge_matcher.match(level, graphs.back(), p_manager, mappings.back());
                 } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                    he_matcher.match(level, graphs.back(), p_manager, matches.back());
+                    he_matcher.match(level, graphs.back(), p_manager, mappings.back());
                 } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
-                    rnd_matcher.match(level, graphs.back(), p_manager, matches.back());
+                    rnd_matcher.match(level, graphs.back(), p_manager, mappings.back());
                 } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                    gpa_matcher.match(level, graphs.back(), p_manager, matches.back());
+                    gpa_matcher.match(level, graphs.back(), p_manager, mappings.back());
                 } else {
                     std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
                 }
             } else {
-                rnd_matcher.match(level, graphs.back(), p_manager, matches.back());
+                rnd_matcher.match(level, graphs.back(), p_manager, mappings.back());
             }
         }
 
@@ -305,18 +303,19 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
 
             graphs.emplace_back(); // coarse the graph
-            graphs.back().initialize(graphs[graphs.size() - 2], matches.back());
-            p_manager.contract(matches.back());
+            graphs.back().initialize(graphs[graphs.size() - 2], mappings.back());
+            p_manager.contract(mappings.back());
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
         }
 
         void uncoarsening([[maybe_unused]] const u64 level) {
-            p_manager.uncontract(matches.back());
+            p_manager.uncontract(mappings.back());
             bv_manager.compute_from_scratch(graphs[graphs.size() - 2], p_manager);
+
             ScopedTimer _t("uncontraction", "misc", "free_graph");
             graphs.pop_back(); // this is doing uncontraction
-            matches.pop_back();
+            mappings.pop_back();
             _t.stop();
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));

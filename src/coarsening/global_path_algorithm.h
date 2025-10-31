@@ -121,12 +121,21 @@ namespace HeiProMap {
         void match(const size_t level,
                    const graph_t &g,
                    const PartitionManagerT &p_manager,
-                   Matching &matching) {
+                   Mapping &mapping) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "match");
+            Matching matching;
+            matching.initialize(g.get_n());
 
             if (level < config->random_level) {
                 // use a random matching
                 random_matching(level, g, matching);
+
+                matching.set_translation();
+                mapping.set_coarse_n(matching.get_n_coarse_nodes());
+                for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                    mapping.set_u(u, matching.get_n(u));
+                }
+
                 return;
             }
 
@@ -260,6 +269,12 @@ namespace HeiProMap {
             }
 #endif
              */
+
+            matching.set_translation();
+            mapping.set_coarse_n(matching.get_n_coarse_nodes());
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                mapping.set_u(u, matching.get_n(u));
+            }
         }
 
         template<typename PartitionManagerT>
