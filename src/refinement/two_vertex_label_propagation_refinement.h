@@ -115,6 +115,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "TwoVertexLabelPropagationRefinement", "refine");
+
             if (level + config->last_n_levels < max_level) {
                 return;
             }

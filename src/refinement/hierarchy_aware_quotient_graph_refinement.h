@@ -113,6 +113,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "HierarchyAwareQuotientGraphRefinement", "refine");
+
             for (size_t rep = 0; rep < 1; ++rep) {
                 for (size_t i = 0; i < m_hierarchy.size(); ++i) {
                     refine_layer(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, m_hierarchy.size() - 1 - i);

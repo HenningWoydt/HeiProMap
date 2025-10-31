@@ -108,6 +108,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "KWayFMRefinement", "refine");
+
             f64 alpha = config->alpha;
             f64 beta  = std::log(g.get_n());
 

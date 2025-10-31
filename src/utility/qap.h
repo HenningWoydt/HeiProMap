@@ -36,6 +36,8 @@ namespace HeiProMap {
     inline weight_t get_qap(GraphT &g,
                             PartitionManagerT &p_manager,
                             DistanceOracleT &d_oracle) {
+        ScopedTimer _t("misc", "misc", "get_qap");
+
         weight_t qap = 0;
         weight_t local_qap = 0;
 
@@ -62,9 +64,9 @@ namespace HeiProMap {
                                                    const PartitionManagerT &p_manager,
                                                    DistanceOracleT &d_oracle,
                                                    const partition_t l) {
-        std::vector<weight_t> final_qap(l, 0);
+        ScopedTimer _t("misc", "misc", "get_qap_per_layer");
 
-        std::vector<weight_t> qap_local(l, 0);
+        std::vector<weight_t> final_qap(l, 0);
         forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
@@ -73,15 +75,11 @@ namespace HeiProMap {
                         partition_t v_id = p_manager[v];
                         weight_t d = d_oracle.get(u_id, v_id);
                         partition_t layer_id = d_oracle.get_h(u_id, v_id);
-                        qap_local[layer_id] += (d * w);
+                        final_qap[layer_id] += (d * w);
                     }
                 endfor
             }
         endfor
-
-        for (u64 j = 0; j < l; ++j) {
-            final_qap[j] += qap_local[j];
-        }
 
         return final_qap;
     }

@@ -61,6 +61,7 @@ namespace HeiProMap {
         COARSENING_ALG_HEAVY_MATCHING,
         COARSENING_ALG_RANDOM_MATCHING,
         COARSENING_ALG_GLOBAL_PATHS,
+        COARSENING_ALG_SIZE_CONSTRAINED_LP
     };
 
     inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
@@ -69,6 +70,7 @@ namespace HeiProMap {
         if (str == "heavy-matching") return COARSENING_ALG_HEAVY_MATCHING;
         if (str == "random-matching") return COARSENING_ALG_RANDOM_MATCHING;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
+        if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
         return COARSENING_ALG_UNDEFINED;
     }
 
@@ -84,6 +86,8 @@ namespace HeiProMap {
                 return "random-matching";
             case COARSENING_ALG_GLOBAL_PATHS:
                 return "global-paths";
+            case COARSENING_ALG_SIZE_CONSTRAINED_LP:
+                return "size-constrained-lp";
             default:
                 return "UNDEFINED";
         }
@@ -140,78 +144,78 @@ namespace HeiProMap {
     class AlgorithmConfiguration {
     private:
         std::vector<CommandLineOption> options = {
-                {"--help",                                                "",   "Produces the help message",                                                                                                                "",                     "", false},
-                {"--graph",                                               "-g", "Filepath to the graph.",                                                                                                                   "",                     "", false},
-                {"--mapping",                                             "-m", "Output filepath to the generated mapping.",                                                                                                "",                     "", false},
-                {"--statistics",                                          "",   "Output filepath to the statistics file.",                                                                                                  "HeiProMap_stats.JSON", "", false},
-                {"--hierarchy",                                           "-h", "Hierarchy in the form a1:a2:...:al .",                                                                                                     "",                     "", false},
-                {"--distance",                                            "-d", "Distance in the form d1:d2:...:dl .",                                                                                                      "",                     "", false},
-                {"--imbalance",                                           "-e", "Allowed imbalance (for example 0.03).",                                                                                                    "0.03",                 "", false},
-                {"--config",                                              "-c", "The configuration.",                                                                                                                       "",                     "", false},
-                {"--seed",                                                "",   "Seed for diversifying results.",                                                                                                           "",                     "", false},
+            {"--help", "", "Produces the help message", "", "", false},
+            {"--graph", "-g", "Filepath to the graph.", "", "", false},
+            {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
+            {"--statistics", "", "Output filepath to the statistics file.", "HeiProMap_stats.JSON", "", false},
+            {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
+            {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
+            {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
+            {"--config", "-c", "The configuration.", "", "", false},
+            {"--seed", "", "Seed for diversifying results.", "", "", false},
 
-                /** Coarsening */
-                {"--coarsening-algorithm",                                "",   "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, random-matching, global-paths}.",                  "global-paths",         "", false},
+            /** Coarsening */
+            {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, random-matching, global-paths}.", "global-paths", "", false},
 
-                // Coarsening global-path
-                {"--coarsening-algorithm-global-paths-random-level",      "",   "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.",                            "4",                    "", false},
+            // Coarsening global-path
+            {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
 
-                // Coarsening greedy matching
-                {"--coarsening-algorithm-greedy-matching-pendant-first",  "",   "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1",                    "", false},
+            // Coarsening greedy matching
+            {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
 
-                // Coarsening heavy matching
-                {"--coarsening-algorithm-heavy-matching-pendant-first",   "",   "Whether the heavy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.",  "1",                    "", false},
+            // Coarsening heavy matching
+            {"--coarsening-algorithm-heavy-matching-pendant-first", "", "Whether the heavy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
 
-                /** Partitioning */
-                {"--partitioning-algorithm",                              "",   "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.",                                                          "multisection",         "", false},
+            /** Partitioning */
+            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.", "multisection", "", false},
 
-                // Partitioning kaffpa
-                {"--partitioning-algorithm-kaffpa-partitioning-mode",     "",   "Which mode {strong, eco, fast} to use.",                                                                                                   "strong",               "", false},
-                {"--partitioning-algorithm-kaffpa-partitioning-method",   "",   "Which mode {bisection, multisection} to use.",                                                                                             "multisection",         "", false},
+            // Partitioning kaffpa
+            {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
+            {"--partitioning-algorithm-kaffpa-partitioning-method", "", "Which mode {bisection, multisection} to use.", "multisection", "", false},
 
-                // Partitioning multisection
-                {"--partitioning-algorithm-multisection-mode",            "",   "Which mode {strong, eco, fast} to use.",                                                                                                   "strong",               "", false},
+            // Partitioning multisection
+            {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
 
-                /** Rebalancing */
-                {"--rebalancing-algorithm",                               "",   "Which rebalancing algorithm to use. Allowed values are {simple}.",                                                                         "simple",               "", false},
+            /** Rebalancing */
+            {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
 
-                /** Refinement */
-                // Refinement Faraj20 label propagation
-                {"--refinement-lable-propagation-faraj20-enable",         "",   "Enables the label propagation refinement by Faraj20.",                                                                                     "0",                    "", false},
-                {"--refinement-lable-propagation-faraj20-max-iterations", "",   "For how many iterations to run label propagation refinement by Faraj20.",                                                                  "25",                   "", false},
+            /** Refinement */
+            // Refinement Faraj20 label propagation
+            {"--refinement-lable-propagation-faraj20-enable", "", "Enables the label propagation refinement by Faraj20.", "0", "", false},
+            {"--refinement-lable-propagation-faraj20-max-iterations", "", "For how many iterations to run label propagation refinement by Faraj20.", "25", "", false},
 
-                // Refinement Faraj20 quotient graph
-                {"--refinement-quotient-graph-faraj20-enable",            "",   "Enables the quotient graph refinement by Faraj20.",                                                                                        "0",                    "", false},
-                {"--refinement-quotient-graph-faraj20-max-iterations",    "",   "How many iterations to run quotient graph refinement by Faraj20 at most.",                                                                 "1",                    "", false},
+            // Refinement Faraj20 quotient graph
+            {"--refinement-quotient-graph-faraj20-enable", "", "Enables the quotient graph refinement by Faraj20.", "0", "", false},
+            {"--refinement-quotient-graph-faraj20-max-iterations", "", "How many iterations to run quotient graph refinement by Faraj20 at most.", "1", "", false},
 
-                // Refinement Faraj20 k-Way FM
-                {"--refinement-k-way-fm-faraj20-enable",                  "",   "Enables the K-Way FM refinement by Faraj20.",                                                                                              "0",                    "", false},
-                {"--refinement-k-way-fm-faraj20-max-iterations",          "",   "How many iterations to run K-Way FM by Faraj20 refinement at most.",                                                                       "1",                    "", false},
+            // Refinement Faraj20 k-Way FM
+            {"--refinement-k-way-fm-faraj20-enable", "", "Enables the K-Way FM refinement by Faraj20.", "0", "", false},
+            {"--refinement-k-way-fm-faraj20-max-iterations", "", "How many iterations to run K-Way FM by Faraj20 refinement at most.", "1", "", false},
 
-                // Refinement Faraj20 Multi-Try FM
-                {"--refinement-multi-try-fm-faraj20-enable",              "",   "Enables the Multi-Try FM refinement by Faraj20.",                                                                                          "0",                    "", false},
-                {"--refinement-multi-try-fm-faraj20-max-iterations",      "",   "How many iterations to run Multi-Try FM refinement by Faraj20 at most.",                                                                   "1",                    "", false},
+            // Refinement Faraj20 Multi-Try FM
+            {"--refinement-multi-try-fm-faraj20-enable", "", "Enables the Multi-Try FM refinement by Faraj20.", "0", "", false},
+            {"--refinement-multi-try-fm-faraj20-max-iterations", "", "How many iterations to run Multi-Try FM refinement by Faraj20 at most.", "1", "", false},
 
-                // Refinement label propagation
-                {"--refinement-lable-propagation-enable",                 "",   "Enables the label propagation refinement.",                                                                                                "0",                    "", false},
-                {"--refinement-lable-propagation-max-iterations",         "",   "For how many iterations to run label propagation refinement.",                                                                             "25",                   "", false},
+            // Refinement label propagation
+            {"--refinement-lable-propagation-enable", "", "Enables the label propagation refinement.", "0", "", false},
+            {"--refinement-lable-propagation-max-iterations", "", "For how many iterations to run label propagation refinement.", "25", "", false},
 
-                // Refinement quotient graph
-                {"--refinement-quotient-graph-enable",                    "",   "Enables the quotient graph refinement.",                                                                                                   "0",                    "", false},
+            // Refinement quotient graph
+            {"--refinement-quotient-graph-enable", "", "Enables the quotient graph refinement.", "0", "", false},
 
-                // Refinement k-Way FM
-                {"--refinement-k-way-fm-enable",                          "",   "Enables the K-Way FM refinement.",                                                                                                         "0",                    "", false},
-                {"--refinement-k-way-fm-max-iterations",                  "",   "How many iterations to run K-Way FM refinement at most.",                                                                                  "1",                    "", false},
+            // Refinement k-Way FM
+            {"--refinement-k-way-fm-enable", "", "Enables the K-Way FM refinement.", "0", "", false},
+            {"--refinement-k-way-fm-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "1", "", false},
 
-                // Refinement Multi-Try FM
-                {"--refinement-multi-try-fm-enable",                      "",   "Enables the Multi-Try FM refinement.",                                                                                                     "0",                    "", false},
-                {"--refinement-multi-try-fm-max-iterations",              "",   "How many iterations to run Multi-Try FM refinement at most.",                                                                              "1",                    "", false},
+            // Refinement Multi-Try FM
+            {"--refinement-multi-try-fm-enable", "", "Enables the Multi-Try FM refinement.", "0", "", false},
+            {"--refinement-multi-try-fm-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "1", "", false},
 
-                // Refinement Hierarchy Aware Cycles
-                {"--refinement-hierarchy-aware-multi-way-fm-enable",      "",   "Enables the Hierarchy Aware Multi-Way FM refinement.",                                                                                     "0",                    "", false},
+            // Refinement Hierarchy Aware Cycles
+            {"--refinement-hierarchy-aware-multi-way-fm-enable", "", "Enables the Hierarchy Aware Multi-Way FM refinement.", "0", "", false},
 
-                // Refinement Two Vertex Label Propagation
-                {"--refinement-two-vertex-label-propagation-enable",      "",   "Enables Label Propagation with two vertices.",                                                                                             "0",                    "", false},
+            // Refinement Two Vertex Label Propagation
+            {"--refinement-two-vertex-label-propagation-enable", "", "Enables Label Propagation with two vertices.", "0", "", false},
         };
 
     public:
@@ -221,12 +225,12 @@ namespace HeiProMap {
         std::string statistics_out;
 
         // hierarchy information
-        std::string              hierarchy_string;
+        std::string hierarchy_string;
         std::vector<partition_t> hierarchy;
-        partition_t              k = 0;
+        partition_t k = 0;
 
         // distance information
-        std::string           distance_string;
+        std::string distance_string;
         std::vector<weight_t> distance;
 
         // balancing information
@@ -238,55 +242,56 @@ namespace HeiProMap {
         u64 n_v_cycle = 1;
 
         // coarsening algorithm
-        std::string     coarsening_algorithm_string;
+        std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
 
-        GreedyEdgeMatcherConfiguration   greedy_edge_matcher_config;
-        HeavyEdgeMatcherConfiguration    heavy_edge_matcher_config;
+        GreedyEdgeMatcherConfiguration greedy_edge_matcher_config;
+        HeavyEdgeMatcherConfiguration heavy_edge_matcher_config;
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
-        RandomEdgeMatcherConfiguration   random_edge_matcher_config;
+        RandomEdgeMatcherConfiguration random_edge_matcher_config;
+        SizeConstrainedLPConfiguration size_constrained_lp_config;
 
         // partitioning algorithm
-        std::string       partitioning_algorithm_string;
+        std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
-        GlobalMultisectionConfiguration    global_multisection_config;
-        KaffpaPartitionerConfiguration     kaffpa_partitioner_config;
+        GlobalMultisectionConfiguration global_multisection_config;
+        KaffpaPartitionerConfiguration kaffpa_partitioner_config;
 
         // rebalance algorithm
-        std::string      rebalancing_algorithm_string;
+        std::string rebalancing_algorithm_string;
         REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
 
         // refinement algorithms
-        LabelPropagationConfiguration            label_propagation_config              = LabelPropagationConfiguration("Label Propagation");
-        QuotientGraphRefinementConfiguration     quotient_graph_refinement_config      = QuotientGraphRefinementConfiguration("Quotient Graph");
-        KWayFMRefinementConfiguration            k_way_fm_refinement_config            = KWayFMRefinementConfiguration("K-Way-FM");
-        MultiTryFmRefinementConfiguration        multi_try_fm_refinement_config        = MultiTryFmRefinementConfiguration("Multi Try-FM");
-        TwoVertexLabelPropagationConfiguration   two_vertex_label_propagation_config   = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
+        LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
+        QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
+        KWayFMRefinementConfiguration k_way_fm_refinement_config = KWayFMRefinementConfiguration("K-Way-FM");
+        MultiTryFmRefinementConfiguration multi_try_fm_refinement_config = MultiTryFmRefinementConfiguration("Multi Try-FM");
+        TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
         ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
-        FlowBasedRefinementConfiguration         flow_based_refinement_config          = FlowBasedRefinementConfiguration("Flow Based");
+        FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
         // ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
 
-        HierarchyAwareMultiWayFMConfiguration              hierarchy_aware_multi_way_fm_config                     = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
-        HierarchyAwareMultiTryMultiWayFMConfiguration      hierarchy_aware_multi_try_multi_way_fm_config           = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
+        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
+        HierarchyAwareMultiTryMultiWayFMConfiguration hierarchy_aware_multi_try_multi_way_fm_config = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
         // HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
-        HierarchyAwareFlowBasedRefinementConfiguration     hierarchy_aware_flow_based_refinement_configuration     = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
+        HierarchyAwareFlowBasedRefinementConfiguration hierarchy_aware_flow_based_refinement_configuration = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
         HierarchyAwareQuotientGraphRefinementConfiguration hierarchy_aware_quotient_graph_refinement_configuration = HierarchyAwareQuotientGraphRefinementConfiguration("Hierarchy Aware Quotient Graph Refineemnt");
 
-        WaveRefinementConfiguration      wave_refinement_configuration      = WaveRefinementConfiguration("Wave Refinement");
+        WaveRefinementConfiguration wave_refinement_configuration = WaveRefinementConfiguration("Wave Refinement");
         LightningRefinementConfiguration lightning_refinement_configuration = LightningRefinementConfiguration("Lightning Refinement");
 
         AlgorithmConfiguration() = default;
 
         void set_hierarchy() {
             hierarchy_string = get("--hierarchy");
-            hierarchy        = convert<partition_t>(split(hierarchy_string, ':'));
-            k                = prod<partition_t>(hierarchy);
+            hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
+            k = prod<partition_t>(hierarchy);
         }
 
         void set_distance() {
             distance_string = get("--distance");
-            distance        = convert<weight_t>(split(distance_string, ':'));
+            distance = convert<weight_t>(split(distance_string, ':'));
         }
 
         void set_imbalance() {
@@ -320,7 +325,7 @@ namespace HeiProMap {
             // actually set which algorithm to use
             if (use_default || is_set("--coarsening-algorithm")) {
                 coarsening_algorithm_string = get("--coarsening-algorithm");
-                coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+                coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
             }
         }
 
@@ -328,30 +333,30 @@ namespace HeiProMap {
             // initialize global multisection config
             if (use_default || is_set("--partitioning-algorithm-multisection-mode")) {
                 global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
-                global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+                global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             }
 
             // initialize kaffpa partitioning config
             if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-mode")) {
                 kaffpa_partitioner_config.mode_string = get("--partitioning-algorithm-kaffpa-partitioning-mode");
-                kaffpa_partitioner_config.mode        = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
+                kaffpa_partitioner_config.mode = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
             }
             if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-method")) {
                 kaffpa_partitioner_config.method_string = get("--partitioning-algorithm-kaffpa-partitioning-method");
-                kaffpa_partitioner_config.method        = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
+                kaffpa_partitioner_config.method = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
             }
 
             // actually set which algorithm to use
             if (use_default || is_set("--partitioning-algorithm")) {
                 partitioning_algorithm_string = get("--partitioning-algorithm");
-                partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+                partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             }
         }
 
         void set_rebalancing_algorithm(const bool use_default = false) {
             if (use_default || is_set("--rebalancing-algorithm")) {
                 rebalancing_algorithm_string = get("--rebalancing-algorithm");
-                rebalancing_algorithm_id     = string_to_rebalancing_algorithm(rebalancing_algorithm_string);
+                rebalancing_algorithm_id = string_to_rebalancing_algorithm(rebalancing_algorithm_string);
             }
         }
 
@@ -412,7 +417,7 @@ namespace HeiProMap {
             for (int i = 1; i < argc; ++i) {
                 for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                     if (large_key == args[i] || small_key == args[i]) {
-                        input  = args[i + 1];
+                        input = args[i + 1];
                         is_set = true;
                         i += 1;
                         break;
@@ -420,8 +425,8 @@ namespace HeiProMap {
                 }
             }
 
-            graph_in       = get("--graph");
-            mapping_out    = get("--mapping");
+            graph_in = get("--graph");
+            mapping_out = get("--mapping");
             statistics_out = get("--statistics");
 
             set_hierarchy();
@@ -459,135 +464,135 @@ namespace HeiProMap {
         void set_fastest() {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 1;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "strong";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
         }
 
         void set_fast() {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 4;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "eco";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = false;
+            label_propagation_config.enabled = false;
             label_propagation_config.max_iteration = 1;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.enabled = false;
             multi_try_fm_refinement_config.max_iteration = 2;
-            multi_try_fm_refinement_config.alpha         = 100.0;
+            multi_try_fm_refinement_config.alpha = 100.0;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha         = 100.0;
+            quotient_graph_refinement_config.alpha = 100.0;
 
             // enable k-way fm
-            k_way_fm_refinement_config.enabled       = false;
+            k_way_fm_refinement_config.enabled = false;
             k_way_fm_refinement_config.max_iteration = 1;
-            k_way_fm_refinement_config.alpha         = 100.0;
+            k_way_fm_refinement_config.alpha = 100.0;
 
             // enable experimental refinement
-            hierarchy_aware_multi_way_fm_config.enabled       = false;
+            hierarchy_aware_multi_way_fm_config.enabled = false;
             hierarchy_aware_multi_way_fm_config.max_iteration = 1;
-            hierarchy_aware_multi_way_fm_config.alpha         = 100.0;
+            hierarchy_aware_multi_way_fm_config.alpha = 100.0;
         }
 
         void set_eco() {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "fast";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha         = 1000.0;
+            quotient_graph_refinement_config.alpha = 1000.0;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = true;
+            multi_try_fm_refinement_config.enabled = true;
             multi_try_fm_refinement_config.max_iteration = 3;
-            multi_try_fm_refinement_config.alpha         = 1000.0;
+            multi_try_fm_refinement_config.alpha = 1000.0;
         }
 
         void set_strong() {
             // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            coarsening_algorithm_string = "size-constrained-lp";
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id     = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "strong";
-            global_multisection_config.mode        = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
 
             // enable label propagation
-            label_propagation_config.enabled       = false;
+            label_propagation_config.enabled = false;
             label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled       = true;
+            quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha         = 1000.0;
+            quotient_graph_refinement_config.alpha = 1000.0;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled       = false;
+            multi_try_fm_refinement_config.enabled = false;
             multi_try_fm_refinement_config.max_iteration = 3;
-            multi_try_fm_refinement_config.alpha         = 1000.0;
+            multi_try_fm_refinement_config.alpha = 1000.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled                    = false;
-            flow_based_refinement_config.min_level                  = 0;
-            flow_based_refinement_config.max_level                  = 100;
-            flow_based_refinement_config.max_global_iteration       = 2;
-            flow_based_refinement_config.max_local_iteration        = 5;
-            flow_based_refinement_config.alpha                      = 2.0;
-            flow_based_refinement_config.alpha_upper_bound          = 16.0;
-            flow_based_refinement_config.alpha_modifier             = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set      = true;
+            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.min_level = 0;
+            flow_based_refinement_config.max_level = 100;
+            flow_based_refinement_config.max_global_iteration = 2;
+            flow_based_refinement_config.max_local_iteration = 5;
+            flow_based_refinement_config.alpha = 2.0;
+            flow_based_refinement_config.alpha_upper_bound = 16.0;
+            flow_based_refinement_config.alpha_modifier = 2.0;
+            flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 50;
 
-            hierarchy_aware_flow_based_refinement_configuration.enabled                    = false;
-            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration       = 2;
-            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration        = 5;
-            hierarchy_aware_flow_based_refinement_configuration.alpha                      = 2.0;
-            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound          = 16.0;
-            hierarchy_aware_flow_based_refinement_configuration.alpha_modifier             = 2.0;
-            hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set      = true;
+            hierarchy_aware_flow_based_refinement_configuration.enabled = false;
+            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration = 2;
+            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration = 5;
+            hierarchy_aware_flow_based_refinement_configuration.alpha = 2.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound = 16.0;
+            hierarchy_aware_flow_based_refinement_configuration.alpha_modifier = 2.0;
+            hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set = true;
             hierarchy_aware_flow_based_refinement_configuration.closed_vertex_sets_repeats = 100;
 
-            hierarchy_aware_multi_way_fm_config.enabled                     = false;
+            hierarchy_aware_multi_way_fm_config.enabled = false;
             hierarchy_aware_quotient_graph_refinement_configuration.enabled = false;
 
             wave_refinement_configuration.enabled = false;
@@ -598,29 +603,29 @@ namespace HeiProMap {
         void set_experimental() {
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id     = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
             // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_multi_way_fm_config.enabled       = true;
+            hierarchy_aware_multi_way_fm_config.enabled = true;
             hierarchy_aware_multi_way_fm_config.max_iteration = 2;
-            hierarchy_aware_multi_way_fm_config.alpha         = 1000.0;
+            hierarchy_aware_multi_way_fm_config.alpha = 1000.0;
 
             // enable hierarchy aware multi try multi way fm refinement
-            hierarchy_aware_multi_try_multi_way_fm_config.enabled       = false;
+            hierarchy_aware_multi_try_multi_way_fm_config.enabled = false;
             hierarchy_aware_multi_try_multi_way_fm_config.max_iteration = 1;
-            hierarchy_aware_multi_try_multi_way_fm_config.alpha         = 100.0;
+            hierarchy_aware_multi_try_multi_way_fm_config.alpha = 100.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled                    = false;
-            flow_based_refinement_config.max_global_iteration       = 1;
-            flow_based_refinement_config.max_local_iteration        = 5;
-            flow_based_refinement_config.alpha                      = 8.0;
-            flow_based_refinement_config.alpha_upper_bound          = 32.0;
-            flow_based_refinement_config.alpha_modifier             = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set      = true;
+            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.max_local_iteration = 5;
+            flow_based_refinement_config.alpha = 8.0;
+            flow_based_refinement_config.alpha_upper_bound = 32.0;
+            flow_based_refinement_config.alpha_modifier = 2.0;
+            flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 100;
         }
 

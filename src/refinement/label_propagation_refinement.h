@@ -107,6 +107,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "LabelPropagationRefinement", "refine");
+
             bool     positive_move_occurred = true;
             for (u64 iteration              = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;

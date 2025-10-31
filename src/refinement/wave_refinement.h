@@ -115,6 +115,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "WaveRefinement", "refine");
+
             u64 max_n_waves = 10000;
             u64 max_n_repetitions = 1;
             u64 max_n_add_nodes = 100;

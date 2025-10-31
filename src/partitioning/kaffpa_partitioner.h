@@ -104,6 +104,8 @@ namespace HeiProMap {
                        const f64 imbalance,
                        RandomEngine &t_random_engine,
                        const KaffpaPartitionerConfiguration &i_config) {
+            ScopedTimer _t("partition", "KaffpaPartitioner", "partition");
+
             KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration *>(&i_config);
 
             // number of vertices and edges

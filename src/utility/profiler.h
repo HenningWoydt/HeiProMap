@@ -128,7 +128,6 @@ namespace HeiProMap {
 
         // Add a timing sample
         void add(const char *group, const char *function, const char *kernel, double ms) {
-            std::unique_lock<std::shared_mutex> lock(mtx_); // writers take unique lock
             auto &g = groups_[group];
             auto &f = g.functions[function];
             f.kernels[kernel].add(ms);
@@ -422,7 +421,6 @@ namespace HeiProMap {
     private:
         Profiler() = default;
 
-        mutable std::shared_mutex mtx_;
         std::unordered_map<std::string, KTGroup> groups_;
         KTStat total_;
     };

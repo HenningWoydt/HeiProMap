@@ -114,6 +114,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "LightningRefinement", "refine");
+
             if (level + 5 < max_level) { return; }
 
             for (size_t i = 0; i < config->max_iteration; ++i) {

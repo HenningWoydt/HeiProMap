@@ -204,6 +204,8 @@ namespace HeiProMap {
         }
 
         void reset() {
+            ScopedTimer _t("misc", "BoundaryVertexManager", "reset");
+
             m_n_boundary_edges.initialize(m_n, 0);
             m_boundaries_size.initialize(m_k, 0);
             // m_complete_boundary_size = 0;

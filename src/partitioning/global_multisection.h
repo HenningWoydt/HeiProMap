@@ -118,6 +118,8 @@ namespace HeiProMap {
                        const f64 imbalance,
                        RandomEngine &t_random_engine,
                        const GlobalMultisectionConfiguration &i_config)  {
+            ScopedTimer _t("partition", "GlobalMultisectionPartitioner", "partition");
+
             GlobalMultisectionConfiguration config = *dynamic_cast<const GlobalMultisectionConfiguration *>(&i_config);
 
             int mode;

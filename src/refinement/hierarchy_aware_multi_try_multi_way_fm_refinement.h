@@ -121,6 +121,8 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph) override {
+            ScopedTimer _t("refinement", "HierarchyAwareMultiTryMultiWayFMRefinement", "refine");
+
             if (level > 0) { return; }
 
             for (size_t iteration = 0; iteration < config->max_iteration; ++iteration) {

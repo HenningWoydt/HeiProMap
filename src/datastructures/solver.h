@@ -40,6 +40,7 @@
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../coarsening/random_edge_matcher.h"
+#include "../coarsening/size_constrained_lp.h"
 #include "../rebalance/rebalancer.h"
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
@@ -75,6 +76,7 @@ namespace HeiProMap {
         HeavyEdgeMatcher he_matcher;
         RandomEdgeMatcher rnd_matcher;
         GlobalPathAlgorithmMatcher gpa_matcher;
+        SizeConstrainedLP size_constrained_lp;
 
         Rebalancer rebalancer;
 
@@ -125,6 +127,7 @@ namespace HeiProMap {
             he_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.heavy_edge_matcher_config);
             rnd_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.random_edge_matcher_config);
             gpa_matcher.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.global_path_algorithm_config);
+            size_constrained_lp.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, random_engine, ac.size_constrained_lp_config);
 
             rebalancer.initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, lmax, ac.hierarchy, ac.distance, random_engine);
 
@@ -205,11 +208,11 @@ namespace HeiProMap {
                 u64 level = 0;
                 u64 max_level = 0;
 
-                u64 mult = 64;
+                u64 mult = 8;
                 if (v_cycle > 0) { mult = 16; }
 
                 while (graphs.back().get_n() > ac.k * mult) {
-                    matching(level, v_cycle);
+                    coarsening(level, v_cycle);
                     if (mappings.back().get_coarse_n() >= 0.9 * graphs.back().get_n()) {
                         mappings.pop_back();
                         break;
@@ -247,6 +250,7 @@ namespace HeiProMap {
                 }
 
                 // initialize boundary vertices and quotient graph
+                ScopedTimer _t_allocate("partition", "misc", "initialize_datastructures");
                 p_manager.reset_weights();
                 bv_manager.reset();
                 q_graph.initialize(ac.k);
@@ -269,6 +273,7 @@ namespace HeiProMap {
                         endfor
                     }
                 endfor
+                _t_allocate.stop();
 
                 initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
                 initial_max_block_weight = max(p_manager.get_bweights());
@@ -277,7 +282,7 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void matching(const u64 level, u64 v_cycle) {
+        void coarsening(const u64 level, u64 v_cycle) {
             mappings.emplace_back();
             mappings.back().initialize(graphs.back().get_n());
 
@@ -290,6 +295,8 @@ namespace HeiProMap {
                     rnd_matcher.match(level, graphs.back(), p_manager, mappings.back());
                 } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                     gpa_matcher.match(level, graphs.back(), p_manager, mappings.back());
+                } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
+                    size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back());
                 } else {
                     std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
