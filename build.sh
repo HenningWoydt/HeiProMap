@@ -82,5 +82,5 @@ cd build
 
 # build
 cmake .. -DCMAKE_BUILD_TYPE=Release && cd ${ROOT}
-cmake --build build --parallel "$(get_num_cores)" --target HeiProMap
-cmake --build build --parallel "$(get_num_cores)" --target heipromap  # the library
+cmake --build build --parallel "$JOBS" --target HeiProMap
+cmake --build build --parallel "$JOBS" --target heipromap  # the library
