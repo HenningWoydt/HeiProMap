@@ -1,0 +1,413 @@
+/*******************************************************************************
+ * MIT License
+ *
+ * This file is part of HeiProMap.
+ *
+ * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ ******************************************************************************/
+
+#ifndef HEIPROMAP_REBALANCER_H
+#define HEIPROMAP_REBALANCER_H
+
+#include <limits>
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <queue>
+
+#include "../definitions.h"
+#include "../definitions_1.h"
+#include "../definitions_2.h"
+#include "../definitions_3.h"
+#include "../utility/random_engine.h"
+#include "../utility/qap.h"
+
+namespace HeiProMap {
+    struct RebalancerMove {
+        vertex_t u;
+        partition_t best_id;
+        weight_t best_qap;
+        u64 state_id;
+
+        RebalancerMove(const vertex_t t_u, const partition_t t_id, const weight_t t_qap, const u64 t_state_id) {
+            u = t_u;
+            best_id = t_id;
+            best_qap = t_qap;
+            state_id = t_state_id;
+        }
+
+        bool operator>(const RebalancerMove &m) const { return best_qap > m.best_qap; }
+        bool operator<(const RebalancerMove &m) const { return best_qap < m.best_qap; }
+        bool operator<=(const RebalancerMove &m) const { return best_qap <= m.best_qap; }
+    };
+
+    class Rebalancer {
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        weight_t m_lmax = 0;
+
+        std::vector<partition_t> m_hierarchy; // O(l)
+        std::vector<weight_t> m_distance; // O(l)
+
+        RandomEngine *random_engine = nullptr;
+
+    public:
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const weight_t t_lmax,
+                        const std::vector<partition_t> &t_hierarchy,
+                        const std::vector<weight_t> &t_distance,
+                        RandomEngine &t_random_engine) {
+            ScopedTimer _t("io", "Rebalancer", "initialize");
+
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
+            m_lmax = t_lmax;
+
+            m_hierarchy = t_hierarchy;
+            m_distance = t_distance;
+
+            random_engine = &t_random_engine;
+        }
+
+        RebalancerMove get_best_move(vertex_t u,
+                                     const graph_t &g,
+                                     const p_manager_t &p_manager,
+                                     const q_graph_t &q_graph,
+                                     const d_oracle_t &d_oracle,
+                                     const u64 state_id) const {
+            RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
+
+            partition_t u_id = p_manager[u];
+            weight_t u_weight = g.weight(u);
+
+            forall_guiv(g, u, j, v) {
+                    partition_t v_id = p_manager[v];
+                    if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
+
+                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                    if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
+                        move.best_qap = qap_delta;
+                        move.best_id = v_id;
+                    }
+                }
+            endfor
+
+            if (move.best_id != m_k) { return move; }
+
+            for (partition_t v_id = 0; v_id < m_k; ++v_id) {
+                if (v_id == u_id) { continue; }
+                if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
+
+                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
+                    move.best_qap = qap_delta;
+                    move.best_id = v_id;
+                }
+            }
+
+            return move;
+        }
+
+        RebalancerMove get_local_best_move(vertex_t u,
+                                           const graph_t &g,
+                                           const p_manager_t &p_manager,
+                                           const d_oracle_t &d_oracle,
+                                           const u64 state_id) const {
+            RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
+
+            partition_t u_id = p_manager[u];
+            weight_t u_weight = g.weight(u);
+
+            forall_guiv(g, u, j, v) {
+                    partition_t v_id = p_manager[v];
+                    if (p_manager.get_bweight(v_id) + u_weight > m_lmax) { continue; }
+
+                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                    if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
+                        move.best_qap = qap_delta;
+                        move.best_id = v_id;
+                    }
+                }
+            endfor
+
+            return move;
+        }
+
+        void rebalance(const graph_t &g,
+                       p_manager_t &p_manager,
+                       bv_manager_t &bv_manager,
+                       q_graph_t &q_graph,
+                       d_oracle_t &d_oracle) {
+            ScopedTimer _t_allocate("rebalance", "Rebalancer", "allocate");
+
+            AlignedArray<vertex_t> boundary;
+            boundary.initialize(g.get_n());
+            size_t boundary_size = 0;
+
+            AlignedArray<RebalancerMove> moves;
+            std::priority_queue<RebalancerMove> global_queue;
+
+            AlignedArray<u64> offsets;
+            offsets.initialize(m_k + 1);
+            size_t offsets_size = 0;
+            AlignedArray<u64> cursor;
+            cursor.initialize(m_k + 1);
+
+            AlignedArray<u64> state_ids;
+            state_ids.initialize(g.get_n(), 0);
+
+            _t_allocate.stop();
+
+            bool move_made = true;
+            while (move_made) {
+                ScopedTimer _t_get_boundary("rebalance", "Rebalancer", "get_boundary");
+                move_made = false;
+
+                offsets_size = 1;
+                offsets[0] = 0;
+                for (partition_t id = 0; id < m_k; ++id) {
+                    if (p_manager.get_bweight(id) > m_lmax) {
+                        offsets[offsets_size] = offsets[offsets_size - 1] + bv_manager.size(id);
+                    } else {
+                        offsets[offsets_size] = offsets[offsets_size - 1];
+                    }
+                    offsets_size += 1;
+                }
+
+                for (size_t i = 0; i < offsets_size; ++i) {
+                    cursor[i] = offsets[i];
+                }
+                boundary_size = offsets[offsets_size - 1];
+
+                for (partition_t id = 0; id < m_k; ++id) {
+                    if (p_manager.get_bweight(id) > m_lmax) {
+                        forall_bv_id_iu(bv_manager, id, i, u) {
+                                boundary[cursor[id]] = u;
+                                cursor[id] += 1;
+                            }
+                        endfor
+                    }
+                }
+
+                _t_get_boundary.stop();
+                ScopedTimer _t_fill_heaps("rebalance", "Rebalancer", "fill_heaps");
+
+                moves.initialize(boundary_size);
+                for (u64 i = 0; i < boundary_size; ++i) {
+                    vertex_t u = boundary[i];
+                    state_ids[u] += 1;
+                    RebalancerMove move = get_local_best_move(u, g, p_manager, d_oracle, state_ids[u]);
+                    moves[i] = move;
+                }
+
+                _t_fill_heaps.stop();
+                ScopedTimer _t_global_heap("rebalance", "Rebalancer", "global_heap");
+
+                for (u64 i = 0; i < boundary_size; ++i) {
+                    if (moves[i].best_id != m_k) {
+                        global_queue.push(moves[i]);
+                    }
+                }
+
+                _t_global_heap.stop();
+                ScopedTimer _t_process_heap("rebalance", "Rebalancer", "process_heap");
+
+                while (!global_queue.empty()) {
+                    RebalancerMove move = global_queue.top();
+                    global_queue.pop();
+                    vertex_t u = move.u;
+                    weight_t u_weight = g.weight(u);
+                    partition_t u_id = p_manager[u];
+                    partition_t best_id = move.best_id;
+
+                    if (move.best_id == m_k) { continue; } // not a valid destination
+                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
+                    if (p_manager.get_bweight(u_id) <= m_lmax) { continue; } // dont need to move anymore
+                    if (state_ids[u] != move.state_id) { continue; }
+
+                    if (p_manager.get_bweight(best_id) + u_weight > m_lmax) {
+                        // best_id is overloaded, recompute
+                        state_ids[u] += 1;
+                        RebalancerMove new_move = get_local_best_move(u, g, p_manager, d_oracle, state_ids[u]);
+                        if (new_move.best_id != m_k) {
+                            global_queue.push(new_move);
+                        }
+                        continue;
+                    }
+
+                    // move
+                    bv_manager.move(g, p_manager, u, u_id, best_id);
+                    q_graph.move(g, p_manager, u, u_id, best_id);
+                    p_manager.move(u, u_weight, u_id, best_id);
+                    move_made = true;
+
+                    forall_guiv(g, u, j, v) {
+                            if (bv_manager.is_boundary(v) == false) { continue; }
+                            if (p_manager.get_bweight(p_manager[v]) <= m_lmax) { continue; }
+
+                            state_ids[v] += 1;
+                            RebalancerMove new_move = get_local_best_move(v, g, p_manager, d_oracle, state_ids[u]);
+                            if (new_move.best_id != m_k) {
+                                global_queue.push(new_move);
+                            }
+                        }
+                    endfor
+                }
+                _t_process_heap.stop();
+            }
+        }
+
+        void rebalance_last_layer(const graph_t &g,
+                                  p_manager_t &p_manager,
+                                  bv_manager_t &bv_manager,
+                                  q_graph_t &q_graph,
+                                  d_oracle_t &d_oracle) {
+            rebalance(g, p_manager, bv_manager, q_graph, d_oracle);
+            ScopedTimer _t_allocate("rebalance", "LL-Rebalancer", "allocate");
+
+            AlignedArray<vertex_t> boundary;
+            boundary.initialize(g.get_n());
+            size_t boundary_size = 0;
+
+            AlignedArray<RebalancerMove> moves;
+            std::priority_queue<RebalancerMove> global_queue;
+
+            AlignedArray<u64> offsets;
+            offsets.initialize(m_k + 1);
+            size_t offsets_size = 0;
+
+            AlignedArray<u64> cursor;
+            cursor.initialize(m_k + 1);
+
+            AlignedArray<u64> state_ids;
+            state_ids.initialize(g.get_n(), 0);
+
+            _t_allocate.stop();
+
+            bool move_made = true;
+            while (move_made) {
+                ScopedTimer _t_get_boundary("rebalance", "LL-Rebalancer", "get_boundary");
+                move_made = false;
+
+                offsets_size = 1;
+                offsets[0] = 0;
+                for (partition_t id = 0; id < m_k; ++id) {
+                    if (p_manager.get_bweight(id) > m_lmax) {
+                        offsets[offsets_size] = offsets[offsets_size - 1] + bv_manager.size(id);
+                    } else {
+                        offsets[offsets_size] = offsets[offsets_size - 1];
+                    }
+                    offsets_size += 1;
+                }
+
+                for (size_t i = 0; i < offsets_size; ++i) {
+                    cursor[i] = offsets[i];
+                }
+                boundary_size = offsets[offsets_size - 1];
+
+
+                for (partition_t id = 0; id < m_k; ++id) {
+                    if (p_manager.get_bweight(id) > m_lmax) {
+                        forall_bv_id_iu(bv_manager, id, i, u) {
+                                boundary[cursor[id]] = u;
+                                cursor[id] += 1;
+                            }
+                        endfor
+                    }
+                }
+
+                _t_get_boundary.stop();
+                ScopedTimer _t_fill_heaps("rebalance", "LL-Rebalancer", "fill_heaps");
+
+                moves.initialize(boundary_size);
+                for (u64 i = 0; i < boundary_size; ++i) {
+                    vertex_t u = boundary[i];
+                    state_ids[u] += 1;
+                    RebalancerMove move = get_best_move(u, g, p_manager, q_graph, d_oracle, state_ids[u]);
+                    moves[i] = move;
+                }
+
+                _t_fill_heaps.stop();
+                ScopedTimer _t_global_heap("rebalance", "LL-Rebalancer", "global_heap");
+
+                global_queue = std::priority_queue<RebalancerMove>();
+                for (u64 i = 0; i < boundary_size; ++i) {
+                    if (moves[i].best_id != m_k) {
+                        global_queue.push(moves[i]);
+                    }
+                }
+
+                _t_global_heap.stop();
+                ScopedTimer _t_process_heap("rebalance", "LL-Rebalancer", "process_heap");
+
+                while (!global_queue.empty()) {
+                    RebalancerMove move = global_queue.top();
+                    global_queue.pop();
+                    vertex_t u = move.u;
+                    weight_t u_weight = g.weight(u);
+                    partition_t u_id = p_manager[u];
+                    partition_t best_id = move.best_id;
+
+                    if (move.best_id == m_k) { continue; } // not a valid destination
+                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
+                    if (p_manager.get_bweight(u_id) <= m_lmax) { continue; } // dont need to move anymore
+                    if (state_ids[u] != move.state_id) { continue; }
+
+                    if (p_manager.get_bweight(best_id) + u_weight > m_lmax) {
+                        // best_id is overloaded, recompute
+                        state_ids[u] += 1;
+                        RebalancerMove new_move = get_best_move(u, g, p_manager, q_graph, d_oracle, state_ids[u]);
+                        if (new_move.best_id != m_k) {
+                            global_queue.push(new_move);
+                        }
+                        continue;
+                    }
+
+                    // move
+                    bv_manager.move(g, p_manager, u, u_id, best_id);
+                    q_graph.move(g, p_manager, u, u_id, best_id);
+                    p_manager.move(u, u_weight, u_id, best_id);
+                    move_made = true;
+
+                    forall_guiv(g, u, j, v) {
+                            if (bv_manager.is_boundary(v) == false) { continue; }
+                            if (p_manager.get_bweight(p_manager[v]) <= m_lmax) { continue; }
+
+                            state_ids[v] += 1;
+                            RebalancerMove new_move = get_best_move(v, g, p_manager, q_graph, d_oracle, state_ids[v]);
+                            if (new_move.best_id != m_k) {
+                                global_queue.push(new_move);
+                            }
+                        }
+                    endfor
+                }
+
+                _t_process_heap.stop();
+            }
+        }
+    };
+}
+
+#endif //HEIPROMAP_REBALANCER_H

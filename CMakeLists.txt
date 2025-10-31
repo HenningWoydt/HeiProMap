@@ -28,20 +28,6 @@ find_path(KAHIP_INCLUDE_DIR
 message(STATUS "Found KaHIP: ${KAHIP_LIBRARY}")
 include_directories(${KAHIP_INCLUDE_DIR})
 
-# if(NOT GUROBI_DIR)
-#     message(FATAL_ERROR "GUROBI_DIR not set — please pass it using -DGUROBI_DIR=/opt/gurobi1201/linux64")
-# endif()
-
-# message(STATUS "GUROBI_DIR is ${GUROBI_DIR}")
-# message(STATUS "GUROBI_HOME is $ENV{GUROBI_HOME}")
-
-# find_package(GUROBI REQUIRED)
-# include_directories(${GUROBI_INCLUDE_DIRS})
-
-# message(STATUS "GUROBI_INCLUDE_DIRS is ${GUROBI_INCLUDE_DIRS}")
-# message(STATUS "GUROBI_CXX_LIBRARY is ${GUROBI_CXX_LIBRARY}")
-# message(STATUS "GUROBI_LIBRARY is ${GUROBI_LIBRARY}")
-
 # Compiler Flags
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter")
@@ -50,43 +36,29 @@ set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG -finline-functions -fwhole-program 
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra -pedantic")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 
-# Find all commons source and header files
-file(GLOB_RECURSE SOURCES_COMMONS CONFIGURE_DEPENDS "src/commons/*.cpp")
-file(GLOB_RECURSE HEADERS_COMMONS CONFIGURE_DEPENDS "src/commons/*.h")
-
 # Find all serial source and header files
-file(GLOB_RECURSE SOURCES_SERIAL CONFIGURE_DEPENDS "src/serial/*.cpp")
-file(GLOB_RECURSE HEADERS_SERIAL CONFIGURE_DEPENDS "src/serial/*.h")
-
-# Find all parallel source and header files
-file(GLOB_RECURSE SOURCES_PARALLEL CONFIGURE_DEPENDS "src/parallel/*.cpp")
-file(GLOB_RECURSE HEADERS_PARALLEL CONFIGURE_DEPENDS "src/parallel/*.h")
-
-# Find all parallel source and header files
-file(GLOB_RECURSE SOURCES_DEEP CONFIGURE_DEPENDS "src/deep/*.cpp")
-file(GLOB_RECURSE HEADERS_DEEP CONFIGURE_DEPENDS "src/deep/*.h")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "src/*.h")
 
 # Find all maxflow files
 file(GLOB_RECURSE MAXFLOW_SOURCES CONFIGURE_DEPENDS "extern/maxflow/*.cpp")
 file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow/*.h")
+foreach(maxflow_src ${MAXFLOW_SOURCES})
+    set_source_files_properties(${maxflow_src} PROPERTIES
+            COMPILE_FLAGS "-w"              # GCC/Clang: disable all warnings
+            # or: COMPILE_OPTIONS -w        # equivalent, more modern
+    )
+endforeach()
 
-# add_executable(HeiProMap application/HeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
-# add_executable(MtHeiProMap application/MtHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_PARALLEL} ${SOURCES_PARALLEL})
-add_executable(DeepHeiProMap application/DeepHeiProMap.cpp ${HEADERS_COMMONS} ${SOURCES_COMMONS} ${HEADERS_DEEP} ${SOURCES_DEEP} ${HEADERS_SERIAL} ${SOURCES_SERIAL} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
-
-# Link OpenMP library
-find_package(OpenMP REQUIRED)
-if (OpenMP_CXX_FOUND)
-    message(STATUS "OpenMP found")
-    # target_link_libraries(MtHeiProMap OpenMP::OpenMP_CXX)
-    target_link_libraries(DeepHeiProMap OpenMP::OpenMP_CXX)
-endif ()
+add_executable(HeiProMap main.cpp ${HEADERS} ${SOURCES} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
 
 # Link KaHIP library
-# target_link_libraries(HeiProMap kahip)
-# target_link_libraries(MtHeiProMap kahip)
-target_link_libraries(DeepHeiProMap
-                      ${KAHIP_LIBRARY})
+target_link_libraries(HeiProMap ${KAHIP_LIBRARY})
 
-# target_link_libraries(HeiProMap ${GUROBI_CXX_LIBRARY})
-# target_link_libraries(HeiProMap ${GUROBI_LIBRARY})
+# Add the library subdirectory
+add_library(libheipromap OBJECT ${HEADERS} ${SOURCES} ${MAXFLOW_SOURCES} ${MAXFLOW_HEADERS})
+add_library(heipromap SHARED lib/libheipromap.cpp $<TARGET_OBJECTS:libheipromap>)
+target_include_directories(heipromap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/interface)
+target_link_libraries(heipromap ${KAHIP_LIBRARY}) # Link KaHIP library
+install(TARGETS heipromap DESTINATION lib)
+
