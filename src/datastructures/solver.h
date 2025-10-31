@@ -208,7 +208,7 @@ namespace HeiProMap {
                 u64 level = 0;
                 u64 max_level = 0;
 
-                u64 mult = 8;
+                u64 mult = 4;
                 if (v_cycle > 0) { mult = 16; }
 
                 while (graphs.back().get_n() > ac.k * mult) {

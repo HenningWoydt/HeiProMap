@@ -37,12 +37,11 @@
 #include "../utility/mapping.h"
 
 namespace HeiProMap {
-
     class SizeConstrainedLPConfiguration {
     public:
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
-        f64 f = 64;
+        f64 f = 16;
     };
 
     class SizeConstrainedLP {
