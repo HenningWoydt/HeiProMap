@@ -478,7 +478,7 @@ namespace HeiProMap {
 
         void set_fast() {
             // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -517,7 +517,7 @@ namespace HeiProMap {
 
         void set_eco() {
             // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -572,7 +572,7 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha = 1000.0;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.min_level = 0;
             flow_based_refinement_config.max_level = 100;
             flow_based_refinement_config.max_global_iteration = 2;

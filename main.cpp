@@ -54,9 +54,9 @@ int main(const int argc, char *argv[]) {
                 // {"--graph", "../../graph_collection/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
                 // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
                 // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
-                {"--graph", "../../graph_collection/mapping/rgg23.graph"},
-                {"--mapping", "../data/out/partition/rgg23.txt"},
-                {"--statistics", "../data/out/statistics/rgg23.JSON"},
+                {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"},
+                {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
+                {"--statistics", "../data/out/statistics/2cubes_sphere.mtx.JSON"},
                 // {"--graph", "../data/training/598a.graph"},
                 // {"--mapping", "../data/out/partition/598a.txt"},
                 // {"--statistics", "../data/out/statistics/598a.JSON"},
@@ -72,7 +72,7 @@ int main(const int argc, char *argv[]) {
                 {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
-                {"--config", "strong"},
+                {"--config", "fast"},
                 {"--seed", "0"},
 
                 // coarsening
@@ -176,7 +176,7 @@ int main(const int argc, char *argv[]) {
     }
 
     auto ep = get_time_point();
-    std::cout << "Total Time: " << get_seconds(sp, ep) << std::endl;
+    std::cout << "Total Time in main.cpp: " << get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

@@ -177,7 +177,7 @@ namespace HeiProMap {
                 m_graph_weight += vw;
 
                 // read in edges
-                while (*p != '\n') {
+                while (*p != '\n' && p < end) {
                     vertex_t v = 0;
                     weight_t w = 1;
 
