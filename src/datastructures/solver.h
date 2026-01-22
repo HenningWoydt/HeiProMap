@@ -56,6 +56,7 @@ namespace HeiProMap {
     class Solver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
+        f64 init_time = 0.0;
 
         // statistics
         s64 initial_qap = 0;
@@ -105,10 +106,11 @@ namespace HeiProMap {
 
     public:
         explicit Solver(const AlgorithmConfiguration &t_ac) {
+            graphs.emplace_back(t_ac.graph_in);
+
+            auto sp = get_time_point();
             ac = t_ac;
             random_engine = RandomEngine(ac.seed);
-
-            graphs.emplace_back(ac.graph_in);
 
             // balance
             lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].weight() / (f64) ac.k));
@@ -162,6 +164,9 @@ namespace HeiProMap {
                     refiner->initialize(graphs[0].get_n(), graphs[0].get_m(), ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
                 }
             }
+
+            auto ep = get_time_point();
+            init_time += get_seconds(sp, ep);
         }
 
         std::vector<vertex_t> solve() {
@@ -177,7 +182,7 @@ namespace HeiProMap {
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
 
-            std::cout << "Total time        : " << duration << std::endl;
+            std::cout << "Total time        : " << duration + init_time << std::endl;
             std::cout << "#Nodes            : " << graphs.back().get_n() << std::endl;
             std::cout << "#Edges            : " << graphs.back().get_m() << std::endl;
             std::cout << "k                 : " << ac.k << std::endl;
