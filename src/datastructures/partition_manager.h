@@ -93,11 +93,43 @@ namespace HeiProMap {
             return weights;
         }
 
+        weight_t max_weight() const {
+            weight_t m = 0;
+            for (size_t i = 0; i < m_k; ++i) {
+                m = std::max(m, bweights[i]);
+            }
+            return m;
+        }
+
+        partition_t n_empty_blocks() const {
+            partition_t n = 0;
+            for (size_t i = 0; i < m_k; ++i) {
+                n += bweights[i] == 0;
+            }
+            return n;
+        }
+
+        partition_t n_oload_blocks() const {
+            partition_t n = 0;
+            for (size_t i = 0; i < m_k; ++i) {
+                n += bweights[i] > lmax;
+            }
+            return n;
+        }
+
+        weight_t sum_oload_weight() const {
+            weight_t w = 0;
+            for (size_t i = 0; i < m_k; ++i) {
+                w += std::max((weight_t) 0 , bweights[i] - lmax);
+            }
+            return w;
+        }
+
         void contract(const Mapping &mapping) {
             ScopedTimer _t("contraction", "PartitionManager", "contract");
 
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
-                vertex_t map_u = mapping.get_map_u(u);
+                vertex_t map_u = mapping.get(u);
                 partition_temp[map_u] = partition[u];
             }
             std::swap(partition, partition_temp);
@@ -111,7 +143,7 @@ namespace HeiProMap {
         void uncontract(const Mapping &mapping) {
             ScopedTimer _t("uncontraction", "PartitionManager", "uncontract");
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
-                vertex_t map_u = mapping.get_map_u(u);
+                vertex_t map_u = mapping.get(u);
                 partition_temp[u] = partition[map_u];
             }
             std::swap(partition, partition_temp);

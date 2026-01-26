@@ -130,7 +130,7 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t    u_weight = g.weight(u);
+                    weight_t    u_weight = g.v_weights[u];
                     partition_t u_id     = p_manager[u];
 
                     // make the move that reduces qap the most

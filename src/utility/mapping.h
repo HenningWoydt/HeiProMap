@@ -46,12 +46,8 @@ namespace HeiProMap {
             map.initialize(n);
         }
 
-        void map_to_self() {
-            std::iota(map.get_ptr(), map.get_ptr() + old_n, 0);
-        }
-
-        void set_u(vertex_t u, vertex_t v) { map[u] = v; }
-        vertex_t get_map_u(vertex_t u) const { return map[u]; }
+        void set(vertex_t u, vertex_t v) { map[u] = v; }
+        vertex_t get(vertex_t u) const { return map[u]; }
         void set_coarse_n(vertex_t n) { coarse_n = n; }
         vertex_t get_coarse_n() const { return coarse_n; }
         vertex_t get_old_n() const { return old_n; }

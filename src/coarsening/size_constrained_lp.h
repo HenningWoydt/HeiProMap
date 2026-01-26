@@ -41,7 +41,7 @@ namespace HeiProMap {
     public:
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
-        f64 f = 16;
+        f64 f = 8;
     };
 
     class SizeConstrainedLP {
@@ -49,6 +49,17 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
         weight_t m_l_max = 0;
+
+        AlignedArray<vertex_t> flat_vertices;
+        AlignedArray<vertex_t> bucket_sizes;
+        AlignedArray<vertex_t> bucket_offsets;
+        AlignedArray<weight_t> cluster_weights;
+        AlignedArray<vertex_t> cluster_count;
+        AlignedArray<u8> active;
+        AlignedArray<u8> active_next;
+        FlatMap<vertex_t, weight_t> flat_map;
+        AlignedArray<vertex_t> remap;
+        AlignedArray<vertex_t> singletons;
 
         const SizeConstrainedLPConfiguration *config = nullptr;
         RandomEngine *random_engine = nullptr;
@@ -71,186 +82,331 @@ namespace HeiProMap {
             random_engine = &t_random_engine;
         }
 
+        void merge_when_identitiy([[maybe_unused]] const size_t level,
+                                  const graph_t &g,
+                                  [[maybe_unused]] const p_manager_t &p_manager,
+                                  Mapping &mapping,
+                                  weight_t max_w) {
+            ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_when_identitiy");
+
+            vertex_t n = g.n;
+
+            // 2) collect active cluster ids
+            std::vector<vertex_t> ids;
+            std::vector<u32> used(n, 0);
+            ids.reserve(n);
+            for (vertex_t id = 0; id < n; ++id) {
+                ids.push_back(id);
+            }
+
+            // 3) sort by cluster weight ascending (merge small into something feasible)
+            std::sort(ids.begin(), ids.end(), [&](vertex_t a, vertex_t b) { return g.v_weights[a] < g.v_weights[b]; });
+
+            // 4) greedy merging:
+            // for each small cluster a, find the smallest cluster b (b != a) s.t. cw[a]+cw[b] <= max_w
+            // and move all members of a into b.
+            for (size_t ia = 0; ia < ids.size(); ++ia) {
+                vertex_t a = ids[ia];
+                if (used[a] == 1) { continue; }
+
+                // find best target b
+                vertex_t best_b = (vertex_t) -1;
+
+                for (size_t ib = 0; ib < ids.size(); ++ib) {
+                    vertex_t b = ids[ids.size() - ib - 1];
+                    if (b == a) continue;
+                    if (used[b] == 1) { continue; }
+
+                    weight_t sum = g.v_weights[a] + g.v_weights[b];
+                    best_b = b;
+                    if (sum <= max_w) {
+                        best_b = b;
+                        break;
+                    }
+                }
+
+                if (best_b == (vertex_t) -1) {
+                    // No feasible merge target for this cluster under max_w.
+                    // In identity-mapping case this happens only if max_w < 2*min_vertex_weight etc.
+                    continue;
+                }
+
+                used[a] = 1;
+                used[best_b] = 1;
+
+                mapping.set(a, best_b);
+            }
+        }
+
+        void merge_singletons([[maybe_unused]] const size_t level,
+                              const graph_t &g,
+                              [[maybe_unused]] const p_manager_t &p_manager,
+                              Mapping &mapping,
+                              weight_t max_w) {
+            ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_singletons");
+
+            // 2) collect singleton vertices
+            vertex_t singletons_size = 0;
+            singletons.initialize(g.n);
+
+            forall_gu(g, u)
+                {
+                    vertex_t id = mapping.get(u);
+                    if (cluster_count[id] == 1) {
+                        singletons[singletons_size] = u;
+                        singletons_size += 1;
+                    }
+                }
+            endfor
+
+            if (singletons_size == 0) { return; }
+
+            // 3) For each singleton u: choose best neighbor cluster by summed edge weight
+            flat_map.clear();
+            flat_map.reserve(128);
+
+            for (size_t i = 0; i < singletons_size; ++i) {
+                vertex_t u = singletons[i];
+                vertex_t cur_id = mapping.get(u);
+
+                // might not be a singleton anymore if we already merged it earlier
+                if (cluster_count[cur_id] != 1) { continue; }
+
+                weight_t u_w = g.v_weights[u];
+                vertex_t current_id = mapping.get(u);
+                weight_t current_id_w = 0;
+
+                flat_map.clear();
+                forall_guivw(g, u, j, v, w) {
+                        vertex_t id = mapping.get(v);
+                        if (id == current_id) {
+                            current_id_w += w;
+                        } else {
+                            if (u_w + cluster_weights[id] > max_w) { continue; }
+                            flat_map.add(id, w);
+                        }
+                    }
+                endfor
+
+                vertex_t best_id = current_id;
+                weight_t best_weight = current_id_w;
+                for (auto [id, w]: flat_map) {
+                    // check constraint only for candidates != current_id (same logic as your loop)
+                    if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
+                        best_weight = w;
+                        best_id = id;
+                    }
+                }
+
+                if (best_id == cur_id) { continue; }
+
+                // 4) apply merge: u moves from cur_id -> best_id
+                mapping.set(u, best_id);
+
+                cluster_weights[best_id] += u_w;
+                cluster_count[best_id] += 1;
+
+                cluster_weights[cur_id] -= u_w;
+                cluster_count[cur_id] -= 1; // becomes 0
+            }
+        }
+
         void cluster([[maybe_unused]] const size_t level,
                      const graph_t &g,
                      [[maybe_unused]] const p_manager_t &p_manager,
                      Mapping &mapping) {
-            ScopedTimer _t_max("coarsening", "SizeConstrainedLP", "max");
-
-            // determine the maximum allowed cluster weight
-            weight_t max_w = (weight_t) ((f64) m_l_max / config->f);
+            weight_t max_w = 0; // (weight_t) ((f64) m_l_max / config->f);
             vertex_t max_deg = 0;
-            forall_gu(g, u)
-                {
-                    max_w = std::max(max_w, g.weight(u));
-                    max_deg = std::max(max_deg, g.size(u));
-                }
-            endfor
+            // get max w and max deg
+            {
+                ScopedTimer _t("coarsening", "SizeConstrainedLP", "max");
 
-            _t_max.stop();
-            ScopedTimer _t_flat_vertices("coarsening", "SizeConstrainedLP", "flat_vertices");
-
-            // get list of all vertices
-            AlignedArray<vertex_t> flat_vertices;
-            flat_vertices.initialize(g.get_n());
-
-            _t_flat_vertices.stop();
-            ScopedTimer _t_bucket_sizes("coarsening", "SizeConstrainedLP", "bucket_sizes");
-
+                // determine the maximum allowed cluster weight
+                forall_gu(g, u)
+                    {
+                        max_w = std::max(max_w, g.v_weights[u]);
+                        max_deg = std::max(max_deg, g.deg(u));
+                    }
+                endfor
+                max_w *= 2;
+            }
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
-            AlignedArray<vertex_t> bucket_sizes;
-            bucket_sizes.initialize(B, 0);
-            forall_gu(g, u)
-                {
-                    size_t d = g.size(u);
-                    size_t b = (d == 0) ? 0 : floor_log2(d);
-                    bucket_sizes[b]++;
-                }
-            endfor
+            // get all vertices
+            {
+                ScopedTimer _t("coarsening", "SizeConstrainedLP", "flat_vertices");
 
-            _t_bucket_sizes.stop();
-            ScopedTimer _t_bucket_offsets("coarsening", "SizeConstrainedLP", "bucket_offsets");
+                flat_vertices.initialize(g.n);
+                bucket_sizes.initialize(B, 0);
+                bucket_offsets.initialize(B);
 
-            AlignedArray<vertex_t> bucket_offsets;
-            bucket_offsets.initialize(B);
-            bucket_offsets[0] = 0;
-            for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
+                forall_gu(g, u)
+                    {
+                        size_t d = g.deg(u);
+                        size_t b = (d == 0) ? 0 : floor_log2(d);
+                        bucket_sizes[b]++;
+                    }
+                endfor
 
-            _t_bucket_offsets.stop();
-            ScopedTimer _t_fill_flat_vertices("coarsening", "SizeConstrainedLP", "fill_flat_vertices");
+                bucket_offsets[0] = 0;
+                for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
 
-            forall_gu(g, u)
-                {
-                    size_t d = g.size(u);
-                    size_t b = (d == 0) ? 0 : floor_log2(d);
-                    flat_vertices[bucket_offsets[b]] = u;
-                    bucket_offsets[b] += 1;
-                }
-            endfor
+                forall_gu(g, u)
+                    {
+                        size_t d = g.deg(u);
+                        size_t b = (d == 0) ? 0 : floor_log2(d);
+                        flat_vertices[bucket_offsets[b]] = u;
+                        bucket_offsets[b] += 1;
+                    }
+                endfor
+            }
+            // setup cluster weights
+            {
+                ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster_weights");
 
-            _t_fill_flat_vertices.stop();
-            ScopedTimer _t_cluster_weights("coarsening", "SizeConstrainedLP", "cluster_weights");
+                // set each vertex to its own id
+                cluster_weights.initialize(g.n);
+                cluster_count.initialize(g.n);
+                forall_gu(g, u)
+                    {
+                        mapping.set(u, u);
+                        cluster_weights[u] = g.v_weights[u];
+                        cluster_count[u] = 1;
+                    }
+                endfor
+            }
+            // setup active
+            {
+                ScopedTimer _t_active("coarsening", "SizeConstrainedLP", "active");
 
-            // set each vertex to its own id
-            AlignedArray<weight_t> cluster_weights;
-            cluster_weights.initialize(g.get_n());
-            forall_gu(g, u)
-                {
-                    mapping.set_u(u, u);
-                    cluster_weights[u] = g.weight(u);
-                }
-            endfor
+                active.initialize(g.n, 1);
+                active_next.initialize(g.n, 1);
+            }
 
-            _t_cluster_weights.stop();
-            ScopedTimer _t_active("coarsening", "SizeConstrainedLP", "active");
+            flat_map.clear();
+            flat_map.reserve(128);
 
-            AlignedArray<u8> active;
-            active.initialize(g.get_n(), 1);
-            AlignedArray<u8> active_next;
-            active_next.initialize(g.get_n(), 0);
-
-            _t_active.stop();
-            ScopedTimer _t_flat_maps("coarsening", "SizeConstrainedLP", "flat_maps");
-
-
-            FlatMap<vertex_t, weight_t> flat_map(128);
             u64 n_moved = 0;
 
-            _t_flat_maps.stop();
-
             for (u64 round = 0; round < config->max_rounds; ++round) {
-                ScopedTimer _t_reset_n_moved("coarsening", "SizeConstrainedLP", "reset_n_moved");
-
                 n_moved = 0;
+                //
+                {
+                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "shuffle_buckets");
 
-                _t_reset_n_moved.stop();
-                ScopedTimer _t_cluster("coarsening", "SizeConstrainedLP", "cluster");
+                    for (size_t i = 0; i < B - 1; ++i) {
+                        [[maybe_unused]] size_t beg = bucket_offsets[i];
+                        [[maybe_unused]] size_t end = bucket_offsets[i + 1];
 
-                for (size_t i = 0; i < g.get_n(); ++i) {
-                    vertex_t u = flat_vertices[i];
-                    if (active[u] == 0) { continue; }
-
-                    weight_t u_w = g.weight(u);
-                    vertex_t current_id = mapping.get_map_u(u);
-
-                    flat_map.clear();
-                    forall_guivw(g, u, j, v, w) {
-                            vertex_t id = mapping.get_map_u(v);
-                            flat_map[id] += w;
-                        }
-                    endfor
-
-                    vertex_t best_id = current_id;
-                    weight_t best_weight = 0;
-                    for (auto [id, w_sum]: flat_map) {
-                        weight_t cluster_weight = cluster_weights[id];
-                        if (id != current_id && u_w + cluster_weight > max_w) { continue; }
-                        if (w_sum > best_weight) {
-                            best_weight = w_sum;
-                            best_id = id;
-                        }
+                        // fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine->generator);
                     }
+                }
+                // run clustering
+                {
+                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster");
+                    for (size_t i = 0; i < g.n; ++i) {
+                        vertex_t u = flat_vertices[i];
+                        if (active[u] == 0) { continue; }
 
-                    // If you intend to move u, update mapping and cluster weights here.
-                    if (best_id != current_id) {
-                        // remove from current, add to new (keep these atomic or protected if parallel)
-                        mapping.set_u(u, best_id);
-                        cluster_weights[best_id] += u_w;
-                        cluster_weights[current_id] -= u_w;
+                        weight_t u_w = g.v_weights[u];
+                        vertex_t current_id = mapping.get(u);
+                        weight_t current_id_w = 0;
 
-                        n_moved += 1;
-                        if (round > 0) {
-                            forall_guiv(g, u, j, v) {
-                                    active_next[v] = 1;
+                        flat_map.clear();
+                        forall_guivw(g, u, j, v, w) {
+                                vertex_t id = mapping.get(v);
+                                if (id == current_id) {
+                                    current_id_w += w;
+                                } else {
+                                    if (u_w + cluster_weights[id] > max_w) { continue; }
+                                    flat_map.add(id, w);
                                 }
-                            endfor
+                            }
+                        endfor
+
+                        vertex_t best_id = current_id;
+                        weight_t best_weight = current_id_w;
+                        for (auto [id, w]: flat_map) {
+                            // check constraint only for candidates != current_id (same logic as your loop)
+                            if (w > best_weight) {
+                                best_weight = w;
+                                best_id = id;
+                            }
+                        }
+
+                        if (best_id != current_id) {
+                            mapping.set(u, best_id);
+                            cluster_weights[best_id] += u_w;
+                            cluster_weights[current_id] -= u_w;
+                            cluster_count[best_id] += 1;
+                            cluster_count[current_id] -= 1;
+
+                            n_moved += 1;
+                            if (round > 0) {
+                                forall_guiv(g, u, j, v) {
+                                        active_next[v] = 1;
+                                    }
+                                endfor
+                            }
                         }
                     }
                 }
+                // swap active
+                {
+                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "swap_active");
 
-                _t_cluster.stop();
-                ScopedTimer _t_swap_active("coarsening", "SizeConstrainedLP", "swap_active");
-
-                if (round > 0) {
                     std::swap(active, active_next);
-                    active_next.initialize(g.get_n(), 0);
+                    active_next.initialize(g.n, 0);
                 }
 
-                _t_swap_active.stop();
-
-                if ((f64) n_moved < (f64) g.get_n() * config->min_threshold) {
+                if ((f64) n_moved < (f64) g.n * config->min_threshold) {
                     break;
                 }
             }
 
-            ScopedTimer _t_calc_map("coarsening", "SizeConstrainedLP", "calc_map");
+            merge_singletons(level, g, p_manager, mapping, max_w);
 
-            // mapping starts at 0 and increments
-            AlignedArray<vertex_t> remap;
-            remap.initialize(g.get_n(), m_n);
-            vertex_t new_id = 0;
-            forall_gu(g, u)
-                {
-                    const vertex_t id = mapping.get_map_u(u);
-                    if (remap[id] == m_n) {
-                        remap[id] = new_id;
-                        new_id += 1;
+            bool ident_mapping = true;
+            // is identity mapping
+            {
+                ScopedTimer _t("coarsening", "SizeConstrainedLP", "is_identity_mapping");
+
+                forall_gu(g, u)
+                    {
+                        ident_mapping &= u == mapping.get(u);
                     }
-                }
-            endfor
-            mapping.set_coarse_n(new_id);
+                endfor
+            }
+            if (ident_mapping) {
+                merge_when_identitiy(level, g, p_manager, mapping, max_w);
+            }
 
-            _t_calc_map.stop();
-            ScopedTimer _t_remap("coarsening", "SizeConstrainedLP", "remap");
+            // map to a continuous range
+            {
+                ScopedTimer _t("coarsening", "SizeConstrainedLP", "calc_map");
 
-            // remap
-            forall_gu(g, u)
-                {
-                    const vertex_t id = mapping.get_map_u(u);
-                    const vertex_t map_id = remap[id];
-                    mapping.set_u(u, map_id);
-                }
-            endfor
+                // mapping starts at 0 and increments
+                remap.initialize(g.n, m_n);
+                vertex_t new_id = 0;
+                forall_gu(g, u)
+                    {
+                        const vertex_t id = mapping.get(u);
+                        if (remap[id] == m_n) {
+                            remap[id] = new_id;
+                            new_id += 1;
+                        }
+                    }
+                endfor
+                mapping.set_coarse_n(new_id);
+
+                // remap
+                forall_gu(g, u)
+                    {
+                        const vertex_t id = mapping.get(u);
+                        const vertex_t map_id = remap[id];
+                        mapping.set(u, map_id);
+                    }
+                endfor
+            }
         }
     };
 }

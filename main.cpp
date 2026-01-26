@@ -42,97 +42,20 @@ int main(const int argc, char *argv[]) {
         {
             ScopedTimer _t("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
-                // {"--graph", "../data/mapping/2cubes_sphere.mtx.graph"},
-                // {"--mapping", "../data/out/partition/2cubes_sphere.txt"},
-                // {"--statistics", "../data/out/statistics/2cubes_sphere.JSON"},
-                // {"--graph", "../data/dimacs10_matrix/af_shell10.graph"},
-                // {"--mapping", "../data/out/partition/af_shell10.txt"},
-                // {"--statistics", "../data/out/statistics/af_shell10.JSON"},
-                // {"--graph", "../data/training/PGPgiantcompo.graph"},
-                // {"--mapping", "../data/out/partition/PGPgiantcompo.txt"},
-                // {"--statistics", "../data/out/statistics/PGPgiantcompo.JSON"},
-                // {"--graph", "../../graph_collection/dimacs10_delaunay/delaunay_n22.graph"}, // To Beat 2715456 in 220.94 s
-                // {"--mapping", "../data/out/partition/delaunay_n22.txt"},
-                // {"--statistics", "../data/out/statistics/delaunay_n22.JSON"},
-                {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"},
-                {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
-                {"--statistics", "../data/out/statistics/2cubes_sphere.mtx.JSON"},
-                // {"--graph", "../data/training/598a.graph"},
-                // {"--mapping", "../data/out/partition/598a.txt"},
-                // {"--statistics", "../data/out/statistics/598a.JSON"},
-                // {"--graph", "../data/training/rgg_n26.graph"},
-                // {"--mapping", "../data/out/partition/rgg_n26.txt"},
-                // {"--statistics", "../data/out/statistics/rgg_n26.JSON"},
-                // {"--graph", "../data/training/G3_circuit.graph"},
-                // {"--mapping", "../data/out/partition/G3_circuit.txt"},
-                // {"--statistics", "../data/out/statistics/G3_circuit.JSON"},
-                // {"--graph", "../data/dimacs10_random/rgg_n_2_15_s0.graph"}, // To beat 207196 in 0.29
-                // {"--mapping", "../data/out/partition/rgg_n_2_15_s0.txt"},
-                // {"--statistics", "../data/out/statistics/rgg_n_2_15_s0.JSON"},
+                // {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"}, // fast 0.753s 8,704,035 comm cost // eco 2.559s 7,469,493 // strong 22.498s 7,223,358
+                // {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
+                // {"--statistics", "../data/out/statistics/2cubes_sphere.mtx.JSON"},
+                {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.608s, 4,751,188 comm cost, // eco 44.685s 3,971,464 comm cost, // strong 536.000s 3,851,899 comm cost
+                {"--mapping", "../data/out/partition/del23.txt"},
+                {"--statistics", "../data/out/statistics/del23.JSON"},
+                // {"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
+                // {"--mapping", "../data/out/partition/afshell9.txt"},
+                // {"--statistics", "../data/out/statistics/afshell9.JSON"},
                 {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
-                {"--config", "fast"},
+                {"--config", "eco"},
                 {"--seed", "0"},
-
-                // coarsening
-                // {"--coarsening-algorithm", "heavy-matching"},
-                // {"--coarsening-algorithm", "greedy-matching"},
-                // {"--coarsening-algorithm", "global-paths"},
-                // {"--coarsening-algorithm", "random-matching"},
-                {"--coarsening-algorithm", "size-constrained-lp"},
-
-                // coarsening - greedy configuration
-                {"--coarsening-algorithm-greedy-matching-pendant-first", "0"},
-
-                // coarsening - greedy configuration
-                {"--coarsening-algorithm-heavy-matching-pendant-first", "0"},
-
-                // Partitioning
-                //{"--partitioning-algorithm", "kaffpa-multisection"},
-                // {"--partitioning-algorithm", "multisection"},
-
-                // {"--partitioning-algorithm-multisection-mode", "fast"},
-
-                // Rebalancing
-                {"--rebalancing-algorithm", "simple"},
-
-                // Refinement Label Propagation Faraj20
-                // {"--refinement-lable-propagation-faraj20-enable", "0"},
-                // {"--refinement-lable-propagation-faraj20-max-iterations", "25"},
-
-                // Refinement Quotient graph Faraj20
-                // {"--refinement-quotient-graph-faraj20-enable", "0"},
-                //{"--refinement-quotient-graph-faraj20-max-iterations", "1"},
-                //{"--refinement-quotient-graph-faraj20-max-moves-without-max", "500"},
-
-                // Refinement k-way FM Faraj20
-                // {"--refinement-k-way-fm-faraj20-enable", "0"},
-                //{"--refinement-k-way-fm-faraj20-max-iterations", "1"},
-
-                // Refinement Multi-Try FM Faraj20
-                // {"--refinement-multi-try-fm-faraj20-enable", "0"},
-                // {"--refinement-multi-try-fm-faraj20-max-iterations", "1"},
-
-                // Refinement Label Propagation
-                // {"--refinement-lable-propagation-enable", "0"},
-                // {"--refinement-lable-propagation-max-iterations", "25"},
-
-                // Refinement Quotient graph
-                // {"--refinement-quotient-graph-enable", "0"},
-                //{"--refinement-quotient-graph-max-iterations", "1"},
-                //{"--refinement-quotient-graph-max-moves-without-max", "500"},
-
-                // Refinement k-way FM
-                // {"--refinement-k-way-fm-enable", "0"},
-                //{"--refinement-k-way-fm-max-iterations", "1"},
-
-                // Refinement Multi-Try FM
-                // {"--refinement-multi-try-fm-enable", "0"},
-                // {"--refinement-multi-try-fm-max-iterations", "1"},
-
-                // Refinement Hierarchy aware cycles
-                // {"--refinement-hierarchy-aware-cycles-enable", "0"},
             };
 
             std::vector<std::string> args = {"HeiProMap"};

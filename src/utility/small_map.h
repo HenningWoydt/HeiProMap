@@ -61,6 +61,28 @@ namespace HeiProMap {
             return data_.back().second;
         }
 
+        Val add_and_ret(const Key &k, const Val &v) {
+            // linear find — works best for small sets
+            for (auto &kv: data_) {
+                if (kv.first == k) {
+                    kv.second += v;
+                    return kv.second;
+                }
+            }
+            data_.emplace_back(k, v);
+            return v;
+        }
+
+        void add(const Key &k, const Val &v) {
+            // linear find — works best for small sets
+            for (auto &kv: data_) {
+                if (kv.first == k) {
+                    kv.second += v;
+                }
+            }
+            data_.emplace_back(k, v);
+        }
+
         // --- iteration ------------------------------------------------------------
         iterator begin() noexcept { return data_.begin(); }
         iterator end() noexcept { return data_.end(); }

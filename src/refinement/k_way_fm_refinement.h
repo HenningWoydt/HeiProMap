@@ -111,7 +111,7 @@ namespace HeiProMap {
             ScopedTimer _t("refinement", "KWayFMRefinement", "refine");
 
             f64 alpha = config->alpha;
-            f64 beta  = std::log(g.get_n());
+            f64 beta  = std::log(g.n);
 
             for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
                 heap = std::priority_queue<KWayFMMove>();
@@ -121,7 +121,7 @@ namespace HeiProMap {
                     forall_bv_id_iu(bv_manager, id, j, u)
                     {
                         partition_t u_id     = p_manager[u];
-                        weight_t    u_weight = g.weight(u);
+                        weight_t    u_weight = g.v_weights[u];
 
                         // find all connected partitions to u
                         block_marker += 1;
@@ -158,7 +158,7 @@ namespace HeiProMap {
 
                     vertex_t    vertex        = move.u;
                     partition_t vertex_id     = p_manager[vertex];
-                    weight_t    vertex_weight = g.weight(vertex);
+                    weight_t    vertex_weight = g.v_weights[vertex];
                     partition_t move_id       = move.to_move_id;
 
                     if (vertex_used[vertex] == vertex_marker) { continue; }
@@ -198,7 +198,7 @@ namespace HeiProMap {
                             if (!is_boundary(g, p_manager, neighbor)) { continue; }
 
                             partition_t neighbor_id     = p_manager[neighbor];
-                            weight_t    neighbor_weight = g.weight(neighbor);
+                            weight_t    neighbor_weight = g.v_weights[neighbor];
 
                             block_marker += 1;
                             forall_guiv(g, neighbor, j, v)
@@ -221,7 +221,7 @@ namespace HeiProMap {
                 // revert all moves in partitioning manager
                 for (size_t i = 0; i < moves_size; i++) {
                     vertex_t    vertex        = moves[moves_size - 1 - i].u;
-                    weight_t    vertex_weight = g.weight(vertex);
+                    weight_t    vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
                     partition_t move_id       = moves[moves_size - 1 - i].u_id;
 
@@ -231,7 +231,7 @@ namespace HeiProMap {
                 // make all moves to best index
                 for (size_t i = 0; i < best_idx; ++i) {
                     vertex_t    vertex        = moves[i].u;
-                    weight_t    vertex_weight = g.weight(vertex);
+                    weight_t    vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id     = moves[i].u_id;
                     partition_t move_id       = moves[i].to_move_id;
 

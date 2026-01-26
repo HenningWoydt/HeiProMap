@@ -42,34 +42,20 @@
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
-    static inline uint64_t splitmix64(uint64_t x) {
-        x += 0x9E3779B97F4A7C15ull;
-        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
-        x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-        return x ^ (x >> 31);
-    }
-
-    // Hash a vertex id (optionally salted by map_u)
-    static inline uint64_t hash_vertex(vertex_t v, vertex_t salt = 0) {
-        uint64_t x = static_cast<uint64_t>(v) ^ (static_cast<uint64_t>(salt) * 0x9E3779B97F4A7C15ull);
-        return splitmix64(x);
-    }
-
     /**
     * Standard undirected Graph that can hold vertex and edge weights.
     */
     class CSRGraph {
-        vertex_t m_n = 0;
-        vertex_t m_m = 0;
-
-        weight_t m_graph_weight = 0;
-
-        AlignedArray<weight_t> m_v_weights;
-        AlignedArray<size_t> m_neighborhoods;
-        AlignedArray<vertex_t> m_edges_v;
-        AlignedArray<weight_t> m_edges_w;
-
     public:
+        vertex_t n = 0;
+        vertex_t m = 0;
+        weight_t g_weight = 0;
+
+        AlignedArray<weight_t> v_weights;
+        AlignedArray<size_t> neighborhoods;
+        AlignedArray<vertex_t> edges_v;
+        AlignedArray<weight_t> edges_w;
+
         CSRGraph() = default;
 
         explicit CSRGraph(const std::string &file_path) {
@@ -97,9 +83,9 @@ namespace HeiProMap {
             while (*p == ' ') { ++p; }
 
             // read number of vertices
-            m_n = 0;
+            n = 0;
             while (*p != ' ' && *p != '\n') {
-                m_n = m_n * 10 + (vertex_t) (*p - '0');
+                n = n * 10 + (vertex_t) (*p - '0');
                 ++p;
             }
 
@@ -107,12 +93,12 @@ namespace HeiProMap {
             while (*p == ' ') { ++p; }
 
             // read number of edges
-            m_m = 0;
+            m = 0;
             while (*p != ' ' && *p != '\n') {
-                m_m = m_m * 10 + (vertex_t) (*p - '0');
+                m = m * 10 + (vertex_t) (*p - '0');
                 ++p;
             }
-            m_m *= 2;
+            m *= 2;
 
             // search end of line or fmt
             std::string fmt = "000";
@@ -136,12 +122,12 @@ namespace HeiProMap {
                 // skip whitespaces
                 while (*p == ' ') { ++p; }
             }
-            m_graph_weight = 0;
-            m_v_weights.initialize(m_n);
-            m_neighborhoods.initialize(m_n + 1);
-            m_neighborhoods[0] = 0;
-            m_edges_v.initialize(m_m);
-            m_edges_w.initialize(m_m);
+            g_weight = 0;
+            v_weights.initialize(n);
+            neighborhoods.initialize(n + 1);
+            neighborhoods[0] = 0;
+            edges_v.initialize(m);
+            edges_w.initialize(m);
             has_v_weights = fmt[1] == '1';
             has_e_weights = fmt[2] == '1';
 
@@ -173,8 +159,8 @@ namespace HeiProMap {
                     // skip whitespaces
                     while (*p == ' ') { ++p; }
                 }
-                m_v_weights[u] = vw;
-                m_graph_weight += vw;
+                v_weights[u] = vw;
+                g_weight += vw;
 
                 // read in edges
                 while (*p != '\n' && p < end) {
@@ -200,17 +186,17 @@ namespace HeiProMap {
                         while (*p == ' ') { ++p; }
                     }
 
-                    m_edges_v[curr_m] = v - 1;
-                    m_edges_w[curr_m] = w;
+                    edges_v[curr_m] = v - 1;
+                    edges_w[curr_m] = w;
                     ++curr_m;
                 }
-                m_neighborhoods[u + 1] = curr_m;
+                neighborhoods[u + 1] = curr_m;
                 ++u;
                 ++p;
             }
 
-            if (curr_m != m_m) {
-                std::cerr << "Number of expected edges " << m_m << " not equal to number edges " << curr_m << " found!\n";
+            if (curr_m != m) {
+                std::cerr << "Number of expected edges " << m << " not equal to number edges " << curr_m << " found!\n";
                 munmap_file(mm);
                 exit(EXIT_FAILURE);
             }
@@ -220,128 +206,244 @@ namespace HeiProMap {
             munmap_file(mm);
         }
 
+        explicit CSRGraph(vertex_t t_n, vertex_t t_m, weight_t t_g_weight) {
+            n = t_n;
+            m = t_m;
+            g_weight = t_g_weight;
+
+            v_weights.initialize(n, 0);
+            neighborhoods.initialize(n + 1);
+            neighborhoods[0] = 0;
+            edges_v.initialize(m);
+            edges_w.initialize(m);
+        }
+
+        void initialize_old(const CSRGraph &g,
+                            const Mapping &mapping) {
+            // allocate
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "allocate");
+
+                n = mapping.get_coarse_n();
+                g_weight = g.g_weight;
+                v_weights.initialize(n, 0);
+            }
+            AlignedArray<vertex_t> overest_sizes;
+            // overestimate new neighborhood sizes
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "overest_sizes");
+                overest_sizes.initialize(n, 0);
+
+                // overestimate neighborhood sizes and collect weights
+                for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                    vertex_t map_u = mapping.get(u);
+                    overest_sizes[map_u] += g.deg(u);
+                    v_weights[map_u] += g.v_weights[u];
+                }
+            }
+            AlignedArray<vertex_t> overest_neighborhood;
+            // prefix sum on overestimated neighborhood
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "prefix_sum");
+
+                overest_neighborhood.initialize(n + 1);
+                overest_neighborhood[0] = 0;
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
+                }
+            }
+            AlignedArray<vertex_t> temp_edges_v;
+            AlignedArray<weight_t> temp_edges_w;
+            AlignedArray<vertex_t> sizes;
+            // insert edges
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "insert_edges");
+
+                m = 0;
+                temp_edges_v.initialize(overest_neighborhood[n], g.n);
+                temp_edges_w.initialize(overest_neighborhood[n]);
+
+                sizes.initialize(n, 0);
+
+                for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                    vertex_t map_u = mapping.get(u);
+
+                    forall_guivw(g, u, i, v, w) {
+                            vertex_t map_v = mapping.get(v);
+                            if (map_u == map_v) { continue; }
+
+                            vertex_t beg = overest_neighborhood[map_u];
+                            vertex_t end = overest_neighborhood[map_u + 1];
+                            vertex_t len = end - beg;
+                            if (len == 0) { continue; }
+
+                            // insert map_v
+                            vertex_t j = beg + (hash_vertex(map_v) % len);
+                            while (true) {
+                                if (j == end) { j = beg; }
+                                if (temp_edges_v[j] == map_v) {
+                                    temp_edges_w[j] += w;
+                                    break;
+                                }
+                                if (temp_edges_v[j] == g.n) {
+                                    temp_edges_v[j] = map_v;
+                                    temp_edges_w[j] = w;
+                                    m += 1;
+                                    sizes[map_u] += 1;
+                                    break;
+                                }
+                                j += 1;
+                            }
+                        }
+                    endfor
+                }
+            }
+            // insert edges in real array
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "real_neighborhood");
+
+                neighborhoods.initialize(n + 1);
+                neighborhoods[0] = 0;
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    neighborhoods[map_u + 1] = neighborhoods[map_u] + sizes[map_u];
+                }
+            }
+            // copy edges
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "copy_edges");
+
+                edges_v.initialize(m);
+                edges_w.initialize(m);
+
+                for (vertex_t map_u = 0; map_u < mapping.get_coarse_n(); ++map_u) {
+                    size_t cursor = neighborhoods[map_u];
+                    for (vertex_t j = overest_neighborhood[map_u]; j < overest_neighborhood[map_u + 1]; ++j) {
+                        vertex_t map_v = temp_edges_v[j];
+                        weight_t map_w = temp_edges_w[j];
+
+                        if (map_v != g.n) {
+                            edges_v[cursor] = map_v;
+                            edges_w[cursor] = map_w;
+                            cursor += 1;
+                        }
+                    }
+                }
+            }
+        }
+
         void initialize(const CSRGraph &g,
                         const Mapping &mapping) {
-            ScopedTimer _t_allocate("contraction", "CSRGraph", "allocate");
+            AlignedArray<vertex_t> n_mapped;
+            AlignedArray<vertex_t> n_mapped_prefix;
+            AlignedArray<vertex_t> cursor;
+            AlignedArray<vertex_t> mapped_vertices;
 
-            m_n = mapping.get_coarse_n();
-            m_graph_weight = g.m_graph_weight;
-            m_v_weights.initialize(m_n, 0);
+            AlignedArray<u32> seen;
+            AlignedArray<size_t> idx;
+            u32 epoch = 0;
+            // allocate
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "allocate");
 
-            _t_allocate.stop();
-            ScopedTimer _t_overest_sizes("contraction", "CSRGraph", "overest_sizes");
+                n = mapping.get_coarse_n();
+                g_weight = g.g_weight;
+                v_weights.initialize(n, 0);
+                neighborhoods.initialize(n + 1);
+                neighborhoods[0] = 0;
+                edges_v.initialize(g.m);
+                edges_w.initialize(g.m);
 
-            AlignedArray<vertex_t> overest_sizes;
-            overest_sizes.initialize(m_n, 0);
+                n_mapped.initialize(n, 0);
+                n_mapped_prefix.initialize(n + 1);
+                n_mapped_prefix[0] = 0;
+                cursor.initialize(n + 1);
+                mapped_vertices.initialize(g.n);
 
-            // overestimate neighborhood sizes and collect weights
-            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
-                vertex_t map_u = mapping.get_map_u(u);
-                overest_sizes[map_u] += g.size(u);
-                m_v_weights[map_u] += g.weight(u);
+                seen.initialize(n, 0);
+                idx.initialize(n);
             }
+            // count how many vertices are mapped to each new vertex
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "n_mapped");
 
-            _t_overest_sizes.stop();
-            ScopedTimer _t_prefix_sum("contraction", "CSRGraph", "prefix_sum");
-
-            // prefix-sum on overestimated neighborhood
-            AlignedArray<vertex_t> overest_neighborhood;
-            overest_neighborhood.initialize(m_n + 1);
-            overest_neighborhood[0] = 0;
-            for (vertex_t map_u = 0; map_u < m_n; ++map_u) {
-                overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
-            }
-
-            _t_prefix_sum.stop();
-            ScopedTimer _t_insert_edges("contraction", "CSRGraph", "insert_edges");
-
-            // insert edges in overestimated array
-            m_m = 0;
-            AlignedArray<vertex_t> edges_v;
-            AlignedArray<weight_t> edges_w;
-            edges_v.initialize(overest_neighborhood[m_n], g.get_n());
-            edges_w.initialize(overest_neighborhood[m_n]);
-
-            AlignedArray<vertex_t> sizes;
-            sizes.initialize(m_n, 0);
-
-            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
-                vertex_t map_u = mapping.get_map_u(u);
-
-                forall_guivw(g, u, i, v, w) {
-                    vertex_t map_v = mapping.get_map_u(v);
-                    if (map_u == map_v) { continue; }
-
-                    vertex_t beg = overest_neighborhood[map_u];
-                    vertex_t end = overest_neighborhood[map_u + 1];
-                    vertex_t len = end - beg;
-                    if (len == 0) { continue; }
-
-                    // insert map_v
-                    vertex_t j = beg + (hash_vertex(map_v) % len);
-                    while (true) {
-                        if (j == end) { j = beg; }
-                        if (edges_v[j] == map_v) {
-                            edges_w[j] += w;
-                            break;
-                        }
-                        if (edges_v[j] == g.get_n()) {
-                            edges_v[j] = map_v;
-                            edges_w[j] = w;
-                            m_m += 1;
-                            sizes[map_u] += 1;
-                            break;
-                        }
-                        j += 1;
-                    }
+                // count and collect weights
+                for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                    vertex_t map_u = mapping.get(u);
+                    n_mapped[map_u] += 1;
+                    v_weights[map_u] += g.v_weights[u];
                 }
+            }
+            // prefix sum on n_mapped
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "prefix_sum");
+
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    n_mapped_prefix[map_u + 1] = n_mapped_prefix[map_u] + n_mapped[map_u];
+                }
+            }
+            // copy so we have a cursor
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "copy_cursor");
+
+                for (vertex_t map_u = 0; map_u <= n; ++map_u) {
+                    cursor[map_u] = n_mapped_prefix[map_u];
+                }
+            }
+            // insert mapped vertices
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "mapped_vertices");
+
+                forall_gu(g, u)
+                    {
+                        vertex_t map_u = mapping.get(u);
+                        mapped_vertices[cursor[map_u]] = u;
+                        cursor[map_u] += 1;
+                    }
                 endfor
             }
-
-            _t_insert_edges.stop();
-            ScopedTimer _t_real_neighborhood("contraction", "CSRGraph", "real_neighborhood");
-
             // insert edges in real array
-            m_neighborhoods.initialize(m_n + 1);
-            m_neighborhoods[0] = 0;
-            for (vertex_t map_u = 0; map_u < m_n; ++map_u) {
-                m_neighborhoods[map_u + 1] = m_neighborhoods[map_u] + sizes[map_u];
-            }
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "real_neighborhood");
 
-            _t_real_neighborhood.stop();
-            ScopedTimer _t_copy_edges("contraction", "CSRGraph", "copy_edges");
+                m = 0;
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    epoch += 1;
+                    for (u64 i = n_mapped_prefix[map_u]; i < n_mapped_prefix[map_u + 1]; ++i) {
+                        vertex_t u = mapped_vertices[i];
 
-            m_edges_v.initialize(m_m);
-            m_edges_w.initialize(m_m);
+                        forall_guivw(g, u, j, v, w) {
+                                vertex_t map_v = mapping.get(v);
+                                if (map_u == map_v) { continue; }
 
-            for (vertex_t map_u = 0; map_u < mapping.get_coarse_n(); ++map_u) {
-                size_t cursor = m_neighborhoods[map_u];
-                for (vertex_t j = overest_neighborhood[map_u]; j < overest_neighborhood[map_u + 1]; ++j) {
-                    vertex_t map_v = edges_v[j];
-                    weight_t map_w = edges_w[j];
-
-                    if (map_v != g.get_n()) {
-                        m_edges_v[cursor] = map_v;
-                        m_edges_w[cursor] = map_w;
-                        cursor += 1;
+                                if (seen[map_v] == epoch) {
+                                    size_t k = idx[map_v];
+                                    edges_w[k] += w;
+                                } else {
+                                    seen[map_v] = epoch;
+                                    idx[map_v] = m;
+                                    edges_v[m] = map_v;
+                                    edges_w[m] = w;
+                                    m += 1;
+                                }
+                            }
+                        endfor
                     }
+                    neighborhoods[map_u + 1] = m;
                 }
             }
-
-            _t_copy_edges.stop();
         }
 
         // Move constructor
         CSRGraph(CSRGraph &&other) noexcept {
-            m_n = other.m_n;
-            m_m = other.m_m;
+            n = other.n;
+            m = other.m;
 
-            m_graph_weight = other.m_graph_weight;
+            g_weight = other.g_weight;
 
-            std::swap(m_v_weights, other.m_v_weights);
-            std::swap(m_neighborhoods, other.m_neighborhoods);
-            std::swap(m_edges_v, other.m_edges_v);
-            std::swap(m_edges_w, other.m_edges_w);
+            std::swap(v_weights, other.v_weights);
+            std::swap(neighborhoods, other.neighborhoods);
+            std::swap(edges_v, other.edges_v);
+            std::swap(edges_w, other.edges_w);
         }
 
         // Optionally disable copying.
@@ -349,28 +451,16 @@ namespace HeiProMap {
 
         CSRGraph &operator=(const CSRGraph &) = delete;
 
-        vertex_t get_n() const { return m_n; }
+        size_t deg(const vertex_t u) const { return neighborhoods[u + 1] - neighborhoods[u]; }
 
-        vertex_t get_m() const { return m_m; }
-
-        weight_t weight() const { return m_graph_weight; }
-
-        weight_t weight(const vertex_t u) const { return m_v_weights[u]; }
-
-        size_t size(const vertex_t u) const { return m_neighborhoods[u + 1] - m_neighborhoods[u]; }
-
-        vertex_t neighbor(const vertex_t u, const size_t idx) const { return m_edges_v[m_neighborhoods[u] + idx]; }
-
-        weight_t weight(const vertex_t u, const size_t idx) const { return m_edges_w[m_neighborhoods[u] + idx]; }
-
-        void write_graph(std::string file_path) {
+        void write_graph(const std::string &file_path) {
             std::ofstream file(file_path);
 
-            file << m_n << " " << m_m / 2 << " 011" << std::endl;
-            for (size_t i = 0; i < m_n; ++i) {
-                file << m_v_weights[i] << " ";
-                for (size_t j = m_neighborhoods[i]; j < m_neighborhoods[i + 1]; ++j) {
-                    file << m_edges_v[j] + 1 << " " << m_edges_w[j] << " ";
+            file << n << " " << m / 2 << " 011" << std::endl;
+            for (size_t i = 0; i < n; ++i) {
+                file << v_weights[i] << " ";
+                for (size_t j = neighborhoods[i]; j < neighborhoods[i + 1]; ++j) {
+                    file << edges_v[j] + 1 << " " << edges_w[j] << " ";
                 }
                 file << std::endl;
             }

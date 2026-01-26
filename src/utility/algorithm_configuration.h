@@ -240,6 +240,7 @@ namespace HeiProMap {
         u64 seed = 0;
 
         u64 n_v_cycle = 1;
+        u64 initial_c = 8;
 
         // coarsening algorithm
         std::string coarsening_algorithm_string;
@@ -256,7 +257,6 @@ namespace HeiProMap {
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
         GlobalMultisectionConfiguration global_multisection_config;
-        KaffpaPartitionerConfiguration kaffpa_partitioner_config;
 
         // rebalance algorithm
         std::string rebalancing_algorithm_string;
@@ -334,16 +334,6 @@ namespace HeiProMap {
             if (use_default || is_set("--partitioning-algorithm-multisection-mode")) {
                 global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
                 global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            }
-
-            // initialize kaffpa partitioning config
-            if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-mode")) {
-                kaffpa_partitioner_config.mode_string = get("--partitioning-algorithm-kaffpa-partitioning-mode");
-                kaffpa_partitioner_config.mode = string_to_kaffpa_partitioner_mode(kaffpa_partitioner_config.mode_string);
-            }
-            if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-method")) {
-                kaffpa_partitioner_config.method_string = get("--partitioning-algorithm-kaffpa-partitioning-method");
-                kaffpa_partitioner_config.method = string_to_kaffpa_partitioner_method(kaffpa_partitioner_config.method_string);
             }
 
             // actually set which algorithm to use
@@ -439,10 +429,7 @@ namespace HeiProMap {
             set_rebalancing_algorithm(true);
             enable_refinement_algorithms(true);
 
-            // set FARAJ20 config
-            if (get("--config") == "fastest") {
-                set_fastest();
-            } else if (get("--config") == "fast") {
+            if (get("--config") == "fast") {
                 set_fast();
             } else if (get("--config") == "eco") {
                 set_eco();
@@ -461,22 +448,9 @@ namespace HeiProMap {
             enable_refinement_algorithms();
         }
 
-        void set_fastest() {
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 1;
-
-            // set multisection
-            partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "strong";
-            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-        }
-
         void set_fast() {
+            initial_c = 32;
+
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
@@ -484,11 +458,17 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 4;
 
+            size_constrained_lp_config.max_rounds = 3;
+            size_constrained_lp_config.min_threshold = 0.10;
+
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "eco";
+            // global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "metis-recursive";
+            // global_multisection_config.mode_string = "metis-kway";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.kappa = 1;
 
             // enable label propagation
             label_propagation_config.enabled = false;
@@ -501,21 +481,19 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha = 100.0;
+            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.alpha = 1000.0;
+            quotient_graph_refinement_config.min_n_steps = 8;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled = false;
             k_way_fm_refinement_config.max_iteration = 1;
             k_way_fm_refinement_config.alpha = 100.0;
-
-            // enable experimental refinement
-            hierarchy_aware_multi_way_fm_config.enabled = false;
-            hierarchy_aware_multi_way_fm_config.max_iteration = 1;
-            hierarchy_aware_multi_way_fm_config.alpha = 100.0;
         }
 
         void set_eco() {
+            initial_c = 32;
+
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
@@ -526,8 +504,11 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "fast";
+            // global_multisection_config.mode_string = "kaffpa-strong";
+            global_multisection_config.mode_string = "metis-recursive";
+            // global_multisection_config.mode_string = "metis-kway";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.kappa = 1;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
@@ -541,6 +522,8 @@ namespace HeiProMap {
         }
 
         void set_strong() {
+            initial_c = 32;
+
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
@@ -551,8 +534,11 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "strong";
+            global_multisection_config.mode_string = "kaffpa-strong";
+            // global_multisection_config.mode_string = "metis-recursive";
+            // global_multisection_config.mode_string = "metis-kway";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.kappa = 5;
 
             // enable label propagation
             label_propagation_config.enabled = false;
@@ -573,15 +559,13 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.min_level = 0;
-            flow_based_refinement_config.max_level = 100;
             flow_based_refinement_config.max_global_iteration = 2;
             flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 2.0;
-            flow_based_refinement_config.alpha_upper_bound = 16.0;
+            flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 50;
+            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
 
             hierarchy_aware_flow_based_refinement_configuration.enabled = false;
             hierarchy_aware_flow_based_refinement_configuration.max_global_iteration = 2;

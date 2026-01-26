@@ -149,7 +149,7 @@ namespace HeiProMap {
                         possible_pos_moves.clear();
                         possible_neg_moves.clear();
                         forall_bv_id_iu(bv_manager, u_id, i, u) {
-                                if (g.weight(u) + p_manager.get_bweight(v_id) > m_lmax) { continue; }
+                                if (g.v_weights[u] + p_manager.get_bweight(v_id) > m_lmax) { continue; }
                                 forall_guiv(g, u, j, v) {
                                         if (p_manager[v] != v_id) { continue; }
 
@@ -199,7 +199,7 @@ namespace HeiProMap {
                         moves_qap_sum += m.qap_delta;
                         bv_manager.move(g, p_manager, m.u, u_id, v_id);
                         q_graph.move(g, p_manager, m.u, u_id, v_id);
-                        p_manager.move(m.u, g.weight(m.u), u_id, v_id);
+                        p_manager.move(m.u, g.v_weights[m.u], u_id, v_id);
 
                         if (moves_qap_sum >= moves_best_qap_sum) {
                             moves_best_qap_sum = moves_qap_sum;
@@ -210,7 +210,7 @@ namespace HeiProMap {
                     // revert all moves in partitioning manager
                     for (size_t i = 0; i < moves.size(); i++) {
                         vertex_t vertex = moves[moves.size() - 1 - i].u;
-                        weight_t vertex_weight = g.weight(vertex);
+                        weight_t vertex_weight = g.v_weights[vertex];
                         partition_t vertex_id = p_manager[vertex];
                         partition_t move_id = u_id == vertex_id ? v_id : u_id;
 
@@ -229,7 +229,7 @@ namespace HeiProMap {
                 // make all moves to best index
                 for (size_t i = 0; i < global_moves.size(); ++i) {
                     vertex_t vertex = global_moves[i].u;
-                    weight_t vertex_weight = g.weight(vertex);
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
 

@@ -145,7 +145,7 @@ namespace HeiProMap {
                     std::vector<vertex_t> vertices;
                     vertices.push_back(u);
 
-                    std::vector<u8> inserted(g.get_n(), 0);
+                    std::vector<u8> inserted(g.n, 0);
                     inserted[u] = 1;
 
                     forall_guiv(g, u, j, uu)
@@ -202,9 +202,9 @@ namespace HeiProMap {
                                 vertex_t vv  = vertices[k];
                                 vertex_t vvv = vertices[l];
 
-                                weight_t v_weight   = g.weight(v);
-                                weight_t vv_weight  = g.weight(vv);
-                                weight_t vvv_weight = g.weight(vvv);
+                                weight_t v_weight   = g.v_weights[v];
+                                weight_t vv_weight  = g.v_weights[vv];
+                                weight_t vvv_weight = g.v_weights[vvv];
 
                                 partition_t v_id   = p_manager[v];
                                 partition_t vv_id  = p_manager[vv];

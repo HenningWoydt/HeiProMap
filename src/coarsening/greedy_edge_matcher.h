@@ -88,7 +88,7 @@ namespace HeiProMap {
                    Mapping &mapping) {
             ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "match");
             Matching matching;
-            matching.initialize(g.get_n());
+            matching.initialize(g.n);
 
             mark += 1;
             edges_size = 0;
@@ -97,13 +97,13 @@ namespace HeiProMap {
             if (config->match_pendant_vertices_first) {
                 forall_gu(g, u)
                     {
-                        if (g.size(u) != 1) {
+                        if (g.deg(u) != 1) {
                             continue;
                         }
 
-                        const vertex_t v      = g.neighbor(u, 0);
-                        const weight_t ew     = g.weight(u, 0);
-                        const f32      rating = (f32) ew / (f32) (g.size(u) * g.size(v));
+                        const vertex_t v      = g.edges_v[g.neighborhoods[u]];
+                        const weight_t ew     = g.edges_w[g.neighborhoods[u]];
+                        const f32      rating = (f32) ew / (f32) (g.deg(u) * g.deg(v));
                         edges[edges_size++] = {u, v, rating};
                     }
                 endfor
@@ -115,7 +115,7 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    if (g.weight(u) + g.weight(v) > m_l_max) {
+                    if (g.v_weights[u] + g.v_weights[v] > m_l_max) {
                         continue;
                     }
 
@@ -133,7 +133,7 @@ namespace HeiProMap {
             // handle all other vertices
             forall_gu(g, u)
                 {
-                    weight_t u_w = g.weight(u);
+                    weight_t u_w = g.v_weights[u];
 
                     if (used[u] == mark) {
                         continue;
@@ -141,13 +141,13 @@ namespace HeiProMap {
 
                     forall_guivw(g, u, j, v, w)
                         {
-                            weight_t v_w = g.weight(v);
+                            weight_t v_w = g.v_weights[v];
 
                             if (used[v] == mark) {
                                 continue;
                             }
 
-                            if (g.weight(u) + g.weight(v) > m_l_max) {
+                            if (g.v_weights[u] + g.v_weights[v] > m_l_max) {
                                 continue;
                             }
 
@@ -174,7 +174,7 @@ namespace HeiProMap {
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                mapping.set_u(u, matching.get_n(u));
+                mapping.set(u, matching.get_n(u));
             }
         }
     };

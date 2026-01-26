@@ -44,10 +44,10 @@ namespace HeiProMap {
         f32 w2;
     };
 
-#define IS_ENDPOINT(n, u) n.n2 == u
-#define IS_NOT_ENDPOINT(n, u) n.n2 != u
-#define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
-#define IS_UNMATCHED(n, u) n.n1 == u
+    #define IS_ENDPOINT(n, u) n.n2 == u
+    #define IS_NOT_ENDPOINT(n, u) n.n2 != u
+    #define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
+    #define IS_UNMATCHED(n, u) n.n1 == u
 
     class GlobalPathAlgorithmConfiguration {
     public:
@@ -124,7 +124,7 @@ namespace HeiProMap {
                    Mapping &mapping) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "match");
             Matching matching;
-            matching.initialize(g.get_n());
+            matching.initialize(g.n);
 
             if (level < config->random_level) {
                 // use a random matching
@@ -133,7 +133,7 @@ namespace HeiProMap {
                 matching.set_translation();
                 mapping.set_coarse_n(matching.get_n_coarse_nodes());
                 for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                    mapping.set_u(u, matching.get_n(u));
+                    mapping.set(u, matching.get_n(u));
                 }
 
                 return;
@@ -143,7 +143,7 @@ namespace HeiProMap {
 
             std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
-            for (vertex_t u = 0; u < g.get_n(); ++u) {
+            for (vertex_t u = 0; u < g.n; ++u) {
                 m_neighbors[u].n1 = u;
                 m_neighbors[u].n2 = u;
             }
@@ -273,7 +273,7 @@ namespace HeiProMap {
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                mapping.set_u(u, matching.get_n(u));
+                mapping.set(u, matching.get_n(u));
             }
         }
 
@@ -284,12 +284,12 @@ namespace HeiProMap {
 
             forall_gu(g, u)
                 {
-                    weight_t u_w = g.weight(u);
+                    weight_t u_w = g.v_weights[u];
 
                     forall_guivw(g, u, j, v, w) {
                             if (u > v) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.weight(v);
+                            weight_t v_w = g.v_weights[v];
 
                             // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
                             // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
@@ -523,16 +523,15 @@ namespace HeiProMap {
         void random_matching([[maybe_unused]] const size_t level,
                              const graph_t &g,
                              Matching &matching) {
-            std::vector<u8> is_matched(g.get_n(), 0);
+            std::vector<u8> is_matched(g.n, 0);
 
             forall_gu(g, u)
                 {
                     if (is_matched[u]) { continue; }
-                    weight_t u_w = g.weight(u);
-
+                    weight_t u_w = g.v_weights[u];
                     forall_guiv(g, u, j, v) {
                             if (is_matched[v]) { continue; }
-                            weight_t v_w = g.weight(v);
+                            weight_t v_w = g.v_weights[v];
 
                             if (u_w + v_w > m_l_max) { continue; }
 

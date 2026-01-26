@@ -100,7 +100,7 @@ namespace HeiProMap {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
-            weight_t u_weight = g.weight(u);
+            weight_t u_weight = g.v_weights[u];
 
             forall_guiv(g, u, j, v) {
                     partition_t v_id = p_manager[v];
@@ -138,7 +138,7 @@ namespace HeiProMap {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
-            weight_t u_weight = g.weight(u);
+            weight_t u_weight = g.v_weights[u];
 
             forall_guiv(g, u, j, v) {
                     partition_t v_id = p_manager[v];
@@ -163,7 +163,7 @@ namespace HeiProMap {
             ScopedTimer _t_allocate("rebalance", "Rebalancer", "allocate");
 
             AlignedArray<vertex_t> boundary;
-            boundary.initialize(g.get_n());
+            boundary.initialize(g.n);
             size_t boundary_size = 0;
 
             AlignedArray<RebalancerMove> moves;
@@ -176,7 +176,7 @@ namespace HeiProMap {
             cursor.initialize(m_k + 1);
 
             AlignedArray<u64> state_ids;
-            state_ids.initialize(g.get_n(), 0);
+            state_ids.initialize(g.n, 0);
 
             _t_allocate.stop();
 
@@ -238,7 +238,7 @@ namespace HeiProMap {
                     RebalancerMove move = global_queue.top();
                     global_queue.pop();
                     vertex_t u = move.u;
-                    weight_t u_weight = g.weight(u);
+                    weight_t u_weight = g.v_weights[u];
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
@@ -288,7 +288,7 @@ namespace HeiProMap {
             ScopedTimer _t_allocate("rebalance", "LL-Rebalancer", "allocate");
 
             AlignedArray<vertex_t> boundary;
-            boundary.initialize(g.get_n());
+            boundary.initialize(g.n);
             size_t boundary_size = 0;
 
             AlignedArray<RebalancerMove> moves;
@@ -302,7 +302,7 @@ namespace HeiProMap {
             cursor.initialize(m_k + 1);
 
             AlignedArray<u64> state_ids;
-            state_ids.initialize(g.get_n(), 0);
+            state_ids.initialize(g.n, 0);
 
             _t_allocate.stop();
 
@@ -366,7 +366,7 @@ namespace HeiProMap {
                     RebalancerMove move = global_queue.top();
                     global_queue.pop();
                     vertex_t u = move.u;
-                    weight_t u_weight = g.weight(u);
+                    weight_t u_weight = g.v_weights[u];
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 

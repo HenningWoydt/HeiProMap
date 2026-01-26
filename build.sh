@@ -1,6 +1,10 @@
 #!/bin/bash
 
 ROOT=${PWD}
+GCC=$(which gcc || true)
+
+echo "Root          : ${ROOT}"
+echo "Using C compiler: ${GCC:-<system default>}"
 
 # ----- pick a reasonable parallelism (leave 2 cores free) -----
 calc_jobs() {
@@ -16,10 +20,8 @@ calc_jobs() {
 JOBS="${MAX_THREADS:-$(calc_jobs)}"
 echo "Building with $JOBS parallel jobs (override with MAX_THREADS)."
 
-echo "Root          : ${ROOT}"
-echo "Using C compiler: ${GCC:-<system default>}"
-
 # make local folder for all includes
+rm -rf extern
 mkdir -p extern
 
 # --- Download KaHIP 3.19 ---
@@ -44,6 +46,7 @@ echo "Downloading maxflow 3.04..."
 if (
   cd extern \
   && rm -f maxflow-v3.04.src.zip \
+  && rm -rf maxflow \
   && rm -rf maxflow-v3.04.src \
   && wget -q https://pub.ista.ac.at/~vnk/software/maxflow-v3.04.src.zip \
   && unzip -q maxflow-v3.04.src.zip \
@@ -53,6 +56,40 @@ if (
   echo "maxflow 3.04 downloaded and extracted successfully."
 else
   echo "Failed to download maxflow!" >&2
+  exit 1
+fi
+
+# --- Download GKlib (latest release) ---
+echo "Downloading GKlib..."
+if (
+  cd extern \
+  && rm -f gklib.tar.gz \
+  && rm -rf GKlib \
+  && wget -q https://github.com/KarypisLab/GKlib/archive/refs/heads/master.tar.gz -O gklib.tar.gz \
+  && tar -xzf gklib.tar.gz \
+  && mv GKlib-master GKlib \
+  && rm -f gklib.tar.gz
+); then
+  echo "GKlib downloaded and extracted successfully."
+else
+  echo "Failed to download GKlib!" >&2
+  exit 1
+fi
+
+# --- Download METIS 5.2.1 ---
+echo "Downloading METIS 5.2.1..."
+if (
+  cd extern \
+  && rm -f metis-5.2.1.tar.gz \
+  && rm -rf METIS \
+  && wget -q https://github.com/KarypisLab/METIS/archive/refs/tags/v5.2.1.tar.gz -O metis-5.2.1.tar.gz \
+  && tar -xzf metis-5.2.1.tar.gz \
+  && mv METIS-5.2.1 METIS \
+  && rm -f metis-5.2.1.tar.gz
+); then
+  echo "METIS 5.2.1 downloaded and extracted successfully."
+else
+  echo "Failed to download METIS v5.2.1!" >&2
   exit 1
 fi
 
@@ -76,7 +113,35 @@ else
 fi
 cd "${ROOT}"
 
+# install GKLIB into a local folder
+export CFLAGS="-Wall -Wno-error=pedantic -Wno-error -D_GNU_SOURCE -DHAVE_STRDUP=1"
+export CPPFLAGS="-Wall -Wno-error=pedantic -Wno-error -D_GNU_SOURCE -DHAVE_STRDUP=1"
+
+echo "Building GKlib..."
+if cd "${ROOT}/extern/GKlib" && rm -rf build \
+  && make config prefix="${ROOT}/extern/local/gklib" cc="${GCC}" \
+  && make install; then
+  echo "GKlib build completed successfully."
+else
+  echo "GKlib build failed!" >&2
+  exit 1
+fi
+cd "${ROOT}"
+
+echo "Building METIS..."
+if cd "${ROOT}/extern/METIS" \
+  && rm -rf build \
+  && make config prefix="${ROOT}/extern/local/metis" gklib_path="${ROOT}/extern/local/gklib" cc="${GCC}" > /dev/null 2>&1 \
+  && make install > /dev/null 2>&1; then
+  echo "METIS build completed successfully."
+else
+  echo "METIS build failed!" >&2
+  exit 1
+fi
+cd "${ROOT}"
+
 # make directory
+rm -rf build
 mkdir build
 cd build
 

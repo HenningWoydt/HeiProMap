@@ -79,7 +79,7 @@ namespace HeiProMap {
                    Mapping &mapping) {
             ScopedTimer _t("coarsening", "RandomEdgeMatcher", "match");
             Matching matching;
-            matching.initialize(g.get_n());
+            matching.initialize(g.n);
 
             mark += 1;
 
@@ -87,7 +87,7 @@ namespace HeiProMap {
                 {
                     if (used[u] == mark) { continue; }
 
-                    weight_t u_w = g.weight(u);
+                    weight_t u_w = g.v_weights[u];
 
                     f32 counter = 0;
                     vertex_t chosen_v = 0;
@@ -95,7 +95,7 @@ namespace HeiProMap {
                     forall_guiv(g, u, j, v) {
                             if (used[v] == mark) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.weight(v);
+                            weight_t v_w = g.v_weights[v];
 
                             if (u_w + v_w > m_l_max) { continue; }
 
@@ -143,7 +143,7 @@ namespace HeiProMap {
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                mapping.set_u(u, matching.get_n(u));
+                mapping.set(u, matching.get_n(u));
             }
         }
 

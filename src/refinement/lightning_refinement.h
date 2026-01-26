@@ -36,40 +36,41 @@
 namespace HeiProMap {
     class LightningRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit LightningRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+        explicit LightningRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {
+        }
 
         u64 max_iteration = 10; // how many iterations to run the algorithm at most
         u64 max_recursion = 10;
     };
 
     class LightningRefinement final : public ISerialRefiner {
-        vertex_t                 m_n         = 0;
-        vertex_t                 m_m         = 0;
-        partition_t              m_k         = 0;
-        f64                      m_imbalance = 0.0;
-        weight_t                 m_lmax      = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        f64 m_imbalance = 0.0;
+        weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
+        std::vector<weight_t> m_distance;
 
         AlignedArray<u32> vertex_used;
-        u32               vertex_marker = 0;
+        u32 vertex_marker = 0;
 
         AlignedArray<u32> block_used;
-        u32               block_marker = 0;
+        u32 block_marker = 0;
 
         AlignedArray<vertex_t> curr_boundary;
-        size_t                 curr_boundary_size = 0;
+        size_t curr_boundary_size = 0;
 
         AlignedArray<partition_t> blocks;
-        AlignedArray<s64>         blocks_qap_delta;
-        size_t                    blocks_size = 0;
+        AlignedArray<s64> blocks_qap_delta;
+        size_t blocks_size = 0;
 
-        RandomEngine                           *random_engine = nullptr;
-        const LightningRefinementConfiguration *config        = nullptr;
+        RandomEngine *random_engine = nullptr;
+        const LightningRefinementConfiguration *config = nullptr;
 
         std::vector<u8> used_blocks;
-        s64             current_qap_delta = 0;
-        size_t          current_n_moves   = 0;
+        s64 current_qap_delta = 0;
+        size_t current_n_moves = 0;
 
     public:
         LightningRefinement() = default;
@@ -85,16 +86,16 @@ namespace HeiProMap {
                         const std::vector<weight_t> &t_distance,
                         RandomEngine &t_random_engine,
                         const ISerialRefinerConfiguration &i_config) override {
-            m_n         = t_n;
-            m_m         = t_m;
-            m_k         = t_k;
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
             m_imbalance = t_imbalance;
-            m_lmax      = t_lmax;
+            m_lmax = t_lmax;
             m_hierarchy = t_hierarchy;
-            m_distance  = t_distance;
+            m_distance = t_distance;
 
             random_engine = &t_random_engine;
-            config        = dynamic_cast<const LightningRefinementConfiguration *>(&i_config);
+            config = dynamic_cast<const LightningRefinementConfiguration *>(&i_config);
 
             vertex_used.initialize(m_n, 0);
             block_used.initialize(m_k, 0);
@@ -123,34 +124,32 @@ namespace HeiProMap {
                 std::fill(used_blocks.begin(), used_blocks.end(), 0);
 
                 std::vector<KWayFMMove> possible_moves;
-                current_n_moves   = 0;
+                current_n_moves = 0;
                 current_qap_delta = 0;
                 used_blocks.clear();
 
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u)
-                    {
-                        partition_t u_id     = p_manager[u];
-                        weight_t    u_weight = g.weight(u);
+                    forall_bv_id_iu(bv_manager, id, i, u) {
+                            partition_t u_id = p_manager[u];
+                            weight_t u_weight = g.v_weights[u];
 
-                        block_marker += 1;
-                        forall_guiv(g, u, i, v)
-                        {
-                            partition_t v_id = p_manager[v];
-                            if (u_id == v_id) { continue; }
-                            if (block_used[v_id] == block_marker) { continue; }
+                            block_marker += 1;
+                            forall_guiv(g, u, i, v) {
+                                    partition_t v_id = p_manager[v];
+                                    if (u_id == v_id) { continue; }
+                                    if (block_used[v_id] == block_marker) { continue; }
 
-                            if (p_manager.get_bweight(v_id) + u_weight > m_lmax) {
-                                // would overload
-                                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
-                                // if (qap_delta < 0) { continue; }
+                                    if (p_manager.get_bweight(v_id) + u_weight > m_lmax) {
+                                        // would overload
+                                        s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                        // if (qap_delta < 0) { continue; }
 
-                                possible_moves.push_back({u, u_id, v_id, qap_delta});
-                                block_used[v_id] = block_marker;
-                            }
+                                        possible_moves.push_back({u, u_id, v_id, qap_delta});
+                                        block_used[v_id] = block_marker;
+                                    }
+                                }
+                            endfor
                         }
-                        endfor
-                    }
                     endfor
                 }
 
@@ -163,7 +162,7 @@ namespace HeiProMap {
                 for (auto &move: possible_moves) {
                     bv_manager.move(g, p_manager, move.u, move.u_id, move.to_move_id);
                     q_graph.move(g, p_manager, move.u, move.u_id, move.to_move_id);
-                    p_manager.move(move.u, g.weight(move.u), move.u_id, move.to_move_id);
+                    p_manager.move(move.u, g.v_weights[move.u], move.u_id, move.to_move_id);
 
                     used_blocks[move.u_id] = 1;
                     current_n_moves += 1;
@@ -182,7 +181,7 @@ namespace HeiProMap {
 
                     bv_manager.move(g, p_manager, move.u, move.to_move_id, move.u_id);
                     q_graph.move(g, p_manager, move.u, move.to_move_id, move.u_id);
-                    p_manager.move(move.u, g.weight(move.u), move.to_move_id, move.u_id);
+                    p_manager.move(move.u, g.v_weights[move.u], move.to_move_id, move.u_id);
                 }
 
                 if (!moves_found) {
@@ -209,15 +208,13 @@ namespace HeiProMap {
             // if no move found than revert one step
 
             std::vector<KWayFMMove> possible_moves;
-            KWayFMMove              best_stop_move = {0, 0, std::numeric_limits<partition_t>::max(), -1};
+            KWayFMMove best_stop_move = {0, 0, std::numeric_limits<partition_t>::max(), -1};
 
-            forall_bv_id_iu(bv_manager, id, i, u)
-                {
-                    weight_t u_weight = g.weight(u);
+            forall_bv_id_iu(bv_manager, id, i, u) {
+                    weight_t u_weight = g.v_weights[u];
 
                     block_marker += 1;
-                    forall_guiv(g, u, j, v)
-                        {
+                    forall_guiv(g, u, j, v) {
                             partition_t v_id = p_manager[v];
                             if (id == v_id) { continue; }
                             if (block_used[v_id] == block_marker) { continue; }
@@ -256,7 +253,7 @@ namespace HeiProMap {
             for (auto &move: possible_moves) {
                 bv_manager.move(g, p_manager, move.u, move.u_id, move.to_move_id);
                 q_graph.move(g, p_manager, move.u, move.u_id, move.to_move_id);
-                p_manager.move(move.u, g.weight(move.u), move.u_id, move.to_move_id);
+                p_manager.move(move.u, g.v_weights[move.u], move.u_id, move.to_move_id);
 
                 used_blocks[move.u_id] = 1;
                 current_n_moves += 1;
@@ -285,7 +282,7 @@ namespace HeiProMap {
 
                 bv_manager.move(g, p_manager, move.u, move.to_move_id, move.u_id);
                 q_graph.move(g, p_manager, move.u, move.to_move_id, move.u_id);
-                p_manager.move(move.u, g.weight(move.u), move.to_move_id, move.u_id);
+                p_manager.move(move.u, g.v_weights[move.u], move.to_move_id, move.u_id);
             }
 
             // positive move that balances block and not overloads non-used block -> stop
@@ -294,7 +291,7 @@ namespace HeiProMap {
 
                 bv_manager.move(g, p_manager, best_stop_move.u, best_stop_move.u_id, best_stop_move.to_move_id);
                 q_graph.move(g, p_manager, best_stop_move.u, best_stop_move.u_id, best_stop_move.to_move_id);
-                p_manager.move(best_stop_move.u, g.weight(best_stop_move.u), best_stop_move.u_id, best_stop_move.to_move_id);
+                p_manager.move(best_stop_move.u, g.v_weights[best_stop_move.u], best_stop_move.u_id, best_stop_move.to_move_id);
 
                 current_n_moves += 1;
                 current_qap_delta += best_stop_move.qap_delta;
@@ -313,7 +310,8 @@ namespace HeiProMap {
                           [[maybe_unused]] bv_manager_t &bv_manager,
                           [[maybe_unused]] p_manager_t &p_manager,
                           [[maybe_unused]] q_graph_t &q_graph,
-                          [[maybe_unused]] size_t layer) override {}
+                          [[maybe_unused]] size_t layer) override {
+        }
     };
 }
 

@@ -37,7 +37,7 @@ namespace HeiProMap {
     struct PairWeight {
         partition_t id1;
         partition_t id2;
-        weight_t    distance;
+        weight_t distance;
 
         bool operator<(const PairWeight &p) const {
             return distance < p.distance;
@@ -50,21 +50,25 @@ namespace HeiProMap {
 
     class QuotientGraphRefinementConfiguration final : public ISerialRefinerConfiguration {
     public:
-        explicit QuotientGraphRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {}
+        explicit QuotientGraphRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {
+        }
 
         u64 max_iteration = 1;
-        f64 alpha         = 100.0;
-        f64 beta          = 1.0;
+        u64 min_n_steps = 4;
+        f64 alpha = 100.0;
+        f64 beta = 1.0;
+        bool use_active_scheduling = true;
+        bool use_preemptive_exit = true;
     };
 
     class QuotientGraphRefinement final : public ISerialRefiner {
-        vertex_t                 m_n         = 0;
-        vertex_t                 m_m         = 0;
-        partition_t              m_k         = 0;
-        f64                      m_imbalance = 0.0;
-        weight_t                 m_lmax      = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
+        f64 m_imbalance = 0.0;
+        weight_t m_lmax = 0;
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
+        std::vector<weight_t> m_distance;
 
         // priority queues
         IndexedMaxHeap<s64> boundary_vertices_u;
@@ -72,26 +76,25 @@ namespace HeiProMap {
 
         // store change
         AlignedArray<vertex_t> moves;
-        size_t                 moves_size         = 0;
-        s64                    curr_qap_gain      = 0;
-        s64                    max_qap_gain       = 0;
-        s64                    curr_edge_cut_gain = 0;
-        s64                    max_edge_cut_gain  = 0;
-        size_t                 best_idx           = 0;
+        size_t moves_size = 0;
+        s64 curr_qap_gain = 0;
+        s64 max_qap_gain = 0;
+        s64 curr_edge_cut_gain = 0;
+        s64 max_edge_cut_gain = 0;
+        size_t best_idx = 0;
 
         // active block scheduling
-        AlignedArray<u8>         active_this_round;
-        AlignedArray<u8>         active_next_round;
+        AlignedArray<u8> active_this_round;
+        AlignedArray<u8> active_next_round;
         AlignedArray<PairWeight> pairs;
-        size_t                   pairs_size = 0;
+        size_t pairs_size = 0;
 
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
-        u32               vertex_mark = 0;
+        u32 vertex_mark = 0;
 
-        RandomEngine                               *random_engine = nullptr;
-        const QuotientGraphRefinementConfiguration *config        = nullptr;
-
+        RandomEngine *random_engine = nullptr;
+        const QuotientGraphRefinementConfiguration *config = nullptr;
 
     public:
         QuotientGraphRefinement() = default;
@@ -109,16 +112,16 @@ namespace HeiProMap {
                         const ISerialRefinerConfiguration &i_config) override {
             ScopedTimer _t("io", "QuotientGraphRefinement", "initialize");
 
-            m_n         = t_n;
-            m_m         = t_m;
-            m_k         = t_k;
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
             m_imbalance = t_imbalance;
-            m_lmax      = t_lmax;
+            m_lmax = t_lmax;
             m_hierarchy = t_hierarchy;
-            m_distance  = t_distance;
+            m_distance = t_distance;
 
             random_engine = &t_random_engine;
-            config        = dynamic_cast<const QuotientGraphRefinementConfiguration *>(&i_config);
+            config = dynamic_cast<const QuotientGraphRefinementConfiguration *>(&i_config);
 
             // priority queues
             boundary_vertices_u.initialize(m_n);
@@ -152,27 +155,38 @@ namespace HeiProMap {
 
             u64 iteration = 0;
             while (iteration < config->max_iteration) {
-
                 iteration += 1;
 
                 // determine all pairs in the quotient graph
                 pairs_size = 0;
-                for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                    for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
-                        if (q_graph.has_edge(u_id, v_id) && (active_this_round[u_id] || active_this_round[v_id])) {
-                            pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
+                if (config->use_active_scheduling) {
+                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                        for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
+                            if (q_graph.has_edge(u_id, v_id) && (active_this_round[u_id] || active_this_round[v_id])) {
+                                pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
+                            }
+                        }
+                    }
+                } else {
+                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                        for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
+                            if (q_graph.has_edge(u_id, v_id)) {
+                                pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
+                            }
                         }
                     }
                 }
                 if (pairs_size == 0) { return; }
 
+                std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine->generator);
+
                 for (size_t j = 0; j < pairs_size; ++j) {
                     auto [u_id, v_id, distance] = pairs[j];
-                    if (d_oracle.last_level_pair(u_id, v_id)) {
-                        refine_blocks_edge_cut(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
-                    } else {
-                        refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
-                    }
+                    // if (d_oracle.last_level_pair(u_id, v_id)) {
+                    //     refine_blocks_edge_cut(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
+                    // } else {
+                    refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
+                    // }
                 }
 
                 std::swap(active_this_round, active_next_round);
@@ -189,9 +203,8 @@ namespace HeiProMap {
                            q_graph_t &q_graph,
                            partition_t u_id,
                            partition_t v_id) {
-
             f64 alpha = config->alpha;
-            f64 beta  = std::log(g.get_n());
+            f64 beta = std::log(g.n);
 
             size_t max_n_swaps = 0;
 
@@ -199,10 +212,8 @@ namespace HeiProMap {
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
             vertex_mark += 1;
-            forall_bv_id_iu(bv_manager, u_id, k, u)
-                {
-                    forall_guiv(g, u, i, v)
-                        {
+            forall_bv_id_iu(bv_manager, u_id, k, u) {
+                    forall_guiv(g, u, i, v) {
                             if (p_manager[v] == v_id) {
                                 // u is connected to block v_id
                                 if (vertex_used[u] != vertex_mark) {
@@ -226,14 +237,14 @@ namespace HeiProMap {
 
             // start executing moves based on the TopGain method
             vertex_mark += 1;
-            moves_size         = 0;
-            best_idx           = 0;
-            curr_qap_gain      = 0;
-            max_qap_gain       = 0;
+            moves_size = 0;
+            best_idx = 0;
+            curr_qap_gain = 0;
+            max_qap_gain = 0;
 
-            f64 steps_since_last_improvement = 0.0;
-            f64 qap_gain_mean                = 0.0;
-            f64 qap_gain_var                 = 0.0;
+            u64 steps_since_last_improvement = 0;
+            f64 qap_gain_mean = 0.0;
+            f64 qap_gain_var = 0.0;
 
             while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
                 // determine from which block to choose
@@ -261,41 +272,44 @@ namespace HeiProMap {
                 // choose the priority queue
                 IndexedMaxHeap<s64> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
 
-                vertex_t    vertex        = boundary_vertices.top_key();
-                s64         qap_delta     = boundary_vertices.top();
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = choose_u ? u_id : v_id;
-                partition_t move_id       = choose_u ? v_id : u_id;
+                vertex_t vertex = boundary_vertices.top_key();
+                s64 qap_delta = boundary_vertices.top();
+                weight_t vertex_weight = g.v_weights[vertex];
+                partition_t vertex_id = choose_u ? u_id : v_id;
+                partition_t move_id = choose_u ? v_id : u_id;
                 boundary_vertices.pop();
 
                 // move the vertex
                 moves[moves_size++] = vertex;
                 curr_qap_gain += qap_delta;
                 if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= m_lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= m_lmax) {
-                    best_idx     = moves_size;
+                    best_idx = moves_size;
                     max_qap_gain = curr_qap_gain;
 
-                    steps_since_last_improvement = 0.0;
-                    qap_gain_mean                = 0.0;
-                    qap_gain_var                 = 0.0;
+                    steps_since_last_improvement = 0;
+                    qap_gain_mean = 0.0;
+                    qap_gain_var = 0.0;
                 }
 
                 // make move in structures
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 vertex_used[vertex] = vertex_mark;
 
-                steps_since_last_improvement += 1.0;
-                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / steps_since_last_improvement;
-                f64 new_qap_gain_var  = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / steps_since_last_improvement;
+                steps_since_last_improvement += 1;
+                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
+                f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
 
                 qap_gain_mean = new_qap_gain_mean;
-                qap_gain_var  = new_qap_gain_var;
+                qap_gain_var = new_qap_gain_var;
 
-                if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) { break; }
+                if (config->use_preemptive_exit) {
+                    if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
+                        break;
+                    }
+                }
 
                 // we have to push or update the neighbors that were not moved already
-                forall_guiv(g, vertex, i, neighbor)
-                    {
+                forall_guiv(g, vertex, i, neighbor) {
                         if (vertex_used[neighbor] == vertex_mark) { continue; }
 
                         partition_t neighbor_id = p_manager[neighbor];
@@ -305,7 +319,7 @@ namespace HeiProMap {
                         partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
                         bool is_connected_to_new_id;
-                        s64  new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
+                        s64 new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
 
                         if (!is_connected_to_new_id) { continue; }
 
@@ -326,20 +340,20 @@ namespace HeiProMap {
 
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
-                vertex_t    vertex        = moves[moves_size - 1 - i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex = moves[moves_size - 1 - i];
+                weight_t vertex_weight = g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
 
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
 
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
-                vertex_t    vertex        = moves[i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex = moves[i];
+                weight_t vertex_weight = g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
@@ -350,7 +364,6 @@ namespace HeiProMap {
                 active_next_round[u_id] = 1;
                 active_next_round[v_id] = 1;
             }
-
         }
 
         void refine_blocks_edge_cut([[maybe_unused]] const u64 level,
@@ -362,9 +375,8 @@ namespace HeiProMap {
                                     q_graph_t &q_graph,
                                     partition_t u_id,
                                     partition_t v_id) {
-
             f64 alpha = config->alpha;
-            f64 beta  = std::log(g.get_n());
+            f64 beta = std::log(g.n);
 
             size_t max_n_swaps = 0;
 
@@ -372,10 +384,8 @@ namespace HeiProMap {
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
             vertex_mark += 1;
-            forall_bv_id_iu(bv_manager, u_id, k, u)
-                {
-                    forall_guiv(g, u, i, v)
-                        {
+            forall_bv_id_iu(bv_manager, u_id, k, u) {
+                    forall_guiv(g, u, i, v) {
                             if (p_manager[v] == v_id) {
                                 // u is connected to block v_id
                                 if (vertex_used[u] != vertex_mark) {
@@ -399,14 +409,14 @@ namespace HeiProMap {
 
             // start executing moves based on the TopGain method
             vertex_mark += 1;
-            moves_size         = 0;
-            best_idx           = 0;
+            moves_size = 0;
+            best_idx = 0;
             curr_edge_cut_gain = 0;
-            max_edge_cut_gain  = 0;
+            max_edge_cut_gain = 0;
 
-            f64 steps_since_last_improvement = 0.0;
-            f64 edge_cut_gain_mean           = 0.0;
-            f64 edge_cut_gain_var            = 0.0;
+            u64 steps_since_last_improvement = 0;
+            f64 edge_cut_gain_mean = 0.0;
+            f64 edge_cut_gain_var = 0.0;
 
             while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
                 // determine from which block to choose
@@ -434,41 +444,40 @@ namespace HeiProMap {
                 // choose the priority queue
                 IndexedMaxHeap<s64> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
 
-                vertex_t    vertex         = boundary_vertices.top_key();
-                s64         edge_cut_delta = boundary_vertices.top();
-                weight_t    vertex_weight  = g.weight(vertex);
-                partition_t vertex_id      = choose_u ? u_id : v_id;
-                partition_t move_id        = choose_u ? v_id : u_id;
+                vertex_t vertex = boundary_vertices.top_key();
+                s64 edge_cut_delta = boundary_vertices.top();
+                weight_t vertex_weight = g.v_weights[vertex];
+                partition_t vertex_id = choose_u ? u_id : v_id;
+                partition_t move_id = choose_u ? v_id : u_id;
                 boundary_vertices.pop();
 
                 // move the vertex
                 moves[moves_size++] = vertex;
                 curr_edge_cut_gain += edge_cut_delta;
                 if (curr_edge_cut_gain >= max_edge_cut_gain && p_manager.get_bweight(move_id) + vertex_weight <= m_lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= m_lmax) {
-                    best_idx          = moves_size;
+                    best_idx = moves_size;
                     max_edge_cut_gain = curr_edge_cut_gain;
 
-                    steps_since_last_improvement = 0.0;
-                    edge_cut_gain_mean           = 0.0;
-                    edge_cut_gain_var            = 0.0;
+                    steps_since_last_improvement = 0;
+                    edge_cut_gain_mean = 0.0;
+                    edge_cut_gain_var = 0.0;
                 }
 
                 // make move in structures
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 vertex_used[vertex] = vertex_mark;
 
-                steps_since_last_improvement += 1.0;
-                f64 new_edge_cut_gain_mean = edge_cut_gain_mean + ((f64) edge_cut_delta - edge_cut_gain_mean) / steps_since_last_improvement;
-                f64 new_edge_cut_gain_var  = (edge_cut_gain_var + ((f64) edge_cut_delta - edge_cut_gain_mean) * ((f64) edge_cut_delta - new_edge_cut_gain_mean)) / steps_since_last_improvement;
+                steps_since_last_improvement += 1;
+                f64 new_edge_cut_gain_mean = edge_cut_gain_mean + ((f64) edge_cut_delta - edge_cut_gain_mean) / (f64) steps_since_last_improvement;
+                f64 new_edge_cut_gain_var = (edge_cut_gain_var + ((f64) edge_cut_delta - edge_cut_gain_mean) * ((f64) edge_cut_delta - new_edge_cut_gain_mean)) / (f64) steps_since_last_improvement;
 
                 edge_cut_gain_mean = new_edge_cut_gain_mean;
-                edge_cut_gain_var  = new_edge_cut_gain_var;
+                edge_cut_gain_var = new_edge_cut_gain_var;
 
-                if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * edge_cut_gain_mean * edge_cut_gain_mean > alpha * edge_cut_gain_var + beta) { break; }
+                if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * edge_cut_gain_mean * edge_cut_gain_mean > alpha * edge_cut_gain_var + beta) { break; }
 
                 // we have to push or update the neighbors that were not moved already
-                forall_guiv(g, vertex, i, neighbor)
-                    {
+                forall_guiv(g, vertex, i, neighbor) {
                         if (vertex_used[neighbor] == vertex_mark) { continue; }
 
                         partition_t neighbor_id = p_manager[neighbor];
@@ -478,7 +487,7 @@ namespace HeiProMap {
                         partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
 
                         bool is_connected_to_new_id;
-                        s64  new_edge_cut_delta = get_u_edge_cut_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager);
+                        s64 new_edge_cut_delta = get_u_edge_cut_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager);
 
                         if (!is_connected_to_new_id) { continue; }
 
@@ -499,20 +508,20 @@ namespace HeiProMap {
 
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
-                vertex_t    vertex        = moves[moves_size - 1 - i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex = moves[moves_size - 1 - i];
+                weight_t vertex_weight = g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
 
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
 
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
-                vertex_t    vertex        = moves[i];
-                weight_t    vertex_weight = g.weight(vertex);
-                partition_t vertex_id     = p_manager[vertex];
-                partition_t move_id       = u_id == vertex_id ? v_id : u_id;
+                vertex_t vertex = moves[i];
+                weight_t vertex_weight = g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
@@ -523,7 +532,6 @@ namespace HeiProMap {
                 active_next_round[u_id] = 1;
                 active_next_round[v_id] = 1;
             }
-
         }
 
         void refine_layer([[maybe_unused]] const u64 level,
@@ -533,7 +541,8 @@ namespace HeiProMap {
                           [[maybe_unused]] bv_manager_t &bv_manager,
                           [[maybe_unused]] p_manager_t &p_manager,
                           [[maybe_unused]] q_graph_t &q_graph,
-                          [[maybe_unused]] size_t layer) override {}
+                          [[maybe_unused]] size_t layer) override {
+        }
     };
 }
 

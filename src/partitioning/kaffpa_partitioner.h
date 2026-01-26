@@ -28,200 +28,58 @@
 #define HEIPROMAP_KAFFPA_PARTITIONER_H
 
 #include "../definitions.h"
+#include "../utility/assert_state.h"
 #include "../../extern/local/kahip/include/kaHIP_interface.h"
 
 namespace HeiProMap {
-    enum KaffpaPartitionerMode {
-        KAFFPA_PARTITIONER_MODE_UNDEFINED,
-        KAFFPA_PARTITIONER_MODE_STRONG,
-        KAFFPA_PARTITIONER_MODE_ECO,
-        KAFFPA_PARTITIONER_MODE_FAST,
+    enum KaffpaPartitionMode {
+        KAFFPA_PARTITION_STRONG,
+        KAFFPA_PARTITION_ECO,
+        KAFFPA_PARTITION_FAST
     };
 
-    inline KaffpaPartitionerMode string_to_kaffpa_partitioner_mode(const std::string &str) {
-        if (str == "UNDEFINED") return KAFFPA_PARTITIONER_MODE_UNDEFINED;
-        if (str == "strong") return KAFFPA_PARTITIONER_MODE_STRONG;
-        if (str == "eco") return KAFFPA_PARTITIONER_MODE_ECO;
-        if (str == "fast") return KAFFPA_PARTITIONER_MODE_FAST;
-        return KAFFPA_PARTITIONER_MODE_UNDEFINED;
+    inline void kaffpa_partition(graph_t &g, partition_t k, f64 imb, KaffpaPartitionMode kaffpa_mode, u64 seed, AlignedArray<partition_t> &partition) {
+        ASSERT(assert_graph(g));
+
+        int n = (int) g.n;
+        int m = (int) g.m;
+        int *vwgt = (int *) malloc(n * sizeof(int));
+        int *xadj = (int *) malloc((n + 1) * sizeof(int));
+        int *adjcwgt = (int *) malloc(m * sizeof(int));
+        int *adjncy = (int *) malloc(m * sizeof(int));
+        int nparts = (int) k;
+        double imbalance = imb;
+        bool suppress_output = true;
+        int mode = FAST;
+        int edge_cut;
+        int *part = (int *) malloc(n * sizeof(int));
+
+        if (kaffpa_mode == KAFFPA_PARTITION_STRONG) { mode = STRONG; }
+        if (kaffpa_mode == KAFFPA_PARTITION_ECO) { mode = ECO; }
+        if (kaffpa_mode == KAFFPA_PARTITION_FAST) { mode = FAST; }
+
+        // set vertex weights
+        for (int i = 0; i < n; i++) { vwgt[i] = (int) g.v_weights[i]; }
+
+        // set xadj
+        for (int i = 0; i < n + 1; i++) { xadj[i] = (int) g.neighborhoods[i]; }
+
+        // set adjncy
+        for (int i = 0; i < m; i++) { adjncy[i] = (int) g.edges_v[i]; }
+
+        // set adjcwgt
+        for (int i = 0; i < m; i++) { adjcwgt[i] = (int) g.edges_w[i]; }
+
+        kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &nparts, &imbalance, suppress_output, (int) seed, mode, &edge_cut, part);
+
+        for (int i = 0; i < n; i++) { partition[i] = part[i]; }
+
+        free(vwgt);
+        free(xadj);
+        free(adjcwgt);
+        free(adjncy);
+        free(part);
     }
-
-    inline std::string kaffpa_partitioner_mode_to_string(KaffpaPartitionerMode mode) {
-        switch (mode) {
-            case KAFFPA_PARTITIONER_MODE_UNDEFINED:
-                return "UNDEFINED";
-            case KAFFPA_PARTITIONER_MODE_STRONG:
-                return "strong";
-            case KAFFPA_PARTITIONER_MODE_ECO:
-                return "eco";
-            case KAFFPA_PARTITIONER_MODE_FAST:
-                return "fast";
-            default:
-                return "UNDEFINED";
-        }
-    }
-
-    enum KaffpaPartitionerMethod {
-        KAFFPA_PARTITIONER_METHOD_UNDEFINED,
-        KAFFPA_PARTITIONER_METHOD_BISECTION,
-        KAFFPA_PARTITIONER_METHOD_MULTISECTION,
-    };
-
-    inline KaffpaPartitionerMethod string_to_kaffpa_partitioner_method(const std::string &str) {
-        if (str == "UNDEFINED") return KAFFPA_PARTITIONER_METHOD_UNDEFINED;
-        if (str == "bisection") return KAFFPA_PARTITIONER_METHOD_BISECTION;
-        if (str == "multisection") return KAFFPA_PARTITIONER_METHOD_MULTISECTION;
-        return KAFFPA_PARTITIONER_METHOD_UNDEFINED;
-    }
-
-    inline std::string kaffpa_partitioner_method_to_string(KaffpaPartitionerMethod mode) {
-        switch (mode) {
-            case KAFFPA_PARTITIONER_METHOD_UNDEFINED:
-                return "UNDEFINED";
-            case KAFFPA_PARTITIONER_METHOD_BISECTION:
-                return "bisection";
-            case KAFFPA_PARTITIONER_METHOD_MULTISECTION:
-                return "multisection";
-            default:
-                return "UNDEFINED";
-        }
-    }
-
-    class KaffpaPartitionerConfiguration {
-    public:
-        std::string             mode_string;
-        KaffpaPartitionerMode   mode; // Which mode to use: strong, eco, fast
-        std::string             method_string;
-        KaffpaPartitionerMethod method; // Which method to use: bisection, multisection
-    };
-
-    class KaffpaPartitioner {
-    public:
-        void partition(const graph_t &g,
-                       p_manager_t &p_manager,
-                       const std::vector<partition_t> &hierarchy,
-                       const std::vector<weight_t> &distance,
-                       const f64 imbalance,
-                       RandomEngine &t_random_engine,
-                       const KaffpaPartitionerConfiguration &i_config) {
-            ScopedTimer _t("partition", "KaffpaPartitioner", "partition");
-
-            KaffpaPartitionerConfiguration config = *dynamic_cast<const KaffpaPartitionerConfiguration *>(&i_config);
-
-            // number of vertices and edges
-            int n = 0;
-            int m = 0;
-
-            // build translation table
-            TranslationTable<int> tt;
-            tt.reserve(g.get_n(), g.get_n());
-            vertex_t translate = 0;
-            forall_gu(g, u)
-                {
-                    tt.add(u, translate);
-                    translate += 1;
-
-                    n += 1;
-                    m += (int) g.size(u);
-                }
-            endfor
-
-            // vertex weights
-            int      *v_weights = (int *) malloc(n * sizeof(int));
-            for (int i          = 0; i < n; ++i) { v_weights[i] = (int) g.weight(tt.get_o(i)); }
-
-            // pointer to adjacency lists
-            int *adj_ptr   = (int *) malloc((n + 1) * sizeof(int));
-            int *adj       = (int *) malloc(m * sizeof(int));
-            int *e_weights = (int *) malloc(m * sizeof(int));
-
-            // set adj_ptr
-            adj_ptr[0] = 0;
-            for (int new_u            = 0; new_u < n; ++new_u) {
-                vertex_t    old_u      = tt.get_o(new_u);
-                int         insert_idx = 0;
-                for (size_t i          = 0; i < g.size(old_u); ++i) {
-                    vertex_t v                             = g.neighbor(old_u, i);
-                    weight_t ew                            = g.weight(old_u, i);
-                    adj[adj_ptr[new_u] + insert_idx]       = (int) tt.get_n(v);
-                    e_weights[adj_ptr[new_u] + insert_idx] = (int) ew;
-                    insert_idx += 1;
-                }
-                adj_ptr[new_u + 1] = adj_ptr[new_u] + insert_idx;
-            }
-            // imbalance
-            double   kaffpa_imbalance = imbalance;
-
-            // hierarchy
-            int      *kaffpa_hierarchy = (int *) malloc(hierarchy.size() * sizeof(int));
-            for (u64 i                 = 0; i < hierarchy.size(); ++i) { kaffpa_hierarchy[i] = (int) hierarchy[i]; }
-
-            // distance
-            int      *kaffpa_distance = (int *) malloc(distance.size() * sizeof(int));
-            for (u64 i                = 0; i < distance.size(); ++i) { kaffpa_distance[i] = (int) distance[i]; }
-
-            // mode
-            int kaffpa_map_mode;
-            int kaffpa_partition_mode;
-
-            if (config.method == KAFFPA_PARTITIONER_METHOD_BISECTION) {
-                kaffpa_map_mode = MAPMODE_BISECTION;
-            } else if (config.method == KAFFPA_PARTITIONER_METHOD_MULTISECTION) {
-                kaffpa_map_mode = MAPMODE_MULTISECTION; // TODO: Figure out why MAPMODE_MULTISECTION does not work
-            } else {
-                std::cout << "KaFFPa Partitioning method " << kaffpa_partitioner_method_to_string(config.method) << " with id " << config.method << " not known!" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-
-            if (config.mode == KAFFPA_PARTITIONER_MODE_FAST) {
-                kaffpa_partition_mode = FAST;
-            } else if (config.mode == KAFFPA_PARTITIONER_MODE_ECO) {
-                kaffpa_partition_mode = ECO;
-            } else if (config.mode == KAFFPA_PARTITIONER_MODE_STRONG) {
-                kaffpa_partition_mode = STRONG;
-            } else {
-                std::cout << "KaFFPa Partitioning mode " << kaffpa_partitioner_mode_to_string(config.mode) << " with id " << config.mode << " not known!" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-
-            // partition result
-            int *kaffpa_partition = (int *) malloc(n * sizeof(int));
-
-            int kaffpa_edgecut, kaffpa_qap;
-
-            // std::string file_path = "error.graph";
-            // write_graph(n, m/2, v_weights, adj_ptr, e_weights, adj, file_path);
-
-            // execute kaffpa
-            process_mapping(&n, v_weights, adj_ptr, e_weights, adj, kaffpa_hierarchy, kaffpa_distance, (int) hierarchy.size(), kaffpa_partition_mode, kaffpa_map_mode, &kaffpa_imbalance, true, t_random_engine.get_s32(), &kaffpa_edgecut, &kaffpa_qap, kaffpa_partition);
-
-            // first read partition
-            for (int new_u = 0; new_u < n; ++new_u) {
-                p_manager.set(tt.get_o(new_u), g.weight(tt.get_o(new_u)), kaffpa_partition[new_u]);
-            }
-
-            free(v_weights);
-            free(adj_ptr);
-            free(adj);
-            free(e_weights);
-            free(kaffpa_hierarchy);
-            free(kaffpa_distance);
-            free(kaffpa_partition);
-        }
-
-        void write_graph(int n, int m, int *vwgt, int *xadj, int *adjwgt, int *adjncy, std::string &file_path) {
-            std::ofstream file(file_path);
-
-            file << n << " " << m << " 011" << std::endl;
-            for (int i = 0; i < n; ++i) {
-                file << vwgt[i] << " ";
-                for (int j = xadj[i]; j < xadj[i + 1]; ++j) {
-                    file << adjncy[j] + 1 << " " << adjwgt[j] << " ";
-                }
-                file << std::endl;
-            }
-        }
-    };
 }
 
 #endif //HEIPROMAP_KAFFPA_PARTITIONER_H

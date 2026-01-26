@@ -79,7 +79,7 @@ namespace HeiProMap {
                    Mapping &mapping) {
             ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "match");
             Matching matching;
-            matching.initialize(g.get_n());
+            matching.initialize(g.n);
 
             mark += 1;
 
@@ -88,14 +88,14 @@ namespace HeiProMap {
                 forall_gu(g, u)
                     {
                         if (used[u] == mark) { continue; }
-                        if (g.size(u) != 1) { continue; }
+                        if (g.deg(u) != 1) { continue; }
 
-                        vertex_t v = g.neighbor(u, 0);
+                        vertex_t v = g.edges_v[g.neighborhoods[u]];
 
                         if (used[v] == mark) { continue; }
 
-                        weight_t u_w = g.weight(u);
-                        weight_t v_w = g.weight(v);
+                        weight_t u_w = g.v_weights[u];
+                        weight_t v_w = g.v_weights[v];
 
                         if (u_w + v_w > m_l_max) { continue; }
 
@@ -109,7 +109,7 @@ namespace HeiProMap {
                 {
                     if (used[u] == mark) { continue; }
 
-                    weight_t u_w        = g.weight(u);
+                    weight_t u_w        = g.v_weights[u];
                     vertex_t best_v     = u;
                     weight_t max_weight = 0;
 
@@ -117,7 +117,7 @@ namespace HeiProMap {
                         {
                             if (used[v] == mark) { continue; }
 
-                            weight_t v_w = g.weight(v);
+                            weight_t v_w = g.v_weights[v];
 
                             if (u_w + v_w > m_l_max) { continue; }
 
@@ -140,7 +140,7 @@ namespace HeiProMap {
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                mapping.set_u(u, matching.get_n(u));
+                mapping.set(u, matching.get_n(u));
             }
         }
     };

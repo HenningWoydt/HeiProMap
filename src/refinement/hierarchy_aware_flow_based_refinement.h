@@ -252,8 +252,8 @@ namespace HeiProMap {
                 iteration += 1;
 
                 // get allowed weight on each side
-                weight_t l_lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.weight() / (f64) m_k)) * ids_per_super_block;
-                weight_t r_lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.weight() / (f64) m_k)) * ids_per_super_block;
+                weight_t l_lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k)) * ids_per_super_block;
+                weight_t r_lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k)) * ids_per_super_block;
 
                 weight_t l_max_add_weight = l_lmax;;
                 weight_t         r_max_add_weight = r_lmax;
@@ -278,8 +278,8 @@ namespace HeiProMap {
 
                 weight_t    l_region_weight = 0;
                 weight_t    r_region_weight = 0;
-                for (size_t i               = 0; i < left_region_size; ++i) { l_region_weight += g.weight(left_region[i]); }
-                for (size_t i               = 0; i < right_region_size; ++i) { r_region_weight += g.weight(right_region[i]); }
+                for (size_t i               = 0; i < left_region_size; ++i) { l_region_weight += g.v_weights[left_region[i]]; }
+                for (size_t i               = 0; i < right_region_size; ++i) { r_region_weight += g.v_weights[right_region[i]]; }
 
                 // build a translation table from graph to flow network
                 vertex_t    new_u = 0;
@@ -427,8 +427,8 @@ namespace HeiProMap {
                 vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
 
-                if (l_curr_weight + g.weight(u) <= r_max_add_weight) {
-                    l_curr_weight += g.weight(u);
+                if (l_curr_weight + g.v_weights[u] <= r_max_add_weight) {
+                    l_curr_weight += g.v_weights[u];
 
                     left_region[left_region_size++] = u;
                     is_left_region[u]               = is_region_mark;
@@ -464,8 +464,8 @@ namespace HeiProMap {
                 vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
 
-                if (r_curr_weight + g.weight(u) <= l_max_add_weight) {
-                    r_curr_weight += g.weight(u);
+                if (r_curr_weight + g.v_weights[u] <= l_max_add_weight) {
+                    r_curr_weight += g.v_weights[u];
 
                     right_region[right_region_size++] = u;
                     is_right_region[u]                = is_region_mark;
@@ -665,7 +665,7 @@ namespace HeiProMap {
 
             for (size_t i = 0; i < left_region_size; ++i) {
                 vertex_t u        = left_region[i];
-                weight_t u_weight = g.weight(u);
+                weight_t u_weight = g.v_weights[u];
                 vertex_t new_u    = translation_table.get_n(u);
                 if (is_left[new_u] == 0) {
                     l_weight -= u_weight;
@@ -675,7 +675,7 @@ namespace HeiProMap {
 
             for (size_t i = 0; i < right_region_size; ++i) {
                 vertex_t u        = right_region[i];
-                weight_t u_weight = g.weight(u);
+                weight_t u_weight = g.v_weights[u];
                 vertex_t new_u    = translation_table.get_n(u);
                 if (is_left[new_u] == 1) {
                     r_weight -= u_weight;
@@ -699,7 +699,7 @@ namespace HeiProMap {
             for (size_t i = 0; i < left_region_size; ++i) {
                 vertex_t    u        = left_region[i];
                 partition_t u_id     = p_manager[u];
-                weight_t    u_weight = g.weight(u);
+                weight_t    u_weight = g.v_weights[u];
                 vertex_t    new_u    = translation_table.get_n(u);
 
                 ASSERT(l_start <= u_id && u_id < l_start + ids_per_superblock);
@@ -734,7 +734,7 @@ namespace HeiProMap {
                     }
 
                     q_graph.move(g, p_manager, u, u_id, best_id);
-                    p_manager.move(u, g.weight(u), u_id, best_id);
+                    p_manager.move(u, g.v_weights[u], u_id, best_id);
                 }
             }
 
@@ -742,7 +742,7 @@ namespace HeiProMap {
             for (size_t i = 0; i < right_region_size; ++i) {
                 vertex_t    u        = right_region[i];
                 partition_t u_id     = p_manager[u];
-                weight_t    u_weight = g.weight(u);
+                weight_t    u_weight = g.v_weights[u];
                 vertex_t    new_u    = translation_table.get_n(u);
 
                 ASSERT(r_start <= u_id && u_id < r_start + ids_per_superblock);
@@ -777,7 +777,7 @@ namespace HeiProMap {
                     }
 
                     q_graph.move(g, p_manager, u, u_id, best_id);
-                    p_manager.move(u, g.weight(u), u_id, best_id);
+                    p_manager.move(u, g.v_weights[u], u_id, best_id);
                 }
             }
         }
@@ -824,7 +824,7 @@ namespace HeiProMap {
                 forall_gu(g, u)
                     {
                         if (p_manager[u] == greatest_id) {
-                            weight_t u_weight = g.weight(u);
+                            weight_t u_weight = g.v_weights[u];
                             if (smallest_weight + u_weight <= m_lmax) {
                                 // move
                                 bv_manager.move(g, p_manager, u, greatest_id, smallest_id);

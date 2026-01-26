@@ -203,7 +203,7 @@ namespace HeiProMap {
             scc_weights.resize(n_scc, 0);
             for (vertex_t u = 0; u < n; ++u) {
                 if (u != source && u != target) {
-                    scc_weights[scc_id[u]] += g.weight(tt.get_o(u));
+                    scc_weights[scc_id[u]] += g.v_weights[tt.get_o(u)];
                 }
             }
         }

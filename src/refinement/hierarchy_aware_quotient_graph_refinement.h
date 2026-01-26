@@ -201,7 +201,7 @@ namespace HeiProMap {
                            partition_t ids_per_super_block,
                            weight_t lmax) {
             f64 alpha = 1000.0;
-            f64 beta  = std::log(g.get_n());
+            f64 beta  = std::log(g.n);
 
             // initialize the heaps
             l_boundary_vertices.clear();
@@ -298,7 +298,7 @@ namespace HeiProMap {
 
                 vertex_t    vertex        = boundary_vertices.top_key();
                 s64         qap_delta     = boundary_vertices.top();
-                weight_t    vertex_weight = g.weight(vertex);
+                weight_t    vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id     = p_manager[vertex];
                 partition_t move_id       = choose_l ? r_start : l_start;
                 boundary_vertices.pop();
@@ -419,7 +419,7 @@ namespace HeiProMap {
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
                 vertex_t    vertex        = moves[moves_size - 1 - i].u;
-                weight_t    vertex_weight = g.weight(vertex);
+                weight_t    vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
                 partition_t move_id       = moves[moves_size - 1 - i].u_id;
 
@@ -431,7 +431,7 @@ namespace HeiProMap {
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t    vertex        = moves[i].u;
-                weight_t    vertex_weight = g.weight(vertex);
+                weight_t    vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id     = moves[i].u_id;
                 partition_t move_id       = moves[i].to_move_id;
 

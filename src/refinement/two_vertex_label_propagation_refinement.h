@@ -141,7 +141,7 @@ namespace HeiProMap {
                     if (vertex_used[u] == vertex_marker) { continue; } // vertex was used
                     if (!bv_manager.is_boundary(u)) { continue; } // vertex is not boundary
 
-                    weight_t    u_weight = g.weight(u);
+                    weight_t    u_weight = g.v_weights[u];
                     partition_t u_id     = p_manager[u];
 
                     // get all connected partitions to u
@@ -171,7 +171,7 @@ namespace HeiProMap {
                             if (vertex_used[v] == vertex_marker) { continue; } // vertex was used
                             if (!bv_manager.is_boundary(v)) { continue; } // vertex is not boundary
 
-                            weight_t    v_weight = g.weight(v);
+                            weight_t    v_weight = g.v_weights[v];
                             partition_t v_id     = p_manager[v];
 
                             // get all connected partitions to v

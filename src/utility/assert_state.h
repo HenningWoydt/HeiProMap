@@ -36,14 +36,25 @@
 #include "../definitions_3.h"
 
 namespace HeiProMap {
+    inline bool assert_csr_structure(const graph_t &g) {
+        ScopedTimer _t("assert", "misc", "assert_no_self_loops");
+
+        ASSERT(g.neighborhoods[0] == 0);
+        ASSERT(g.neighborhoods[g.n] == g.m);
+        for (vertex_t u = 0; u < g.n; ++u) {
+            ASSERT(g.neighborhoods[u] <= g.neighborhoods[u + 1]);
+        }
+        return true;
+    }
+
     inline bool assert_no_self_loops(const graph_t &g) {
         ScopedTimer _t("assert", "misc", "assert_no_self_loops");
 
         forall_gu(g, u)
             {
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    for (size_t j = i + 1; j < g.size(u); ++j) {
-                        ASSERT(g.neighbor(u, i) != g.neighbor(u, j));
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    for (size_t j = i + 1; j < g.neighborhoods[u + 1]; ++j) {
+                        ASSERT(g.edges_v[i] != g.edges_v[j]);
                     }
                 }
             }
@@ -58,8 +69,8 @@ namespace HeiProMap {
         forall_gu(g, u)
             {
                 manual.clear();
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    manual.push_back(g.neighbor(u, i));
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    manual.push_back(g.edges_v[i]);
                 }
                 std::sort(manual.begin(), manual.end());
                 ASSERT(no_duplicates_sorted(manual));
@@ -98,7 +109,7 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-                weights[u_id] += g.weight(u);
+                weights[u_id] += g.v_weights[u];
             }
         endfor
 
@@ -119,8 +130,8 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-                for (size_t i = 0; i < g.size(u); ++i) {
-                    partition_t v_id = p_manager[g.neighbor(u, i)];
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    partition_t v_id = p_manager[g.edges_v[i]];
                     if (u_id != v_id) {
                         manual.push_back(u);
                         break;
@@ -229,9 +240,25 @@ namespace HeiProMap {
         return true;
     }
 
+    inline bool assert_graph([[maybe_unused]] const graph_t &g) {
+        // assert csr structure
+        ASSERT(assert_csr_structure(g));
+
+        // check no self-loops
+        ASSERT(assert_no_self_loops(g));
+
+        // check no duplicate edges
+        ASSERT(assert_no_double_edges(g));
+
+        return true;
+    }
+
     inline bool assert_state_pre_partitioning([[maybe_unused]] const graph_t &g,
                                               [[maybe_unused]] const p_manager_t &p_manager,
                                               [[maybe_unused]] const partition_t k) {
+        // assert csr structure
+        ASSERT(assert_csr_structure(g));
+
         // check no self-loops
         ASSERT(assert_no_self_loops(g));
 
@@ -249,6 +276,9 @@ namespace HeiProMap {
                                                 [[maybe_unused]] bv_manager_t &bv_manager,
                                                 [[maybe_unused]] const q_graph_t &q_graph,
                                                 [[maybe_unused]] const partition_t k) {
+        // assert csr structure
+        ASSERT(assert_csr_structure(g));
+
         // check no self-loops
         ASSERT(assert_no_self_loops(g));
 
@@ -276,6 +306,9 @@ namespace HeiProMap {
     inline bool assert_state_after_partitioning([[maybe_unused]] const graph_t &g,
                                                 [[maybe_unused]] const p_manager_t &p_manager,
                                                 [[maybe_unused]] const partition_t k) {
+        // assert csr structure
+        ASSERT(assert_csr_structure(g));
+
         // check no self-loops
         ASSERT(assert_no_self_loops(g));
 

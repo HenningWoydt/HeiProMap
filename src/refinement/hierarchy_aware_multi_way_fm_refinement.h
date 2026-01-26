@@ -171,7 +171,7 @@ namespace HeiProMap {
                                  partition_t n_local_super_blocks,
                                  partition_t ids_per_super_block) {
             f64 alpha = config->alpha;
-            f64 beta  = std::log(g.get_n());
+            f64 beta  = std::log(g.n);
 
             weight_t              blocks_lmax = (weight_t) ids_per_super_block * m_lmax;
             std::vector<weight_t> blocks_weights(n_local_super_blocks, 0);
@@ -188,7 +188,7 @@ namespace HeiProMap {
             for (partition_t                u_id = neighborhood_id_start; u_id < neighborhood_id_end; ++u_id) {
                 forall_bv_id_iu(bv_manager, u_id, i, u)
                     {
-                        weight_t u_weight = g.weight(u);
+                        weight_t u_weight = g.v_weights[u];
 
                         block_marker += 1;
                         forall_guiv(g, u, j, v)
@@ -227,7 +227,7 @@ namespace HeiProMap {
 
                 vertex_t    vertex        = move.u;
                 partition_t vertex_id     = p_manager[vertex];
-                weight_t    vertex_weight = g.weight(vertex);
+                weight_t    vertex_weight = g.v_weights[vertex];
                 partition_t move_id       = move.to_move_id;
 
                 if (vertex_used[vertex] == vertex_marker) { continue; }
@@ -266,7 +266,7 @@ namespace HeiProMap {
                 forall_guiv(g, vertex, i, neighbor)
                     {
                         partition_t neighbor_id     = p_manager[neighbor];
-                        weight_t    neighbor_weight = g.weight(neighbor);
+                        weight_t    neighbor_weight = g.v_weights[neighbor];
 
                         if (!IN_NEIGHBORING_BLOCK(neighbor_id, neighborhood_id_start, neighborhood_id_end)) { continue; }
                         if (vertex_used[neighbor] == vertex_marker) { continue; }
@@ -294,7 +294,7 @@ namespace HeiProMap {
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves_size; i++) {
                 vertex_t    vertex        = moves[moves_size - 1 - i].u;
-                weight_t    vertex_weight = g.weight(vertex);
+                weight_t    vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id     = moves[moves_size - 1 - i].to_move_id;
                 partition_t move_id       = moves[moves_size - 1 - i].u_id;
 
@@ -304,7 +304,7 @@ namespace HeiProMap {
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t    vertex        = moves[i].u;
-                weight_t    vertex_weight = g.weight(vertex);
+                weight_t    vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id     = moves[i].u_id;
                 partition_t move_id       = moves[i].to_move_id;
 
@@ -392,7 +392,7 @@ namespace HeiProMap {
                     for (partition_t u_id  = start; u_id < end; ++u_id) {
                         forall_bv_id_iu(bv_manager, u_id, k, u)
                             {
-                                weight_t u_weight = g.weight(u);
+                                weight_t u_weight = g.v_weights[u];
 
                                 block_marker += 1;
                                 for (partition_t v_id = neighborhood_id_start; v_id < neighborhood_id_end; ++v_id) {

@@ -493,6 +493,30 @@ namespace HeiProMap {
         if (mm.data && mm.size) ::munmap(mm.data, mm.size);
         if (mm.fd >= 0) ::close(mm.fd);
     }
+
+    template<class T, class URBG>
+    inline void fast_shuffle_unchecked(T *first, T *last, URBG &gen) {
+        std::size_t n = last - first;
+        std::size_t swaps = n / 8;
+
+        std::uniform_int_distribution<std::size_t> dist(0, n - 1);
+
+        for (std::size_t i = 0; i < swaps; ++i)
+            std::swap(first[dist(gen)], first[dist(gen)]);
+    }
+
+    static inline uint64_t splitmix64(uint64_t x) {
+        x += 0x9E3779B97F4A7C15ull;
+        x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+        x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+        return x ^ (x >> 31);
+    }
+
+    // Hash a vertex id (optionally salted by map_u)
+    static inline uint64_t hash_vertex(vertex_t v, vertex_t salt = 0) {
+        uint64_t x = static_cast<uint64_t>(v) ^ (static_cast<uint64_t>(salt) * 0x9E3779B97F4A7C15ull);
+        return splitmix64(x);
+    }
 }
 
 #endif //HEIPROMAP_UTILS_H
