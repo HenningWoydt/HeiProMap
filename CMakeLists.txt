@@ -78,7 +78,27 @@ find_path(GKLIB_INCLUDE_DIR
 message(STATUS "Found GKlib library: ${GKLIB_LIBRARY}")
 message(STATUS "Found GKlib include: ${GKLIB_INCLUDE_DIR}")
 
+# ---------------------------
+# Mt-KaHyPar (CMake package)
+# ---------------------------
+set(MTK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/local/mt-kahypar")
+list(APPEND CMAKE_PREFIX_PATH "${MTK_ROOT}")
+
+find_package(MtKaHyPar CONFIG REQUIRED)
+
+# optional: help runtime loader find the .so when using the local install
+if (EXISTS "${MTK_ROOT}/lib64")
+    set(MTK_LIBDIR "${MTK_ROOT}/lib64")
+else()
+    set(MTK_LIBDIR "${MTK_ROOT}/lib")
+endif()
+
+message(STATUS "Found Mt-KaHyPar via CMake package: MtKaHyPar::mtkahypar")
+message(STATUS "Mt-KaHyPar libdir: ${MTK_LIBDIR}")
+
+# ---------------------------
 # Fail early if something is missing
+# ---------------------------
 if (NOT KAHIP_LIBRARY OR NOT KAHIP_INCLUDE_DIR)
     message(FATAL_ERROR "KaHIP not found under ${KAHIP_ROOT}")
 endif()
@@ -119,17 +139,17 @@ target_include_directories(HeiProMap PRIVATE
         ${GKLIB_INCLUDE_DIR}
 )
 
-# IMPORTANT: static link order -> METIS then GKlib
-target_link_libraries(HeiProMap PRIVATE
+# Link order matters for static libs: METIS then GKlib
+target_link_libraries(HeiProMap PUBLIC
         ${KAHIP_LIBRARY}
         ${METIS_LIBRARY}
         ${GKLIB_LIBRARY}
+        MtKaHyPar::mtkahypar
         m
 )
 
-# If you rely on shared libs from those local folders at runtime
 set_target_properties(HeiProMap PROPERTIES
-        BUILD_RPATH "${KAHIP_ROOT}/lib;${METIS_ROOT}/lib;${GKLIB_ROOT}/lib"
+        BUILD_RPATH "${KAHIP_ROOT}/lib;${METIS_ROOT}/lib;${GKLIB_ROOT}/lib;${MTK_LIBDIR}"
 )
 
 # ---------------------------
@@ -162,11 +182,21 @@ target_link_libraries(heipromap PRIVATE
         ${KAHIP_LIBRARY}
         ${METIS_LIBRARY}
         ${GKLIB_LIBRARY}
+        MtKaHyPar::mtkahypar
         m
 )
 
 set_target_properties(heipromap PROPERTIES
-        BUILD_RPATH "${KAHIP_ROOT}/lib;${METIS_ROOT}/lib;${GKLIB_ROOT}/lib"
+        BUILD_RPATH "${KAHIP_ROOT}/lib;${METIS_ROOT}/lib;${GKLIB_ROOT}/lib;${MTK_LIBDIR}"
 )
 
-install(TARGETS heipromap DESTINATION lib)
+
+foreach(tgt HeiProMap heipromap)
+    target_link_options(${tgt} PRIVATE
+            "-Wl,--disable-new-dtags"
+            "-Wl,-rpath-link,${MTK_LIBDIR}"
+    )
+    set_target_properties(${tgt} PROPERTIES
+            BUILD_RPATH "${KaHIP_ROOT}/lib;${MTK_LIBDIR}"
+    )
+endforeach()

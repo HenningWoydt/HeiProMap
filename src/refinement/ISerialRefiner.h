@@ -42,7 +42,7 @@ namespace HeiProMap {
         virtual ~ISerialRefinerConfiguration() = default;
 
         std::string name;
-        bool        enabled = false;
+        bool enabled = false;
     };
 
     class ISerialRefiner {
@@ -52,29 +52,14 @@ namespace HeiProMap {
         virtual void initialize(vertex_t t_n,
                                 vertex_t t_m,
                                 partition_t t_k,
-                                f64 t_imbalance,
-                                weight_t t_lmax,
-                                const std::vector<partition_t> &t_hierarchy,
-                                const std::vector<weight_t> &t_distance,
-                                RandomEngine &t_random_engine,
                                 const ISerialRefinerConfiguration &i_config) = 0;
 
-        virtual void refine(u64 level,
-                            u64 max_level,
-                            graph_t &g,
+        virtual void refine(graph_t &g,
                             d_oracle_t &d_oracle,
                             bv_manager_t &bv_manager,
                             p_manager_t &p_manager,
-                            q_graph_t &q_graph) = 0;
-
-        virtual void refine_layer(const u64 level,
-                                  const u64 max_level,
-                                  graph_t &g,
-                                  d_oracle_t &d_oracle,
-                                  bv_manager_t &bv_manager,
-                                  p_manager_t &p_manager,
-                                  q_graph_t &q_graph,
-                                  size_t layer) = 0;
+                            q_graph_t &q_graph,
+                            f64 imbalance) = 0;
     };
 }
 

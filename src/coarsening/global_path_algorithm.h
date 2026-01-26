@@ -64,7 +64,6 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        weight_t m_l_max = 0;
 
         const GlobalPathAlgorithmConfiguration *config = nullptr;
         RandomEngine *random_engine = nullptr;
@@ -89,7 +88,6 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const weight_t t_l_max,
                         RandomEngine &t_random_engine,
                         const GlobalPathAlgorithmConfiguration &i_config) {
             ScopedTimer _t("io", "GlobalPathAlgorithmMatcher", "initialize");
@@ -97,7 +95,6 @@ namespace HeiProMap {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-            m_l_max = t_l_max;
 
             config = dynamic_cast<const GlobalPathAlgorithmConfiguration *>(&i_config);
             random_engine = &t_random_engine;
@@ -121,14 +118,18 @@ namespace HeiProMap {
         void match(const size_t level,
                    const graph_t &g,
                    const PartitionManagerT &p_manager,
-                   Mapping &mapping) {
+                   Mapping &mapping,
+                   f64 imbalance) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "match");
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+
             Matching matching;
             matching.initialize(g.n);
 
             if (level < config->random_level) {
                 // use a random matching
-                random_matching(level, g, matching);
+                random_matching(level, g, matching, lmax);
 
                 matching.set_translation();
                 mapping.set_coarse_n(matching.get_n_coarse_nodes());
@@ -139,7 +140,7 @@ namespace HeiProMap {
                 return;
             }
 
-            compute_ratings(g, p_manager);
+            compute_ratings(g, p_manager, lmax);
 
             std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
@@ -278,7 +279,7 @@ namespace HeiProMap {
         }
 
         template<typename PartitionManagerT>
-        void compute_ratings(const graph_t &g, const PartitionManagerT &p_manager) {
+        void compute_ratings(const graph_t &g, const PartitionManagerT &p_manager, weight_t lmax) {
             edges_size = 0;
             std::vector<EdgeUVW> local_edges;
 
@@ -294,7 +295,7 @@ namespace HeiProMap {
                             // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
                             // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
 
-                            if (u_w + v_w > m_l_max) { continue; }
+                            if (u_w + v_w > lmax) { continue; }
 
                             f32 edge_rating;
 
@@ -522,7 +523,8 @@ namespace HeiProMap {
 
         void random_matching([[maybe_unused]] const size_t level,
                              const graph_t &g,
-                             Matching &matching) {
+                             Matching &matching,
+                             weight_t lmax) {
             std::vector<u8> is_matched(g.n, 0);
 
             forall_gu(g, u)
@@ -533,7 +535,7 @@ namespace HeiProMap {
                             if (is_matched[v]) { continue; }
                             weight_t v_w = g.v_weights[v];
 
-                            if (u_w + v_w > m_l_max) { continue; }
+                            if (u_w + v_w > lmax) { continue; }
 
                             is_matched[u] = 1;
                             is_matched[v] = 1;

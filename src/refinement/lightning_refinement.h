@@ -47,10 +47,6 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        f64 m_imbalance = 0.0;
-        weight_t m_lmax = 0;
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
 
         AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
@@ -65,7 +61,7 @@ namespace HeiProMap {
         AlignedArray<s64> blocks_qap_delta;
         size_t blocks_size = 0;
 
-        RandomEngine *random_engine = nullptr;
+        RandomEngine random_engine = RandomEngine(0);
         const LightningRefinementConfiguration *config = nullptr;
 
         std::vector<u8> used_blocks;
@@ -80,21 +76,11 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const f64 t_imbalance,
-                        const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
                         const ISerialRefinerConfiguration &i_config) override {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-            m_imbalance = t_imbalance;
-            m_lmax = t_lmax;
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
 
-            random_engine = &t_random_engine;
             config = dynamic_cast<const LightningRefinementConfiguration *>(&i_config);
 
             vertex_used.initialize(m_n, 0);
@@ -108,16 +94,15 @@ namespace HeiProMap {
             blocks_size = 0;
         }
 
-        void refine(const u64 level,
-                    const u64 max_level,
-                    graph_t &g,
+        void refine(graph_t &g,
                     d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                    q_graph_t &q_graph,
+                    f64 imbalance) override {
             ScopedTimer _t("refinement", "LightningRefinement", "refine");
 
-            if (level + 5 < max_level) { return; }
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             for (size_t i = 0; i < config->max_iteration; ++i) {
                 used_blocks.resize(m_k);
@@ -139,7 +124,7 @@ namespace HeiProMap {
                                     if (u_id == v_id) { continue; }
                                     if (block_used[v_id] == block_marker) { continue; }
 
-                                    if (p_manager.get_bweight(v_id) + u_weight > m_lmax) {
+                                    if (p_manager.get_bweight(v_id) + u_weight > lmax) {
                                         // would overload
                                         s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                                         // if (qap_delta < 0) { continue; }
@@ -168,7 +153,7 @@ namespace HeiProMap {
                     current_n_moves += 1;
                     current_qap_delta += move.qap_delta;
 
-                    bool found = find_move(0, move.to_move_id, g, d_oracle, bv_manager, p_manager, q_graph);
+                    bool found = find_move(0, move.to_move_id, g, d_oracle, bv_manager, p_manager, q_graph, lmax);
 
                     if (found) {
                         moves_found = true;
@@ -196,7 +181,8 @@ namespace HeiProMap {
                        d_oracle_t &d_oracle,
                        bv_manager_t &bv_manager,
                        p_manager_t &p_manager,
-                       q_graph_t &q_graph) {
+                       q_graph_t &q_graph,
+                       weight_t lmax) {
             if (depth > config->max_recursion || current_qap_delta < -100) {
                 return false;
             }
@@ -222,18 +208,18 @@ namespace HeiProMap {
 
                             s64 qap_delta = get_u_qap_delta(g, u, id, v_id, p_manager, d_oracle);
 
-                            if (p_manager.get_bweight(id) - u_weight <= m_lmax && p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
+                            if (p_manager.get_bweight(id) - u_weight <= lmax && p_manager.get_bweight(v_id) + u_weight <= lmax) {
                                 if (qap_delta > best_stop_move.qap_delta) {
                                     block_used[v_id] = block_marker;
                                     best_stop_move = {u, id, v_id, qap_delta};
                                 }
                             }
 
-                            if (p_manager.get_bweight(id) - u_weight <= m_lmax && p_manager.get_bweight(v_id) + u_weight > m_lmax) {
+                            if (p_manager.get_bweight(id) - u_weight <= lmax && p_manager.get_bweight(v_id) + u_weight > lmax) {
                                 block_used[v_id] = block_marker;
                                 possible_moves.push_back({u, id, v_id, qap_delta});
                             }
-                            if (p_manager.get_bweight(id) - u_weight > m_lmax && p_manager.get_bweight(v_id) + u_weight <= m_lmax) {
+                            if (p_manager.get_bweight(id) - u_weight > lmax && p_manager.get_bweight(v_id) + u_weight <= lmax) {
                                 block_used[v_id] = block_marker;
                                 possible_moves.push_back({u, id, v_id, qap_delta});
                             }
@@ -261,16 +247,16 @@ namespace HeiProMap {
 
                 partition_t next_id = 0;
                 // positive move that balances block and overloads another block -> continue
-                if (p_manager.get_bweight(id) <= m_lmax && p_manager.get_bweight(move.to_move_id) > m_lmax) {
+                if (p_manager.get_bweight(id) <= lmax && p_manager.get_bweight(move.to_move_id) > lmax) {
                     next_id = move.to_move_id;
                 }
 
                 // positive move that improves balances, but not overloads non-used block -> continue
-                if (p_manager.get_bweight(id) > m_lmax && p_manager.get_bweight(move.to_move_id) <= m_lmax) {
+                if (p_manager.get_bweight(id) > lmax && p_manager.get_bweight(move.to_move_id) <= lmax) {
                     next_id = id;
                 }
 
-                bool found = find_move(depth + 1, next_id, g, d_oracle, bv_manager, p_manager, q_graph);
+                bool found = find_move(depth + 1, next_id, g, d_oracle, bv_manager, p_manager, q_graph, lmax);
 
                 if (found) {
                     return true;
@@ -301,16 +287,6 @@ namespace HeiProMap {
 
             // if no move found than revert one step
             return false;
-        }
-
-        void refine_layer([[maybe_unused]] const u64 level,
-                          [[maybe_unused]] const u64 max_level,
-                          [[maybe_unused]] graph_t &g,
-                          [[maybe_unused]] d_oracle_t &d_oracle,
-                          [[maybe_unused]] bv_manager_t &bv_manager,
-                          [[maybe_unused]] p_manager_t &p_manager,
-                          [[maybe_unused]] q_graph_t &q_graph,
-                          [[maybe_unused]] size_t layer) override {
         }
     };
 }

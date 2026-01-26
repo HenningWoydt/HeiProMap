@@ -59,10 +59,6 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        f64 m_imbalance = 0.0;
-        weight_t m_lmax = 0;
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
 
         // active block scheduling
         AlignedArray<u8> active_this_round;
@@ -106,7 +102,7 @@ namespace HeiProMap {
         ResidualFlowNetwork residual_flow_network;
         SCCGraph scc_graph;
 
-        RandomEngine *random_engine = nullptr;
+        RandomEngine random_engine = RandomEngine(0);
         const FlowBasedRefinementConfiguration *config = nullptr;
 
     public:
@@ -117,23 +113,13 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const f64 t_imbalance,
-                        const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
                         const ISerialRefinerConfiguration &i_config) override {
             ScopedTimer _t("io", "FlowBasedRefinement", "initialize");
 
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-            m_lmax = t_lmax;
-            m_imbalance = t_imbalance;
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
 
-            random_engine = &t_random_engine;
             config = dynamic_cast<const FlowBasedRefinementConfiguration *>(&i_config);
 
             // active block scheduling
@@ -170,13 +156,12 @@ namespace HeiProMap {
             translation_table.reserve(m_n, m_n);
         }
 
-        void refine(const u64 level,
-                    const u64 max_level,
-                    graph_t &g,
+        void refine(graph_t &g,
                     d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                    q_graph_t &q_graph,
+                    f64 imbalance) override {
             //
             {
                 ScopedTimer _t("refinement", "FlowBasedRefinement", "allocate");
@@ -202,13 +187,13 @@ namespace HeiProMap {
                 // shuffle the pairs
                 {
                     ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "shuffle_pairs");
-                    std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine->generator);
+                    std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
                 }
 
                 for (size_t i = 0; i < pairs_size; ++i) {
                     partition_t left_id = pairs[i].id1;
                     partition_t right_id = pairs[i].id2;
-                    refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, left_id, right_id);
+                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, left_id, right_id, imbalance);
                 }
 
                 // swap active
@@ -220,16 +205,17 @@ namespace HeiProMap {
             }
         }
 
-        void refine_blocks([[maybe_unused]] const u64 level,
-                           [[maybe_unused]] const u64 max_level,
-                           graph_t &g,
+        void refine_blocks(graph_t &g,
                            d_oracle_t &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
                            partition_t left_id,
-                           partition_t right_id) {
+                           partition_t right_id,
+                           f64 imbalance) {
             ASSERT(left_id != right_id);
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) m_k));
 
             f64 alpha = config->alpha;
             f64 alpha_upper_bound = config->alpha_upper_bound;
@@ -245,9 +231,9 @@ namespace HeiProMap {
                 determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
 
                 // calc max weight for each bfs
-                weight_t lmax = std::ceil((1.0 + (m_imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k));
-                weight_t left_max_weight = lmax - p_manager.get_bweight(right_id);
-                weight_t right_max_weight = lmax - p_manager.get_bweight(left_id);
+                weight_t adapt_lmax = std::ceil((1.0 + (imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k));
+                weight_t left_max_weight = adapt_lmax - p_manager.get_bweight(right_id);
+                weight_t right_max_weight = adapt_lmax - p_manager.get_bweight(left_id);
 
                 // get both regions
                 region_mark += 2;
@@ -263,8 +249,8 @@ namespace HeiProMap {
                         }
                     }
                 endfor
-                weight_t left_region_weight = determine_region(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_boundary_size, left_region, left_region_size, left_seed_vertex);
-                weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_boundary_size, right_region, right_region_size, right_seed_vertex);
+                weight_t left_region_weight = determine_region(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_boundary_size, left_region, left_region_size, left_seed_vertex, left_boundary_weight);
+                weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_boundary_size, right_region, right_region_size, right_seed_vertex, right_boundary_weight);
 
                 if (left_region_size + right_region_size == 0) {
                     // if both regions are empty, increase their sizes
@@ -285,9 +271,10 @@ namespace HeiProMap {
                 build_flow_network(g, d_oracle, left_id, right_id);
 
                 // solve the flow network
-                ScopedTimer _t_solve_flow_network("refinement", "FlowBasedRefinement", "solve_flow_network");
-                flow_network.solve();
-                _t_solve_flow_network.stop();
+                {
+                    ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_flow_network");
+                    flow_network.solve();
+                }
 
                 std::vector<u8> is_left;
                 // get the cut
@@ -299,7 +286,7 @@ namespace HeiProMap {
                 // check if cut is valid
                 {
                     ScopedTimer _t("refinement", "FlowBasedRefinement", "cut_is_valid");
-                    is_valid = cut_is_valid(g, p_manager, left_id, right_id, is_left);
+                    is_valid = cut_is_valid(g, p_manager, left_id, right_id, is_left, lmax);
                 }
 
                 if (!is_valid && config->use_closed_vertex_set) {
@@ -324,7 +311,7 @@ namespace HeiProMap {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "scc_find");
                         weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
                         weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
-                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, m_lmax, m_lmax, config->closed_vertex_sets_repeats, *random_engine, is_left);
+                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, config->closed_vertex_sets_repeats, random_engine, is_left);
                     }
                     //
                     if (!closure_found) {
@@ -375,7 +362,7 @@ namespace HeiProMap {
                     endfor
                 }
             endfor
-            std::shuffle(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine->generator);
+            std::shuffle(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine.generator);
 
             right_boundary_size = 0;
             right_boundary_weight = 0;
@@ -391,7 +378,7 @@ namespace HeiProMap {
                     endfor
                 }
             endfor
-            std::shuffle(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine->generator);
+            std::shuffle(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine.generator);
         }
 
         weight_t determine_region(const graph_t &g,
@@ -403,7 +390,8 @@ namespace HeiProMap {
                                   vertex_t boundary_size,
                                   AlignedArray<vertex_t> &region,
                                   vertex_t &region_size,
-                                  [[maybe_unused]] vertex_t seed_vertex) {
+                                  vertex_t seed_vertex,
+                                  weight_t boundary_weight) {
             ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "determine_regions");
 
             seen_mark += 2;
@@ -413,11 +401,15 @@ namespace HeiProMap {
             weight_t curr_weight = 0;
 
             queue_size = 0;
-            for (size_t i = 0; i < boundary_size; ++i) {
-                vertex_t u = boundary[i];
-                ASSERT(p_manager[u] == id);
-                queue[queue_size++] = u;
-                seen[u] = seen_mark - 1;
+            if (boundary_weight <= max_weight || true) {
+                for (size_t i = 0; i < boundary_size; ++i) {
+                    vertex_t u = boundary[i];
+                    queue[queue_size++] = u;
+                    seen[u] = seen_mark - 1;
+                }
+            } else {
+                queue[queue_size++] = seed_vertex;
+                seen[seed_vertex] = seen_mark - 1;
             }
 
             size_t queue_idx = 0;
@@ -570,7 +562,8 @@ namespace HeiProMap {
                           const p_manager_t &p_manager,
                           partition_t left_id,
                           partition_t right_id,
-                          std::vector<u8> &is_left) {
+                          std::vector<u8> &is_left,
+                          weight_t lmax) {
             ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "cut_is_valid");
 
             weight_t left_weight = p_manager.get_bweight(left_id);
@@ -595,7 +588,7 @@ namespace HeiProMap {
                 }
             }
 
-            return left_weight <= m_lmax && right_weight <= m_lmax;
+            return left_weight <= lmax && right_weight <= lmax;
         }
 
         bool cut_changes_partition(std::vector<u8> &is_left) {
@@ -707,16 +700,6 @@ namespace HeiProMap {
                     p_manager.move(old_u, g.v_weights[old_u], right_id, left_id);
                 }
             }
-        }
-
-        void refine_layer([[maybe_unused]] const u64 level,
-                          [[maybe_unused]] const u64 max_level,
-                          [[maybe_unused]] graph_t &g,
-                          [[maybe_unused]] d_oracle_t &d_oracle,
-                          [[maybe_unused]] bv_manager_t &bv_manager,
-                          [[maybe_unused]] p_manager_t &p_manager,
-                          [[maybe_unused]] q_graph_t &q_graph,
-                          [[maybe_unused]] size_t layer) override {
         }
     };
 }

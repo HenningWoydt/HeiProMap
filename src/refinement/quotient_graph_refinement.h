@@ -65,10 +65,6 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        f64 m_imbalance = 0.0;
-        weight_t m_lmax = 0;
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
 
         // priority queues
         IndexedMaxHeap<s64> boundary_vertices_u;
@@ -93,7 +89,7 @@ namespace HeiProMap {
         AlignedArray<u32> vertex_used;
         u32 vertex_mark = 0;
 
-        RandomEngine *random_engine = nullptr;
+        RandomEngine random_engine = RandomEngine(0);
         const QuotientGraphRefinementConfiguration *config = nullptr;
 
     public:
@@ -104,23 +100,13 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const f64 t_imbalance,
-                        const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
                         const ISerialRefinerConfiguration &i_config) override {
             ScopedTimer _t("io", "QuotientGraphRefinement", "initialize");
 
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-            m_imbalance = t_imbalance;
-            m_lmax = t_lmax;
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
 
-            random_engine = &t_random_engine;
             config = dynamic_cast<const QuotientGraphRefinementConfiguration *>(&i_config);
 
             // priority queues
@@ -141,14 +127,15 @@ namespace HeiProMap {
             pairs_size = 0;
         }
 
-        void refine(const u64 level,
-                    const u64 max_level,
-                    graph_t &g,
+        void refine(graph_t &g,
                     d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                    q_graph_t &q_graph,
+                    f64 imbalance) override {
             ScopedTimer _t("refinement", "QuotientGraphRefinement", "refine");
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
@@ -178,14 +165,14 @@ namespace HeiProMap {
                 }
                 if (pairs_size == 0) { return; }
 
-                std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine->generator);
+                std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
 
                 for (size_t j = 0; j < pairs_size; ++j) {
                     auto [u_id, v_id, distance] = pairs[j];
                     // if (d_oracle.last_level_pair(u_id, v_id)) {
                     //     refine_blocks_edge_cut(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
                     // } else {
-                    refine_blocks(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
+                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, lmax);
                     // }
                 }
 
@@ -194,15 +181,14 @@ namespace HeiProMap {
             }
         }
 
-        void refine_blocks([[maybe_unused]] const u64 level,
-                           [[maybe_unused]] const u64 max_level,
-                           const graph_t &g,
+        void refine_blocks(const graph_t &g,
                            d_oracle_t &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
                            partition_t u_id,
-                           partition_t v_id) {
+                           partition_t v_id,
+                           weight_t lmax) {
             f64 alpha = config->alpha;
             f64 beta = std::log(g.n);
 
@@ -257,16 +243,16 @@ namespace HeiProMap {
                     if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
                         choose_u = false;
                     } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                        choose_u = random_engine->get_f32() < 0.5;
+                        choose_u = random_engine.get_f32() < 0.5;
                     }
 
                     // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
                     weight_t u_id_weight = p_manager.get_bweight(u_id);
                     weight_t v_id_weight = p_manager.get_bweight(v_id);
 
-                    if (u_id_weight > m_lmax && u_id_weight > v_id_weight) { choose_u = true; }
-                    if (v_id_weight > m_lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > m_lmax && v_id_weight > m_lmax && u_id_weight == v_id_weight) { choose_u = random_engine->get_f32() < 0.5; }
+                    if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
+                    if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
+                    if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
@@ -282,7 +268,7 @@ namespace HeiProMap {
                 // move the vertex
                 moves[moves_size++] = vertex;
                 curr_qap_gain += qap_delta;
-                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= m_lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= m_lmax) {
+                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
                     best_idx = moves_size;
                     max_qap_gain = curr_qap_gain;
 
@@ -374,7 +360,8 @@ namespace HeiProMap {
                                     p_manager_t &p_manager,
                                     q_graph_t &q_graph,
                                     partition_t u_id,
-                                    partition_t v_id) {
+                                    partition_t v_id,
+                                    weight_t lmax) {
             f64 alpha = config->alpha;
             f64 beta = std::log(g.n);
 
@@ -429,16 +416,16 @@ namespace HeiProMap {
                     if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
                         choose_u = false;
                     } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                        choose_u = random_engine->get_f32() < 0.5;
+                        choose_u = random_engine.get_f32() < 0.5;
                     }
 
                     // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
                     weight_t u_id_weight = p_manager.get_bweight(u_id);
                     weight_t v_id_weight = p_manager.get_bweight(v_id);
 
-                    if (u_id_weight > m_lmax && u_id_weight > v_id_weight) { choose_u = true; }
-                    if (v_id_weight > m_lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > m_lmax && v_id_weight > m_lmax && u_id_weight == v_id_weight) { choose_u = random_engine->get_f32() < 0.5; }
+                    if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
+                    if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
+                    if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
@@ -454,7 +441,7 @@ namespace HeiProMap {
                 // move the vertex
                 moves[moves_size++] = vertex;
                 curr_edge_cut_gain += edge_cut_delta;
-                if (curr_edge_cut_gain >= max_edge_cut_gain && p_manager.get_bweight(move_id) + vertex_weight <= m_lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= m_lmax) {
+                if (curr_edge_cut_gain >= max_edge_cut_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
                     best_idx = moves_size;
                     max_edge_cut_gain = curr_edge_cut_gain;
 
@@ -532,16 +519,6 @@ namespace HeiProMap {
                 active_next_round[u_id] = 1;
                 active_next_round[v_id] = 1;
             }
-        }
-
-        void refine_layer([[maybe_unused]] const u64 level,
-                          [[maybe_unused]] const u64 max_level,
-                          [[maybe_unused]] graph_t &g,
-                          [[maybe_unused]] d_oracle_t &d_oracle,
-                          [[maybe_unused]] bv_manager_t &bv_manager,
-                          [[maybe_unused]] p_manager_t &p_manager,
-                          [[maybe_unused]] q_graph_t &q_graph,
-                          [[maybe_unused]] size_t layer) override {
         }
     };
 }

@@ -31,6 +31,7 @@
 #include "../utility/utils.h"
 #include "kaffpa_partitioner.h"
 #include "metis_partitioner.h"
+#include "mtkahypar_partition.h"
 
 namespace HeiProMap {
     enum GlobalMultisectionMode {
@@ -40,6 +41,9 @@ namespace HeiProMap {
         GLOBAL_MULTISECTION_KAFFPA_FAST,
         GLOBAL_MULTISECTION_METIS_RECURSIVE,
         GLOBAL_MULTISECTION_METIS_KWAY,
+        GLOBAL_MULTISECTION_MTKAHYPAR_DEFAULT,
+        GLOBAL_MULTISECTION_MTKAHYPAR_QUALITY,
+        GLOBAL_MULTISECTION_MTKAHYPAR_HIGHEST_QUALITY,
     };
 
     inline GlobalMultisectionMode string_to_global_multisection_mode(const std::string &str) {
@@ -49,6 +53,9 @@ namespace HeiProMap {
         if (str == "kaffpa-fast") return GLOBAL_MULTISECTION_KAFFPA_FAST;
         if (str == "metis-recursive") return GLOBAL_MULTISECTION_METIS_RECURSIVE;
         if (str == "metis-kway") return GLOBAL_MULTISECTION_METIS_KWAY;
+        if (str == "mtkahypar-default") return GLOBAL_MULTISECTION_MTKAHYPAR_DEFAULT;
+        if (str == "mtkahypar-quality") return GLOBAL_MULTISECTION_MTKAHYPAR_QUALITY;
+        if (str == "mtkahypar-highestquality") return GLOBAL_MULTISECTION_MTKAHYPAR_HIGHEST_QUALITY;
         return GLOBAL_MULTISECTION_UNDEFINED;
     }
 
@@ -66,6 +73,12 @@ namespace HeiProMap {
                 return "metis-recursive";
             case GLOBAL_MULTISECTION_METIS_KWAY:
                 return "metis-kway";
+            case GLOBAL_MULTISECTION_MTKAHYPAR_DEFAULT:
+                return "mtkahypar-default";
+            case GLOBAL_MULTISECTION_MTKAHYPAR_QUALITY:
+                return "mtkahypar-quality";
+            case GLOBAL_MULTISECTION_MTKAHYPAR_HIGHEST_QUALITY:
+                return "mtkahypar-highestquality";
             default:
                 return "UNDEFINED";
         }
@@ -152,15 +165,21 @@ namespace HeiProMap {
                 stack.pop_back();         // remove top item
 
                 if (config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
-                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition);
+                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
-                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_ECO, item.seed, partition);
+                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_ECO, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
-                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition);
+                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_RECURSIVE) {
                     metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_RECURSIVE, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_KWAY, item.seed, partition);
+                } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_DEFAULT) {
+                    mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_DEFAULT, item.seed, partition);
+                } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_QUALITY) {
+                    mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_QUALITY, item.seed, partition);
+                } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_HIGHEST_QUALITY) {
+                    mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_HIGHEST_QUALITY, item.seed, partition);
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();

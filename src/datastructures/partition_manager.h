@@ -32,29 +32,28 @@
 
 namespace HeiProMap {
     class PartitionManager {
-        vertex_t m_n = 0;
-        partition_t m_k = 0;
-        weight_t lmax = 0;
+    public:
+        vertex_t n = 0;
+        partition_t k = 0;
 
         AlignedArray<partition_t> partition;
         AlignedArray<partition_t> partition_temp;
         AlignedArray<weight_t> bweights;
         AlignedArray<size_t> n_vertices;
 
-    public:
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
-                        const weight_t t_lmax) {
+                        const weight_t g_weight) {
             ScopedTimer _t("io", "PartitionManager", "initialize");
 
-            m_n = t_n;
-            m_k = t_k;
-            lmax = t_lmax;
+            n = t_n;
+            k = t_k;
 
-            partition.initialize(m_n, 0);
-            partition_temp.initialize(m_n);
-            bweights.initialize(m_k, 0);
-            n_vertices.initialize(m_k, 0);
+            partition.initialize(n, 0);
+            partition_temp.initialize(n);
+            bweights.initialize(k, 0);
+            bweights[0] = g_weight;
+            n_vertices.initialize(k, 0);
             n_vertices[0] = t_n;
         }
 
@@ -86,8 +85,8 @@ namespace HeiProMap {
         size_t size(const partition_t id) const { return n_vertices[id]; }
 
         std::vector<weight_t> get_bweights() const {
-            std::vector<weight_t> weights(m_k);
-            for (size_t i = 0; i < m_k; ++i) {
+            std::vector<weight_t> weights(k);
+            for (size_t i = 0; i < k; ++i) {
                 weights[i] = bweights[i];
             }
             return weights;
@@ -95,7 +94,7 @@ namespace HeiProMap {
 
         weight_t max_weight() const {
             weight_t m = 0;
-            for (size_t i = 0; i < m_k; ++i) {
+            for (size_t i = 0; i < k; ++i) {
                 m = std::max(m, bweights[i]);
             }
             return m;
@@ -103,24 +102,24 @@ namespace HeiProMap {
 
         partition_t n_empty_blocks() const {
             partition_t n = 0;
-            for (size_t i = 0; i < m_k; ++i) {
+            for (size_t i = 0; i < k; ++i) {
                 n += bweights[i] == 0;
             }
             return n;
         }
 
-        partition_t n_oload_blocks() const {
+        partition_t n_oload_blocks(weight_t lmax) const {
             partition_t n = 0;
-            for (size_t i = 0; i < m_k; ++i) {
+            for (size_t i = 0; i < k; ++i) {
                 n += bweights[i] > lmax;
             }
             return n;
         }
 
-        weight_t sum_oload_weight() const {
+        weight_t sum_oload_weight(weight_t lmax) const {
             weight_t w = 0;
-            for (size_t i = 0; i < m_k; ++i) {
-                w += std::max((weight_t) 0 , bweights[i] - lmax);
+            for (size_t i = 0; i < k; ++i) {
+                w += std::max((weight_t) 0, bweights[i] - lmax);
             }
             return w;
         }
@@ -134,7 +133,7 @@ namespace HeiProMap {
             }
             std::swap(partition, partition_temp);
 
-            n_vertices.initialize(m_k, 0);
+            n_vertices.initialize(k, 0);
             for (vertex_t u = 0; u < mapping.get_coarse_n(); ++u) {
                 n_vertices[partition[u]] += 1;
             }
@@ -148,22 +147,22 @@ namespace HeiProMap {
             }
             std::swap(partition, partition_temp);
 
-            n_vertices.initialize(m_k, 0);
+            n_vertices.initialize(k, 0);
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                 n_vertices[partition[u]] += 1;
             }
         }
 
-        bool is_overloaded() {
-            for (size_t i = 0; i < m_k; ++i) {
+        bool is_overloaded(weight_t lmax) {
+            for (size_t i = 0; i < k; ++i) {
                 if (bweights[i] > lmax) { return true; }
             }
             return false;
         }
 
         void reset_weights() {
-            bweights.initialize(m_k, 0);
-            n_vertices.initialize(m_k, 0);
+            bweights.initialize(k, 0);
+            n_vertices.initialize(k, 0);
         }
     };
 }

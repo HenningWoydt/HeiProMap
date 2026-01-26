@@ -46,10 +46,6 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        f64 m_imbalance = 0.0;
-        weight_t m_lmax = 0;
-        std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t> m_distance;
 
         AlignedArray<u32> vertex_used;
         u32 vertex_marker = 0;
@@ -64,7 +60,7 @@ namespace HeiProMap {
         AlignedArray<s64> blocks_qap_delta;
         size_t blocks_size = 0;
 
-        RandomEngine *random_engine = nullptr;
+        RandomEngine random_engine = RandomEngine(0);
         const WaveRefinementConfiguration *config = nullptr;
 
         std::vector<KWayFMMove> global_moves;
@@ -80,21 +76,11 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const f64 t_imbalance,
-                        const weight_t t_lmax,
-                        const std::vector<partition_t> &t_hierarchy,
-                        const std::vector<weight_t> &t_distance,
-                        RandomEngine &t_random_engine,
                         const ISerialRefinerConfiguration &i_config) override {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-            m_imbalance = t_imbalance;
-            m_lmax = t_lmax;
-            m_hierarchy = t_hierarchy;
-            m_distance = t_distance;
 
-            random_engine = &t_random_engine;
             config = dynamic_cast<const WaveRefinementConfiguration *>(&i_config);
 
             vertex_used.initialize(m_n, 0);
@@ -108,22 +94,23 @@ namespace HeiProMap {
             blocks_size = 0;
         }
 
-        void refine([[maybe_unused]] const u64 level,
-                    [[maybe_unused]] const u64 max_level,
-                    graph_t &g,
+        void refine(graph_t &g,
                     d_oracle_t &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph) override {
+                    q_graph_t &q_graph,
+                    f64 imbalance) override {
             ScopedTimer _t("refinement", "WaveRefinement", "refine");
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             u64 max_n_waves = 10000;
             u64 max_n_repetitions = 1;
             u64 max_n_add_nodes = 100;
 
             for (size_t wave_i = 0; wave_i < max_n_waves; ++wave_i) {
-                partition_t u_id = random_engine->get_u32() % m_k;
-                partition_t v_id = random_engine->get_u32() % m_k;
+                partition_t u_id = random_engine.get_u32() % m_k;
+                partition_t v_id = random_engine.get_u32() % m_k;
 
                 if (u_id == v_id || !q_graph.has_edge(u_id, v_id)) {
                     wave_i -= 1;
@@ -143,13 +130,13 @@ namespace HeiProMap {
                         s64 sum_qap_delta = 0;
                         size_t n_pos_moves = 0;
 
-                        if (p_manager.get_bweight(v_id) == m_lmax) { continue; }
+                        if (p_manager.get_bweight(v_id) == lmax) { continue; }
 
                         // collect all possible moves
                         possible_pos_moves.clear();
                         possible_neg_moves.clear();
                         forall_bv_id_iu(bv_manager, u_id, i, u) {
-                                if (g.v_weights[u] + p_manager.get_bweight(v_id) > m_lmax) { continue; }
+                                if (g.v_weights[u] + p_manager.get_bweight(v_id) > lmax) { continue; }
                                 forall_guiv(g, u, j, v) {
                                         if (p_manager[v] != v_id) { continue; }
 
@@ -174,7 +161,7 @@ namespace HeiProMap {
                         // randomly choose one move
                         if (n_pos_moves > 0) {
                             // choose a positive move
-                            s64 threshold = random_engine->get_f32(0.0, 1.0) * sum_qap_delta;
+                            s64 threshold = random_engine.get_f32(0.0, 1.0) * sum_qap_delta;
                             s64 c = 0;
                             for (size_t i = 0; i < possible_pos_moves.size(); ++i) {
                                 if (c <= threshold && c + possible_pos_moves[i].qap_delta > threshold) {
@@ -238,16 +225,6 @@ namespace HeiProMap {
                     p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 }
             }
-        }
-
-        void refine_layer([[maybe_unused]] const u64 level,
-                          [[maybe_unused]] const u64 max_level,
-                          [[maybe_unused]] graph_t &g,
-                          [[maybe_unused]] d_oracle_t &d_oracle,
-                          [[maybe_unused]] bv_manager_t &bv_manager,
-                          [[maybe_unused]] p_manager_t &p_manager,
-                          [[maybe_unused]] q_graph_t &q_graph,
-                          [[maybe_unused]] size_t layer) override {
         }
     };
 }

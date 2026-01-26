@@ -434,62 +434,70 @@ namespace HeiProMap {
 
     inline std::size_t floor_log2(std::size_t x) noexcept {
         if (x == 0) return 0;
-#if defined(__GNUC__) || defined(__clang__)
-        return static_cast<std::size_t>(8 * sizeof(unsigned long long) - 1 -
-                                        __builtin_clzll(static_cast<unsigned long long>(x)));
-#elif defined(_MSC_VER)
+        #if defined(__GNUC__) || defined(__clang__)
+        return static_cast<std::size_t>(8 * sizeof(unsigned long long) - 1 - __builtin_clzll(static_cast<unsigned long long>(x)));
+        #elif defined(_MSC_VER)
         unsigned long index;
-#   if defined(_WIN64)
+        #   if defined(_WIN64)
         _BitScanReverse64(&index, x);
-#   else
+        #   else
         _BitScanReverse(&index, static_cast<unsigned long>(x));
-#   endif
+        #   endif
         return static_cast<std::size_t>(index);
-#else
+        #else
         // Fallback portable loop
         std::size_t res = 0;
         while ((std::size_t(1) << (res + 1)) <= x) ++res;
         return res;
-#endif
+        #endif
     }
 
     // Suggested shape of your helper
     struct MMap {
-        char*  data = nullptr;
+        char *data = nullptr;
         size_t size = 0;
-        int    fd   = -1;  // keep fd so you can close it later
+        int fd = -1; // keep fd so you can close it later
     };
 
-    inline MMap mmap_file_ro(const std::string& path) {
+    inline MMap mmap_file_ro(const std::string &path) {
         MMap mm;
 
         int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
-        if (fd < 0) { perror("open"); std::exit(EXIT_FAILURE); }
+        if (fd < 0) {
+            perror("open");
+            std::exit(EXIT_FAILURE);
+        }
 
         struct stat st{};
-        if (fstat(fd, &st) != 0) { perror("fstat"); std::exit(EXIT_FAILURE); }
+        if (fstat(fd, &st) != 0) {
+            perror("fstat");
+            std::exit(EXIT_FAILURE);
+        }
         size_t size = static_cast<size_t>(st.st_size);
 
-#ifdef __linux__
+        #ifdef __linux__
         // 1) Tell the kernel we’ll read sequentially (before mmap)
-        (void)posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-#endif
+        (void) posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+        #endif
 
-        void* addr = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (addr == MAP_FAILED) { perror("mmap"); std::exit(EXIT_FAILURE); }
+        void *addr = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (addr == MAP_FAILED) {
+            perror("mmap");
+            std::exit(EXIT_FAILURE);
+        }
 
-#ifdef __linux__
+        #ifdef __linux__
         // 2) Hint that we’ll need these pages, sequentially (right after mmap)
-        (void)madvise(addr, size, MADV_SEQUENTIAL | MADV_WILLNEED);
-#endif
+        (void) madvise(addr, size, MADV_SEQUENTIAL | MADV_WILLNEED);
+        #endif
 
-        mm.data = static_cast<char*>(addr);
+        mm.data = static_cast<char *>(addr);
         mm.size = size;
-        mm.fd   = fd;   // store; close in your munmap_file(...)
+        mm.fd = fd; // store; close in your munmap_file(...)
         return mm;
     }
 
-    inline void munmap_file(const MMap& mm) {
+    inline void munmap_file(const MMap &mm) {
         if (mm.data && mm.size) ::munmap(mm.data, mm.size);
         if (mm.fd >= 0) ::close(mm.fd);
     }

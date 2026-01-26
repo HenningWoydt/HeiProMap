@@ -34,9 +34,6 @@
 #include "utils.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
-#include "../refinement/hierarchy_aware_flow_based_refinement.h"
-#include "../refinement/hierarchy_aware_ILP_refinement.h"
-#include "../refinement/hierarchy_aware_multi_way_fm_refinement.h"
 #include "../refinement/ILP_refinement.h"
 #include "../refinement/k_way_fm_refinement.h"
 #include "../refinement/label_propagation_refinement.h"
@@ -49,8 +46,6 @@
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../refinement/lightning_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
-#include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
-#include "../refinement/hierarchy_aware_quotient_graph_refinement.h"
 #include "../refinement/wave_refinement.h"
 
 
@@ -272,12 +267,6 @@ namespace HeiProMap {
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
         // ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
 
-        HierarchyAwareMultiWayFMConfiguration hierarchy_aware_multi_way_fm_config = HierarchyAwareMultiWayFMConfiguration("Hierarchy Aware Multi-Way-FM");
-        HierarchyAwareMultiTryMultiWayFMConfiguration hierarchy_aware_multi_try_multi_way_fm_config = HierarchyAwareMultiTryMultiWayFMConfiguration("Hierarchy Aware Multi Try Multi-Way-FM");
-        // HierarchyAwareILPRefinementConfiguration hierarchy_aware_ilp_refinement_configuration              = HierarchyAwareILPRefinementConfiguration("Hierarchy Aware ILP Refinement");
-        HierarchyAwareFlowBasedRefinementConfiguration hierarchy_aware_flow_based_refinement_configuration = HierarchyAwareFlowBasedRefinementConfiguration("Hierarchy Aware Flow Based Refinement");
-        HierarchyAwareQuotientGraphRefinementConfiguration hierarchy_aware_quotient_graph_refinement_configuration = HierarchyAwareQuotientGraphRefinementConfiguration("Hierarchy Aware Quotient Graph Refineemnt");
-
         WaveRefinementConfiguration wave_refinement_configuration = WaveRefinementConfiguration("Wave Refinement");
         LightningRefinementConfiguration lightning_refinement_configuration = LightningRefinementConfiguration("Lightning Refinement");
 
@@ -380,11 +369,6 @@ namespace HeiProMap {
                 multi_try_fm_refinement_config.enabled = get("--refinement-multi-try-fm-enable") == "1";
             }
 
-            // initialize hierarchy aware k way fm refinement
-            if (use_default || is_set("--refinement-hierarchy-aware-multi-way-fm-enable")) {
-                hierarchy_aware_multi_way_fm_config.enabled = get("--refinement-hierarchy-aware-multi-way-fm-enable") == "1";
-            }
-
             // initialize two vertex label propagation
             if (use_default || is_set("--refinement-two-vertex-label-propagation-enable")) {
                 two_vertex_label_propagation_config.enabled = get("--refinement-two-vertex-label-propagation-enable") == "1";
@@ -449,7 +433,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 32;
+            initial_c = 8;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -465,8 +449,11 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "kaffpa-fast";
-            global_multisection_config.mode_string = "metis-recursive";
-            // global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "metis-recursive";
+            global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "mtkahypar-default";
+            // global_multisection_config.mode_string = "mtkahypar-quality";
+            // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 
@@ -492,7 +479,7 @@ namespace HeiProMap {
         }
 
         void set_eco() {
-            initial_c = 32;
+            initial_c = 8;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -500,29 +487,48 @@ namespace HeiProMap {
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
+
+            size_constrained_lp_config.max_rounds = 3;
+            size_constrained_lp_config.min_threshold = 0.10;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "kaffpa-strong";
-            global_multisection_config.mode_string = "metis-recursive";
+            // global_multisection_config.mode_string = "kaffpa-eco";
+            global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "mtkahypar-default";
+            // global_multisection_config.mode_string = "mtkahypar-quality";
+            // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 10;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha = 1000.0;
+            quotient_graph_refinement_config.alpha = 10000.0;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = true;
             multi_try_fm_refinement_config.max_iteration = 3;
-            multi_try_fm_refinement_config.alpha = 1000.0;
+            multi_try_fm_refinement_config.alpha = 10000.0;
+            multi_try_fm_refinement_config.min_n_steps = 8;
+
+            // enable flow based refinement
+            flow_based_refinement_config.enabled = true;
+            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.max_local_iteration = 1;
+            flow_based_refinement_config.alpha = 2.0;
+            flow_based_refinement_config.alpha_upper_bound = 64.0;
+            flow_based_refinement_config.alpha_modifier = 2.0;
+            flow_based_refinement_config.use_closed_vertex_set = true;
+            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
         void set_strong() {
-            initial_c = 32;
+            initial_c = 8;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -530,6 +536,9 @@ namespace HeiProMap {
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
+
+            size_constrained_lp_config.max_rounds = 3;
+            size_constrained_lp_config.min_threshold = 0.10;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -537,8 +546,11 @@ namespace HeiProMap {
             global_multisection_config.mode_string = "kaffpa-strong";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "mtkahypar-default";
+            // global_multisection_config.mode_string = "mtkahypar-quality";
+            // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 5;
+            global_multisection_config.kappa = 3;
 
             // enable label propagation
             label_propagation_config.enabled = false;
@@ -567,18 +579,6 @@ namespace HeiProMap {
             flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
 
-            hierarchy_aware_flow_based_refinement_configuration.enabled = false;
-            hierarchy_aware_flow_based_refinement_configuration.max_global_iteration = 2;
-            hierarchy_aware_flow_based_refinement_configuration.max_local_iteration = 5;
-            hierarchy_aware_flow_based_refinement_configuration.alpha = 2.0;
-            hierarchy_aware_flow_based_refinement_configuration.alpha_upper_bound = 16.0;
-            hierarchy_aware_flow_based_refinement_configuration.alpha_modifier = 2.0;
-            hierarchy_aware_flow_based_refinement_configuration.use_closed_vertex_set = true;
-            hierarchy_aware_flow_based_refinement_configuration.closed_vertex_sets_repeats = 100;
-
-            hierarchy_aware_multi_way_fm_config.enabled = false;
-            hierarchy_aware_quotient_graph_refinement_configuration.enabled = false;
-
             wave_refinement_configuration.enabled = false;
 
             lightning_refinement_configuration.enabled = false;
@@ -591,16 +591,6 @@ namespace HeiProMap {
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
-
-            // enable hierarchy aware k-way fm refinement
-            hierarchy_aware_multi_way_fm_config.enabled = true;
-            hierarchy_aware_multi_way_fm_config.max_iteration = 2;
-            hierarchy_aware_multi_way_fm_config.alpha = 1000.0;
-
-            // enable hierarchy aware multi try multi way fm refinement
-            hierarchy_aware_multi_try_multi_way_fm_config.enabled = false;
-            hierarchy_aware_multi_try_multi_way_fm_config.max_iteration = 1;
-            hierarchy_aware_multi_try_multi_way_fm_config.alpha = 100.0;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = false;

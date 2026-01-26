@@ -45,16 +45,16 @@ int main(const int argc, char *argv[]) {
                 // {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"}, // fast 0.753s 8,704,035 comm cost // eco 2.559s 7,469,493 // strong 22.498s 7,223,358
                 // {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
                 // {"--statistics", "../data/out/statistics/2cubes_sphere.mtx.JSON"},
-                {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.608s, 4,751,188 comm cost, // eco 44.685s 3,971,464 comm cost, // strong 536.000s 3,851,899 comm cost
-                {"--mapping", "../data/out/partition/del23.txt"},
-                {"--statistics", "../data/out/statistics/del23.JSON"},
-                // {"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
-                // {"--mapping", "../data/out/partition/afshell9.txt"},
-                // {"--statistics", "../data/out/statistics/afshell9.JSON"},
+                // {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.608s, 4,751,188 comm cost, // eco 44.685s 3,971,464 comm cost, // strong 536.000s 3,851,899 comm cost
+                // {"--mapping", "../data/out/partition/del23.txt"},
+                // {"--statistics", "../data/out/statistics/del23.JSON"},
+                {"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
+                {"--mapping", "../data/out/partition/afshell9.txt"},
+                {"--statistics", "../data/out/statistics/afshell9.JSON"},
                 {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
-                {"--config", "eco"},
+                {"--config", "strong"},
                 {"--seed", "0"},
             };
 

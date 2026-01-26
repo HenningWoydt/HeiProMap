@@ -48,7 +48,6 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-        weight_t m_l_max = 0;
 
         AlignedArray<vertex_t> flat_vertices;
         AlignedArray<vertex_t> bucket_sizes;
@@ -68,7 +67,6 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const weight_t t_l_max,
                         RandomEngine &t_random_engine,
                         const SizeConstrainedLPConfiguration &i_config) {
             ScopedTimer _t("io", "SizeConstrainedLP", "initialize");
@@ -76,7 +74,6 @@ namespace HeiProMap {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-            m_l_max = t_l_max;
 
             config = dynamic_cast<const SizeConstrainedLPConfiguration *>(&i_config);
             random_engine = &t_random_engine;
@@ -214,7 +211,10 @@ namespace HeiProMap {
         void cluster([[maybe_unused]] const size_t level,
                      const graph_t &g,
                      [[maybe_unused]] const p_manager_t &p_manager,
-                     Mapping &mapping) {
+                     Mapping &mapping,
+                     f64 imbalance) {
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+
             weight_t max_w = 0; // (weight_t) ((f64) m_l_max / config->f);
             vertex_t max_deg = 0;
             // get max w and max deg
@@ -229,6 +229,7 @@ namespace HeiProMap {
                     }
                 endfor
                 max_w *= 2;
+                max_w = std::min(max_w, lmax);
             }
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
             // get all vertices

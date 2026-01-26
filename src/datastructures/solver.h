@@ -45,7 +45,6 @@
 #include "../partitioning/global_multisection.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../refinement/hierarchy_aware_multi_try_multi_way_fm_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../utility/algorithm_configuration.h"
@@ -68,9 +67,6 @@ namespace HeiProMap {
         QuotientGraph q_graph;
         DistanceOracle d_oracle;
 
-        // balance
-        weight_t lmax = 0;
-
         // matching
         std::vector<Mapping> mappings;
         GreedyEdgeMatcher ge_matcher;
@@ -91,18 +87,10 @@ namespace HeiProMap {
         FlowBasedRefinement flow_based_refinement;
         // ILPRefinement ilp_refinement;
 
-        HierarchyAwareMultiWayFMRefinement hierarchy_aware_fm_refinement;
-        HierarchyAwareMultiTryMultiWayFMRefinement hierarchy_aware_multi_try_multi_way_fm_refinement;
-        // HierarchyAwareILPRefinement hierarchy_aware_ilp_refinement;
-        HierarchyAwareFlowBasedRefinement hierarchy_aware_flow_based_refinement;
-        HierarchyAwareQuotientGraphRefinement hierarchy_aware_quotient_graph_refinement;
-
         WaveRefinement wave_refinement;
         LightningRefinement lightning_refinement;
 
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *> > refinements;
-
-        std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *> > hierarchy_refinements;
 
         f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
@@ -120,6 +108,7 @@ namespace HeiProMap {
 
             weight_t comm_cost;
             weight_t max_b_weight;
+            weight_t lmax;
             f64 imb;
             partition_t empty_partitions;
             partition_t oload_partitions;
@@ -140,6 +129,7 @@ namespace HeiProMap {
                     << std::setw(8) << L.n << " | "
                     << std::setw(11) << L.m << " | "
                     << std::setw(10) << L.comm_cost << " | "
+                    << std::setw(7) << L.lmax << " | "
                     << std::setw(7) << L.max_b_weight << " | "
                     << std::setw(8) << L.imb << " | "
                     << std::setw(6) << (u32) L.empty_partitions << " | "
@@ -159,6 +149,7 @@ namespace HeiProMap {
                     << std::setw(8) << "n" << " | "
                     << std::setw(11) << "m" << " | "
                     << std::setw(10) << "comm cost" << " | "
+                    << std::setw(7) << "lmax" << " | "
                     << std::setw(7) << "maxW" << " | "
                     << std::setw(8) << "imb" << " | "
                     << std::setw(6) << "empty" << " | "
@@ -187,11 +178,8 @@ namespace HeiProMap {
             ac = t_ac;
             random_engine = RandomEngine(ac.seed);
 
-            // balance
-            lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
-
             // manager
-            p_manager.initialize(graphs[0].n, ac.k, lmax);
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
             bv_manager.initialize(graphs[0].n, ac.k);
             q_graph.initialize(ac.k);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
@@ -200,13 +188,13 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ge_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, lmax, random_engine, ac.greedy_edge_matcher_config);
-            he_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, lmax, random_engine, ac.heavy_edge_matcher_config);
-            rnd_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, lmax, random_engine, ac.random_edge_matcher_config);
-            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, lmax, random_engine, ac.global_path_algorithm_config);
-            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, lmax, random_engine, ac.size_constrained_lp_config);
+            ge_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.greedy_edge_matcher_config);
+            he_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.heavy_edge_matcher_config);
+            rnd_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.random_edge_matcher_config);
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.global_path_algorithm_config);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.size_constrained_lp_config);
 
-            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, lmax, ac.hierarchy, ac.distance, random_engine);
+            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
             // refinement
             // refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
@@ -218,25 +206,12 @@ namespace HeiProMap {
             refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
 
-            hierarchy_refinements.emplace_back(&hierarchy_aware_fm_refinement, &ac.hierarchy_aware_multi_way_fm_config);
-            hierarchy_refinements.emplace_back(&hierarchy_aware_multi_try_multi_way_fm_refinement, &ac.hierarchy_aware_multi_try_multi_way_fm_config);
-            hierarchy_refinements.emplace_back(&hierarchy_aware_flow_based_refinement, &ac.hierarchy_aware_flow_based_refinement_configuration);
-            hierarchy_refinements.emplace_back(&hierarchy_aware_quotient_graph_refinement, &ac.hierarchy_aware_quotient_graph_refinement_configuration);
-            // hierarchy_refinements.emplace_back(&ilp_refinement, &ac.ilp_refinement_configuration);
-            // hierarchy_refinements.emplace_back(&hierarchy_aware_ilp_refinement, &ac.hierarchy_aware_ilp_refinement_configuration);
-
             refinements.emplace_back(&wave_refinement, &ac.wave_refinement_configuration);
             refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
-                }
-            }
-
-            for (auto &[refiner, config]: hierarchy_refinements) {
-                if (config->enabled) {
-                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, *config);
+                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, *config);
                 }
             }
 
@@ -256,6 +231,8 @@ namespace HeiProMap {
 
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
+
+            weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             std::cout << "Total time        : " << duration + init_time << std::endl;
             std::cout << "#Nodes            : " << graphs.back().n << std::endl;
@@ -298,9 +275,10 @@ namespace HeiProMap {
     private:
         void internal_solve() {
             u64 level = 0;
-            u64 max_level = 0;
-
             u64 mult = ac.initial_c;
+
+            f64 level_imbalance = 0.0;
+            weight_t level_lmax = 0;
 
             while (graphs.back().n > ac.k * mult) {
                 #if ENABLE_PROFILER
@@ -310,7 +288,9 @@ namespace HeiProMap {
                 level_infos[level].m = graphs.back().m;
                 #endif
 
-                coarsening(level);
+                level_imbalance = ac.imbalance + (f64) level / 400.0;
+                level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                coarsening(level, level_imbalance);
                 contraction(level);
 
                 level += 1;
@@ -323,40 +303,49 @@ namespace HeiProMap {
             level_infos[level].m = graphs.back().m;
             #endif
 
-            partition();
+            level_imbalance = ac.imbalance + (f64) level / 400.0;
+            level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+            partition(level, level_imbalance);
 
             #if ENABLE_PROFILER
-            level_infos[level].max_b_weight = p_manager.max_weight();;
+            level_infos[level].max_b_weight = p_manager.max_weight();
+            level_infos[level].lmax = level_lmax;
             level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
             level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
             level_infos[level].empty_partitions = p_manager.n_empty_blocks();
-            level_infos[level].oload_partitions = p_manager.n_oload_blocks();
-            level_infos[level].sum_oload_weights = p_manager.sum_oload_weight();
+            level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
+            level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
             #endif
 
             while (!mappings.empty()) {
                 level -= 1;
+
+                level_imbalance = ac.imbalance + (f64) level / 400.0;
+                level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                 uncoarsening(level);
-                rebalancing(level);
-                refinement(level, max_level);
+                rebalancing(level, level_imbalance);
+                refinement(level, level_imbalance);
 
                 #if ENABLE_PROFILER
-                level_infos[level].max_b_weight = p_manager.max_weight();;
+
+                level_infos[level].max_b_weight = p_manager.max_weight();
+                level_infos[level].lmax = level_lmax;
                 level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
                 level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
                 level_infos[level].empty_partitions = p_manager.n_empty_blocks();
-                level_infos[level].oload_partitions = p_manager.n_oload_blocks();
-                level_infos[level].sum_oload_weights = p_manager.sum_oload_weight();
+                level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
+                level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
                 #endif
             }
         }
 
-        void partition() {
+        void partition(u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
+
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                     GlobalMultisectionPartitioner partitioner;
-                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, ac.imbalance, random_engine, ac.global_multisection_config);
+                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, random_engine, ac.global_multisection_config);
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
@@ -398,12 +387,12 @@ namespace HeiProMap {
                 MultiTryFMRefinement refinement;
                 MultiTryFmRefinementConfiguration config("config");
 
-                refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.imbalance, lmax, ac.hierarchy, ac.distance, random_engine, config);
+                refinement.initialize(graphs[0].n, graphs[0].m, ac.k, config);
                 config.enabled = true;
 
                 weight_t qap_before = get_qap(graphs.back(), p_manager, d_oracle);
 
-                refinement.refine(0, 0, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
+                refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, level_imbalance);
 
                 weight_t qap_after = get_qap(graphs.back(), p_manager, d_oracle);
                 std::cout << qap_before << " " << qap_after << std::endl;
@@ -415,21 +404,21 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void coarsening(const u64 level) {
+        void coarsening(const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
             mappings.emplace_back();
             mappings.back().initialize(graphs.back().n);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), p_manager, mappings.back());
+                ge_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(level, graphs.back(), p_manager, mappings.back());
+                he_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
-                rnd_matcher.match(level, graphs.back(), p_manager, mappings.back());
+                rnd_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back());
+                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back());
+                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -483,13 +472,13 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void rebalancing([[maybe_unused]] const u64 level) {
+        void rebalancing(const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
 
             if (level == 0) {
-                rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle);
+                rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, level_imbalance);
             } else {
-                rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle);
+                rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, level_imbalance);
             }
 
             auto ep = get_time_point();
@@ -503,14 +492,14 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void refinement(const u64 level, const u64 max_level) {
+        void refinement(const u64 level, const f64 level_imbalance) {
             auto sp = get_time_point();
 
             u64 refinement_max_iterations = 1;
             for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
                 for (auto [refiner, config]: refinements) {
                     if (config->enabled) {
-                        refiner->refine(level, max_level, graphs.back(), d_oracle, bv_manager, p_manager, q_graph);
+                        refiner->refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, level_imbalance);
                         HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
                     }
                 }

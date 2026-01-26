@@ -38,7 +38,13 @@ namespace HeiProMap {
         KAFFPA_PARTITION_FAST
     };
 
-    inline void kaffpa_partition(graph_t &g, partition_t k, f64 imb, KaffpaPartitionMode kaffpa_mode, u64 seed, AlignedArray<partition_t> &partition) {
+    inline void kaffpa_partition(graph_t &g,
+                                 partition_t k,
+                                 f64 imb,
+                                 KaffpaPartitionMode kaffpa_mode,
+                                 u64 seed,
+                                 AlignedArray<partition_t> &partition,
+                                 u64 kappa) {
         ASSERT(assert_graph(g));
 
         int n = (int) g.n;
@@ -48,10 +54,11 @@ namespace HeiProMap {
         int *adjcwgt = (int *) malloc(m * sizeof(int));
         int *adjncy = (int *) malloc(m * sizeof(int));
         int nparts = (int) k;
-        double imbalance = imb;
+        double imbalance = std::max(imb, 0.0);
         bool suppress_output = true;
         int mode = FAST;
         int edge_cut;
+        int best_edge_cut = std::numeric_limits<int>::max();
         int *part = (int *) malloc(n * sizeof(int));
 
         if (kaffpa_mode == KAFFPA_PARTITION_STRONG) { mode = STRONG; }
@@ -70,9 +77,14 @@ namespace HeiProMap {
         // set adjcwgt
         for (int i = 0; i < m; i++) { adjcwgt[i] = (int) g.edges_w[i]; }
 
-        kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &nparts, &imbalance, suppress_output, (int) seed, mode, &edge_cut, part);
+        for (u64 j = 0; j < kappa; j++) {
+            kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &nparts, &imbalance, suppress_output, (int) seed + j, mode, &edge_cut, part);
 
-        for (int i = 0; i < n; i++) { partition[i] = part[i]; }
+            if (edge_cut < best_edge_cut) {
+                best_edge_cut = edge_cut;
+                for (int i = 0; i < n; i++) { partition[i] = part[i]; }
+            }
+        }
 
         free(vwgt);
         free(xadj);

@@ -46,7 +46,6 @@ namespace HeiProMap {
         vertex_t    m_n     = 0;
         vertex_t    m_m     = 0;
         partition_t m_k     = 0;
-        weight_t    m_l_max = 0;
 
         const GreedyEdgeMatcherConfiguration *config        = nullptr;
         RandomEngine                         *random_engine = nullptr;
@@ -63,7 +62,6 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        const weight_t t_l_max,
                         RandomEngine &t_random_engine,
                         const GreedyEdgeMatcherConfiguration &i_config) {
             ScopedTimer _t("io", "GreedyEdgeMatcher", "initialize");
@@ -71,7 +69,6 @@ namespace HeiProMap {
             m_n     = t_n;
             m_m     = t_m;
             m_k     = t_k;
-            m_l_max = t_l_max;
 
             config        = dynamic_cast<const GreedyEdgeMatcherConfiguration *>(&i_config);
             random_engine = &t_random_engine;
@@ -85,8 +82,12 @@ namespace HeiProMap {
         void match([[maybe_unused]] const size_t level,
                    const graph_t &g,
                    [[maybe_unused]] p_manager_t &p_manager,
-                   Mapping &mapping) {
+                   Mapping &mapping,
+                   f64 imbalance) {
             ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "match");
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+
             Matching matching;
             matching.initialize(g.n);
 
@@ -115,7 +116,7 @@ namespace HeiProMap {
                         continue;
                     }
 
-                    if (g.v_weights[u] + g.v_weights[v] > m_l_max) {
+                    if (g.v_weights[u] + g.v_weights[v] > lmax) {
                         continue;
                     }
 
@@ -147,7 +148,7 @@ namespace HeiProMap {
                                 continue;
                             }
 
-                            if (g.v_weights[u] + g.v_weights[v] > m_l_max) {
+                            if (g.v_weights[u] + g.v_weights[v] > lmax) {
                                 continue;
                             }
 

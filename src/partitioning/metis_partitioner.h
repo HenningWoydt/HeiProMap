@@ -103,9 +103,8 @@ namespace HeiProMap {
         // Let METIS assume equal target weights per part by passing nullptr for tpwgts.
         idx_t edgecut = 0;
 
-        int status;
         if (metis_mode == METIS_PARTITION_RECURSIVE) {
-            status = METIS_PartGraphRecursive(
+            METIS_PartGraphRecursive(
                 &nvtxs, &ncon, xadj, adjncy,
                 vwgt,
                 /*vsize=*/nullptr,
@@ -118,7 +117,7 @@ namespace HeiProMap {
                 part
             );
         } else {
-            status = METIS_PartGraphKway(
+            METIS_PartGraphKway(
                 &nvtxs, &ncon, xadj, adjncy,
                 vwgt,
                 /*vsize=*/nullptr,
@@ -131,8 +130,6 @@ namespace HeiProMap {
                 part
             );
         }
-
-        ASSERT(status == METIS_OK);
 
         for (idx_t i = 0; i < nvtxs; ++i) {
             partition[(u64) i] = (partition_t) part[i];
