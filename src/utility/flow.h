@@ -650,7 +650,7 @@ namespace HeiProMap {
         // std::vector<std::vector<EdgeVW>> adj;
 
     public:
-        FlowNetwork() : g(Graph<int, int, int>(0, 0)) {
+        FlowNetwork() : g(Graph<int, int, int>(1024*16, 1024*16)) {
             n = 0;
             source = 0;
             target = 0;

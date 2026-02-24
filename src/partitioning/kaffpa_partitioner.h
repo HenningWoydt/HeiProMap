@@ -77,6 +77,9 @@ namespace HeiProMap {
         // set adjcwgt
         for (int i = 0; i < m; i++) { adjcwgt[i] = (int) g.edges_w[i]; }
 
+        // for (int i=0;i<n;++i) vwgt[i]=1;
+        // for (int e=0;e<m;++e) adjcwgt[e]=1;
+
         for (u64 j = 0; j < kappa; j++) {
             kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &nparts, &imbalance, suppress_output, (int) seed + j, mode, &edge_cut, part);
 

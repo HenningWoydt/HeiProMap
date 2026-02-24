@@ -395,7 +395,7 @@ namespace HeiProMap {
                 refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, level_imbalance);
 
                 weight_t qap_after = get_qap(graphs.back(), p_manager, d_oracle);
-                std::cout << qap_before << " " << qap_after << std::endl;
+                std::cout << qap_before << " " << qap_after << " " << graphs.back().n << std::endl;
             }
 
             auto ep = get_time_point();

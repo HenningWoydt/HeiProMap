@@ -298,7 +298,7 @@ namespace HeiProMap {
                         [[maybe_unused]] size_t beg = bucket_offsets[i];
                         [[maybe_unused]] size_t end = bucket_offsets[i + 1];
 
-                        // fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine->generator);
+                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine->generator);
                     }
                 }
                 // run clustering

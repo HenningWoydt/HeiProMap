@@ -185,7 +185,7 @@ namespace HeiProMap {
                     abort();
                 }
 
-                if ((partition_t) item.identifier->size() == l - 1) {
+                if (item.identifier->size() == l - 1) {
                     // insert solution
                     u64 offset = 0;
                     for (partition_t i = 0; i < l - 1; ++i) { offset += item.identifier->operator[](i) * index_vec[index_vec.size() - 1 - i]; }
