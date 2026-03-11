@@ -114,12 +114,9 @@ endif()
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "src/*.h")
 
-file(GLOB_RECURSE MAXFLOW_SOURCES CONFIGURE_DEPENDS "extern/maxflow/*.cpp")
-file(GLOB_RECURSE MAXFLOW_HEADERS CONFIGURE_DEPENDS "extern/maxflow/*.h")
-
-foreach(maxflow_src ${MAXFLOW_SOURCES})
-    set_source_files_properties(${maxflow_src} PROPERTIES COMPILE_FLAGS "-w")
-endforeach()
+file(GLOB_RECURSE MAXFLOW_ALG_bk_HEADERS CONFIGURE_DEPENDS "extern/maxflow_algorithms/bk/*.h")
+file(GLOB_RECURSE MAXFLOW_ALG_hi_pr_SOURCES CONFIGURE_DEPENDS "extern/maxflow_algorithms/hi_pr/*.cpp")
+list(FILTER MAXFLOW_ALG_hi_pr_SOURCES EXCLUDE REGEX ".*main\\.cpp$")
 
 # ---------------------------
 # Executable
@@ -128,14 +125,16 @@ add_executable(HeiProMap
         main.cpp
         ${HEADERS}
         ${SOURCES}
-        ${MAXFLOW_SOURCES}
-        ${MAXFLOW_HEADERS}
+        ${MAXFLOW_ALG_hi_pr_SOURCES}
+        ${MAXFLOW_ALG_bk_HEADERS}
 )
 
 target_include_directories(HeiProMap PRIVATE
         ${KAHIP_INCLUDE_DIR}
         ${METIS_INCLUDE_DIR}
         ${GKLIB_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/maxflow_algorithms/bk
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/maxflow_algorithms/hi_pr
 )
 
 # Link order matters for static libs: METIS then GKlib
@@ -157,14 +156,16 @@ set_target_properties(HeiProMap PROPERTIES
 add_library(libheipromap OBJECT
         ${HEADERS}
         ${SOURCES}
-        ${MAXFLOW_SOURCES}
-        ${MAXFLOW_HEADERS}
+        ${MAXFLOW_ALG_bk_HEADERS}
+        ${MAXFLOW_ALG_hi_pr_SOURCES}
 )
 
 target_include_directories(libheipromap PRIVATE
         ${KAHIP_INCLUDE_DIR}
         ${METIS_INCLUDE_DIR}
         ${GKLIB_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/maxflow_algorithms/bk
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/maxflow_algorithms/hi_pr
 )
 
 add_library(heipromap SHARED

@@ -123,7 +123,7 @@ namespace HeiProMap {
                     // make the move that reduces qap the most
                     partition_t best_id = u_id;
                     weight_t best_id_weight = 0;
-                    s64 best_qap_delta = -1;
+                    s64 best_qap_delta = -10;
                     f32 counter = 0;
 
                     block_marker += 1;

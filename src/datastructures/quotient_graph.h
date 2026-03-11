@@ -93,6 +93,12 @@ namespace HeiProMap {
                 }
             endfor
         }
+
+        void copy_from(const QuotientGraph &q) {
+            for (u64 i = 0; i < m_k * m_k; i++) {
+                m_adj_mtx[i] = q.m_adj_mtx[i];
+            }
+        }
     };
 }
 

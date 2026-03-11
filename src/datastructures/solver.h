@@ -62,9 +62,11 @@ namespace HeiProMap {
         weight_t initial_max_block_weight = 0;
 
         std::vector<graph_t> graphs;
-        PartitionManager p_manager;
-        BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
+
+        u64 n_partitions = 2;
+        std::vector<PartitionManager> p_managers;
+        std::vector<BoundaryVertexManager> bv_managers;
+        std::vector<QuotientGraph> q_graphs;
         DistanceOracle d_oracle;
 
         // matching
@@ -102,26 +104,26 @@ namespace HeiProMap {
         f64 refinement_ms = 0.0;
 
         struct level_info {
-            u32 level;
-            vertex_t n;
-            vertex_t m;
+            u32 level = -1;
+            vertex_t n = -1;
+            vertex_t m = -1;
 
-            weight_t comm_cost;
-            weight_t max_b_weight;
-            weight_t lmax;
-            f64 imb;
-            partition_t empty_partitions;
-            partition_t oload_partitions;
-            weight_t sum_oload_weights;
+            weight_t comm_cost = -1;
+            weight_t max_b_weight = -1;
+            weight_t lmax = -1;
+            f64 imb = -1.0;
+            partition_t empty_partitions = -1;
+            partition_t oload_partitions = -1;
+            weight_t sum_oload_weights = -1;
 
-            f64 t_coarsening;
-            f64 t_contraction;
-            f64 t_uncontraction;
-            f64 t_rebalance;
-            f64 t_refinement;
+            f64 t_coarsening = 0.0;
+            f64 t_contraction = 0.0;
+            f64 t_uncontraction = 0.0;
+            f64 t_rebalance = 0.0;
+            f64 t_refinement = 0.0;
         };
 
-        std::vector<level_info> level_infos;
+        std::vector<std::vector<level_info>> level_infos;
 
         inline void print_level_row(const level_info &L) {
             std::cout
@@ -179,9 +181,14 @@ namespace HeiProMap {
             random_engine = RandomEngine(ac.seed);
 
             // manager
-            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
+            p_managers.resize(n_partitions);
+            bv_managers.resize(n_partitions);
+            q_graphs.resize(n_partitions);
+            for (u64 i = 0; i < n_partitions; ++i) {
+                p_managers[i].initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+                bv_managers[i].initialize(graphs[0].n, ac.k);
+                q_graphs[i].initialize(ac.k);
+            }
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
@@ -214,6 +221,7 @@ namespace HeiProMap {
                     refiner->initialize(graphs[0].n, graphs[0].m, ac.k, *config);
                 }
             }
+            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.label_propagation_config);
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -223,10 +231,10 @@ namespace HeiProMap {
             const auto sp = std::chrono::high_resolution_clock::now();
             internal_solve();
 
-            weight_t qap = get_qap(graphs.back(), p_manager, d_oracle);
+            weight_t qap = get_qap(graphs.back(), p_managers[0], d_oracle);
 
             std::vector<partition_t> p(graphs.back().n);
-            for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_manager[u]; }
+            for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_managers[0][u]; }
             write_partition(p, ac.mapping_out);
 
             const auto ep = std::chrono::high_resolution_clock::now();
@@ -242,15 +250,15 @@ namespace HeiProMap {
             std::cout << "Init. QAP         : " << initial_qap << std::endl;
             std::cout << "Init. max block w : " << initial_max_block_weight << std::endl;
             std::cout << "Final QAP         : " << qap << std::endl;
-            std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
+            std::cout << "max block w       : " << max(p_managers[0].get_bweights()) << std::endl;
 
             size_t n_empty_partitions = 0;
             size_t n_overloaded_partitions = 0;
             weight_t sum_too_much = 0;
             for (partition_t id = 0; id < ac.k; ++id) {
-                n_empty_partitions += p_manager.get_bweight(id) == 0;
-                n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
-                sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
+                n_empty_partitions += p_managers[0].get_bweight(id) == 0;
+                n_overloaded_partitions += p_managers[0].get_bweight(id) > lmax;
+                sum_too_much += std::max((weight_t) 0, p_managers[0].get_bweight(id) - lmax);
             }
             std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
             std::cout << "#oload partitions : " << n_overloaded_partitions << std::endl;
@@ -265,9 +273,11 @@ namespace HeiProMap {
             std::cout << "Refinement        : " << refinement_ms << std::endl;
             std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
-            #if ENABLE_PROFILER
-            print_all_levels(level_infos);
-            #endif
+#if ENABLE_PROFILER
+            for (size_t i = 0; i < level_infos.size(); ++i) {
+                print_all_levels(level_infos[i]);
+            }
+#endif
 
             return p;
         }
@@ -280,62 +290,173 @@ namespace HeiProMap {
             f64 level_imbalance = 0.0;
             weight_t level_lmax = 0;
 
+            level_infos.emplace_back();
             while (graphs.back().n > ac.k * mult) {
-                #if ENABLE_PROFILER
-                level_infos.emplace_back();
-                level_infos[level].level = level;
-                level_infos[level].n = graphs.back().n;
-                level_infos[level].m = graphs.back().m;
-                #endif
+#if ENABLE_PROFILER
+                level_infos[0].emplace_back();
+                level_infos[0][level].level = level;
+                level_infos[0][level].n = graphs.back().n;
+                level_infos[0][level].m = graphs.back().m;
+#endif
 
-                level_imbalance = ac.imbalance + (f64) level / 400.0;
+                level_imbalance = ac.imbalance + (f64) level / 200.0;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
-                coarsening(level, level_imbalance);
-                contraction(level);
+                coarsening(0, level, level_imbalance);
+                contraction(0, level);
 
                 level += 1;
             }
 
-            #if ENABLE_PROFILER
-            level_infos.emplace_back();
-            level_infos[level].level = level;
-            level_infos[level].n = graphs.back().n;
-            level_infos[level].m = graphs.back().m;
-            #endif
+#if ENABLE_PROFILER
+            level_infos[0].emplace_back();
+            level_infos[0][level].level = level;
+            level_infos[0][level].n = graphs.back().n;
+            level_infos[0][level].m = graphs.back().m;
+#endif
 
-            level_imbalance = ac.imbalance + (f64) level / 400.0;
+            level_imbalance = ac.imbalance + (f64) (level) / 200.0;
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
             partition(level, level_imbalance);
 
-            #if ENABLE_PROFILER
-            level_infos[level].max_b_weight = p_manager.max_weight();
-            level_infos[level].lmax = level_lmax;
-            level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
-            level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
-            level_infos[level].empty_partitions = p_manager.n_empty_blocks();
-            level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
-            level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
-            #endif
+#if ENABLE_PROFILER
+            level_infos[0][level].max_b_weight = p_managers[0].max_weight();
+            level_infos[0][level].lmax = level_lmax;
+            level_infos[0][level].imb = (f64) level_infos[0][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
+            level_infos[0][level].comm_cost = get_qap(graphs.back(), p_managers[0], d_oracle);
+            level_infos[0][level].empty_partitions = p_managers[0].n_empty_blocks();
+            level_infos[0][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
+            level_infos[0][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
+#endif
 
             while (!mappings.empty()) {
                 level -= 1;
 
-                level_imbalance = ac.imbalance + (f64) level / 400.0;
+                level_imbalance = ac.imbalance + (f64) (level) / 200.0;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
-                uncoarsening(level);
-                rebalancing(level, level_imbalance);
-                refinement(level, level_imbalance);
+                uncoarsening(0, level);
 
-                #if ENABLE_PROFILER
+                for (u64 i = 1; i < n_partitions; ++i) {
+                    p_managers[i].copy_from(p_managers[0]);
+                    bv_managers[i].copy_from(bv_managers[0]);
+                    q_graphs[i].copy_from(q_graphs[0]);
 
-                level_infos[level].max_b_weight = p_manager.max_weight();
-                level_infos[level].lmax = level_lmax;
-                level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
-                level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
-                level_infos[level].empty_partitions = p_manager.n_empty_blocks();
-                level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
-                level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
-                #endif
+                    lp_refine.refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], level_imbalance);
+                }
+
+                rebalancing(0, level, level_imbalance);
+                refinement(0, level, level_imbalance);
+
+                weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
+                u64 best_id = 0;
+                for (u64 i = 1; i < n_partitions; ++i) {
+                    weight_t qap = get_qap(graphs.back(), p_managers[i], d_oracle);
+                    if (qap < best_qap) {
+                        best_qap = qap;
+                        best_id = i;
+                    }
+                }
+
+                if (best_id != 0) {
+                    std::swap(p_managers[0], p_managers[best_id]);
+                    std::swap(bv_managers[0], bv_managers[best_id]);
+                    std::swap(q_graphs[0], q_graphs[best_id]);
+                }
+
+#if ENABLE_PROFILER
+                level_infos[0][level].max_b_weight = p_managers[0].max_weight();
+                level_infos[0][level].lmax = level_lmax;
+                level_infos[0][level].imb = (f64) level_infos[0][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
+                level_infos[0][level].comm_cost = get_qap(graphs.back(), p_managers[0], d_oracle);
+                level_infos[0][level].empty_partitions = p_managers[0].n_empty_blocks();
+                level_infos[0][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
+                level_infos[0][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
+#endif
+            }
+
+            u64 n_v_cycle = 3;
+            for (u64 i_v_cycle = 0; i_v_cycle < n_v_cycle; i_v_cycle++) {
+                level_infos.emplace_back();
+                while (graphs.back().n > ac.k * mult && graphs.size() <= 1) {
+#if ENABLE_PROFILER
+                    level_infos[i_v_cycle+1].emplace_back();
+                    level_infos[i_v_cycle+1][level].level = level;
+                    level_infos[i_v_cycle+1][level].n = graphs.back().n;
+                    level_infos[i_v_cycle+1][level].m = graphs.back().m;
+#endif
+
+                    level_imbalance = ac.imbalance + (f64) level / 400.0;
+                    level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                    coarsening(i_v_cycle+1, level, level_imbalance, true);
+                    contraction(i_v_cycle+1, level);
+
+                    level += 1;
+                }
+
+#if ENABLE_PROFILER
+                level_infos[i_v_cycle+1].emplace_back();
+                level_infos[i_v_cycle+1][level].level = level;
+                level_infos[i_v_cycle+1][level].n = graphs.back().n;
+                level_infos[i_v_cycle+1][level].m = graphs.back().m;
+#endif
+
+                // level_imbalance = ac.imbalance + (f64) (level) / 200.0;
+                // level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                // partition(level, level_imbalance);
+
+#if ENABLE_PROFILER
+                level_infos[i_v_cycle+1][level].max_b_weight = p_managers[0].max_weight();
+                level_infos[i_v_cycle+1][level].lmax = level_lmax;
+                level_infos[i_v_cycle+1][level].imb = (f64) level_infos[0][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
+                level_infos[i_v_cycle+1][level].comm_cost = get_qap(graphs.back(), p_managers[0], d_oracle);
+                level_infos[i_v_cycle+1][level].empty_partitions = p_managers[0].n_empty_blocks();
+                level_infos[i_v_cycle+1][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
+                level_infos[i_v_cycle+1][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
+#endif
+
+                while (!mappings.empty()) {
+                    level -= 1;
+
+                    level_imbalance = ac.imbalance + (f64) (level) / 200.0;
+                    level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                    uncoarsening(i_v_cycle+1, level);
+
+                    for (u64 i = 1; i < n_partitions; ++i) {
+                        p_managers[i].copy_from(p_managers[0]);
+                        bv_managers[i].copy_from(bv_managers[0]);
+                        q_graphs[i].copy_from(q_graphs[0]);
+
+                        lp_refine.refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], level_imbalance);
+                    }
+
+                    rebalancing(i_v_cycle+1, level, level_imbalance);
+                    refinement(i_v_cycle+1, level, level_imbalance);
+
+                    weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
+                    u64 best_id = 0;
+                    for (u64 i = 1; i < n_partitions; ++i) {
+                        weight_t qap = get_qap(graphs.back(), p_managers[i], d_oracle);
+                        if (qap < best_qap) {
+                            best_qap = qap;
+                            best_id = i;
+                        }
+                    }
+
+                    if (best_id != 0) {
+                        std::swap(p_managers[0], p_managers[best_id]);
+                        std::swap(bv_managers[0], bv_managers[best_id]);
+                        std::swap(q_graphs[0], q_graphs[best_id]);
+                    }
+
+#if ENABLE_PROFILER
+                    level_infos[i_v_cycle+1][level].max_b_weight = p_managers[0].max_weight();
+                    level_infos[i_v_cycle+1][level].lmax = level_lmax;
+                    level_infos[i_v_cycle+1][level].imb = (f64) level_infos[0][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
+                    level_infos[i_v_cycle+1][level].comm_cost = get_qap(graphs.back(), p_managers[0], d_oracle);
+                    level_infos[i_v_cycle+1][level].empty_partitions = p_managers[0].n_empty_blocks();
+                    level_infos[i_v_cycle+1][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
+                    level_infos[i_v_cycle+1][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
+#endif
+                }
             }
         }
 
@@ -345,7 +466,7 @@ namespace HeiProMap {
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                     GlobalMultisectionPartitioner partitioner;
-                    partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, random_engine, ac.global_multisection_config);
+                    partitioner.partition(graphs.back(), p_managers[0], ac.hierarchy, ac.distance, level_imbalance, random_engine, ac.global_multisection_config);
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
@@ -353,22 +474,23 @@ namespace HeiProMap {
 
                 // initialize boundary vertices and quotient graph
                 ScopedTimer _t_allocate("partition", "misc", "initialize_datastructures");
-                p_manager.reset_weights();
-                bv_manager.reset();
-                q_graph.initialize(ac.k);
+                p_managers[0].reset_weights();
+                bv_managers[0].reset();
+                q_graphs[0].initialize(ac.k);
                 forall_gu(graphs.back(), u)
                     {
-                        const partition_t u_id = p_manager[u];
+                        const partition_t u_id = p_managers[0][u];
                         const weight_t u_w = graphs.back().v_weights[u];
-                        p_manager.set(u, u_w, u_id);
+                        p_managers[0].set(u, u_w, u_id);
 
-                        forall_guivw(graphs.back(), u, i, v, w) {
-                                const partition_t v_id = p_manager[v];
+                        forall_guivw(graphs.back(), u, i, v, w)
+                            {
+                                const partition_t v_id = p_managers[0][v];
 
                                 if (u_id != v_id) {
-                                    bv_manager.add(u, u_id); // boundary vertex
+                                    bv_managers[0].add(u, u_id); // boundary vertex
                                     if (u < v) {
-                                        q_graph.add_edge(u_id, v_id, w); // quotient graph
+                                        q_graphs[0].add_edge(u_id, v_id, w); // quotient graph
                                     }
                                 }
                             }
@@ -377,8 +499,8 @@ namespace HeiProMap {
                 endfor
                 _t_allocate.stop();
 
-                initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
-                initial_max_block_weight = max(p_manager.get_bweights());
+                initial_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
+                initial_max_block_weight = max(p_managers[0].get_bweights());
             }
             //
             {
@@ -390,11 +512,11 @@ namespace HeiProMap {
                 refinement.initialize(graphs[0].n, graphs[0].m, ac.k, config);
                 config.enabled = true;
 
-                weight_t qap_before = get_qap(graphs.back(), p_manager, d_oracle);
+                weight_t qap_before = get_qap(graphs.back(), p_managers[0], d_oracle);
 
-                refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, level_imbalance);
+                refinement.refine(graphs.back(), d_oracle, bv_managers[0], p_managers[0], q_graphs[0], level_imbalance);
 
-                weight_t qap_after = get_qap(graphs.back(), p_manager, d_oracle);
+                weight_t qap_after = get_qap(graphs.back(), p_managers[0], d_oracle);
                 std::cout << qap_before << " " << qap_after << " " << graphs.back().n << std::endl;
             }
 
@@ -404,21 +526,23 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void coarsening(const u64 level, f64 level_imbalance) {
+        void coarsening(const u64 v_cycle, const u64 level, f64 level_imbalance, bool random = false) {
             auto sp = get_time_point();
             mappings.emplace_back();
             mappings.back().initialize(graphs.back().n);
 
-            if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
+            if (random) {
+                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
+                ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
+                he_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
-                rnd_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
+                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
+                gpa_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
+                size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -428,33 +552,33 @@ namespace HeiProMap {
             auto ep = get_time_point();
             coarsening_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
-            level_infos[level].t_coarsening = get_milli_seconds(sp, ep);
-            #endif
+#if ENABLE_PROFILER
+            level_infos[v_cycle][level].t_coarsening += get_milli_seconds(sp, ep);
+#endif
         }
 
-        void contraction([[maybe_unused]] const u64 level) {
+        void contraction(const u64 v_cycle, [[maybe_unused]] const u64 level) {
             auto sp = get_time_point();
 
             graphs.emplace_back(); // coarse the graph
             graphs.back().initialize(graphs[graphs.size() - 2], mappings.back());
-            p_manager.contract(mappings.back());
+            p_managers[0].contract(mappings.back());
 
             auto ep = get_time_point();
             contraction_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
-            level_infos[level].t_contraction = get_milli_seconds(sp, ep);
-            #endif
+#if ENABLE_PROFILER
+            level_infos[v_cycle][level].t_contraction += get_milli_seconds(sp, ep);
+#endif
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
         }
 
-        void uncoarsening([[maybe_unused]] const u64 level) {
+        void uncoarsening(const u64 v_cycle, [[maybe_unused]] const u64 level) {
             auto sp = get_time_point();
 
-            p_manager.uncontract(mappings.back());
-            bv_manager.compute_from_scratch(graphs[graphs.size() - 2], p_manager);
+            p_managers[0].uncontract(mappings.back());
+            bv_managers[0].compute_from_scratch(graphs[graphs.size() - 2], p_managers[0]);
 
             ScopedTimer _t("uncontraction", "misc", "free_graph");
             graphs.pop_back(); // this is doing uncontraction
@@ -465,42 +589,46 @@ namespace HeiProMap {
 
             uncontraction_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
-            level_infos[level].t_uncontraction = get_milli_seconds(sp, ep);
-            #endif
+#if ENABLE_PROFILER
+            level_infos[v_cycle][level].t_uncontraction += get_milli_seconds(sp, ep);
+#endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void rebalancing(const u64 level, f64 level_imbalance) {
+        void rebalancing(const u64 v_cycle, const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
 
-            if (level == 0) {
-                rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, level_imbalance);
-            } else {
-                rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, level_imbalance);
+            for (u64 i = 0; i < n_partitions; ++i) {
+                if (level == 0) {
+                    rebalancer.rebalance_last_layer(graphs.back(), p_managers[i], bv_managers[i], q_graphs[i], d_oracle, level_imbalance);
+                } else {
+                    rebalancer.rebalance(graphs.back(), p_managers[i], bv_managers[i], q_graphs[i], d_oracle, level_imbalance);
+                }
             }
 
             auto ep = get_time_point();
 
             rebalance_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
-            level_infos[level].t_rebalance = get_milli_seconds(sp, ep);
-            #endif
+#if ENABLE_PROFILER
+            level_infos[v_cycle][level].t_rebalance += get_milli_seconds(sp, ep);
+#endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }
 
-        void refinement(const u64 level, const f64 level_imbalance) {
+        void refinement(const u64 v_cycle, const u64 level, const f64 level_imbalance) {
             auto sp = get_time_point();
 
-            u64 refinement_max_iterations = 1;
-            for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
-                for (auto [refiner, config]: refinements) {
-                    if (config->enabled) {
-                        refiner->refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, level_imbalance);
-                        HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
+            for (u64 i = 0; i < n_partitions; ++i) {
+                u64 refinement_max_iterations = 5;
+                for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
+                    for (auto [refiner, config]: refinements) {
+                        if (config->enabled) {
+                            refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], level_imbalance);
+                            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
+                        }
                     }
                 }
             }
@@ -509,9 +637,9 @@ namespace HeiProMap {
 
             refinement_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
-            level_infos[level].t_refinement = get_milli_seconds(sp, ep);
-            #endif
+#if ENABLE_PROFILER
+            level_infos[v_cycle][level].t_refinement += get_milli_seconds(sp, ep);
+#endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, ac.k));
         }

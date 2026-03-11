@@ -34,6 +34,7 @@
 #include "../utility/functions.h"
 #include "ISerialRefiner.h"
 #include "../utility/qap.h"
+#include "../utility/random_engine.h"
 
 namespace HeiProMap {
     class MultiTryFmRefinementConfiguration final : public ISerialRefinerConfiguration {

@@ -31,7 +31,7 @@
 #include <stack>
 #include <vector>
 
-#include "../../extern/maxflow/graph.h"
+#include "../../extern/maxflow_algorithms/bk/graph.h"
 
 #include "../definitions.h"
 #include "macros.h"
@@ -641,16 +641,15 @@ namespace HeiProMap {
         }
     };
 
+    /*
     class FlowNetwork {
         vertex_t n;
-        Graph<int, int, int> g;
+        bk::Graph<int, int, int> g;
         vertex_t source;
         vertex_t target;
 
-        // std::vector<std::vector<EdgeVW>> adj;
-
     public:
-        FlowNetwork() : g(Graph<int, int, int>(1024*16, 1024*16)) {
+        FlowNetwork() : g(bk::Graph<int, int, int>(1024*16, 1024*16)) {
             n = 0;
             source = 0;
             target = 0;
@@ -662,55 +661,32 @@ namespace HeiProMap {
             g.add_node(n + 2);
             source = n;
             target = n + 1;
-
-            /*
-            if (adj.size() != n + 2) {
-                adj.resize(n + 2);
-            }
-            for (auto &vec: adj) {
-                vec.clear();
-            }
-             */
         }
 
         void add(vertex_t u, vertex_t v, weight_t w) {
             ASSERT(u < n);
             ASSERT(v < n);
             ASSERT(w >= 0);
-            // for(auto & e : adj[u]){ ASSERT(e.v != v); }
-            // for(auto & e : adj[v]){ ASSERT(e.v != u); }
-
             g.add_edge(u, v, w, w);
-
-            // adj[u].emplace_back(v, w);
-            // adj[v].emplace_back(u, w);
         }
 
         void add_s_edge(vertex_t v, weight_t w) {
             ASSERT(v < n);
             ASSERT(w >= 0);
-            // for(auto & e : adj[source]){ ASSERT(e.v != v); }
-
             g.add_edge(source, v, w, 0);
-
-            // adj[source].emplace_back(v, w);
         }
 
         void add_t_edge(vertex_t v, weight_t w) {
             ASSERT(v < n);
             ASSERT(w >= 0);
-            // for(auto & e : adj[target]){ ASSERT(e.v != v); }
-
             g.add_edge(v, target, w, 0);
-
-            // adj[v].emplace_back(target, w);
         }
 
         void build_residual_network(ResidualFlowNetwork &residual_g) {
             residual_g.initialize(n);
 
             int n_edges = g.get_arc_num();
-            Graph<int, int, int>::arc_id arc = g.get_first_arc();
+            bk::Graph<int, int, int>::arc_id arc = g.get_first_arc();
 
             int u, v;
             for (int i = 0; i < n_edges; ++i) {
@@ -736,17 +712,6 @@ namespace HeiProMap {
         }
 
         void solve() {
-            /*
-            for (auto &vec: adj) {
-
-                for (size_t i = 0; i < vec.size(); ++i) {
-                    for (size_t j = i + 1; j < vec.size(); ++j) {
-                        ASSERT(vec[i].v != vec[j].v);
-                    }
-                }
-            }
-             */
-
             const int INF = std::numeric_limits<int>::max() / 2;
             g.add_tweights(source, INF, 0);
             g.add_tweights(target, 0, INF);
@@ -757,35 +722,11 @@ namespace HeiProMap {
         void get_cut(std::vector<u8> &is_left) {
             is_left.resize(n);
             for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = g.what_segment(u) == Graph<int, int, int>::SOURCE;
+                is_left[u] = g.what_segment(u) == bk::SOURCE;
             }
-        }
-
-        void print() const {
-            /*
-            std::cout << "Flow Network Adjacency List:\n";
-            std::cout << "-----------------------------\n";
-
-            for (vertex_t u = 0; u < adj.size(); ++u) {
-                if (u == source) {
-                    std::cout << "Source (" << u << "): ";
-                } else if (u == target) {
-                    std::cout << "Target (" << u << "): ";
-                } else {
-                    std::cout << "Node " << u << ": ";
-                }
-
-                for (const auto &edge: adj[u]) {
-                    std::cout << edge.v << "(w=" << edge.w << ") ";
-                }
-
-                std::cout << "\n";
-            }
-
-            std::cout << "-----------------------------\n";
-             */
         }
     };
+    */
 }
 
 #endif //HEIPROMAP_FLOW_H

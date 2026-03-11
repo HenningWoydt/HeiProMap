@@ -209,6 +209,19 @@ namespace HeiProMap {
             // m_n_boundary             = 0;
         }
 
+        void copy_from(const BoundaryVertexManager &bm) {
+            for (vertex_t u = 0; u < m_n; u++) {
+                m_n_boundary_edges[u] = bm.m_n_boundary_edges[u];
+                m_vertex_idx[u] = bm.m_vertex_idx[u];
+            }
+            for (partition_t id = 0; id < m_k; id++) {
+                m_boundaries_size[id] = bm.m_boundaries_size[id];
+            }
+            for (u64 i = 0; i < m_n * m_k; i++) {
+                m_boundaries[i] = bm.m_boundaries[i];
+            }
+        }
+
     private:
         void remove_from_complete([[maybe_unused]] const vertex_t u) {
             // vertex_t last_vertex = m_complete_boundary[m_complete_boundary_size - 1];

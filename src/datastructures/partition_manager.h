@@ -164,6 +164,16 @@ namespace HeiProMap {
             bweights.initialize(k, 0);
             n_vertices.initialize(k, 0);
         }
+
+        void copy_from(PartitionManager &p_manager) {
+            for (vertex_t u = 0; u < n; ++u) {
+                partition[u] = p_manager.partition[u];
+            }
+            for (partition_t id = 0; id < k; ++id) {
+                bweights[id] = p_manager.bweights[id];
+                n_vertices[id] = p_manager.n_vertices[id];
+            }
+        }
     };
 }
 
