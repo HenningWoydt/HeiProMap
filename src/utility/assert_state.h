@@ -142,7 +142,8 @@ namespace HeiProMap {
 
         std::vector<vertex_t> automatic;
         for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-            forall_bv_id_iu(bv_manager, id, i, u) {
+            forall_bv_id_iu(bv_manager, id, i, u)
+                {
                     automatic.push_back(u);
                 }
             endfor
@@ -168,7 +169,8 @@ namespace HeiProMap {
         forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
-                forall_guiv(g, u, i, v) {
+                forall_guiv(g, u, i, v)
+                    {
                         partition_t v_id = p_manager[v];
                         if (u_id != v_id) {
                             manual[u_id].push_back(u);
@@ -181,7 +183,8 @@ namespace HeiProMap {
 
         for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> automatic;
-            forall_bv_id_iu(bv_manager, id, i, u) {
+            forall_bv_id_iu(bv_manager, id, i, u)
+                {
                     automatic.push_back(u);
                 }
             endfor
@@ -217,7 +220,8 @@ namespace HeiProMap {
         forall_gu(g, u)
             {
                 partition_t u_id = p_manager[u];
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         partition_t v_id = p_manager[v];
                         if (u_id != v_id) {
                             manual[{u_id, v_id}] += w;
@@ -237,6 +241,56 @@ namespace HeiProMap {
 
             ASSERT(w == q_graph.get_weight(id1, id2));
         }
+        return true;
+    }
+
+    inline bool assert_correct_block_conn(const graph_t &g,
+                                          const p_manager_t &p_manager,
+                                          const block_conn_t &block_conn,
+                                          [[maybe_unused]] const partition_t k) {
+        ScopedTimer _t("assert", "misc", "assert_correct_block_conn");
+
+        forall_gu(g, u)
+            {
+                std::map<partition_t, weight_t> manual_map;
+
+                forall_guivw(g, u, i, v, w)
+                    {
+                        partition_t v_id = p_manager[v];
+                        manual_map[v_id] += w;
+                    }
+                endfor
+                std::vector<std::pair<partition_t, weight_t> > manual;
+                for (auto [id, w]: manual_map) {
+                    manual.emplace_back(id, w);
+                }
+
+                std::vector<std::pair<partition_t, weight_t> > automatic;
+
+                forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+                    {
+                        automatic.emplace_back(id, idw);
+                    }
+                endfor
+
+                std::sort(manual.begin(), manual.end(), [](const auto &a, const auto &b) {
+                    return a.first < b.first;
+                });
+                std::sort(automatic.begin(), automatic.end(), [](const auto &a, const auto &b) {
+                    return a.first < b.first;
+                });
+
+                ASSERT(no_duplicates_sorted(manual));
+                ASSERT(no_duplicates_sorted(automatic));
+                ASSERT(manual.size() == automatic.size());
+
+                for (size_t i = 0; i < manual.size(); ++i) {
+                    ASSERT(manual[i].first == automatic[i].first);
+                    ASSERT(manual[i].second == automatic[i].second);
+                }
+            }
+        endfor
+
         return true;
     }
 
@@ -275,6 +329,7 @@ namespace HeiProMap {
                                                 [[maybe_unused]] const p_manager_t &p_manager,
                                                 [[maybe_unused]] bv_manager_t &bv_manager,
                                                 [[maybe_unused]] const q_graph_t &q_graph,
+                                                [[maybe_unused]] const block_conn_t &block_conn,
                                                 [[maybe_unused]] const partition_t k) {
         // assert csr structure
         ASSERT(assert_csr_structure(g));
@@ -299,6 +354,8 @@ namespace HeiProMap {
 
         // check the correct quotient graph
         ASSERT(assert_correct_quotient_graph(g, p_manager, q_graph, k));
+
+        ASSERT(assert_correct_block_conn(g, p_manager, block_conn, k));
 
         return true;
     }

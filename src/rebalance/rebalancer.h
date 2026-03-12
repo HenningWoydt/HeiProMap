@@ -149,6 +149,7 @@ namespace HeiProMap {
                        bv_manager_t &bv_manager,
                        q_graph_t &q_graph,
                        d_oracle_t &d_oracle,
+                       block_conn_t &block_conn,
                        f64 imbalance) {
             ScopedTimer _t_allocate("rebalance", "Rebalancer", "allocate");
 
@@ -252,6 +253,7 @@ namespace HeiProMap {
                     // move
                     bv_manager.move(g, p_manager, u, u_id, best_id);
                     q_graph.move(g, p_manager, u, u_id, best_id);
+                    block_conn.move(g, u, u_id, best_id);
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
@@ -276,10 +278,11 @@ namespace HeiProMap {
                                   bv_manager_t &bv_manager,
                                   q_graph_t &q_graph,
                                   d_oracle_t &d_oracle,
+                                  block_conn_t &block_conn,
                                   f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
-            rebalance(g, p_manager, bv_manager, q_graph, d_oracle, imbalance);
+            rebalance(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
             ScopedTimer _t_allocate("rebalance", "LL-Rebalancer", "allocate");
 
             AlignedArray<vertex_t> boundary;
@@ -383,6 +386,7 @@ namespace HeiProMap {
                     // move
                     bv_manager.move(g, p_manager, u, u_id, best_id);
                     q_graph.move(g, p_manager, u, u_id, best_id);
+                    block_conn.move(g, u, u_id, best_id);
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 

@@ -101,6 +101,27 @@ namespace HeiProMap {
             return m_iteration_counter[u] == m_iteration && m_indices[u] != HEAP_TOMBSTONE;
         }
 
+        void remove(const vertex_t u) {
+            ASSERT(entry_exists(u));
+
+            size_t index = m_indices[u];
+            size_t last_index = m_heap_size - 1;
+
+            m_indices[u] = HEAP_TOMBSTONE;
+
+            if (index != last_index) {
+                m_heap[index] = m_heap[last_index];
+                m_indices[m_heap[index].u] = index;
+            }
+
+            m_heap_size--;
+
+            if (index < m_heap_size) {
+                bubble_up(index);
+                bubble_down(index);
+            }
+        }
+
         vertex_t top_u() const { return m_heap[0].u; }
 
         partition_t top_id() const { return m_heap[0].id; }

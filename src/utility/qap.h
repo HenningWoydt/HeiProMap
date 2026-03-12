@@ -45,10 +45,38 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         partition_t v_id = p_manager[v];
                         weight_t d = d_oracle.get(u_id, v_id);
                         local_qap += (d * w);
+                    }
+                endfor
+            }
+        endfor
+        qap += local_qap;
+
+        return qap;
+    }
+
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
+    inline weight_t get_qap(GraphT &g,
+                            PartitionManagerT &p_manager,
+                            DistanceOracleT &d_oracle,
+                            BlockConnT &block_conn) {
+        ScopedTimer _t("misc", "misc", "get_qap");
+
+        weight_t qap = 0;
+        weight_t local_qap = 0;
+
+        forall_gu(g, u)
+            {
+                partition_t u_id = p_manager[u];
+
+                forall_bc_ui_id_idw(block_conn, u, i, id, id_w)
+                    {
+                        weight_t d = d_oracle.get(u_id, id);
+                        local_qap += (d * id_w);
                     }
                 endfor
             }
@@ -70,7 +98,8 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         partition_t v_id = p_manager[v];
                         weight_t d = d_oracle.get(u_id, v_id);
                         partition_t layer_id = d_oracle.get_h(u_id, v_id);
@@ -93,7 +122,8 @@ namespace HeiProMap {
                                DistanceOracleT &d_oracle) {
         s64 qap_delta = 0;
 
-        forall_guivw(g, u, i, v, w) {
+        forall_guivw(g, u, i, v, w)
+            {
                 partition_t v_id = p_manager[v];
                 weight_t old_d = d_oracle.get(v_id, old_id);
                 weight_t new_d = d_oracle.get(v_id, new_id);
@@ -105,21 +135,22 @@ namespace HeiProMap {
         return qap_delta;
     }
 
-    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
     inline s64 get_u_qap_delta(const GraphT &g,
                                const vertex_t u,
                                const partition_t old_id,
                                const partition_t new_id,
                                const PartitionManagerT &p_manager,
-                               const DistanceOracleT &d_oracle) {
+                               DistanceOracleT &d_oracle,
+                               BlockConnT &block_conn) {
         s64 qap_delta = 0;
 
-        forall_guivw(g, u, i, v, w) {
-                partition_t v_id = p_manager[v];
-                weight_t old_d = d_oracle.get(v_id, old_id);
-                weight_t new_d = d_oracle.get(v_id, new_id);
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                weight_t old_d = d_oracle.get(id, old_id);
+                weight_t new_d = d_oracle.get(id, new_id);
 
-                qap_delta += (old_d - new_d) * w;
+                qap_delta += (old_d - new_d) * idw;
             }
         endfor
 
@@ -134,7 +165,8 @@ namespace HeiProMap {
                                     const PartitionManagerT &p_manager) {
         s64 edge_cut_delta = 0;
 
-        forall_guivw(g, u, i, v, w) {
+        forall_guivw(g, u, i, v, w)
+            {
                 partition_t v_id = p_manager[v];
 
                 edge_cut_delta -= (v_id != new_id) * w;
@@ -145,6 +177,26 @@ namespace HeiProMap {
         return edge_cut_delta;
     }
 
+    template<typename GraphT, typename PartitionManagerT, typename BlockConnT>
+    inline s64 get_u_edge_cut_delta(const GraphT &g,
+                                    const vertex_t u,
+                                    const partition_t old_id,
+                                    const partition_t new_id,
+                                    const PartitionManagerT &p_manager,
+                                    const BlockConnT &block_conn) {
+        s64 edge_cut_delta = 0;
+
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                edge_cut_delta -= (id != new_id) * idw;
+                edge_cut_delta += (id != old_id) * idw;
+            }
+        endfor
+
+        return edge_cut_delta;
+    }
+
+    /*
     inline void get_u_qap_delta(const graph_t &g,
                                 const vertex_t u,
                                 const partition_t old_id,
@@ -159,8 +211,9 @@ namespace HeiProMap {
         // reset all to 0
         std::fill_n(blocks_qap_delta, blocks_size, 0);
 
-        #pragma GCC unroll 8
-        forall_guivw(g, u, j, v, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, u, j, v, w)
+            {
                 partition_t v_id = p_manager[v];
                 weight_t old_d = d_oracle.get(v_id, old_id);
 
@@ -171,7 +224,9 @@ namespace HeiProMap {
             }
         endfor
     }
+    */
 
+    /*
     inline s64 get_qap_delta(const graph_t &g,
                              const vertex_t u,
                              const partition_t u_old_id,
@@ -184,8 +239,9 @@ namespace HeiProMap {
         s64 qap_delta = 0;
 
         // process u
-        #pragma GCC unroll 8
-        forall_guivw(g, u, i, neighbor, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, u, i, neighbor, w)
+            {
                 if (neighbor != v) {
                     partition_t neighbor_id = p_manager[neighbor];
 
@@ -201,8 +257,9 @@ namespace HeiProMap {
         endfor
 
         // process v
-        #pragma GCC unroll 8
-        forall_guivw(g, v, i, neighbor, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, v, i, neighbor, w)
+            {
                 if (neighbor == u) { continue; }
 
                 partition_t neighbor_id = p_manager[neighbor];
@@ -215,7 +272,9 @@ namespace HeiProMap {
 
         return qap_delta;
     }
+    */
 
+    /*
     inline s64 get_qap_delta(const graph_t &g,
                              const vertex_t v,
                              const vertex_t vv,
@@ -231,8 +290,9 @@ namespace HeiProMap {
         s64 qap_delta = 0;
 
         // process v
-        #pragma GCC unroll 8
-        forall_guivw(g, v, i, neighbor, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, v, i, neighbor, w)
+            {
                 if (neighbor == vv) {
                     weight_t old_d = d_oracle.get(v_id, vv_id);
                     weight_t new_d = d_oracle.get(new_v_id, new_vv_id);
@@ -252,8 +312,9 @@ namespace HeiProMap {
         endfor
 
         // process vv
-        #pragma GCC unroll 8
-        forall_guivw(g, vv, i, neighbor, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, vv, i, neighbor, w)
+            {
                 if (neighbor == v) { continue; }
                 if (neighbor == vvv) {
                     weight_t old_d = d_oracle.get(vv_id, vvv_id);
@@ -270,8 +331,9 @@ namespace HeiProMap {
         endfor
 
         // process vvv
-        #pragma GCC unroll 8
-        forall_guivw(g, vvv, i, neighbor, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, vvv, i, neighbor, w)
+            {
                 if (neighbor == v) { continue; }
                 if (neighbor == vv) { continue; }
 
@@ -285,6 +347,8 @@ namespace HeiProMap {
 
         return qap_delta;
     }
+    */
+
 
     inline s64 get_u_qap_delta_and_is_boundary(const graph_t &g,
                                                const vertex_t u,
@@ -299,8 +363,9 @@ namespace HeiProMap {
 
         s64 qap_delta = 0;
 
-        #pragma GCC unroll 8
-        forall_guivw(g, u, i, v, w) {
+#pragma GCC unroll 8
+        forall_guivw(g, u, i, v, w)
+            {
                 partition_t v_id = p_manager[v];
 
                 is_boundary_old_id |= (v_id != old_id);
@@ -311,6 +376,36 @@ namespace HeiProMap {
                 qap_delta += (old_d - new_d) * w;
             }
         endfor
+
+        return qap_delta;
+    }
+
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
+    inline s64 get_u_qap_delta_and_is_boundary(const GraphT &g,
+                                               const vertex_t u,
+                                               const partition_t old_id,
+                                               const partition_t new_id,
+                                               bool &is_boundary_old_id,
+                                               bool &is_boundary_new_id,
+                                               const PartitionManagerT &p_manager,
+                                               DistanceOracleT &d_oracle,
+                                               BlockConnT &block_conn) {
+        is_boundary_old_id = false;
+        is_boundary_new_id = false;
+
+        s64 qap_delta = 0;
+
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                is_boundary_old_id |= (id != old_id);
+                is_boundary_new_id |= (id != new_id);
+
+                weight_t old_d = d_oracle.get(id, old_id);
+                weight_t new_d = d_oracle.get(id, new_id);
+                qap_delta += (old_d - new_d) * idw;
+            }
+        endfor
+
 
         return qap_delta;
     }
@@ -327,7 +422,8 @@ namespace HeiProMap {
 
         s64 qap_delta = 0;
 
-        forall_guivw(g, u, i, v, w) {
+        forall_guivw(g, u, i, v, w)
+            {
                 partition_t v_id = p_manager[v];
 
                 is_connected_to_new_id |= (v_id == new_id);
@@ -336,6 +432,33 @@ namespace HeiProMap {
                 weight_t new_d = d_oracle.get(v_id, new_id);
 
                 qap_delta += (old_d - new_d) * w;
+            }
+        endfor
+
+        return qap_delta;
+    }
+
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
+    inline s64 get_u_qap_delta_and_is_connected_to(const GraphT &g,
+                                                   const vertex_t u,
+                                                   const partition_t old_id,
+                                                   const partition_t new_id,
+                                                   bool &is_connected_to_new_id,
+                                                   const PartitionManagerT &p_manager,
+                                                   DistanceOracleT &d_oracle,
+                                                   BlockConnT &block_conn) {
+        is_connected_to_new_id = false;
+
+        s64 qap_delta = 0;
+
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                is_connected_to_new_id |= (id == new_id);
+
+                weight_t old_d = d_oracle.get(id, old_id);
+                weight_t new_d = d_oracle.get(id, new_id);
+
+                qap_delta += (old_d - new_d) * idw;
             }
         endfor
 
@@ -353,7 +476,8 @@ namespace HeiProMap {
 
         s64 edge_cut_delta = 0;
 
-        forall_guivw(g, u, i, v, w) {
+        forall_guivw(g, u, i, v, w)
+            {
                 partition_t v_id = p_manager[v];
 
                 is_connected_to_new_id |= (v_id == new_id);
@@ -366,6 +490,31 @@ namespace HeiProMap {
         return edge_cut_delta;
     }
 
+    template<typename GraphT, typename PartitionManagerT, typename BlockConnT>
+    inline s64 get_u_edge_cut_delta_and_is_connected_to(const GraphT &g,
+                                                        const vertex_t u,
+                                                        const partition_t old_id,
+                                                        const partition_t new_id,
+                                                        bool &is_connected_to_new_id,
+                                                        const PartitionManagerT &p_manager,
+                                                        BlockConnT &block_conn) {
+        is_connected_to_new_id = false;
+
+        s64 edge_cut_delta = 0;
+
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                is_connected_to_new_id |= (id == new_id);
+
+                edge_cut_delta -= (id != new_id) * idw;
+                edge_cut_delta += (id != old_id) * idw;
+            }
+        endfor
+
+        return edge_cut_delta;
+    }
+
+    /*
     template<typename PartitionManagerT, typename DistanceOracleT>
     std::vector<weight_t> qap_per_layer(graph_t &g,
                                         PartitionManagerT &p_manager,
@@ -377,7 +526,8 @@ namespace HeiProMap {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         partition_t v_id = p_manager[v];
                         weight_t distance = d_oracle.get(u_id, v_id);
                         weight_t level = d_oracle.get_h(u_id, v_id);
@@ -389,6 +539,7 @@ namespace HeiProMap {
 
         return qap;
     }
+    */
 }
 
 #endif //HEIPROMAP_QAP_H

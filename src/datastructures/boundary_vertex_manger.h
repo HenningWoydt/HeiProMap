@@ -27,7 +27,6 @@
 #ifndef HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
 #define HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
 
-#include "distance_oracle.h"
 #include "../definitions_1.h"
 #include "../definitions_2.h"
 #include "../definitions.h"

@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_METIS_PARTITIONER_H
 #define HEIPROMAP_METIS_PARTITIONER_H
 
+/*
 #include "../definitions.h"
 #include "../utility/assert_state.h"
 #include "../../extern/local/metis/include/metis.h"
@@ -107,10 +108,10 @@ namespace HeiProMap {
             METIS_PartGraphRecursive(
                 &nvtxs, &ncon, xadj, adjncy,
                 vwgt,
-                /*vsize=*/nullptr,
+                nullptr,
                 adjwgt,
                 &nparts,
-                /*tpwgts=*/nullptr,
+                nullptr,
                 ubvec,
                 options,
                 &edgecut,
@@ -120,10 +121,10 @@ namespace HeiProMap {
             METIS_PartGraphKway(
                 &nvtxs, &ncon, xadj, adjncy,
                 vwgt,
-                /*vsize=*/nullptr,
+                nullptr,
                 adjwgt,
                 &nparts,
-                /*tpwgts=*/nullptr,
+                nullptr,
                 ubvec,
                 options,
                 &edgecut,
@@ -142,5 +143,7 @@ namespace HeiProMap {
         std::free(part);
     }
 }
+
+*/
 
 #endif //HEIPROMAP_METIS_PARTITIONER_H

@@ -31,9 +31,9 @@
 #include "datastructures/quotient_graph.h"
 
 namespace HeiProMap {
-
-    typedef BoundaryVertexManager     bv_manager_t;
-    typedef QuotientGraph             q_graph_t;
+    typedef BoundaryVertexManager bv_manager_t;
+    typedef QuotientGraph q_graph_t;
+    typedef BlockConn block_conn_t;
 }
 
 #endif //HEIPROMAP_SERIAL_DEFINITIONS_3_H

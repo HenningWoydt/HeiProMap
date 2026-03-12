@@ -132,6 +132,7 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
+                    block_conn_t &block_conn,
                     f64 imbalance) override {
             ScopedTimer _t("refinement", "QuotientGraphRefinement", "refine");
 
@@ -172,7 +173,7 @@ namespace HeiProMap {
                     // if (d_oracle.last_level_pair(u_id, v_id)) {
                     //     refine_blocks_edge_cut(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
                     // } else {
-                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id, lmax);
+                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax);
                     // }
                 }
 
@@ -186,6 +187,7 @@ namespace HeiProMap {
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
+                           block_conn_t &block_conn,
                            partition_t u_id,
                            partition_t v_id,
                            weight_t lmax) {
@@ -343,6 +345,7 @@ namespace HeiProMap {
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                block_conn.move(g, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
 
@@ -359,6 +362,7 @@ namespace HeiProMap {
                                     bv_manager_t &bv_manager,
                                     p_manager_t &p_manager,
                                     q_graph_t &q_graph,
+                                    block_conn_t &block_conn,
                                     partition_t u_id,
                                     partition_t v_id,
                                     weight_t lmax) {
@@ -512,6 +516,7 @@ namespace HeiProMap {
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                block_conn.move(g, vertex, vertex_id, move_id);
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
 

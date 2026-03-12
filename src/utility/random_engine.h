@@ -42,6 +42,10 @@ namespace HeiProMap {
         std::uniform_real_distribution<f64> dis_f64;
         std::mt19937 generator;
 
+        size_t cache_size = 1024;
+        size_t cache_i = 1024;
+        std::vector<f32> cache;
+
         RandomEngine() = default;
 
         explicit RandomEngine(const u64 t_seed) {
@@ -54,7 +58,17 @@ namespace HeiProMap {
             dis_u64 = std::uniform_int_distribution<u64>(std::numeric_limits<u64>::min(), std::numeric_limits<u64>::max());
         }
 
-        f32 get_f32() { return dis_f32(generator); }
+        f32 get_f32() {
+            if (cache_i == cache_size) {
+                cache_i = 0;
+                cache.resize(cache_size);
+                for (size_t i = 0; i < cache_size; i++) {
+                    cache[i] = dis_f32(generator);
+                }
+            }
+            cache_i += 1;
+            return cache[cache_i - 1];
+        }
 
         f32 get_f32(const f32 low, const f32 high) { return low + dis_f32(generator) * (high - low); }
 

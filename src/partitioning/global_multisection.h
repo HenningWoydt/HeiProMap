@@ -171,15 +171,15 @@ namespace HeiProMap {
                 } else if (config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_RECURSIVE) {
-                    metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_RECURSIVE, item.seed, partition);
+                    // metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_RECURSIVE, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
-                    metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_KWAY, item.seed, partition);
+                    // metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_KWAY, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_DEFAULT) {
-                    mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_DEFAULT, item.seed, partition);
+                    // mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_DEFAULT, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_QUALITY) {
-                    mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_QUALITY, item.seed, partition);
+                    // mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_QUALITY, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_HIGHEST_QUALITY) {
-                    mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_HIGHEST_QUALITY, item.seed, partition);
+                    // mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_HIGHEST_QUALITY, item.seed, partition);
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();

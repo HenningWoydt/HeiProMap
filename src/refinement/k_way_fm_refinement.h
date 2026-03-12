@@ -93,6 +93,7 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
+                    block_conn_t &block_conn,
                     f64 imbalance) override {
             ScopedTimer _t("refinement", "KWayFMRefinement", "refine");
 
@@ -105,13 +106,15 @@ namespace HeiProMap {
 
                 // insert all boundary vertices
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, j, u) {
+                    forall_bv_id_iu(bv_manager, id, j, u)
+                        {
                             partition_t u_id = p_manager[u];
                             weight_t u_weight = g.v_weights[u];
 
                             // find all connected partitions to u
                             block_marker += 1;
-                            forall_guiv(g, u, i, v) {
+                            forall_guiv(g, u, i, v)
+                                {
                                     partition_t v_id = p_manager[v];
                                     if (v_id == u_id) { continue; }
                                     if (block_used[v_id] == block_marker) { continue; }
@@ -177,7 +180,8 @@ namespace HeiProMap {
                     if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) { break; }
 
                     // we have to push or update the neighbors that were not moved already
-                    forall_guiv(g, vertex, i, neighbor) {
+                    forall_guiv(g, vertex, i, neighbor)
+                        {
                             if (vertex_used[neighbor] == vertex_marker) { continue; }
                             if (!is_boundary(g, p_manager, neighbor)) { continue; }
 
@@ -185,7 +189,8 @@ namespace HeiProMap {
                             weight_t neighbor_weight = g.v_weights[neighbor];
 
                             block_marker += 1;
-                            forall_guiv(g, neighbor, j, v) {
+                            forall_guiv(g, neighbor, j, v)
+                                {
                                     partition_t v_id = p_manager[v];
                                     if (v_id == neighbor_id) { continue; }
                                     if (block_used[v_id] == block_marker) { continue; }
@@ -220,6 +225,7 @@ namespace HeiProMap {
 
                     bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                     q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                    block_conn.move(g, vertex, vertex_id, move_id);
                     p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 }
             }

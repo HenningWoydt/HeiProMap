@@ -266,13 +266,13 @@ namespace HeiProMap {
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         KWayFMRefinementConfiguration k_way_fm_refinement_config = KWayFMRefinementConfiguration("K-Way-FM");
         MultiTryFmRefinementConfiguration multi_try_fm_refinement_config = MultiTryFmRefinementConfiguration("Multi Try-FM");
-        TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
-        ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
+        // TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
+        // ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
         // ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
 
-        WaveRefinementConfiguration wave_refinement_configuration = WaveRefinementConfiguration("Wave Refinement");
-        LightningRefinementConfiguration lightning_refinement_configuration = LightningRefinementConfiguration("Lightning Refinement");
+        // WaveRefinementConfiguration wave_refinement_configuration = WaveRefinementConfiguration("Wave Refinement");
+        // LightningRefinementConfiguration lightning_refinement_configuration = LightningRefinementConfiguration("Lightning Refinement");
 
         AlgorithmConfiguration() = default;
 
@@ -375,7 +375,7 @@ namespace HeiProMap {
 
             // initialize two vertex label propagation
             if (use_default || is_set("--refinement-two-vertex-label-propagation-enable")) {
-                two_vertex_label_propagation_config.enabled = get("--refinement-two-vertex-label-propagation-enable") == "1";
+                // two_vertex_label_propagation_config.enabled = get("--refinement-two-vertex-label-propagation-enable") == "1";
             }
         }
 
@@ -452,9 +452,9 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            // global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
-            global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
@@ -462,8 +462,8 @@ namespace HeiProMap {
             global_multisection_config.kappa = 1;
 
             // enable label propagation
-            label_propagation_config.enabled = false;
-            label_propagation_config.max_iteration = 1;
+            label_propagation_config.enabled = true;
+            label_propagation_config.max_iteration = 25;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = false;
@@ -471,7 +471,7 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha = 100.0;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled = false;
             quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 8;
@@ -536,10 +536,10 @@ namespace HeiProMap {
         void set_strong() {
             initial_c = 8;
 
-            n_max_partitions = 100;
-            n_refinement_iterations = 5;
-            n_v_cycle = 3;
-            v_cycle_max_depth = 3;
+            n_max_partitions = 25;
+            n_refinement_iterations = 1;
+            n_v_cycle = 5;
+            v_cycle_max_depth = 2;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -593,9 +593,9 @@ namespace HeiProMap {
             flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
 
-            wave_refinement_configuration.enabled = false;
+            // wave_refinement_configuration.enabled = false;
 
-            lightning_refinement_configuration.enabled = false;
+            // lightning_refinement_configuration.enabled = false;
         }
 
         void set_experimental() {

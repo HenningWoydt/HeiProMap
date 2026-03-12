@@ -31,33 +31,33 @@
 #include <string>
 
 namespace HeiProMap {
-    #ifndef ASSERT_ENABLED
-    #define ASSERT_ENABLED false
-    #endif
+#ifndef ASSERT_ENABLED
+#define ASSERT_ENABLED false
+#endif
 
-    #ifndef HEAVYASSERT_ENABLED
-    #define HEAVYASSERT_ENABLED false
-    #endif
+#ifndef HEAVYASSERT_ENABLED
+#define HEAVYASSERT_ENABLED false
+#endif
 
-    #if (ASSERT_ENABLED)
+#if (ASSERT_ENABLED)
     // Use ASSERT for quick operations like O(1) operations, for other Asserts use HEAVYASSERT
-    #define ASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
-    #else
-    #define ASSERT(condition) ((void)0)
-    #endif
+#define ASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
+#else
+#define ASSERT(condition) ((void)0)
+#endif
 
 
-    #if (HEAVYASSERT_ENABLED)
+#if (HEAVYASSERT_ENABLED)
     // Use HEAVYASSERT for expensive operations like O(n), O(n^2) operations, for faster Asserts use ASSERT
-    #define HEAVYASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
-    #else
-    #define HEAVYASSERT(condition) ((void)0)
-    #endif
+#define HEAVYASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
+#else
+#define HEAVYASSERT(condition) ((void)0)
+#endif
 
-    #ifdef __GNUC__  // (GCC or Clang)
-    #define ASSUME_ALIGNED(dtype, ptr, alignment) (dtype) __builtin_assume_aligned((ptr), (alignment))
-    #elif defined(_MSC_VER)  // MSVC
-    #include <intrin.h>
+#ifdef __GNUC__  // (GCC or Clang)
+#define ASSUME_ALIGNED(dtype, ptr, alignment) (dtype) __builtin_assume_aligned((ptr), (alignment))
+#elif defined(_MSC_VER)  // MSVC
+#include <intrin.h>
     // MSVC does not have a direct equivalent to __builtin_assume_aligned,
     // but we can at least use __assume to tell the compiler something
     // about the pointer. This is not exactly the same, though.
@@ -65,20 +65,24 @@ namespace HeiProMap {
         __assume(ptr != nullptr);
         return ptr;
     }
-    #else
+#else
     // Fallback: do nothing
-    #define ASSUME_ALIGNED(dtype, ptr, alignment) (ptr)
-    #endif
+#define ASSUME_ALIGNED(dtype, ptr, alignment) (ptr)
+#endif
 
 
     // Macro to iterate over the neighborhood of vertex u of a graph
-    #define forall_guivw(g, u, i, v, w) for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
-    #define forall_guiv(g, u, i, v)  for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-    #define forall_gu(g, u) for (vertex_t u = 0; u < g.n; ++u) {
-    #define endfor }
+#define forall_guivw(g, u, i, v, w) for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
+#define forall_guiv(g, u, i, v)  for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
+#define forall_gu(g, u) for (vertex_t u = 0; u < g.n; ++u) {
+#define endfor }
 
     // Macro to iterate over all boundary vertices
-    #define forall_bv_id_iu(bv_manager, id, i, u) for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
+#define forall_bv_id_iu(bv_manager, id, i, u) for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
+
+    // Macro to iterate over the connections of a vertex
+#define forall_bc_ui_id(block_conn, u, i, id) for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
+#define forall_bc_ui_id_idw(block_conn, u, i, id, id_w) for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t id_w = block_conn.get_w(i);
 }
 
 #endif //HEIPROMAP_MACROS_H

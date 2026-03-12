@@ -33,6 +33,7 @@
 #include "../utility/utils.h"
 #include "ISerialRefiner.h"
 
+/*
 namespace HeiProMap {
     class ThreeVertexLabelPropagationConfiguration final : public ISerialRefinerConfiguration {
     public:
@@ -99,6 +100,7 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
+                    block_conn_t &block_conn,
                     f64 imbalance) override {
             ScopedTimer _t("refinement", "ThreeVertexLabelPropagationRefinement", "refine");
 
@@ -258,5 +260,7 @@ namespace HeiProMap {
         }
     };
 }
+
+*/
 
 #endif //HEIPROMAP_THREE_VERTEX_LABEL_PROPAGATION_REFINEMENT_H

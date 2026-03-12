@@ -163,6 +163,7 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
+                    block_conn_t &block_conn,
                     f64 imbalance) override {
             //
             {
@@ -195,7 +196,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < pairs_size; ++i) {
                     partition_t left_id = pairs[i].id1;
                     partition_t right_id = pairs[i].id2;
-                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, left_id, right_id, imbalance);
+                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, left_id, right_id, imbalance);
                 }
 
                 // swap active
@@ -212,6 +213,7 @@ namespace HeiProMap {
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
+                           block_conn_t &block_conn,
                            partition_t left_id,
                            partition_t right_id,
                            f64 imbalance) {
@@ -336,7 +338,7 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                change_boundary(g, bv_manager, p_manager, q_graph, is_left, left_id, right_id);
+                change_boundary(g, bv_manager, p_manager, q_graph, block_conn, is_left, left_id, right_id);
 
                 active_next_round[left_id] = 1;
                 active_next_round[right_id] = 1;
@@ -618,6 +620,7 @@ namespace HeiProMap {
                                         bv_manager_t &bv_manager,
                                         p_manager_t &p_manager,
                                         q_graph_t &q_graph,
+                                        block_conn_t &block_conn,
                                         std::vector<u8> &is_left,
                                         partition_t left_id,
                                         partition_t right_id) {
@@ -644,6 +647,7 @@ namespace HeiProMap {
                     }
 
                     q_graph.move(g, p_manager, u, left_id, right_id);
+                    block_conn.move(g, u, left_id, right_id);
                     p_manager.move(u, g.v_weights[u], left_id, right_id);
                 }
             }
@@ -663,6 +667,7 @@ namespace HeiProMap {
                     }
 
                     q_graph.move(g, p_manager, u, right_id, left_id);
+                    block_conn.move(g, u, right_id, left_id);
                     p_manager.move(u, g.v_weights[u], right_id, left_id);
                 }
             }
@@ -673,6 +678,7 @@ namespace HeiProMap {
                              bv_manager_t &bv_manager,
                              p_manager_t &p_manager,
                              q_graph_t &q_graph,
+                             block_conn_t &block_conn,
                              std::vector<u8> &changed,
                              partition_t left_id,
                              partition_t right_id) {
@@ -690,6 +696,7 @@ namespace HeiProMap {
                     }
 
                     q_graph.move(g, p_manager, old_u, left_id, right_id);
+                    block_conn.move(g, old_u, left_id, right_id);
                     p_manager.move(old_u, g.v_weights[old_u], left_id, right_id);
                 } else {
                     if (bv_manager.is_boundary(old_u)) {
@@ -699,6 +706,7 @@ namespace HeiProMap {
                     }
 
                     q_graph.move(g, p_manager, old_u, right_id, left_id);
+                    block_conn.move(g, old_u, right_id, left_id);
                     p_manager.move(old_u, g.v_weights[old_u], right_id, left_id);
                 }
             }

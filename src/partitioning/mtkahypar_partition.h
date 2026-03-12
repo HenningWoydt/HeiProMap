@@ -27,6 +27,9 @@
 #ifndef HEIPROMAP_MTKAHYPAR_PARTITION_H
 #define HEIPROMAP_MTKAHYPAR_PARTITION_H
 
+/*
+#include <memory>
+
 #include "../definitions.h"
 #include "../utility/assert_state.h"
 #include "../../extern/local/mt-kahypar/include/mtkahypar.h"
@@ -58,7 +61,7 @@ namespace HeiProMap {
         // Init library (thread pool, etc.)
         const u64 n_threads = 1;
         mt_kahypar_initialize((size_t) n_threads,
-                              false /* interleaved NUMA allocation policy */);
+                              false);
 
         // Preset -> context
         mt_kahypar_preset_type_t preset;
@@ -83,7 +86,7 @@ namespace HeiProMap {
         mt_kahypar_set_partitioning_parameters(context,
                                                (mt_kahypar_partition_id_t) k,
                                                (double) imb,
-                                               CUT /* objective for graphs */);
+                                               CUT);
 
         // NOTE: in your other code this is mt_kahypar_set_seed(seed) (no context).
         // The C API differs by version; this matches your working snippet.
@@ -166,5 +169,6 @@ namespace HeiProMap {
         mt_kahypar_free_context(context);
     }
 }
+*/
 
 #endif //HEIPROMAP_MTKAHYPAR_PARTITION_H

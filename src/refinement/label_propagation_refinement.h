@@ -45,12 +45,6 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
 
-        AlignedArray<u32> vertex_used;
-        u32 vertex_marker = 0;
-
-        AlignedArray<u32> block_used;
-        u32 block_marker = 0;
-
         AlignedArray<vertex_t> curr_boundary;
         size_t curr_boundary_size = 0;
 
@@ -79,9 +73,6 @@ namespace HeiProMap {
 
             config = dynamic_cast<const LabelPropagationConfiguration *>(&i_config);
 
-            vertex_used.initialize(m_n, 0);
-            block_used.initialize(m_m, 0);
-
             curr_boundary.initialize(m_n);
             curr_boundary_size = 0;
 
@@ -95,30 +86,32 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
+                    block_conn_t &block_conn,
                     f64 imbalance) override {
             ScopedTimer _t("refinement", "LabelPropagationRefinement", "refine");
-
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             bool positive_move_occurred = true;
             for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
 
-                curr_boundary_size = 0;
-                for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u)
-                        {
-                            curr_boundary[curr_boundary_size++] = u;
-                        }
-                    endfor
+                {
+                    // ScopedTimer _t("refinement", "LabelPropagationRefinement", "get_boundary");
+                    curr_boundary_size = 0;
+                    for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
+                        forall_bv_id_iu(bv_manager, id, i, u)
+                            {
+                                curr_boundary[curr_boundary_size++] = u;
+                            }
+                        endfor
+                    }
+                    fast_shuffle_unchecked(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
+                    // std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
                 }
-                std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
 
-                vertex_marker += 1;
                 for (size_t j = 0; j < curr_boundary_size; ++j) {
                     vertex_t u = curr_boundary[j];
 
-                    if (vertex_used[u] == vertex_marker) { continue; }
                     if (!bv_manager.is_boundary(u)) { continue; }
 
                     weight_t u_weight = g.v_weights[u];
@@ -129,42 +122,42 @@ namespace HeiProMap {
                     weight_t best_qap_delta = min_improvement;
                     f32 counter = 0;
 
-                    block_marker += 1;
-                    block_used[u_id] = block_marker;
-                    forall_guiv(g, u, i, v)
-                        {
-                            partition_t v_id = p_manager[v];
-                            weight_t v_id_weight = p_manager.get_bweight(v_id);
+                    {
+                        // ScopedTimer _t("refinement", "LabelPropagationRefinement", "find_move");
 
-                            if (block_used[v_id] != block_marker) {
+                        forall_bc_ui_id(block_conn, u, i, id)
+                            {
+                                if (id == u_id) { continue; }
+
+                                weight_t v_id_weight = p_manager.get_bweight(id);
+
                                 if (v_id_weight + u_weight <= lmax) {
-                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle, block_conn);
 
                                     if (qap_delta > best_qap_delta) {
-                                        best_id = v_id;
+                                        best_id = id;
                                         best_qap_delta = qap_delta;
                                         counter = 1.0;
                                     } else if (qap_delta == best_qap_delta) {
                                         counter += 1.0;
                                         // choose with probability 1/counter as it ensures uniform distribution
-                                        if (random_engine.get_f32() < 1.0f / counter) { best_id = v_id; }
+                                        if (random_engine.get_f32() < 1.0f / counter) { best_id = id; }
                                     }
                                 }
-                                block_used[v_id] = block_marker;
                             }
-                        }
-                    endfor
-
-                    if (best_id != NO_ID) {
-                        // choose if positive, if 0-gain choose 50% of the time
-                        if (best_qap_delta >= min_improvement || random_engine.get_f32() < 0.5) {
-                            bv_manager.move(g, p_manager, u, u_id, best_id);
-                            q_graph.move(g, p_manager, u, u_id, best_id);
-                            p_manager.move(u, u_weight, u_id, best_id);
-                            positive_move_occurred |= best_qap_delta > 0;
-                        }
+                        endfor
                     }
-                    vertex_used[u] = vertex_marker;
+
+                    if (best_id != NO_ID && (best_qap_delta >= min_improvement || random_engine.get_f32() < 0.5)) {
+                        // choose if positive, if 0-gain choose 50% of the time
+                        // ScopedTimer _t("refinement", "LabelPropagationRefinement", "make_move");
+
+                        bv_manager.move(g, p_manager, u, u_id, best_id);
+                        q_graph.move(g, p_manager, u, u_id, best_id);
+                        block_conn.move(g, u, u_id, best_id);
+                        p_manager.move(u, u_weight, u_id, best_id);
+                        positive_move_occurred |= best_qap_delta > 0;
+                    }
                 }
             }
         }
