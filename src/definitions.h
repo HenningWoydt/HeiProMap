@@ -51,6 +51,7 @@ namespace HeiProMap {
     typedef u64 partition_t;
 
     constexpr size_t HEAP_TOMBSTONE = std::numeric_limits<size_t>::max();
+    constexpr partition_t NO_ID = std::numeric_limits<partition_t>::max();
 
     struct CommandLineOption {
         std::string large_key;

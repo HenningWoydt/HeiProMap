@@ -62,6 +62,9 @@ namespace HeiProMap {
         const LabelPropagationConfiguration *config = nullptr;
 
     public:
+        weight_t min_improvement = 0;
+
+    public:
         LabelPropagationRefinement() = default;
 
         ~LabelPropagationRefinement() override = default;
@@ -103,7 +106,8 @@ namespace HeiProMap {
 
                 curr_boundary_size = 0;
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u) {
+                    forall_bv_id_iu(bv_manager, id, i, u)
+                        {
                             curr_boundary[curr_boundary_size++] = u;
                         }
                     endfor
@@ -121,14 +125,14 @@ namespace HeiProMap {
                     partition_t u_id = p_manager[u];
 
                     // make the move that reduces qap the most
-                    partition_t best_id = u_id;
-                    weight_t best_id_weight = 0;
-                    s64 best_qap_delta = -10;
+                    partition_t best_id = NO_ID;
+                    weight_t best_qap_delta = min_improvement;
                     f32 counter = 0;
 
                     block_marker += 1;
                     block_used[u_id] = block_marker;
-                    forall_guiv(g, u, i, v) {
+                    forall_guiv(g, u, i, v)
+                        {
                             partition_t v_id = p_manager[v];
                             weight_t v_id_weight = p_manager.get_bweight(v_id);
 
@@ -136,17 +140,14 @@ namespace HeiProMap {
                                 if (v_id_weight + u_weight <= lmax) {
                                     s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
-                                    if (qap_delta > best_qap_delta || (qap_delta == best_qap_delta && v_id_weight < best_id_weight)) {
+                                    if (qap_delta > best_qap_delta) {
                                         best_id = v_id;
-                                        best_id_weight = v_id_weight;
                                         best_qap_delta = qap_delta;
                                         counter = 1.0;
-                                    } else if (qap_delta == best_qap_delta && qap_delta != -1) {
+                                    } else if (qap_delta == best_qap_delta) {
                                         counter += 1.0;
                                         // choose with probability 1/counter as it ensures uniform distribution
-                                        if (random_engine.get_f32() < 1.0f / counter) {
-                                            best_id = v_id;
-                                        }
+                                        if (random_engine.get_f32() < 1.0f / counter) { best_id = v_id; }
                                     }
                                 }
                                 block_used[v_id] = block_marker;
@@ -154,9 +155,9 @@ namespace HeiProMap {
                         }
                     endfor
 
-                    if (best_id != u_id) {
+                    if (best_id != NO_ID) {
                         // choose if positive, if 0-gain choose 50% of the time
-                        if (best_qap_delta > 0 || random_engine.get_f32() < 0.5) {
+                        if (best_qap_delta >= min_improvement || random_engine.get_f32() < 0.5) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             p_manager.move(u, u_weight, u_id, best_id);

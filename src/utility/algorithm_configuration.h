@@ -234,7 +234,9 @@ namespace HeiProMap {
         // random initialization
         u64 seed = 0;
 
-        u64 n_v_cycle = 1;
+        u64 n_max_partitions = 1;
+        u64 n_v_cycle = 0;
+        u64 v_cycle_max_depth = 100;
         u64 initial_c = 8;
 
         // coarsening algorithm
@@ -256,6 +258,8 @@ namespace HeiProMap {
         // rebalance algorithm
         std::string rebalancing_algorithm_string;
         REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
+
+        u64 n_refinement_iterations = 1;
 
         // refinement algorithms
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
@@ -532,6 +536,11 @@ namespace HeiProMap {
         void set_strong() {
             initial_c = 8;
 
+            n_max_partitions = 100;
+            n_refinement_iterations = 5;
+            n_v_cycle = 3;
+            v_cycle_max_depth = 3;
+
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
             // coarsening_algorithm_string = "global-paths";
@@ -554,15 +563,15 @@ namespace HeiProMap {
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 3;
+            global_multisection_config.kappa = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            label_propagation_config.max_iteration = 2;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 2;
+            quotient_graph_refinement_config.max_iteration = 1;
             quotient_graph_refinement_config.alpha = 1000.0;
 
             // enable k-way fm
