@@ -571,7 +571,7 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 1000.0;
 
             // enable k-way fm

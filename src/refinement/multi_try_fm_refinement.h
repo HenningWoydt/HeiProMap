@@ -229,7 +229,7 @@ namespace HeiProMap {
 
                             moves[moves_size++] = Move(vertex, vertex_id, move_id);
                             curr_qap_gain += move_qap_delta;
-                            if (curr_qap_gain > max_qap_gain) {
+                            if (curr_qap_gain >= max_qap_gain) {
                                 best_idx = moves_size;
                                 max_qap_gain = curr_qap_gain;
 
@@ -300,6 +300,7 @@ namespace HeiProMap {
                             weight_t vertex_weight = g.v_weights[vertex];
                             partition_t vertex_id = moves[moves_size - 1 - i].to_move_id;
                             partition_t move_id = moves[moves_size - 1 - i].u_id;
+                            vertex_used[vertex] = vertex_mark - 1;
 
                             p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                         }
