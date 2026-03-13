@@ -232,7 +232,7 @@ namespace HeiProMap {
                 iteration += 1;
 
                 // get boundary vertices
-                determine_boundary_vertices(g, bv_manager, p_manager, left_id, right_id);
+                determine_boundary_vertices(g, bv_manager, p_manager, block_conn, left_id, right_id);
 
                 // calc max weight for each bfs
                 weight_t adapt_lmax = std::ceil((1.0 + (imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k));
@@ -246,7 +246,8 @@ namespace HeiProMap {
                 seen_mark += 2;
                 vertex_t left_seed_vertex = left_boundary[0];
                 vertex_t right_seed_vertex = right_boundary[0];
-                forall_guiv(g, left_seed_vertex, i, v) {
+                forall_guiv(g, left_seed_vertex, i, v)
+                    {
                         if (p_manager[v] == right_id) {
                             right_seed_vertex = v;
                             break;
@@ -348,16 +349,18 @@ namespace HeiProMap {
         void determine_boundary_vertices(const graph_t &g,
                                          const bv_manager_t &bv_manager,
                                          const p_manager_t &p_manager,
+                                         const block_conn_t &block_conn,
                                          partition_t left_id,
                                          partition_t right_id) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "determine_boundary_vertices");
 
             left_boundary_size = 0;
             left_boundary_weight = 0;
-            forall_bv_id_iu(bv_manager, left_id, i, u) {
-                    forall_guiv(g, u, j, v) {
-                            partition_t v_id = p_manager[v];
-                            if (v_id == right_id) {
+            forall_bv_id_iu(bv_manager, left_id, i, u)
+                {
+                    forall_bc_ui_id(block_conn, u, j, id)
+                        {
+                            if (id == right_id) {
                                 left_boundary[left_boundary_size++] = u;
                                 left_boundary_weight += g.v_weights[u];
                                 break;
@@ -366,14 +369,15 @@ namespace HeiProMap {
                     endfor
                 }
             endfor
-            std::shuffle(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine.generator);
+            fast_shuffle_unchecked(left_boundary.get_ptr(), left_boundary.get_ptr() + left_boundary_size, random_engine.generator);
 
             right_boundary_size = 0;
             right_boundary_weight = 0;
-            forall_bv_id_iu(bv_manager, right_id, i, u) {
-                    forall_guiv(g, u, j, v) {
-                            partition_t v_id = p_manager[v];
-                            if (v_id == left_id) {
+            forall_bv_id_iu(bv_manager, right_id, i, u)
+                {
+                    forall_bc_ui_id(block_conn, u, j, id)
+                        {
+                            if (id == left_id) {
                                 right_boundary[right_boundary_size++] = u;
                                 right_boundary_weight += g.v_weights[u];
                                 break;
@@ -382,7 +386,7 @@ namespace HeiProMap {
                     endfor
                 }
             endfor
-            std::shuffle(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine.generator);
+            fast_shuffle_unchecked(right_boundary.get_ptr(), right_boundary.get_ptr() + right_boundary_size, random_engine.generator);
         }
 
         weight_t determine_region(const graph_t &g,
@@ -426,7 +430,8 @@ namespace HeiProMap {
                     region[region_size++] = u;
                     region_marker[u] = mark;
                     curr_weight += g.v_weights[u];
-                    forall_guiv(g, u, i, v) {
+                    forall_guiv(g, u, i, v)
+                        {
                             partition_t v_id = p_manager[v];
                             if (v_id != id) { continue; }
 
@@ -456,7 +461,8 @@ namespace HeiProMap {
                 vertex_t u = left_region[j];
                 left_penalties[u] = 0;
                 right_penalties[u] = 0;
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         if (region_marker[v] == left_mark || region_marker[v] == right_mark) { continue; } // ignore neighbors that are in the region, they will be handled later
                         partition_t v_id = p_manager[v];
 
@@ -469,7 +475,8 @@ namespace HeiProMap {
                 vertex_t u = right_region[j];
                 left_penalties[u] = 0;
                 right_penalties[u] = 0;
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         if (region_marker[v] == right_mark || region_marker[v] == left_mark) { continue; } // ignore neighbors that are in the region, they will be handled later
                         partition_t v_id = p_manager[v];
 
@@ -500,7 +507,8 @@ namespace HeiProMap {
                 vertex_t u = left_region[j];
                 ASSERT(region_marker[u] == left_mark);
 
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         if (region_marker[v] == right_mark) {
                             vertex_t new_u = translation_table.get_n(u);
                             vertex_t new_v = translation_table.get_n(v);
@@ -529,9 +537,10 @@ namespace HeiProMap {
                 vertex_t u = right_region[j];
                 ASSERT(region_marker[u] == right_mark);
 
-                forall_guivw(g, u, i, v, w) {
+                forall_guivw(g, u, i, v, w)
+                    {
                         if (region_marker[v] != right_mark) { continue; } // vertex gets handled by penalties, or if v belongs to the left region, no edge is made
-                        if (u < v) { continue; }                          // no double edges
+                        if (u < v) { continue; } // no double edges
 
                         vertex_t new_u = translation_table.get_n(u);
                         vertex_t new_v = translation_table.get_n(v);
