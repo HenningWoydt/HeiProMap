@@ -539,7 +539,7 @@ namespace HeiProMap {
             n_max_partitions = 25;
             n_refinement_iterations = 1;
             n_v_cycle = 5;
-            v_cycle_max_depth = 2;
+            v_cycle_max_depth = 4;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -563,7 +563,7 @@ namespace HeiProMap {
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 10;
+            global_multisection_config.kappa = 5;
 
             // enable label propagation
             label_propagation_config.enabled = true;
