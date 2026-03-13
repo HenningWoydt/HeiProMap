@@ -157,6 +157,35 @@ namespace HeiProMap {
         return qap_delta;
     }
 
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
+    inline std::pair<partition_t, weight_t> get_u_qap_delta(const GraphT &g,
+                                                            const vertex_t u,
+                                                            const partition_t old_id,
+                                                            const std::vector<partition_t> &new_ids,
+                                                            const PartitionManagerT &p_manager,
+                                                            DistanceOracleT &d_oracle,
+                                                            BlockConnT &block_conn,
+                                                            std::vector<weight_t> &qap_deltas) {
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                weight_t old_d = d_oracle.get(id, old_id);
+
+                for (size_t j = 0; j < new_ids.size(); j++) {
+                    qap_deltas[j] += (old_d - d_oracle.get(id, new_ids[j])) * idw;
+                }
+            }
+        endfor
+
+        std::pair<partition_t, weight_t> best = {new_ids[0], qap_deltas[0]};
+        for (size_t j = 1; j < new_ids.size(); j++) {
+            if (qap_deltas[j] > best.second) {
+                best.first = new_ids[j];
+                best.second = qap_deltas[j];
+            }
+        }
+        return best;
+    }
+
     template<typename GraphT, typename PartitionManagerT>
     inline s64 get_u_edge_cut_delta(const GraphT &g,
                                     const vertex_t u,

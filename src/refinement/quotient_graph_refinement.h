@@ -134,8 +134,6 @@ namespace HeiProMap {
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
                     f64 imbalance) override {
-            ScopedTimer _t("refinement", "QuotientGraphRefinement", "refine");
-
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             active_this_round.initialize(m_k, 1);
@@ -143,6 +141,7 @@ namespace HeiProMap {
 
             u64 iteration = 0;
             while (iteration < config->max_iteration) {
+                ScopedTimer _t("refinement", "QuotientGraphRefinement", "get_pairs");
                 iteration += 1;
 
                 // determine all pairs in the quotient graph
@@ -168,6 +167,7 @@ namespace HeiProMap {
 
                 std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
 
+                _t.stop();
                 for (size_t j = 0; j < pairs_size; ++j) {
                     auto [u_id, v_id, distance] = pairs[j];
                     // if (d_oracle.last_level_pair(u_id, v_id)) {
@@ -196,32 +196,43 @@ namespace HeiProMap {
 
             size_t max_n_swaps = 0;
 
-            // add all boundary vertices with gain
-            boundary_vertices_u.clear();
-            boundary_vertices_v.clear();
-            vertex_mark += 1;
-            forall_bv_id_iu(bv_manager, u_id, k, u) {
-                    forall_guiv(g, u, i, v) {
-                            if (p_manager[v] == v_id) {
-                                // u is connected to block v_id
-                                if (vertex_used[u] != vertex_mark) {
+            {
+                ScopedTimer _t("refinement", "QuotientGraphRefinement", "initial_qap");
+
+                // add all boundary vertices with gain
+                boundary_vertices_u.clear();
+                boundary_vertices_v.clear();
+                vertex_mark += 1;
+                forall_bv_id_iu(bv_manager, u_id, j, u)
+                    {
+                        forall_bc_ui_id(block_conn, u, i, id)
+                            {
+                                if (id == v_id) {
                                     s64 qap_delta_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                                     boundary_vertices_u.push(u, qap_delta_u);
-                                    vertex_used[u] = vertex_mark;
-                                    max_n_swaps += 1;
-                                }
-
-                                if (vertex_used[v] != vertex_mark) {
-                                    s64 qap_delta_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
-                                    boundary_vertices_v.push(v, qap_delta_v);
-                                    vertex_used[v] = vertex_mark;
-                                    max_n_swaps += 1;
+                                    break;
                                 }
                             }
-                        }
-                    endfor
-                }
-            endfor
+                        endfor
+                    }
+                endfor
+
+                forall_bv_id_iu(bv_manager, v_id, j, v)
+                    {
+                        forall_bc_ui_id(block_conn, v, i, id)
+                            {
+                                if (id == u_id) {
+                                    s64 qap_delta_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
+                                    boundary_vertices_v.push(v, qap_delta_v);
+                                    break;
+                                }
+                            }
+                        endfor
+                    }
+                endfor
+            }
+
+            max_n_swaps = 100000;
 
             // start executing moves based on the TopGain method
             vertex_mark += 1;
@@ -234,119 +245,128 @@ namespace HeiProMap {
             f64 qap_gain_mean = 0.0;
             f64 qap_gain_var = 0.0;
 
-            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
-                // determine from which block to choose
-                bool choose_u = true;
-                // 1. if one block is empty, then choose the other one
-                if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
-                    choose_u = boundary_vertices_v.empty();
-                } else {
-                    // 2. choose the block with greater gain and randomly if even
-                    if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
-                        choose_u = false;
-                    } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                        choose_u = random_engine.get_f32() < 0.5;
+            {
+                ScopedTimer _t("refinement", "QuotientGraphRefinement", "process_queue");
+
+                while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
+                    // determine from which block to choose
+                    bool choose_u = true;
+                    // 1. if one block is empty, then choose the other one
+                    if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
+                        choose_u = boundary_vertices_v.empty();
+                    } else {
+                        // 2. choose the block with greater gain and randomly if even
+                        if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
+                            choose_u = false;
+                        } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
+                            choose_u = random_engine.get_f32() < 0.5;
+                        }
+
+                        // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
+                        weight_t u_id_weight = p_manager.get_bweight(u_id);
+                        weight_t v_id_weight = p_manager.get_bweight(v_id);
+
+                        if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
+                        if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
+                        if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                     }
 
-                    // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
-                    weight_t u_id_weight = p_manager.get_bweight(u_id);
-                    weight_t v_id_weight = p_manager.get_bweight(v_id);
+                    // choose the priority queue
+                    IndexedMaxHeap<s64> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
 
-                    if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
-                    if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
-                }
+                    vertex_t vertex = boundary_vertices.top_key();
+                    s64 qap_delta = boundary_vertices.top();
+                    weight_t vertex_weight = g.v_weights[vertex];
+                    partition_t vertex_id = choose_u ? u_id : v_id;
+                    partition_t move_id = choose_u ? v_id : u_id;
+                    boundary_vertices.pop();
 
-                // choose the priority queue
-                IndexedMaxHeap<s64> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
+                    // move the vertex
+                    moves[moves_size++] = vertex;
+                    curr_qap_gain += qap_delta;
+                    if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
+                        best_idx = moves_size;
+                        max_qap_gain = curr_qap_gain;
 
-                vertex_t vertex = boundary_vertices.top_key();
-                s64 qap_delta = boundary_vertices.top();
-                weight_t vertex_weight = g.v_weights[vertex];
-                partition_t vertex_id = choose_u ? u_id : v_id;
-                partition_t move_id = choose_u ? v_id : u_id;
-                boundary_vertices.pop();
-
-                // move the vertex
-                moves[moves_size++] = vertex;
-                curr_qap_gain += qap_delta;
-                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
-                    best_idx = moves_size;
-                    max_qap_gain = curr_qap_gain;
-
-                    steps_since_last_improvement = 0;
-                    qap_gain_mean = 0.0;
-                    qap_gain_var = 0.0;
-                }
-
-                // make move in structures
-                p_manager.move(vertex, vertex_weight, vertex_id, move_id);
-                vertex_used[vertex] = vertex_mark;
-
-                steps_since_last_improvement += 1;
-                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
-                f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
-
-                qap_gain_mean = new_qap_gain_mean;
-                qap_gain_var = new_qap_gain_var;
-
-                if (config->use_preemptive_exit) {
-                    if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
-                        break;
+                        steps_since_last_improvement = 0;
+                        qap_gain_mean = 0.0;
+                        qap_gain_var = 0.0;
                     }
-                }
 
-                // we have to push or update the neighbors that were not moved already
-                forall_guiv(g, vertex, i, neighbor) {
-                        if (vertex_used[neighbor] == vertex_mark) { continue; }
+                    // make move in structures
+                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                    vertex_used[vertex] = vertex_mark;
 
-                        partition_t neighbor_id = p_manager[neighbor];
+                    steps_since_last_improvement += 1;
+                    f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
+                    f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
 
-                        if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
+                    qap_gain_mean = new_qap_gain_mean;
+                    qap_gain_var = new_qap_gain_var;
 
-                        partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
-
-                        bool is_connected_to_new_id;
-                        s64 new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
-
-                        if (!is_connected_to_new_id) { continue; }
-
-                        if (neighbor_id == u_id) {
-                            boundary_vertices_u.push_update(neighbor, new_qap_delta);
-                        } else {
-                            boundary_vertices_v.push_update(neighbor, new_qap_delta);
+                    if (config->use_preemptive_exit) {
+                        if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
+                            break;
                         }
                     }
-                endfor
 
-                // remove vertex from u if it is not boundary
-                while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
+                    // we have to push or update the neighbors that were not moved already
+                    forall_guiv(g, vertex, i, neighbor)
+                        {
+                            if (vertex_used[neighbor] == vertex_mark) { continue; }
 
-                // remove vertex from v if it is not boundary
-                while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
+                            partition_t neighbor_id = p_manager[neighbor];
+
+                            if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
+
+                            partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
+
+                            bool is_connected_to_new_id;
+                            s64 new_qap_delta = get_u_qap_delta_and_is_connected_to(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
+
+                            if (!is_connected_to_new_id) { continue; }
+
+                            if (neighbor_id == u_id) {
+                                boundary_vertices_u.push_update(neighbor, new_qap_delta);
+                            } else {
+                                boundary_vertices_v.push_update(neighbor, new_qap_delta);
+                            }
+                        }
+                    endfor
+
+                    // remove vertex from u if it is not boundary
+                    while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
+
+                    // remove vertex from v if it is not boundary
+                    while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
+                }
             }
 
-            // revert all moves in partitioning manager
-            for (size_t i = 0; i < moves_size; i++) {
-                vertex_t vertex = moves[moves_size - 1 - i];
-                weight_t vertex_weight = g.v_weights[vertex];
-                partition_t vertex_id = p_manager[vertex];
-                partition_t move_id = u_id == vertex_id ? v_id : u_id;
+            {
+                ScopedTimer _t("refinement", "QuotientGraphRefinement", "make_moves");
 
-                p_manager.move(vertex, vertex_weight, vertex_id, move_id);
-            }
+                // revert all moves in partitioning manager
+                for (size_t i = 0; i < moves_size; i++) {
+                    vertex_t vertex = moves[moves_size - 1 - i];
+                    weight_t vertex_weight = g.v_weights[vertex];
+                    partition_t vertex_id = p_manager[vertex];
+                    partition_t move_id = u_id == vertex_id ? v_id : u_id;
 
-            // make all moves to best index
-            for (size_t i = 0; i < best_idx; ++i) {
-                vertex_t vertex = moves[i];
-                weight_t vertex_weight = g.v_weights[vertex];
-                partition_t vertex_id = p_manager[vertex];
-                partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                }
 
-                bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
-                q_graph.move(g, p_manager, vertex, vertex_id, move_id);
-                block_conn.move(g, vertex, vertex_id, move_id);
-                p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                // make all moves to best index
+                for (size_t i = 0; i < best_idx; ++i) {
+                    vertex_t vertex = moves[i];
+                    weight_t vertex_weight = g.v_weights[vertex];
+                    partition_t vertex_id = p_manager[vertex];
+                    partition_t move_id = u_id == vertex_id ? v_id : u_id;
+
+                    bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                    q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                    block_conn.move(g, vertex, vertex_id, move_id);
+                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                }
             }
 
             if (max_qap_gain > 0) {
@@ -375,8 +395,10 @@ namespace HeiProMap {
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
             vertex_mark += 1;
-            forall_bv_id_iu(bv_manager, u_id, k, u) {
-                    forall_guiv(g, u, i, v) {
+            forall_bv_id_iu(bv_manager, u_id, k, u)
+                {
+                    forall_guiv(g, u, i, v)
+                        {
                             if (p_manager[v] == v_id) {
                                 // u is connected to block v_id
                                 if (vertex_used[u] != vertex_mark) {
@@ -468,7 +490,8 @@ namespace HeiProMap {
                 if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * edge_cut_gain_mean * edge_cut_gain_mean > alpha * edge_cut_gain_var + beta) { break; }
 
                 // we have to push or update the neighbors that were not moved already
-                forall_guiv(g, vertex, i, neighbor) {
+                forall_guiv(g, vertex, i, neighbor)
+                    {
                         if (vertex_used[neighbor] == vertex_mark) { continue; }
 
                         partition_t neighbor_id = p_manager[neighbor];
@@ -503,6 +526,7 @@ namespace HeiProMap {
                 weight_t vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                vertex_used[vertex] = vertex_mark-1;
 
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
@@ -513,6 +537,7 @@ namespace HeiProMap {
                 weight_t vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                vertex_used[vertex] = vertex_mark;
 
                 bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                 q_graph.move(g, p_manager, vertex, vertex_id, move_id);

@@ -61,6 +61,14 @@ namespace HeiProMap {
         partition_t get_id(const size_t i) const { return m_arr_ids[i]; }
         weight_t get_w(const size_t i) const { return m_arr_weights[i]; }
 
+        /**
+         * O(max_deg*max_conn)
+         *
+         * @param g
+         * @param u
+         * @param old_id
+         * @param new_id
+         */
         void move(const graph_t &g,
                   const vertex_t u,
                   const partition_t old_id,
@@ -169,8 +177,6 @@ namespace HeiProMap {
                     const partition_t old_id,
                     const partition_t new_id,
                     const weight_t w) {
-            if (old_id == new_id) return;
-
             size_t start = m_start[u];
             size_t end = start + m_sizes[u];
 

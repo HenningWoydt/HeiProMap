@@ -539,7 +539,7 @@ namespace HeiProMap {
             n_max_partitions = 25;
             n_refinement_iterations = 1;
             n_v_cycle = 5;
-            v_cycle_max_depth = 4;
+            v_cycle_max_depth = 20;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -566,13 +566,14 @@ namespace HeiProMap {
             global_multisection_config.kappa = 5;
 
             // enable label propagation
-            label_propagation_config.enabled = true;
+            label_propagation_config.enabled = false;
             label_propagation_config.max_iteration = 2;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled = false;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 1000.0;
+            quotient_graph_refinement_config.min_n_steps = 10;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled = false;
@@ -581,13 +582,13 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.enabled = true;
             multi_try_fm_refinement_config.max_iteration = 2;
             multi_try_fm_refinement_config.alpha = 1000.0;
-            multi_try_fm_refinement_config.min_n_steps = 3;
+            multi_try_fm_refinement_config.min_n_steps = 10;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 2;
-            flow_based_refinement_config.max_local_iteration = 3;
-            flow_based_refinement_config.alpha = 1.0;
+            flow_based_refinement_config.max_global_iteration = 3;
+            flow_based_refinement_config.max_local_iteration = 4;
+            flow_based_refinement_config.alpha = 4.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;

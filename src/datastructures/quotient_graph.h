@@ -70,6 +70,15 @@ namespace HeiProMap {
             return m_adj_mtx[min * m_k + max];
         }
 
+        /**
+         * O(max_deg)
+         *
+         * @param g
+         * @param p_manager
+         * @param u
+         * @param old_id
+         * @param new_id
+         */
         void move(const graph_t &g,
                   const p_manager_t &p_manager,
                   const vertex_t u,

@@ -257,7 +257,7 @@ namespace HeiProMap {
                 weight_t left_region_weight = determine_region(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_boundary_size, left_region, left_region_size, left_seed_vertex, left_boundary_weight);
                 weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_boundary_size, right_region, right_region_size, right_seed_vertex, right_boundary_weight);
 
-                if (left_region_size + right_region_size <= 100) {
+                if (left_region_size + right_region_size == 0) {
                     // if both regions are empty, increase their sizes
                     if (alpha == alpha_upper_bound) { return; }
                     alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);

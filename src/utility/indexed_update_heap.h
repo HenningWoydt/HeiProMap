@@ -29,6 +29,7 @@
 
 #include "../definitions.h"
 #include "macros.h"
+#include "aligned_array.h"
 #include "utils.h"
 
 namespace HeiProMap {

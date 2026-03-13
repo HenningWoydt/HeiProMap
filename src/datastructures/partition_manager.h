@@ -69,6 +69,13 @@ namespace HeiProMap {
             partition[u] = id;
         }
 
+        /**
+         * O(1) operation
+         * @param u
+         * @param w
+         * @param old_id
+         * @param new_id
+         */
         void move(const vertex_t u,
                   const weight_t w,
                   const partition_t old_id,
