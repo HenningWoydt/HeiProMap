@@ -69,14 +69,14 @@ endif()
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS "src/*.h")
 
-file(GLOB_RECURSE MAXFLOW_ALG_bk_HEADERS CONFIGURE_DEPENDS "extern/maxflow_algorithms/bk/*.h")
+file(GLOB_RECURSE MAXFLOW_ALG_bk_HEADERS CONFIGURE_DEPENDS "extern/maxflow_algorithms/nbk/*.h")
 
 # ---------------------------
 # Common include dirs
 # ---------------------------
 set(HEIPROMAP_PRIVATE_INCLUDES
         ${KAHIP_INCLUDE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/extern/maxflow_algorithms/bk
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/maxflow_algorithms/nbk
 )
 
 # ---------------------------

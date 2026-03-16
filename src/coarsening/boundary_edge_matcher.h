@@ -83,110 +83,86 @@ namespace HeiProMap {
             matching.initialize(g.n);
 
             mark += 1;
+            u64 n_matched = 0;
 
-            // 1) First: degree-1 boundary vertices
             for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
                 for (size_t i = 0; i < bv_manager.size(id); ++i) {
-                    const vertex_t u = bv_manager.get(id, i);
+                    vertex_t u = bv_manager.get(id, i);
+                    weight_t u_w = g.v_weights[u];
 
                     if (used[u] == mark) { continue; }
-                    if (g.deg(u) != 1) { continue; }
 
+                    f32 counter = 0;
                     vertex_t chosen_v = 0;
-                    if (select_preferred_neighbor(g, p_manager, bv_manager, u, lmax, chosen_v)) {
+
+                    forall_guiv(g, u, j, v)
+                        {
+                            if (used[v] == mark) { continue; }
+                            if (p_manager[u] != p_manager[v]) { continue; }
+                            if (bv_manager.is_boundary(v)) { continue; }
+                            weight_t v_w = g.v_weights[v];
+
+                            if (u_w + v_w > lmax) { continue; }
+
+                            counter += 1.0;
+                            // choose with probability 1/counter as it ensures uniform distribution
+                            if (random_engine->get_f32() <= 1.0f / counter) {
+                                chosen_v = v;
+                            }
+                        }
+                    endfor
+                    if (counter > 0) {
                         used[u] = mark;
                         used[chosen_v] = mark;
+
                         matching.add(u, chosen_v);
+                        n_matched += 2;
                     }
                 }
             }
 
-            // 2) Second: remaining boundary vertices
-            for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                for (size_t i = 0; i < bv_manager.size(id); ++i) {
-                    const vertex_t u = bv_manager.get(id, i);
+            if (n_matched < g.n * 0.5) {
+                // 3) Third: all remaining vertices
+                forall_gu(g, u)
+                    {
+                        weight_t u_w = g.v_weights[u];
 
-                    if (used[u] == mark) { continue; }
+                        if (used[u] == mark) { continue; }
 
-                    vertex_t chosen_v = 0;
-                    if (select_preferred_neighbor(g, p_manager, bv_manager, u, lmax, chosen_v)) {
-                        used[u] = mark;
-                        used[chosen_v] = mark;
-                        matching.add(u, chosen_v);
+                        f32 counter = 0;
+                        vertex_t chosen_v = 0;
+
+                        forall_guiv(g, u, j, v)
+                            {
+                                if (used[v] == mark) { continue; }
+                                if (p_manager[u] != p_manager[v]) { continue; }
+                                weight_t v_w = g.v_weights[v];
+
+                                if (u_w + v_w > lmax) { continue; }
+
+                                counter += 1.0;
+                                // choose with probability 1/counter as it ensures uniform distribution
+                                if (random_engine->get_f32() <= 1.0f / counter) {
+                                    chosen_v = v;
+                                }
+                            }
+                        endfor
+                        if (counter > 0) {
+                            used[u] = mark;
+                            used[chosen_v] = mark;
+
+                            matching.add(u, chosen_v);
+                            n_matched += 2;
+                        }
                     }
-                }
+                endfor
             }
-
-            // 3) Third: all remaining vertices
-            forall_gu(g, u)
-                {
-                    if (used[u] == mark) { continue; }
-
-                    vertex_t chosen_v = 0;
-                    if (select_preferred_neighbor(g, p_manager, bv_manager, u, lmax, chosen_v)) {
-                        used[u] = mark;
-                        used[chosen_v] = mark;
-                        matching.add(u, chosen_v);
-                    }
-                }
-            endfor
 
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
                 mapping.set(u, matching.get_n(u));
             }
-        }
-
-    private:
-        bool select_preferred_neighbor(const graph_t &g,
-                                       const PartitionManager &p_manager,
-                                       const BoundaryVertexManager &bv_manager,
-                                       const vertex_t u,
-                                       const weight_t lmax,
-                                       vertex_t &chosen_v) {
-            const weight_t u_w = g.v_weights[u];
-
-            f32 preferred_counter = 0.0f;
-            f32 fallback_counter = 0.0f;
-            vertex_t preferred_v = 0;
-            vertex_t fallback_v = 0;
-
-            forall_guiv(g, u, j, v)
-                {
-                    if (used[v] == mark) { continue; }
-                    if (p_manager[u] != p_manager[v]) { continue; }
-
-                    const weight_t v_w = g.v_weights[v];
-                    if (u_w + v_w > lmax) { continue; }
-
-                    // fallback: any feasible neighbor
-                    fallback_counter += 1.0f;
-                    if (random_engine->get_f32() <= 1.0f / fallback_counter) {
-                        fallback_v = v;
-                    }
-
-                    // preferred: boundary neighbor
-                    if (bv_manager.is_boundary(v)) {
-                        preferred_counter += 1.0f;
-                        if (random_engine->get_f32() <= 1.0f / preferred_counter) {
-                            preferred_v = v;
-                        }
-                    }
-                }
-            endfor
-
-            if (preferred_counter > 0.0f) {
-                chosen_v = preferred_v;
-                return true;
-            }
-
-            if (fallback_counter > 0.0f) {
-                chosen_v = fallback_v;
-                return true;
-            }
-
-            return false;
         }
     };
 }

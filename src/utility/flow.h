@@ -31,7 +31,7 @@
 #include <stack>
 #include <vector>
 
-#include "../../extern/maxflow_algorithms/bk/graph.h"
+#include "../../extern/maxflow_algorithms/nbk/graph.h"
 
 #include "../definitions.h"
 #include "macros.h"

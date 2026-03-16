@@ -37,6 +37,7 @@
 #include "../definitions_3.h"
 #include "../utility/random_engine.h"
 #include "../utility/qap.h"
+#include "../utility/indexed_update_heap.h"
 
 namespace HeiProMap {
     struct RebalancerMove {
@@ -90,7 +91,8 @@ namespace HeiProMap {
             partition_t u_id = p_manager[u];
             weight_t u_weight = g.v_weights[u];
 
-            forall_guiv(g, u, j, v) {
+            forall_guiv(g, u, j, v)
+                {
                     partition_t v_id = p_manager[v];
                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
@@ -129,7 +131,8 @@ namespace HeiProMap {
             partition_t u_id = p_manager[u];
             weight_t u_weight = g.v_weights[u];
 
-            forall_guiv(g, u, j, v) {
+            forall_guiv(g, u, j, v)
+                {
                     partition_t v_id = p_manager[v];
                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
@@ -151,6 +154,8 @@ namespace HeiProMap {
                        d_oracle_t &d_oracle,
                        block_conn_t &block_conn,
                        f64 imbalance) {
+            fill_empty_blocks(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
+
             ScopedTimer _t_allocate("rebalance", "Rebalancer", "allocate");
 
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
@@ -196,7 +201,8 @@ namespace HeiProMap {
 
                 for (partition_t id = 0; id < m_k; ++id) {
                     if (p_manager.get_bweight(id) > lmax) {
-                        forall_bv_id_iu(bv_manager, id, i, u) {
+                        forall_bv_id_iu(bv_manager, id, i, u)
+                            {
                                 boundary[cursor[id]] = u;
                                 cursor[id] += 1;
                             }
@@ -235,8 +241,8 @@ namespace HeiProMap {
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
-                    if (move.best_id == m_k) { continue; }                 // not a valid destination
-                    if (bv_manager.is_boundary(u) == false) { continue; }  // not a boundary vertex
+                    if (move.best_id == m_k) { continue; } // not a valid destination
+                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
                     if (p_manager.get_bweight(u_id) <= lmax) { continue; } // dont need to move anymore
                     if (state_ids[u] != move.state_id) { continue; }
 
@@ -257,7 +263,8 @@ namespace HeiProMap {
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
-                    forall_guiv(g, u, j, v) {
+                    forall_guiv(g, u, j, v)
+                        {
                             if (bv_manager.is_boundary(v) == false) { continue; }
                             if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
 
@@ -328,7 +335,8 @@ namespace HeiProMap {
 
                 for (partition_t id = 0; id < m_k; ++id) {
                     if (p_manager.get_bweight(id) > lmax) {
-                        forall_bv_id_iu(bv_manager, id, i, u) {
+                        forall_bv_id_iu(bv_manager, id, i, u)
+                            {
                                 boundary[cursor[id]] = u;
                                 cursor[id] += 1;
                             }
@@ -368,8 +376,8 @@ namespace HeiProMap {
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
-                    if (move.best_id == m_k) { continue; }                 // not a valid destination
-                    if (bv_manager.is_boundary(u) == false) { continue; }  // not a boundary vertex
+                    if (move.best_id == m_k) { continue; } // not a valid destination
+                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
                     if (p_manager.get_bweight(u_id) <= lmax) { continue; } // dont need to move anymore
                     if (state_ids[u] != move.state_id) { continue; }
 
@@ -390,7 +398,8 @@ namespace HeiProMap {
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
-                    forall_guiv(g, u, j, v) {
+                    forall_guiv(g, u, j, v)
+                        {
                             if (bv_manager.is_boundary(v) == false) { continue; }
                             if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
 
@@ -405,6 +414,108 @@ namespace HeiProMap {
 
                 _t_process_heap.stop();
             }
+        }
+
+        void fill_empty_blocks(const graph_t &g,
+                               p_manager_t &p_manager,
+                               bv_manager_t &bv_manager,
+                               q_graph_t &q_graph,
+                               d_oracle_t &d_oracle,
+                               block_conn_t &block_conn,
+                               f64 imbalance) {
+            // return;
+            ScopedTimer _t_allocate("rebalance", "Rebalancer", "fill_empty_blocks");
+
+            std::vector<bool> blocks_to_fill_lookup(m_k, false);
+            std::vector<partition_t> blocks_to_fill;
+            for (partition_t id = 0; id < m_k; ++id) {
+                if (p_manager.get_bweight(id) == 0) {
+                    blocks_to_fill_lookup[id] = true;
+                    blocks_to_fill.push_back(id);
+                }
+            }
+
+            if (blocks_to_fill.empty()) { return; }
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            weight_t fill_value = lmax / 2;
+
+            IndexedUpdateHeap heap;
+            heap.initialize(g.n);
+
+            for (partition_t id = 0; id < m_k; ++id) {
+                forall_bv_id_iu(bv_manager, id, i, u)
+                    {
+                        weight_t u_w = g.v_weights[u];
+
+                        partition_t best_id = NO_ID;
+                        weight_t best_qap = -std::numeric_limits<weight_t>::max();
+
+                        for (partition_t move_id: blocks_to_fill) {
+                            if (p_manager.get_bweight(move_id) + u_w <= lmax) {
+                                weight_t qap = get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle, block_conn);
+
+                                if (qap > best_qap) {
+                                    best_qap = qap;
+                                    best_id = move_id;
+                                }
+                            }
+                        }
+
+                        if (best_id != NO_ID) {
+                            heap.push(u, best_id, best_qap);
+                        }
+                    }
+                endfor
+            }
+
+            while (!heap.empty()) {
+                vertex_t u = heap.top_u();
+                partition_t u_id = p_manager[u];
+                weight_t u_w = g.v_weights[u];
+                partition_t new_id = heap.top_id();
+                heap.pop();
+
+                if (p_manager.get_bweight(new_id) >= fill_value) { continue; }
+                if (p_manager.get_bweight(new_id) + u_w > lmax) { continue; }
+
+                bv_manager.move(g, p_manager, u, u_id, new_id);
+                q_graph.move(g, p_manager, u, u_id, new_id);
+                block_conn.move(g, u, u_id, new_id);
+                p_manager.move(u, u_w, u_id, new_id);
+
+                if (p_manager.get_bweight(new_id) >= fill_value) {
+                    blocks_to_fill_lookup[new_id] = false;
+                    // blocks_to_fill.erase(); // todo
+                }
+
+                forall_guiv(g, u, i, v) {
+                    if (!bv_manager.is_boundary(v)) { continue; }
+
+                    partition_t v_id = p_manager[v];
+                    if (blocks_to_fill_lookup[v_id] == true) { continue; }
+
+                    weight_t v_w = g.v_weights[v];
+                    partition_t best_id = NO_ID;
+                    weight_t best_qap = -std::numeric_limits<weight_t>::max();
+
+                    for (partition_t move_id: blocks_to_fill) {
+                        if (p_manager.get_bweight(move_id) + v_w <= lmax) {
+                            weight_t qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn);
+
+                            if (qap > best_qap) {
+                                best_qap = qap;
+                                best_id = move_id;
+                            }
+                        }
+                    }
+
+                    if (best_id != NO_ID) {
+                        heap.push_update(v, best_id, best_qap);
+                    }
+                } endfor
+            }
+
         }
     };
 }

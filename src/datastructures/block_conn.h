@@ -89,6 +89,8 @@ namespace HeiProMap {
 
             m_sizes.initialize(g.n);
             m_start.initialize(g.n);
+            m_arr_ids.initialize(g.m);
+            m_arr_weights.initialize(g.m);
             std::fill_n(m_sizes.get_ptr(), g.n, 0);
 
             total_size = 0;
@@ -96,14 +98,6 @@ namespace HeiProMap {
                 {
                     m_start[u] = total_size;
                     total_size += std::min(m_k, g.deg(u));
-                }
-            endfor
-
-            m_arr_ids.initialize(total_size);
-            m_arr_weights.initialize(total_size);
-
-            forall_gu(g, u)
-                {
                     forall_guivw(g, u, i, v, w)
                         {
                             partition_t v_id = p_manager[v];

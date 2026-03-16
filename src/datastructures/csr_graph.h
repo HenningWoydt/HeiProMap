@@ -453,7 +453,7 @@ namespace HeiProMap {
 
         size_t deg(const vertex_t u) const { return neighborhoods[u + 1] - neighborhoods[u]; }
 
-        void write_graph(const std::string &file_path) {
+        void write_graph(const std::string &file_path) const {
             std::ofstream file(file_path);
 
             file << n << " " << m / 2 << " 011" << std::endl;

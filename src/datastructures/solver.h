@@ -328,6 +328,8 @@ namespace HeiProMap {
                 coarsening(v_cycle, level, level_imbalance, !is_initial);
                 contraction(v_cycle, level);
 
+                std::cout << graphs.back().n << " " << graphs.back().m << std::endl;
+
                 level += 1;
             }
 
@@ -343,8 +345,6 @@ namespace HeiProMap {
 
             if (is_initial) {
                 partition(level, level_imbalance);
-            } else {
-                block_conns[0].compute_from_scratch(graphs.back(), p_managers[0]);
             }
 
 #if ENABLE_PROFILER
@@ -378,33 +378,33 @@ namespace HeiProMap {
                 lp_refine.min_improvement = 0;
 
                 for (u64 i = 0; i < n_partitions; ++i) {
-                    std::cout << "pre: " << v_cycle << " " << level << " " << i << " " << get_qap(
-                        graphs.back(), p_managers[i], d_oracle) << std::endl;
+                    std::cout << "pre: " << v_cycle << " " << level << " " << i << " " << get_qap(                        graphs.back(), p_managers[i], d_oracle) << std::endl;
                 }
 
                 rebalancing(v_cycle, level, level_imbalance, n_partitions);
                 refinement(v_cycle, level, level_imbalance, n_partitions);
 
                 for (u64 i = 0; i < n_partitions; ++i) {
-                    std::cout << "aft: " << v_cycle << " " << level << " " << i << " " << get_qap(
-                        graphs.back(), p_managers[i], d_oracle) << std::endl;
+                    std::cout << "aft: " << v_cycle << " " << level << " " << i << " " << get_qap(                        graphs.back(), p_managers[i], d_oracle) << std::endl;
                 }
 
-                weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
-                u64 best_id = 0;
-                for (u64 i = 1; i < n_partitions; ++i) {
-                    weight_t qap = get_qap(graphs.back(), p_managers[i], d_oracle);
-                    if (qap < best_qap) {
-                        best_qap = qap;
-                        best_id = i;
+                if (n_partitions > 1) {
+                    weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
+                    u64 best_id = 0;
+                    for (u64 i = 1; i < n_partitions; ++i) {
+                        weight_t qap = get_qap(graphs.back(), p_managers[i], d_oracle);
+                        if (qap < best_qap) {
+                            best_qap = qap;
+                            best_id = i;
+                        }
                     }
-                }
 
-                if (best_id != 0) {
-                    std::swap(p_managers[0], p_managers[best_id]);
-                    std::swap(bv_managers[0], bv_managers[best_id]);
-                    std::swap(q_graphs[0], q_graphs[best_id]);
-                    std::swap(block_conns[0], block_conns[best_id]);
+                    if (best_id != 0) {
+                        std::swap(p_managers[0], p_managers[best_id]);
+                        std::swap(bv_managers[0], bv_managers[best_id]);
+                        std::swap(q_graphs[0], q_graphs[best_id]);
+                        std::swap(block_conns[0], block_conns[best_id]);
+                    }
                 }
 
 #if ENABLE_PROFILER
@@ -488,8 +488,7 @@ namespace HeiProMap {
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
                 size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else {
-                std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) <<
-                        " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
+                std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) <<                        " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 
@@ -539,9 +538,7 @@ namespace HeiProMap {
             level_infos[v_cycle][level].t_uncontraction += get_milli_seconds(sp, ep);
 #endif
 
-            HEAVYASSERT(
-                assert_state_after_partitioning(graphs.back(),p_managers[0], bv_managers[0], q_graphs[0], block_conns[0]
-                    , ac.k));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(),p_managers[0], bv_managers[0], q_graphs[0], block_conns[0] , ac.k));
         }
 
         void rebalancing(const u64 v_cycle, const u64 level, f64 level_imbalance, const u64 n_partitions) {
@@ -569,13 +566,17 @@ namespace HeiProMap {
         void refinement(const u64 v_cycle, const u64 level, const f64 level_imbalance, const u64 n_partitions) {
             auto sp = get_time_point();
 
-            for (u64 i = 0; i < n_partitions; ++i) {
-                u64 refinement_max_iterations = ac.n_refinement_iterations;
-                for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
-                    for (auto [refiner, config]: refinements) {
-                        if (config->enabled) {
-                            refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
-                            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0], ac.k));
+            if (ac.first_fast_v_cycle && v_cycle == 0) {
+                lp_refine.refine(graphs.back(), d_oracle, bv_managers[0], p_managers[0], q_graphs[0], block_conns[0], level_imbalance);
+            } else {
+                for (u64 i = 0; i < n_partitions; ++i) {
+                    u64 refinement_max_iterations = ac.n_refinement_iterations;
+                    for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
+                        for (auto [refiner, config]: refinements) {
+                            if (config->enabled) {
+                                refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
+                                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0], ac.k));
+                            }
                         }
                     }
                 }

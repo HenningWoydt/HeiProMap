@@ -100,9 +100,15 @@ namespace HeiProMap {
         TranslationTable<vertex_t> translation_table;
 
         BKAdapter<int, int, int> flow_network;
+        // IBFSAdapter<int, int, int> flow_network;
         // HiPrAdapter<int, int, int> flow_network;
         ResidualFlowNetwork residual_flow_network;
         SCCGraph scc_graph;
+
+        std::map<f64, u64> succ_map;
+        std::map<f64, u64> no_succ_map;
+        u64 n_closures = 0;
+        u64 n_no_closures = 0;
 
         RandomEngine random_engine = RandomEngine(0);
         const FlowBasedRefinementConfiguration *config = nullptr;
@@ -294,7 +300,15 @@ namespace HeiProMap {
                     is_valid = cut_is_valid(g, p_manager, left_id, right_id, is_left, lmax);
                 }
 
-                if (!is_valid && config->use_closed_vertex_set) {
+                if (!is_valid) {
+                    if (!config->use_closed_vertex_set) {
+                        no_succ_map[alpha] += 1;
+                        if (alpha == 1.0) { return; }
+                        if (alpha == alpha_upper_bound) { return; }
+                        alpha = std::max(alpha / alpha_modifier, 1.0);
+                        continue;
+                    }
+
                     // build residual network
                     {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "build_residual_network");
@@ -320,21 +334,25 @@ namespace HeiProMap {
                     }
                     //
                     if (!closure_found) {
+                        n_no_closures += 1;
+                        no_succ_map[alpha] += 1;
                         if (alpha == 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
+                    n_closures += 1;
                 }
 
                 // check if the cut actually changes the partition
                 if (!cut_changes_partition(is_left)) {
                     // cut is valid, but does not change anything
+                    no_succ_map[alpha] += 1;
                     if (alpha == 1.0) { return; }
                     if (alpha == alpha_upper_bound) { return; }
                     alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
                 }
-
+                succ_map[alpha] += 1;
                 // cut is valid and changes the partition, increase alpha
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 

@@ -44,10 +44,10 @@ namespace HeiProMap {
         f32 w2;
     };
 
-    #define IS_ENDPOINT(n, u) n.n2 == u
-    #define IS_NOT_ENDPOINT(n, u) n.n2 != u
-    #define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
-    #define IS_UNMATCHED(n, u) n.n1 == u
+#define IS_ENDPOINT(n, u) n.n2 == u
+#define IS_NOT_ENDPOINT(n, u) n.n2 != u
+#define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
+#define IS_UNMATCHED(n, u) n.n1 == u
 
     class GlobalPathAlgorithmConfiguration {
     public:
@@ -120,7 +120,7 @@ namespace HeiProMap {
                    const PartitionManagerT &p_manager,
                    Mapping &mapping,
                    f64 imbalance) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "match");
+            ScopedTimer _t_match("coarsening", "GlobalPathAlgorithmMatcher", "match");
 
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
@@ -250,6 +250,18 @@ namespace HeiProMap {
                 }
             endfor
 
+            _t_match.stop();
+
+            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
+                two_hop_degree_one(level, g, p_manager, matching, imbalance);
+            }
+            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
+                two_hop_twins(level, g, p_manager, matching, imbalance);
+            }
+            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
+                two_hop_matchmaker(level, g, p_manager, matching, imbalance);
+            }
+
             /*
 #if ASSERT_ENABLED
             for (size_t i = 0; i < matching.size(); ++i) {
@@ -271,6 +283,7 @@ namespace HeiProMap {
 #endif
              */
 
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "get_mapping");
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
@@ -287,7 +300,8 @@ namespace HeiProMap {
                 {
                     weight_t u_w = g.v_weights[u];
 
-                    forall_guivw(g, u, j, v, w) {
+                    forall_guivw(g, u, j, v, w)
+                        {
                             if (u > v) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
                             weight_t v_w = g.v_weights[v];
@@ -531,7 +545,8 @@ namespace HeiProMap {
                 {
                     if (is_matched[u]) { continue; }
                     weight_t u_w = g.v_weights[u];
-                    forall_guiv(g, u, j, v) {
+                    forall_guiv(g, u, j, v)
+                        {
                             if (is_matched[v]) { continue; }
                             weight_t v_w = g.v_weights[v];
 
@@ -567,6 +582,294 @@ namespace HeiProMap {
                         }
             #endif
              */
+        }
+
+        static inline u64 splitmix64(u64 x) {
+            x += 0x9e3779b97f4a7c15ULL;
+            x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+            x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+            return x ^ (x >> 31);
+        }
+
+        static f64 small_noise(vertex_t u, vertex_t v) {
+            // order-independent: (u,v) and (v,u) give the same result
+            u64 a = static_cast<u64>(std::min(u, v));
+            u64 b = static_cast<u64>(std::max(u, v));
+
+            // combine the pair into one 64-bit value, then hash it
+            u64 key = a;
+            key = key * 0x9e3779b97f4a7c15ULL + b;
+            u64 h = splitmix64(key);
+
+            // map to [0, 1)
+            constexpr f64 inv = 1.0 / static_cast<f64>(std::numeric_limits<u64>::max());
+            f64 x = static_cast<f64>(h) * inv;
+
+            // tiny positive perturbation
+            constexpr f64 eps = 1e-12;
+            return eps * x;
+        }
+
+        template<typename PartitionManagerT>
+        void two_hop_degree_one(const size_t level,
+                                const graph_t &g,
+                                const PartitionManagerT &p_manager,
+                                Matching &matching,
+                                f64 imbalance) {
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_degree_one");
+
+            std::vector<vertex_t> preferred(g.n);
+            std::iota(preferred.begin(), preferred.end(), 0);
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+
+            forall_gu(g, u)
+                {
+                    if (g.deg(u) != 1) { continue; }
+                    if (matching.is_matched(u)) { continue; }
+
+                    vertex_t preferred_vertex = u;
+                    f64 best_rating = -std::numeric_limits<f64>::max();
+
+                    vertex_t middle_vertex = g.edges_v[g.neighborhoods[u]];
+                    weight_t middle_w = g.edges_w[g.neighborhoods[u]];
+
+                    forall_guivw(g, middle_vertex, i, v, w)
+                        {
+                            if (u == v) { continue; }
+                            if (g.deg(v) != 1) { continue; }
+                            if (matching.is_matched(v)) { continue; }
+                            if (g.v_weights[u] + g.v_weights[v] > lmax) { continue; }
+
+                            f64 rating = (f64) (w + middle_w) + small_noise(u, v);
+
+                            if (rating > best_rating) {
+                                best_rating = rating;
+                                preferred_vertex = v;
+                            }
+                        }
+                    endfor
+                    preferred[u] = preferred_vertex;
+                }
+            endfor
+
+            forall_gu(g, u)
+                {
+                    if (g.deg(u) != 1) { continue; }
+                    if (matching.is_matched(u)) { continue; }
+
+                    vertex_t v = preferred[u];
+                    if (u == v) { continue; }
+
+                    if (preferred[v] == u && u < v) {
+                        matching.add(u, v);
+                    }
+                }
+            endfor
+        }
+
+        static inline uint64_t hash_combine_u64(uint64_t a, uint64_t b) {
+            return splitmix64(a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2)));
+        }
+
+        static inline uint64_t hash_edge(vertex_t v, weight_t w) {
+            uint64_t hv = splitmix64(static_cast<uint64_t>(v));
+            uint64_t hw = splitmix64(static_cast<uint64_t>(w));
+            return hash_combine_u64(hv, hw);
+        }
+
+        static inline uint64_t neighborhood_hash(const graph_t &g, vertex_t u) {
+            uint64_t x = splitmix64(static_cast<uint64_t>(g.deg(u)));
+            uint64_t s1 = 0;
+            uint64_t s2 = 0;
+
+            forall_guivw(g, u, i, v, w)
+                {
+                    uint64_t he = hash_edge(v, w);
+                    x ^= he;
+                    s1 += he;
+                    s2 += splitmix64(he);
+                }
+            endfor
+
+            return hash_combine_u64(x, hash_combine_u64(s1, s2));
+        }
+
+        static inline bool same_neighborhood(const graph_t &g, vertex_t u, vertex_t v) {
+            if (g.deg(u) != g.deg(v)) {
+                return false;
+            }
+
+            std::vector<std::pair<vertex_t, weight_t> > nu;
+            std::vector<std::pair<vertex_t, weight_t> > nv;
+            nu.reserve(g.deg(u));
+            nv.reserve(g.deg(v));
+
+            forall_guivw(g, u, i, x, w)
+                {
+                    nu.emplace_back(x, w);
+                }
+            endfor
+
+            forall_guivw(g, v, i, x, w)
+                {
+                    nv.emplace_back(x, w);
+                }
+            endfor
+
+            std::sort(nu.begin(), nu.end());
+            std::sort(nv.begin(), nv.end());
+
+            return nu == nv;
+        }
+
+        template<typename PartitionManagerT>
+        void two_hop_twins(const size_t level,
+                           const graph_t &g,
+                           const PartitionManagerT &p_manager,
+                           Matching &matching,
+                           f64 imbalance) {
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_twins");
+
+            struct Candidate {
+                uint64_t hash;
+                vertex_t u;
+            };
+
+            std::vector<Candidate> candidates;
+            candidates.reserve(g.n);
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * (static_cast<f64>(g.g_weight) / static_cast<f64>(p_manager.k)));
+
+            forall_gu(g, u)
+                {
+                    if (matching.is_matched(u)) { continue; }
+                    candidates.push_back({neighborhood_hash(g, u), u});
+                }
+            endfor
+
+            std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
+                if (a.hash != b.hash) return a.hash < b.hash;
+                return a.u < b.u;
+            });
+
+            size_t begin = 0;
+            while (begin < candidates.size()) {
+                size_t end = begin + 1;
+                while (end < candidates.size() && candidates[end].hash == candidates[begin].hash) {
+                    ++end;
+                }
+
+                // Split hash bucket into exact-equality subgroups
+                std::vector<std::vector<vertex_t> > exact_groups;
+
+                for (size_t i = begin; i < end; ++i) {
+                    vertex_t u = candidates[i].u;
+                    if (matching.is_matched(u)) { continue; }
+
+                    bool placed = false;
+                    for (auto &group: exact_groups) {
+                        if (same_neighborhood(g, u, group.front())) {
+                            group.push_back(u);
+                            placed = true;
+                            break;
+                        }
+                    }
+
+                    if (!placed) {
+                        exact_groups.push_back({u});
+                    }
+                }
+
+                // Match greedily inside each exact group
+                for (auto &group: exact_groups) {
+                    std::sort(group.begin(), group.end(), [&](vertex_t a, vertex_t b) {
+                        if (g.v_weights[a] != g.v_weights[b]) {
+                            return g.v_weights[a] < g.v_weights[b];
+                        }
+                        return a < b;
+                    });
+
+                    for (size_t i = 0; i + 1 < group.size();) {
+                        vertex_t u = group[i];
+                        if (matching.is_matched(u)) {
+                            ++i;
+                            continue;
+                        }
+
+                        size_t j = i + 1;
+                        while (j < group.size()) {
+                            vertex_t v = group[j];
+                            if (!matching.is_matched(v) &&
+                                g.v_weights[u] + g.v_weights[v] <= lmax) {
+                                matching.add(u, v);
+                                break;
+                            }
+                            ++j;
+                        }
+
+                        ++i;
+                    }
+                }
+
+                begin = end;
+            }
+        }
+
+        template<typename PartitionManagerT>
+        void two_hop_matchmaker(const size_t level,
+                                const graph_t &g,
+                                const PartitionManagerT &p_manager,
+                                Matching &matching,
+                                f64 imbalance) {
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_matchmaker");
+
+            std::vector<vertex_t> preferred(g.n);
+            std::iota(preferred.begin(), preferred.end(), 0);
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+
+            forall_gu(g, u)
+                {
+                    if (matching.is_matched(u)) { continue; }
+
+                    vertex_t preferred_vertex = u;
+                    f64 best_rating = -std::numeric_limits<f64>::max();
+
+                    forall_guivw(g, u, j, middle_vertex, middle_w)
+                        {
+                            forall_guivw(g, middle_vertex, i, v, w)
+                                {
+                                    if (u == v) { continue; }
+                                    if (matching.is_matched(v)) { continue; }
+                                    if (g.v_weights[u] + g.v_weights[v] > lmax) { continue; }
+
+                                    f64 rating = (f64) (w + middle_w) + small_noise(u, v);
+
+                                    if (rating > best_rating) {
+                                        best_rating = rating;
+                                        preferred_vertex = v;
+                                    }
+                                }
+                            endfor
+                            preferred[u] = preferred_vertex;
+                        }
+                    endfor
+                }
+            endfor
+
+            forall_gu(g, u)
+                {
+                    if (matching.is_matched(u)) { continue; }
+
+                    vertex_t v = preferred[u];
+                    if (u == v) { continue; }
+
+                    if (preferred[v] == u && u < v) {
+                        matching.add(u, v);
+                    }
+                }
+            endfor
         }
     };
 }

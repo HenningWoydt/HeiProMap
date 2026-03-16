@@ -7,15 +7,14 @@
 
 #include "flow_interface.h"
 
-#include "../../extern/maxflow_algorithms/bk/graph.h"
-#include "../../extern/maxflow_algorithms/hi_pr/hi_pr.h"
+#include "../../extern/maxflow_algorithms/nbk/graph.h"
 
 namespace HeiProMap {
 
 template <typename captype = int, typename tcaptype = int, typename flowtype = int>
 class BKAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
 private:
-    bk::Graph<captype, tcaptype, flowtype> *g;
+    nbk::Graph<captype, tcaptype, flowtype> *g;
     vertex_t n;
     vertex_t source;
     vertex_t target;
@@ -30,7 +29,7 @@ public:
     void initialize(size_t t_n) override {
         n = t_n;
         if (g) delete g;
-        g = new bk::Graph<captype, tcaptype, flowtype>(n + 2, (n + 2) * 4 + 1024);
+        g = new nbk::Graph<captype, tcaptype, flowtype>(n + 2, (n + 2) * 4 + 1024);
         g->add_node(n + 2);
         source = n;
         target = n + 1;
@@ -65,7 +64,7 @@ public:
     void get_cut(std::vector<u8> &is_left) override {
         is_left.resize(n);
         for (vertex_t u = 0; u < n; ++u) {
-            is_left[u] = g->what_segment(u) == bk::SOURCE;
+            is_left[u] = g->what_segment(u) == nbk::SOURCE;
         }
     }
 
@@ -73,7 +72,7 @@ public:
         residual_g.initialize(n);
 
         int n_edges = g->get_arc_num();
-        typename bk::Graph<captype, tcaptype, flowtype>::arc_id arc = g->get_first_arc();
+        typename nbk::Graph<captype, tcaptype, flowtype>::arc_id arc = g->get_first_arc();
 
         int u, v;
         for (int i = 0; i < n_edges; ++i) {
@@ -100,90 +99,6 @@ public:
 
     void print() const override {}
 };
-
-template <typename captype = int, typename tcaptype = int, typename flowtype = int>
-class HiPrAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
-private:
-    hi_pr::HiPr solver;
-    vertex_t n;
-    std::vector<int> edges;
-    std::vector<captype> caps;
-    std::vector<tcaptype> excess;
-
-public:
-    HiPrAdapter() : n(0) {}
-
-    void initialize(size_t t_n) override {
-        n = t_n;
-        edges.clear();
-        caps.clear();
-        excess.assign(n + 2, 0);
-    }
-
-    void add(vertex_t u, vertex_t v, weight_t w) override {
-        ASSERT(u < n);
-        ASSERT(v < n);
-        ASSERT(w >= 0);
-
-        // one edge record, two capacities
-        edges.push_back(u);
-        edges.push_back(v);
-        caps.push_back(w); // u -> v
-        caps.push_back(w); // v -> u
-    }
-
-    void add_s_edge(vertex_t v, weight_t w) override {
-        ASSERT(v < n);
-        ASSERT(w >= 0);
-        excess[v] += w;
-    }
-
-    void add_t_edge(vertex_t v, weight_t w) override {
-        ASSERT(v < n);
-        ASSERT(w >= 0);
-        excess[v] -= w;
-    }
-
-    void solve() override {
-        solver.construct(
-            static_cast<unsigned int>(n),
-            static_cast<unsigned int>(edges.size() / 2),
-            edges.data(),
-            caps.data(),
-            excess.data()
-        );
-        solver.stageOne();
-    }
-
-    void get_cut(std::vector<u8> &is_left) override {
-        is_left.resize(n);
-        for (vertex_t u = 0; u < n; ++u) {
-            is_left[u] = solver.is_weak_source(&solver.nodes[u]);
-        }
-    }
-
-    void build_residual_network(ResidualFlowNetwork &residual_g) override {
-        residual_g.initialize(n);
-        for (vertex_t u = 0; u < n; ++u) {
-            node *node_u = &solver.nodes[u];
-            arc *stopA = (u + 1 < n)
-                ? solver.nodes[u + 1].first
-                : solver.arcs + 2 * solver.m;
-
-            for (arc *a = node_u->first; a != stopA; ++a) {
-                if (a->resCap > 0) {
-                    vertex_t v = static_cast<vertex_t>(a->head - solver.nodes);
-                    if (v < n) {
-                        residual_g.add_directed_edge(u, v, a->resCap);
-                    }
-                }
-            }
-        }
-    }
-
-    void print() const override {}
-};
-
 
 } // namespace HeiProMap
 
