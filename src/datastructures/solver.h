@@ -365,7 +365,7 @@ namespace HeiProMap {
                 uncoarsening(v_cycle, level);
 
                 u64 n_partitions = is_initial ? 1 : std::min(1 + level, max_n_partitions);
-                lp_refine.min_improvement = -1;
+                lp_refine.min_improvement = -10;
                 for (u64 i = 1; i < n_partitions; ++i) {
                     p_managers[i].copy_from(p_managers[0]);
                     bv_managers[i].copy_from(bv_managers[0]);
@@ -477,6 +477,7 @@ namespace HeiProMap {
 
             if (random) {
                 be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
+                // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {

@@ -86,13 +86,11 @@ namespace HeiProMap {
                                   weight_t max_w) {
             ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_when_identitiy");
 
-            vertex_t n = g.n;
-
             // 2) collect active cluster ids
             std::vector<vertex_t> ids;
-            std::vector<u32> used(n, 0);
-            ids.reserve(n);
-            for (vertex_t id = 0; id < n; ++id) {
+            std::vector<u32> used(g.n, 0);
+            ids.reserve(g.n);
+            for (vertex_t id = 0; id < g.n; ++id) {
                 ids.push_back(id);
             }
 
@@ -113,6 +111,8 @@ namespace HeiProMap {
                     vertex_t b = ids[ids.size() - ib - 1];
                     if (b == a) continue;
                     if (used[b] == 1) { continue; }
+
+                    if (p_manager[a] != p_manager[b]) { continue; }
 
                     weight_t sum = g.v_weights[a] + g.v_weights[b];
                     best_b = b;
@@ -165,6 +165,7 @@ namespace HeiProMap {
             for (size_t i = 0; i < singletons_size; ++i) {
                 vertex_t u = singletons[i];
                 vertex_t cur_id = mapping.get(u);
+                partition_t u_id = p_manager[u];
 
                 // might not be a singleton anymore if we already merged it earlier
                 if (cluster_count[cur_id] != 1) { continue; }
@@ -174,7 +175,11 @@ namespace HeiProMap {
                 weight_t current_id_w = 0;
 
                 flat_map.clear();
-                forall_guivw(g, u, j, v, w) {
+                forall_guivw(g, u, j, v, w)
+                    {
+                        partition_t v_id = p_manager[v];
+                        if (u_id != v_id) { continue; }
+
                         vertex_t id = mapping.get(v);
                         if (id == current_id) {
                             current_id_w += w;
@@ -212,7 +217,8 @@ namespace HeiProMap {
                      const graph_t &g,
                      [[maybe_unused]] const p_manager_t &p_manager,
                      Mapping &mapping,
-                     f64 imbalance) {
+                     f64 imbalance,
+                     weight_t modifier = 2) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             weight_t max_w = 0; // (weight_t) ((f64) m_l_max / config->f);
@@ -228,7 +234,7 @@ namespace HeiProMap {
                         max_deg = std::max(max_deg, g.deg(u));
                     }
                 endfor
-                max_w *= 2;
+                max_w *= modifier;
                 max_w = std::min(max_w, lmax);
             }
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
@@ -309,11 +315,16 @@ namespace HeiProMap {
                         if (active[u] == 0) { continue; }
 
                         weight_t u_w = g.v_weights[u];
+                        partition_t u_id = p_manager[u];
                         vertex_t current_id = mapping.get(u);
                         weight_t current_id_w = 0;
 
                         flat_map.clear();
-                        forall_guivw(g, u, j, v, w) {
+                        forall_guivw(g, u, j, v, w)
+                            {
+                                partition_t v_id = p_manager[v];
+                                if (u_id != v_id) { continue; }
+
                                 vertex_t id = mapping.get(v);
                                 if (id == current_id) {
                                     current_id_w += w;
@@ -327,7 +338,6 @@ namespace HeiProMap {
                         vertex_t best_id = current_id;
                         weight_t best_weight = current_id_w;
                         for (auto [id, w]: flat_map) {
-                            // check constraint only for candidates != current_id (same logic as your loop)
                             if (w > best_weight) {
                                 best_weight = w;
                                 best_id = id;
@@ -343,7 +353,8 @@ namespace HeiProMap {
 
                             n_moved += 1;
                             if (round > 0) {
-                                forall_guiv(g, u, j, v) {
+                                forall_guiv(g, u, j, v)
+                                    {
                                         active_next[v] = 1;
                                     }
                                 endfor
