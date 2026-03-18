@@ -60,6 +60,14 @@ namespace HeiProMap {
             return m_boundaries[id].size();
         }
 
+        size_t size() const {
+            size_t n = 0;
+            for (partition_t id = 0; id < m_k; ++id) {
+                n += m_boundaries[id].size();
+            }
+            return n;
+        }
+
         vertex_t get(const partition_t id, const size_t i) const {
             return m_boundaries[id][i];
         }

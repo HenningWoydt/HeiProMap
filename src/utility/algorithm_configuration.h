@@ -533,13 +533,13 @@ namespace HeiProMap {
         }
 
         void set_strong() {
-            initial_c = 16;
+            initial_c = 32;
 
             n_max_partitions = 1;
             n_refinement_iterations = 1;
             n_v_cycle = 2;
             first_fast_v_cycle = false;
-            v_cycle_max_depth = 3;
+            v_cycle_max_depth = 100;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "size-constrained-lp";
@@ -564,7 +564,7 @@ namespace HeiProMap {
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 5;
+            global_multisection_config.kappa = 1;
 
             // enable label propagation
             label_propagation_config.enabled = false;

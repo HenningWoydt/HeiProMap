@@ -47,6 +47,7 @@
 #include "../partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
+#include "../refinement/cycle_based_refinement.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../refinement/pertubator.h"
 #include "../utility/algorithm_configuration.h"
@@ -364,7 +365,7 @@ namespace HeiProMap {
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                 uncoarsening(v_cycle, level);
 
-                u64 n_partitions = is_initial ? 1 : std::min(1 + level, max_n_partitions);
+                u64 n_partitions = is_initial ? 1 : std::min(1 + level * level, max_n_partitions);
                 lp_refine.min_improvement = -10;
                 for (u64 i = 1; i < n_partitions; ++i) {
                     p_managers[i].copy_from(p_managers[0]);
@@ -476,8 +477,9 @@ namespace HeiProMap {
             bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
 
             if (random) {
-                be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
+                // be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
                 // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
+                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
@@ -573,6 +575,10 @@ namespace HeiProMap {
                 for (u64 i = 0; i < n_partitions; ++i) {
                     u64 refinement_max_iterations = ac.n_refinement_iterations;
                     for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
+                        if (v_cycle >= 1 && bv_managers[i].size() <= 20000) {
+                            cycle_refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
+                        }
+
                         for (auto [refiner, config]: refinements) {
                             if (config->enabled) {
                                 refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);

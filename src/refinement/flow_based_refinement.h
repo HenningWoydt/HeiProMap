@@ -101,6 +101,7 @@ namespace HeiProMap {
 
         BKAdapter<int, int, int> flow_network;
         // IBFSAdapter<int, int, int> flow_network;
+        // IBFSAdapter<int, int, int> flow_network;
         // HiPrAdapter<int, int, int> flow_network;
         ResidualFlowNetwork residual_flow_network;
         SCCGraph scc_graph;
