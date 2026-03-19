@@ -68,6 +68,271 @@ namespace HeiProMap {
         }
     };
 
+    struct PathResult {
+        weight_t dist;
+        std::vector<vertex_t> path; // internal nodes only
+    };
+
+    inline PathResult shortest_path(DirectedGraph &dir_g, vertex_t s, vertex_t t) {
+        static constexpr weight_t INF = std::numeric_limits<weight_t>::max() / 4;
+
+        std::vector<vertex_t> indeg(dir_g.n, 0);
+        for (vertex_t u = 0; u < dir_g.n; ++u) {
+            for (const auto &e: dir_g.edges[u]) {
+                indeg[e.v]++;
+            }
+        }
+
+        std::deque<vertex_t> dq;
+        for (vertex_t u = 0; u < dir_g.n; ++u) {
+            if (indeg[u] == 0) dq.push_back(u);
+        }
+
+        std::vector<vertex_t> topo;
+        topo.reserve(dir_g.n);
+
+        while (!dq.empty()) {
+            vertex_t u = dq.front();
+            dq.pop_front();
+            topo.push_back(u);
+
+            for (const auto &e: dir_g.edges[u]) {
+                --indeg[e.v];
+                if (indeg[e.v] == 0) dq.push_back(e.v);
+            }
+        }
+
+        std::vector<weight_t> dist(dir_g.n, INF);
+        std::vector<vertex_t> parent(dir_g.n, static_cast<vertex_t>(-1));
+        dist[s] = 0;
+
+        for (vertex_t u: topo) {
+            if (dist[u] == INF) continue;
+            for (const auto &e: dir_g.edges[u]) {
+                if (dist[u] + e.w < dist[e.v]) {
+                    dist[e.v] = dist[u] + e.w;
+                    parent[e.v] = u;
+                }
+            }
+        }
+
+        if (dist[t] == INF) {
+            return {INF, {}};
+        }
+
+        std::vector<vertex_t> full;
+        for (vertex_t cur = t; cur != static_cast<vertex_t>(-1); cur = parent[cur]) {
+            full.push_back(cur);
+        }
+        std::reverse(full.begin(), full.end());
+
+        std::vector<vertex_t> path;
+        for (size_t i = 1; i + 1 < full.size(); ++i) {
+            path.push_back(full[i]);
+        }
+
+        return {dist[t], path};
+    }
+
+    inline void fast_cycle_refine(graph_t &g,
+                                  d_oracle_t &d_oracle,
+                                  bv_manager_t &bv_manager,
+                                  p_manager_t &p_manager,
+                                  q_graph_t &q_graph,
+                                  block_conn_t &block_conn,
+                                  f64 imbalance) {
+        weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+        RandomEngine random_engine = RandomEngine(0);
+
+        std::vector<std::vector<partition_t> > cycles;
+        size_t max_n_cycles = 10000;
+        size_t n_samples_per_start = 1000;
+        size_t min_cycle_length = 3;
+        size_t max_cycle_length = 20;
+
+        bool found = true;
+        while (found) {
+            found = false;
+            //
+            {
+                ScopedTimer _t("refinement", "FastCycleRefinement", "get_rnd_cycles");
+
+                cycles = q_graph.get_rnd_cycles(max_n_cycles, n_samples_per_start, min_cycle_length, max_cycle_length);
+            }
+
+            std::vector<CycleMove> flat_moves;
+            std::vector<std::vector<std::vector<size_t> > > moves_idx;
+            //
+            {
+                ScopedTimer _t("refinement", "FastCycleRefinement", "init_cache");
+
+                moves_idx.resize(p_manager.k);
+                for (partition_t id = 0; id < p_manager.k; ++id) {
+                    moves_idx[id].resize(p_manager.k);
+                }
+            }
+
+            // get the current boundary
+            std::vector<vertex_t> curr_boundary;
+            //
+            {
+                ScopedTimer _t("refinement", "FastCycleRefinement", "get_boundary");
+
+                for (partition_t id = 0; id < p_manager.k; ++id) {
+                    forall_bv_id_iu(bv_manager, id, i, u)
+                        {
+                            curr_boundary.push_back(u);
+                        }
+                    endfor
+                }
+                fast_shuffle_unchecked(curr_boundary.data(), curr_boundary.data() + curr_boundary.size(), random_engine.generator);
+            }
+
+            // choose an independent set
+            std::vector<vertex_t> independent_set;
+            std::vector<u8> in_independent_set;
+            //
+            {
+                ScopedTimer _t("refinement", "FastCycleRefinement", "independent_set");
+
+                in_independent_set.resize(g.n, 0);
+
+                for (auto u: curr_boundary) {
+                    bool all_free = true;
+                    forall_guiv(g, u, i, v)
+                        {
+                            all_free &= in_independent_set[v] == 0;
+                        }
+                    endfor
+                    if (all_free) {
+                        independent_set.push_back(u);
+                        in_independent_set[u] = 1;
+                    }
+                }
+            }
+
+            //
+            {
+                ScopedTimer _t("refinement", "FastCycleRefinement", "first_time_fill_cache");
+
+                for (vertex_t u: independent_set) {
+                    partition_t u_id = p_manager[u];
+                    forall_bc_ui_id(block_conn, u, j, new_id)
+                        {
+                            if (u_id == new_id) { continue; }
+
+                            weight_t delta = get_u_qap_delta(g, u, u_id, new_id, p_manager, d_oracle, block_conn);
+
+                            CycleMove move = {u, u_id, new_id, -delta};
+                            size_t idx = flat_moves.size();
+                            flat_moves.push_back(move);
+                            moves_idx[u_id][new_id].push_back(idx);
+                        }
+                    endfor
+                }
+            }
+
+            DirectedGraph dir_g;
+
+            for (size_t j = 0; j < cycles.size(); ++j) {
+                auto &cycle = cycles[j];
+                ScopedTimer _t("refinement", "FastCycleRefinement", "process_cycles");
+
+                if (!q_graph.cycle_exists(cycle)) { continue; }
+
+                TranslationTable<size_t> node_move;
+                node_move.reserve(flat_moves.size(), flat_moves.size());
+
+                // count number of vertices and build translation table
+                size_t n = 2; // one for start, one for end
+                size_t node_id = 0;
+                for (size_t i = 0; i < cycle.size(); ++i) {
+                    partition_t id_1 = cycle[i];
+                    partition_t id_2 = cycle[(i + 1) % cycle.size()];
+
+                    n += moves_idx[id_1][id_2].size();
+
+                    for (auto idx: moves_idx[id_1][id_2]) {
+                        node_move.add(node_id, idx);
+                        node_id++;
+                    }
+                }
+
+                dir_g.initialize(n);
+
+                // add from source to first layer
+                for (auto idx_1: moves_idx[cycle[0]][cycle[1]]) {
+                    size_t node_1 = node_move.get_o(idx_1);
+                    dir_g.add(n - 2, node_1, 0); // from source vertex
+                }
+
+                // add the edges
+                for (size_t i = 0; i < cycle.size(); ++i) {
+                    partition_t id_1 = cycle[i];
+                    partition_t id_2 = cycle[(i + 1) % cycle.size()];
+                    partition_t id_3 = cycle[(i + 2) % cycle.size()];
+
+                    for (auto idx_1: moves_idx[id_1][id_2]) {
+                        for (auto idx_2: moves_idx[id_2][id_3]) {
+                            CycleMove &move_1 = flat_moves[idx_1];
+                            CycleMove &move_2 = flat_moves[idx_2];
+
+                            // don't connect moves that would leave block id_2 overloaded
+                            if (p_manager.get_bweight(id_2) + g.v_weights[move_1.u] - g.v_weights[move_2.u] > lmax) { continue; }
+
+                            // edge weight is the delta of the source move
+                            size_t node_1 = node_move.get_o(idx_1);
+                            size_t node_2 = node_move.get_o(idx_2);
+
+                            if (i != cycle.size() - 1) {
+                                dir_g.add(node_1, node_2, move_1.delta);
+                            } else {
+                                dir_g.add(node_1, n - 1, move_1.delta); // to target vertex
+                            }
+                        }
+                    }
+                }
+
+                // compute the shortest path
+                PathResult path = shortest_path(dir_g, n - 2, n - 1);
+
+                // std::cout << j << " graph_size: " << dir_g.n << " " << dir_g.m << " " << bv_manager.size() << " " << independent_set.size() << " " << path.path.size() << " " << path.dist << std::endl;
+
+                if (path.dist > 0) { continue; }
+
+                std::cout << "----- Start Fast-Cycle ----- " << std::endl;
+                print(path.path);
+                std::cout << "dist: " << path.dist << std::endl;
+                weight_t old_qap = get_qap(g, p_manager, d_oracle);
+                std::cout << "A: " << old_qap << " " << p_manager.is_overloaded(lmax) << std::endl;
+
+                for (auto node: path.path) {
+                    size_t idx = node_move.get_n(node);
+
+                    CycleMove move = flat_moves[idx];
+
+                    vertex_t u = move.u;
+                    weight_t u_w = g.v_weights[u];
+                    partition_t u_id = p_manager[u];
+                    partition_t new_id = move.to_id;
+
+                    bv_manager.move(g, p_manager, u, u_id, new_id);
+                    q_graph.move(g, p_manager, u, u_id, new_id);
+                    block_conn.move(g, u, u_id, new_id);
+                    p_manager.move(u, u_w, u_id, new_id);
+                }
+
+                weight_t new_qap = get_qap(g, p_manager, d_oracle);
+                weight_t gain = old_qap - new_qap;
+                std::cout << "B: " << new_qap << " " << p_manager.is_overloaded(lmax) << " " << gain << " " << -path.dist*2 << std::endl;
+                std::cout << "----- End Fast-Cycle -----" << std::endl;
+
+                found = true;
+                break;
+            }
+        }
+    }
+
     inline std::vector<vertex_t> find_negative_weight_cycle(DirectedGraph &dir_g) {
         std::vector<vertex_t> cycle;
 
@@ -159,16 +424,18 @@ namespace HeiProMap {
 
             // choose an independent set
             std::vector<vertex_t> independent_set;
-            std::vector<u8> in_independent_set(g.n, 0);
+            std::vector<u8> in_independent_set;
             //
             {
                 ScopedTimer _t("refinement", "CycleRefinement", "independent_set");
+
+                in_independent_set.resize(g.n, 0);
 
                 for (auto u: curr_boundary) {
                     bool all_free = true;
                     forall_guiv(g, u, i, v)
                         {
-                            all_free &= in_independent_set[v] == 0;
+                            // all_free &= in_independent_set[v] == 0;
                         }
                     endfor
                     if (all_free) {
@@ -290,14 +557,15 @@ namespace HeiProMap {
                 cycle = find_negative_weight_cycle(dir_g);
             }
 
-            std::cout << curr_boundary.size() << " " << independent_set.size() << " " << dir_g.n << " " << dir_g.m << std::endl;
-            std::cout << "Found: ";
-            print(cycle);
-
             if (cycle.empty()) {
                 // no cycle found
                 return;
             }
+
+            std::cout << curr_boundary.size() << " " << independent_set.size() << " " << dir_g.n << " " << dir_g.m << std::endl;
+            std::cout << "Found: ";
+            print(cycle);
+
 
             weight_t old_qap = get_qap(g, p_manager, d_oracle);
             std::cout << "A: " << old_qap << " " << p_manager.is_overloaded(lmax) << std::endl;

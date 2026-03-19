@@ -465,6 +465,37 @@ namespace HeiProMap {
                 file << std::endl;
             }
         }
+
+        void print_degree_distribution() const {
+            std::unordered_map<size_t, size_t> degree_count;
+
+            size_t max_deg = 0;
+
+            // compute degrees
+            for (vertex_t u = 0; u < n; ++u) {
+                size_t deg = neighborhoods[u + 1] - neighborhoods[u];
+                degree_count[deg]++;
+                if (deg > max_deg) {
+                    max_deg = deg;
+                }
+            }
+
+            // move to vector for sorted output
+            std::vector<std::pair<size_t, size_t>> dist;
+            dist.reserve(degree_count.size());
+
+            for (auto &p : degree_count) {
+                dist.push_back(p); // (degree, count)
+            }
+
+            std::sort(dist.begin(), dist.end());
+
+            // print
+            std::cout << "#degree count\n";
+            for (auto &[deg, count] : dist) {
+                std::cout << deg << " " << count << "\n";
+            }
+        }
     };
 }
 

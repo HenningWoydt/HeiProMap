@@ -27,6 +27,9 @@
 #ifndef HEIPROMAP_QUOTIENT_GRAPH_H
 #define HEIPROMAP_QUOTIENT_GRAPH_H
 
+#include <unordered_set>
+#include <random>
+
 #include "../definitions.h"
 #include "../utility/aligned_array.h"
 
@@ -107,6 +110,200 @@ namespace HeiProMap {
             for (u64 i = 0; i < m_k * m_k; i++) {
                 m_adj_mtx[i] = q.m_adj_mtx[i];
             }
+        }
+
+        void write_as_metis(const std::string &file_name) {
+            std::ofstream out(file_name);
+            if (!out) {
+                throw std::runtime_error("Could not open file for writing: " + file_name);
+            }
+
+            // Count undirected edges (ignore self-loops).
+            size_t num_edges = 0;
+            for (partition_t u = 0; u < m_k; ++u) {
+                for (partition_t v = u + 1; v < m_k; ++v) {
+                    if (get_weight(u, v) > 0) {
+                        ++num_edges;
+                    }
+                }
+            }
+
+            // METIS header:
+            // <num vertices> <num edges> <fmt>
+            // fmt = 1 => edge weights present
+            out << m_k << " " << num_edges << " 1\n";
+
+            // For each vertex, write adjacency list:
+            // neighbor_id weight neighbor_id weight ...
+            // METIS uses 1-based vertex numbering.
+            for (partition_t u = 0; u < m_k; ++u) {
+                bool first = true;
+
+                for (partition_t v = 0; v < m_k; ++v) {
+                    if (u == v) {
+                        continue; // skip self-loops
+                    }
+
+                    weight_t w = get_weight(u, v);
+                    if (w > 0) {
+                        if (!first) {
+                            out << " ";
+                        }
+                        out << (v + 1) << " " << w;
+                        first = false;
+                    }
+                }
+
+                out << "\n";
+            }
+        }
+
+        std::vector<std::vector<partition_t> > get_rnd_cycles(u64 max_n_cycles,
+                                                              u64 n_samples_per_start,
+                                                              u64 min_cycle_length,
+                                                              u64 max_cycle_length) {
+            std::vector<std::vector<partition_t> > cycles;
+
+            if (m_k == 0 || max_n_cycles == 0 || n_samples_per_start == 0 || max_cycle_length < 3) {
+                return cycles;
+            }
+
+            std::mt19937_64 rng(std::random_device{}());
+
+            auto canonicalize_cycle = [](std::vector<partition_t> &cyc) {
+                if (cyc.empty()) {
+                    return;
+                }
+
+                const size_t n = cyc.size();
+
+                // find smallest element
+                size_t min_pos = 0;
+                for (size_t i = 1; i < n; ++i) {
+                    if (cyc[i] < cyc[min_pos]) {
+                        min_pos = i;
+                    }
+                }
+
+                // build rotated version
+                std::vector<partition_t> rot(n);
+                for (size_t i = 0; i < n; ++i) {
+                    rot[i] = cyc[(min_pos + i) % n];
+                }
+
+                // build reversed version with same first element
+                std::vector<partition_t> rev(n);
+                rev[0] = rot[0];
+                for (size_t i = 1; i < n; ++i) {
+                    rev[i] = rot[n - i];
+                }
+
+                if (rev < rot) {
+                    cyc.swap(rev);
+                } else {
+                    cyc.swap(rot);
+                }
+            };
+
+            auto same_cycle = [](const std::vector<partition_t> &a,
+                                 const std::vector<partition_t> &b) -> bool {
+                return a == b;
+            };
+
+            // timestamp-based visited structure:
+            // mark[v] == cur_mark  <=>  v is in current path
+            std::vector<u64> mark(m_k, 0);
+            u64 cur_mark = 1;
+
+            std::vector<partition_t> path;
+            path.reserve(std::min<u64>(m_k, max_cycle_length));
+
+            std::vector<partition_t> neighbors;
+            neighbors.reserve(m_k);
+
+            for (u64 sample = 0; sample < n_samples_per_start; ++sample) {
+                for (partition_t start = 0; start < m_k; ++start) {
+                    // handle rare timestamp overflow
+                    std::fill(mark.begin(), mark.end(), 0);
+
+                    path.clear();
+                    path.push_back(start);
+                    mark[start] = cur_mark;
+
+                    partition_t cur = start;
+
+                    for (u64 depth = 1; depth < max_cycle_length; ++depth) {
+                        neighbors.clear();
+
+                        for (partition_t v = 0; v < m_k; ++v) {
+                            if (v == cur) {
+                                continue;
+                            }
+                            if (!has_edge(cur, v)) {
+                                continue;
+                            }
+
+                            if (v == start) {
+                                if (path.size() >= min_cycle_length) {
+                                    neighbors.push_back(v);
+                                }
+                            } else if (mark[v] != cur_mark) {
+                                neighbors.push_back(v);
+                            }
+                        }
+
+                        if (neighbors.empty()) {
+                            break;
+                        }
+
+                        std::uniform_int_distribution<size_t> dist(0, neighbors.size() - 1);
+                        partition_t nxt = neighbors[dist(rng)];
+
+                        if (nxt == start) {
+                            std::vector<partition_t> cyc(path);
+                            canonicalize_cycle(cyc);
+
+                            bool exists = false;
+                            for (const auto &existing: cycles) {
+                                if (same_cycle(existing, cyc)) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+
+                            if (!exists) {
+                                cycles.push_back(std::move(cyc));
+                            }
+                            break;
+                        }
+
+                        path.push_back(nxt);
+                        mark[nxt] = cur_mark;
+                        cur = nxt;
+                    }
+
+                    ++cur_mark;
+                }
+            }
+
+            if (cycles.size() > max_n_cycles) {
+                cycles.resize(max_n_cycles);
+            }
+
+            return cycles;
+        }
+
+        bool cycle_exists(const std::vector<partition_t> &cycle) {
+            for (size_t i = 0; i < cycle.size(); ++i) {
+                partition_t u = cycle[i];
+                partition_t v = cycle[(i + 1) % cycle.size()];
+
+                if (!has_edge(u, v)) {
+                    return false;
+                }
+            }
+
+            return true;
         }
     };
 }

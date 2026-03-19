@@ -132,19 +132,19 @@ namespace HeiProMap {
                     vertex_t chosen_v = 0;
 
                     forall_guiv(g, u, j, v)
-                    {
-                        if (used[v] == mark) { continue; }
-                        if (p_manager[u] != p_manager[v]) { continue; }
-                        weight_t v_w = g.v_weights[v];
+                        {
+                            if (used[v] == mark) { continue; }
+                            if (p_manager[u] != p_manager[v]) { continue; }
+                            weight_t v_w = g.v_weights[v];
 
-                        if (u_w + v_w > lmax) { continue; }
+                            if (u_w + v_w > lmax) { continue; }
 
-                        counter += 1.0;
-                        // choose with probability 1/counter as it ensures uniform distribution
-                        if (random_engine->get_f32() <= 1.0f / counter) {
-                            chosen_v = v;
+                            counter += 1.0;
+                            // choose with probability 1/counter as it ensures uniform distribution
+                            if (random_engine->get_f32() <= 1.0f / counter) {
+                                chosen_v = v;
+                            }
                         }
-                    }
                     endfor
                     if (counter > 0) {
                         used[u] = mark;
@@ -156,42 +156,40 @@ namespace HeiProMap {
                 }
             }
 
-            if (n_matched < g.n * 0.5) {
-                // 3) Third: all remaining vertices
-                forall_gu(g, u)
-                    {
-                        weight_t u_w = g.v_weights[u];
+            // 3) Third: all remaining vertices
+            forall_gu(g, u)
+                {
+                    weight_t u_w = g.v_weights[u];
 
-                        if (used[u] == mark) { continue; }
+                    if (used[u] == mark) { continue; }
 
-                        f32 counter = 0;
-                        vertex_t chosen_v = 0;
+                    f32 counter = 0;
+                    vertex_t chosen_v = 0;
 
-                        forall_guiv(g, u, j, v)
-                            {
-                                if (used[v] == mark) { continue; }
-                                if (p_manager[u] != p_manager[v]) { continue; }
-                                weight_t v_w = g.v_weights[v];
+                    forall_guiv(g, u, j, v)
+                        {
+                            if (used[v] == mark) { continue; }
+                            if (p_manager[u] != p_manager[v]) { continue; }
+                            weight_t v_w = g.v_weights[v];
 
-                                if (u_w + v_w > lmax) { continue; }
+                            if (u_w + v_w > lmax) { continue; }
 
-                                counter += 1.0;
-                                // choose with probability 1/counter as it ensures uniform distribution
-                                if (random_engine->get_f32() <= 1.0f / counter) {
-                                    chosen_v = v;
-                                }
+                            counter += 1.0;
+                            // choose with probability 1/counter as it ensures uniform distribution
+                            if (random_engine->get_f32() <= 1.0f / counter) {
+                                chosen_v = v;
                             }
-                        endfor
-                        if (counter > 0) {
-                            used[u] = mark;
-                            used[chosen_v] = mark;
-
-                            matching.add(u, chosen_v);
-                            n_matched += 2;
                         }
+                    endfor
+                    if (counter > 0) {
+                        used[u] = mark;
+                        used[chosen_v] = mark;
+
+                        matching.add(u, chosen_v);
+                        n_matched += 2;
                     }
-                endfor
-            }
+                }
+            endfor
 
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());

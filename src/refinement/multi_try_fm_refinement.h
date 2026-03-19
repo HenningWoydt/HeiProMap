@@ -175,39 +175,6 @@ namespace HeiProMap {
                     {
                         ScopedTimer _t("refinement", "MultiTryFMRefinement", "initial_boundary_qap");
 
-                        /*
-                        forall_guiv(g, u, i, neighbor)
-                        {
-                            if (vertex_used[neighbor] == vertex_mark) { continue; }
-                            if (!bv_manager.is_boundary(neighbor)) { continue; }
-
-                            partition_t neighbor_id = p_manager[neighbor];
-                            weight_t neighbor_weight = g.v_weights[neighbor];
-
-                            // find all connected partitions to neighbor
-                            block_mark += 1;
-
-                            new_ids.clear();
-                            qap_deltas.clear();
-
-                            forall_bc_ui_id(block_conn, neighbor, j, id)
-                            {
-                                if (id == neighbor_id) { continue; }
-                                if (p_manager.get_bweight(id) + neighbor_weight > lmax) { continue; }
-
-                                new_ids.push_back(id);
-                                qap_deltas.push_back(0);
-                            }
-                            endfor
-
-                            if (!new_ids.empty()) {
-                                std::pair<partition_t, weight_t> best = get_u_qap_delta(g, neighbor, neighbor_id, new_ids, p_manager, d_oracle, block_conn, qap_deltas);
-                                heap.push(neighbor, best.first, best.second);
-                            }
-                        }
-                        endfor
-                        */
-
                         forall_guiv(g, u, i, neighbor)
                             {
                                 if (vertex_used[neighbor] == vertex_mark) { continue; }

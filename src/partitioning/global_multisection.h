@@ -32,6 +32,8 @@
 #include "kaffpa_partitioner.h"
 #include "metis_partitioner.h"
 #include "mtkahypar_partition.h"
+#include "../refinement/multi_try_fm_refinement.h"
+#include "../utility/qap.h"
 
 namespace HeiProMap {
     enum GlobalMultisectionMode {
@@ -103,13 +105,13 @@ namespace HeiProMap {
 
     class GlobalMultisectionPartitioner {
     public:
-        void partition(graph_t &g,
-                       p_manager_t &p_manager,
-                       const std::vector<partition_t> &hierarchy,
-                       [[maybe_unused]] const std::vector<weight_t> &distance,
-                       const f64 imbalance,
-                       RandomEngine &t_random_engine,
-                       const GlobalMultisectionConfiguration &i_config) {
+        static void partition(graph_t &g,
+                              p_manager_t &p_manager,
+                              const std::vector<partition_t> &hierarchy,
+                              [[maybe_unused]] const std::vector<weight_t> &distance,
+                              const f64 imbalance,
+                              RandomEngine &t_random_engine,
+                              const GlobalMultisectionConfiguration &i_config) {
             ScopedTimer _t("partition", "GlobalMultisectionPartitioner", "partition");
 
             GlobalMultisectionConfiguration config = *dynamic_cast<const GlobalMultisectionConfiguration *>(&i_config);
@@ -162,7 +164,7 @@ namespace HeiProMap {
             // process the stack
             while (!stack.empty()) {
                 Item item = stack.back(); // process first item
-                stack.pop_back();         // remove top item
+                stack.pop_back(); // remove top item
 
                 if (config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa);
@@ -183,6 +185,57 @@ namespace HeiProMap {
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();
+                }
+
+                {
+                    // refine
+                    PartitionManager local_p_manager;
+                    BoundaryVertexManager local_boundary_manager;
+                    QuotientGraph local_quotient_graph;
+                    BlockConn local_block_conn;
+                    DistanceOracle local_distance_oracle;
+
+                    local_p_manager.initialize(item.g->n, item.k, item.g->g_weight);
+                    local_boundary_manager.initialize(item.g->n, item.k);
+                    local_quotient_graph.initialize(item.k);
+                    local_block_conn.initialize(item.g->n, item.k);
+                    local_distance_oracle.initialize({item.k}, {1});
+
+                    forall_gu((*item.g), u)
+                        {
+                            const partition_t u_id = partition[u];
+                            const weight_t u_w = item.g->v_weights[u];
+                            local_p_manager.set(u, u_w, u_id);
+
+                            forall_guivw((*item.g), u, i, v, w)
+                                {
+                                    const partition_t v_id = partition[v];
+
+                                    if (u_id != v_id) {
+                                        local_boundary_manager.add(u, u_id); // boundary vertex
+                                        if (u < v) {
+                                            local_quotient_graph.add_edge(u_id, v_id, w); // quotient graph
+                                        }
+                                    }
+                                }
+                            endfor
+                        }
+                    endfor
+                    local_block_conn.compute_from_scratch((*item.g), local_p_manager);
+
+                    weight_t initial_edge_cut = get_edge_cut((*item.g), local_p_manager);
+                    std::cout << "initial_edge_cut: " << initial_edge_cut << std::endl;
+                    std::cout << "imb: " << item.imb << std::endl;
+                    MultiTryFmRefinementConfiguration multi_try_config("refinements");
+                    multi_try_config.max_iteration = 10;
+                    multi_try_config.min_n_steps = 5;
+                    MultiTryFMRefinement multi_try_fm_refinement;
+                    multi_try_fm_refinement.initialize(item.g->n, item.g->m, item.k, multi_try_config);
+                    // multi_try_fm_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
+
+                    weight_t post_edge_cut = get_edge_cut((*item.g), local_p_manager);
+                    std::cout << "post_edge_cut: " << post_edge_cut << " gain " << initial_edge_cut - post_edge_cut << std::endl;
+
                 }
 
                 if (item.identifier->size() == l - 1) {

@@ -39,7 +39,6 @@ namespace HeiProMap {
         ScopedTimer _t("misc", "misc", "get_qap");
 
         weight_t qap = 0;
-        weight_t local_qap = 0;
 
         forall_gu(g, u)
             {
@@ -49,12 +48,57 @@ namespace HeiProMap {
                     {
                         partition_t v_id = p_manager[v];
                         weight_t d = d_oracle.get(u_id, v_id);
-                        local_qap += (d * w);
+                        qap += (d * w);
                     }
                 endfor
             }
         endfor
-        qap += local_qap;
+
+        return qap;
+    }
+
+    template<typename GraphT, typename PartitionManagerT>
+    inline weight_t get_edge_cut(GraphT &g,
+                                 PartitionManagerT &p_manager) {
+        ScopedTimer _t("misc", "misc", "get_qap");
+
+        weight_t qap = 0;
+
+        forall_gu(g, u)
+            {
+                partition_t u_id = p_manager[u];
+
+                forall_guivw(g, u, i, v, w)
+                    {
+                        partition_t v_id = p_manager[v];
+                        if (u_id != v_id) { continue; }
+                        qap += w;
+                    }
+                endfor
+            }
+        endfor
+
+        return qap;
+    }
+
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline weight_t get_qap(GraphT &g,
+                            std::vector<vertex_t> &vertices,
+                            PartitionManagerT &p_manager,
+                            DistanceOracleT &d_oracle) {
+        weight_t qap = 0;
+
+        for (vertex_t u: vertices) {
+            partition_t u_id = p_manager[u];
+
+            forall_guivw(g, u, i, v, w)
+                {
+                    partition_t v_id = p_manager[v];
+                    weight_t d = d_oracle.get(u_id, v_id);
+                    qap += (d * w);
+                }
+            endfor
+        }
 
         return qap;
     }

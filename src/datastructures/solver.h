@@ -48,6 +48,7 @@
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/three_vertex_label_propagation_refinement.h"
 #include "../refinement/cycle_based_refinement.h"
+#include "../refinement/boundary_pair_refiner.h"
 #include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../refinement/pertubator.h"
 #include "../utility/algorithm_configuration.h"
@@ -477,9 +478,9 @@ namespace HeiProMap {
             bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
 
             if (random) {
-                // be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
+                be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
                 // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
-                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+                // rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
@@ -575,8 +576,9 @@ namespace HeiProMap {
                 for (u64 i = 0; i < n_partitions; ++i) {
                     u64 refinement_max_iterations = ac.n_refinement_iterations;
                     for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
-                        if (v_cycle >= 1 && bv_managers[i].size() <= 20000) {
-                            cycle_refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
+
+                        if (v_cycle >= 1) {
+                            // boundary_pair_refiner(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
                         }
 
                         for (auto [refiner, config]: refinements) {
