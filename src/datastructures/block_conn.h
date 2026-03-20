@@ -35,6 +35,7 @@
 namespace HeiProMap {
     class BlockConn {
         vertex_t m_n = 0;
+        vertex_t m_m = 0;
         partition_t m_k = 0;
 
         AlignedArray<size_t> m_sizes; // number of conns for each vertex
@@ -45,13 +46,19 @@ namespace HeiProMap {
 
     public:
         void initialize(const vertex_t t_n,
-                        const partition_t t_k) {
+                const vertex_t t_m,
+                const partition_t t_k) {
             ScopedTimer _t("io", "BlockConn", "initialize");
             m_n = t_n;
+            m_m = t_m;
             m_k = t_k;
 
             m_sizes.initialize(m_n);
             m_start.initialize(m_n);
+            m_arr_ids.initialize(m_m);
+            m_arr_weights.initialize(m_m);
+            std::fill_n(m_sizes.get_ptr(), m_n, 0);
+            total_size = 0;
         }
 
         size_t size(const vertex_t u) const { return m_sizes[u]; }
@@ -126,6 +133,20 @@ namespace HeiProMap {
                 m_arr_ids[i] = bm.m_arr_ids[i];
                 m_arr_weights[i] = bm.m_arr_weights[i];
             }
+        }
+
+        void reset_build() {
+            std::fill_n(m_sizes.get_ptr(), m_n, 0);
+            total_size = 0;
+        }
+
+        void begin_vertex(const graph_t &g, const vertex_t u) {
+            m_start[u] = total_size;
+            total_size += std::min(m_k, g.deg(u));
+        }
+
+        void add_connection(const vertex_t u, const partition_t id, const weight_t w) {
+            add(u, id, w);
         }
 
     private:

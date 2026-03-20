@@ -196,7 +196,7 @@ namespace HeiProMap {
                 p_managers[i].initialize(graphs[0].n, ac.k, graphs[0].g_weight);
                 bv_managers[i].initialize(graphs[0].n, ac.k);
                 q_graphs[i].initialize(ac.k);
-                block_conns[i].initialize(graphs[0].n, ac.k);
+                block_conns[i].initialize(graphs[0].n, graphs[0].m, ac.k);
             }
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_managers[0], ac.k));
 
@@ -473,8 +473,13 @@ namespace HeiProMap {
                 p_managers[0].reset_weights();
                 bv_managers[0].reset();
                 q_graphs[0].initialize(ac.k);
+                block_conns[0].initialize(graphs.back().n, graphs.back().m, ac.k);
+                block_conns[0].reset_build();
+
                 forall_gu(graphs.back(), u)
                     {
+                        block_conns[0].begin_vertex(graphs.back(), u);
+
                         const partition_t u_id = p_managers[0][u];
                         const weight_t u_w = graphs.back().v_weights[u];
                         p_managers[0].set(u, u_w, u_id);
@@ -482,6 +487,9 @@ namespace HeiProMap {
                         forall_guivw(graphs.back(), u, i, v, w)
                             {
                                 const partition_t v_id = p_managers[0][v];
+
+                                // build block_conns directly here
+                                block_conns[0].add_connection(u, v_id, w);
 
                                 if (u_id != v_id) {
                                     bv_managers[0].add(u, u_id); // boundary vertex
@@ -493,7 +501,6 @@ namespace HeiProMap {
                         endfor
                     }
                 endfor
-                block_conns[0].compute_from_scratch(graphs.back(), p_managers[0]);
                 _t_allocate.stop();
 
                 initial_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
@@ -510,7 +517,9 @@ namespace HeiProMap {
             mappings.emplace_back();
             mappings.back().initialize(graphs.back().n);
 
-            bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
+            if (v_cycle > 0) {
+                bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
+            }
 
             if (random) {
                 be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
@@ -561,8 +570,37 @@ namespace HeiProMap {
             auto sp = get_time_point();
 
             p_managers[0].uncontract(mappings.back());
-            bv_managers[0].compute_from_scratch(graphs[graphs.size() - 2], p_managers[0]);
-            block_conns[0].compute_from_scratch(graphs[graphs.size() - 2], p_managers[0]);
+
+            ScopedTimer _tt("uncontraction", "misc", "compute_from_scratch");
+            const graph_t &g_uncontracted = graphs[graphs.size() - 2];
+
+            bv_managers[0].reset();
+            block_conns[0].initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
+            block_conns[0].reset_build();
+
+            forall_gu(g_uncontracted, u)
+                {
+                    const partition_t u_id = p_managers[0][u];
+                    size_t n_different = 0;
+
+                    block_conns[0].begin_vertex(g_uncontracted, u);
+
+                    forall_guivw(g_uncontracted, u, i, v, w)
+                        {
+                            const partition_t v_id = p_managers[0][v];
+
+                            // rebuild block connections
+                            block_conns[0].add_connection(u, v_id, w);
+
+                            // rebuild boundary information
+                            n_different += (u_id != v_id);
+                        }
+                    endfor
+
+                    bv_managers[0].add_boundary_vertex_from_count(u, u_id, n_different);
+                }
+            endfor
+            _tt.stop();
 
             ScopedTimer _t("uncontraction", "misc", "free_graph");
             graphs.pop_back(); // this is doing uncontraction

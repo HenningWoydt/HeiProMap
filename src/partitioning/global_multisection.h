@@ -188,6 +188,7 @@ namespace HeiProMap {
                     abort();
                 }
 
+                /*
                 {
                     // refine
                     PartitionManager local_p_manager;
@@ -242,6 +243,7 @@ namespace HeiProMap {
                     flow_refinement.initialize(item.g->n, item.g->m, item.k, flow_config);
                     flow_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
                 }
+                */
 
                 if (item.identifier->size() == l - 1) {
                     // insert solution

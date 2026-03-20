@@ -188,6 +188,16 @@ namespace HeiProMap {
             endfor
         }
 
+        void add_boundary_vertex_from_count(const vertex_t u,
+                                    const partition_t id,
+                                    const size_t n_boundary_edges) {
+            if (n_boundary_edges == 0) return;
+
+            m_n_boundary_edges[u] = n_boundary_edges;
+            m_vertex_idx[u] = m_boundaries[id].size();
+            m_boundaries[id].push_back(u);
+        }
+
         void reset() {
             ScopedTimer _t("misc", "BoundaryVertexManager", "reset");
 
