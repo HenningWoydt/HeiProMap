@@ -173,7 +173,7 @@ namespace HeiProMap {
         }
 
         void copy_from(PartitionManager &p_manager) {
-            for (vertex_t u = 0; u < n; ++u) {
+            for (vertex_t u = 0; u < p_manager.n; ++u) {
                 partition[u] = p_manager.partition[u];
             }
             for (partition_t id = 0; id < k; ++id) {

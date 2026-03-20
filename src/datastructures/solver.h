@@ -303,7 +303,7 @@ namespace HeiProMap {
 
             u64 n_v_cycle = ac.n_v_cycle;
             for (u64 i_v_cycle = 0; i_v_cycle < n_v_cycle; ++i_v_cycle) {
-                run_cycle(i_v_cycle + 1, level, mult);
+                run_cycle(i_v_cycle + 1, level, 4);
             }
         }
 
@@ -380,14 +380,14 @@ namespace HeiProMap {
                 lp_refine.min_improvement = 0;
 
                 for (u64 i = 0; i < n_partitions; ++i) {
-                    std::cout << "pre: " << v_cycle << " " << level << " " << i << " " << get_qap(                        graphs.back(), p_managers[i], d_oracle) << std::endl;
+                    std::cout << "pre: " << v_cycle << " " << level << " " << i << " " << get_qap(graphs.back(), p_managers[i], d_oracle) << std::endl;
                 }
 
                 rebalancing(v_cycle, level, level_imbalance, n_partitions);
                 refinement(v_cycle, level, level_imbalance, n_partitions);
 
                 for (u64 i = 0; i < n_partitions; ++i) {
-                    std::cout << "aft: " << v_cycle << " " << level << " " << i << " " << get_qap(                        graphs.back(), p_managers[i], d_oracle) << std::endl;
+                    std::cout << "aft: " << v_cycle << " " << level << " " << i << " " << get_qap(graphs.back(), p_managers[i], d_oracle) << std::endl;
                 }
 
                 if (n_partitions > 1) {
@@ -423,11 +423,46 @@ namespace HeiProMap {
 
         void partition(u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
+            ScopedTimer _t("partition", "GlobalMultisectionPartitioner", "partition");
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
-                    GlobalMultisectionPartitioner partitioner;
-                    partitioner.partition(graphs.back(), p_managers[0], ac.hierarchy, ac.distance, level_imbalance, random_engine, ac.global_multisection_config);
+                    if (ac.threads > 1) {
+                        std::vector<PartitionManager> local_p_managers;
+                        std::vector<weight_t> local_qaps;
+
+                        local_p_managers.reserve(ac.threads);
+                        local_qaps.reserve(ac.threads);
+
+                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                            local_p_managers.emplace_back();
+                            local_p_managers.back().initialize(graphs.back().n, graphs.back().m, graphs.back().g_weight);
+                            local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
+                        }
+
+#pragma omp parallel for schedule(static) num_threads(ac.threads)
+                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                            GlobalMultisectionPartitioner partitioner;
+                            partitioner.partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
+
+                            local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
+                        }
+
+                        size_t best_idx = 0;
+                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                            if (local_qaps[thread_id] < local_qaps[best_idx]) {
+                                best_idx = thread_id;
+                            }
+                        }
+
+                        print(local_qaps);
+                        std::cout << "best qap: " << local_qaps[best_idx] << " best idx: " << best_idx << std::endl;
+
+                        p_managers[0].copy_from(local_p_managers[best_idx]);
+                    } else {
+                        GlobalMultisectionPartitioner partitioner;
+                        partitioner.partition(graphs.back(), p_managers[0], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
+                    }
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
@@ -492,7 +527,7 @@ namespace HeiProMap {
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
                 size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else {
-                std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) <<                        " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
+                std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 
@@ -576,7 +611,6 @@ namespace HeiProMap {
                 for (u64 i = 0; i < n_partitions; ++i) {
                     u64 refinement_max_iterations = ac.n_refinement_iterations;
                     for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
-
                         if (v_cycle >= 1) {
                             // boundary_pair_refiner(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
                         }

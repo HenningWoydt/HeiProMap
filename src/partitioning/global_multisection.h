@@ -32,6 +32,7 @@
 #include "kaffpa_partitioner.h"
 #include "metis_partitioner.h"
 #include "mtkahypar_partition.h"
+#include "../refinement/flow_based_refinement.h"
 #include "../refinement/multi_try_fm_refinement.h"
 #include "../utility/qap.h"
 
@@ -110,11 +111,11 @@ namespace HeiProMap {
                               const std::vector<partition_t> &hierarchy,
                               [[maybe_unused]] const std::vector<weight_t> &distance,
                               const f64 imbalance,
-                              RandomEngine &t_random_engine,
-                              const GlobalMultisectionConfiguration &i_config) {
-            ScopedTimer _t("partition", "GlobalMultisectionPartitioner", "partition");
-
+                              const GlobalMultisectionConfiguration &i_config,
+                              u64 seed) {
             GlobalMultisectionConfiguration config = *dynamic_cast<const GlobalMultisectionConfiguration *>(&i_config);
+
+            RandomEngine rnd_engine(seed);
 
             AlignedArray<partition_t> partition;
             partition.initialize(g.n);
@@ -156,7 +157,7 @@ namespace HeiProMap {
             // fill in other information
             first_graph.k = hierarchy.back();
             first_graph.imb = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, first_graph.g->g_weight, k_rem_vec[l - 1], l);
-            first_graph.seed = t_random_engine.get_s32();
+            first_graph.seed = rnd_engine.get_s32();
 
             // initialize stack;
             std::vector<Item> stack = {first_graph};
@@ -196,6 +197,8 @@ namespace HeiProMap {
                     DistanceOracle local_distance_oracle;
 
                     local_p_manager.initialize(item.g->n, item.k, item.g->g_weight);
+                    local_p_manager.n_vertices[0] = 0;
+                    local_p_manager.bweights[0] = 0;
                     local_boundary_manager.initialize(item.g->n, item.k);
                     local_quotient_graph.initialize(item.k);
                     local_block_conn.initialize(item.g->n, item.k);
@@ -224,18 +227,20 @@ namespace HeiProMap {
                     local_block_conn.compute_from_scratch((*item.g), local_p_manager);
 
                     weight_t initial_edge_cut = get_edge_cut((*item.g), local_p_manager);
-                    std::cout << "initial_edge_cut: " << initial_edge_cut << std::endl;
-                    std::cout << "imb: " << item.imb << std::endl;
                     MultiTryFmRefinementConfiguration multi_try_config("refinements");
                     multi_try_config.max_iteration = 10;
                     multi_try_config.min_n_steps = 5;
                     MultiTryFMRefinement multi_try_fm_refinement;
                     multi_try_fm_refinement.initialize(item.g->n, item.g->m, item.k, multi_try_config);
-                    // multi_try_fm_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
+                    multi_try_fm_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
 
-                    weight_t post_edge_cut = get_edge_cut((*item.g), local_p_manager);
-                    std::cout << "post_edge_cut: " << post_edge_cut << " gain " << initial_edge_cut - post_edge_cut << std::endl;
-
+                    FlowBasedRefinementConfiguration flow_config("refinements");
+                    flow_config.alpha = 1.0;
+                    flow_config.max_local_iteration = 10;
+                    flow_config.max_global_iteration = 2;
+                    FlowBasedRefinement flow_refinement;
+                    flow_refinement.initialize(item.g->n, item.g->m, item.k, flow_config);
+                    flow_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
                 }
 
                 if (item.identifier->size() == l - 1) {
@@ -316,7 +321,7 @@ namespace HeiProMap {
                         size_t idx = stack.size() - 1 - i;
                         stack[idx].k = hierarchy[l - 1 - stack[idx].identifier->size()];
                         stack[idx].imb = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, stack[idx].g->g_weight, k_rem_vec[l - 1 - stack[idx].identifier->size()], l - stack[idx].identifier->size());
-                        stack[idx].seed = t_random_engine.get_s32();
+                        stack[idx].seed = rnd_engine.get_s32();
                     }
                 }
                 if (item.free) {

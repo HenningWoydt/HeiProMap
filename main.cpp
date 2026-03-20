@@ -44,17 +44,18 @@ int main(const int argc, char *argv[]) {
             std::vector<std::pair<std::string, std::string> > input = {
                 // {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"}, // fast 0.753s 8,704,035 comm cost // eco 2.559s 7,469,493 // strong 22.498s 7,223,358
                 // {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
-                // {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.608s, 4,751,188 comm cost, // eco 44.685s 3,971,464 comm cost, // strong 536.000s 3,851,899 comm cost
-                // {"--mapping", "../data/out/partition/del23.txt"},
-                {"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
-                {"--mapping", "../data/out/partition/afshell9.txt"},
+                {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.608s, 4,751,188 comm cost, // eco 44.685s 3,971,464 comm cost, // strong 536.000s 3,851,899 comm cost
+                {"--mapping", "../data/out/partition/del23.txt"},
+                //{"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
+                // {"--mapping", "../data/out/partition/afshell9.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/nlr.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
                 // {"--mapping", "../data/out/partition/nlr.txt"},
                 {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
-                {"--config", "strong"},
+                {"--config", "fast"},
                 {"--seed", "0"},
+                {"--threads", "16"},
             };
 
             std::vector<std::string> args = {"HeiProMap"};
@@ -64,29 +65,29 @@ int main(const int argc, char *argv[]) {
             }
 
             // Step 3: Prepare argc and argv.
-            int argc = args.size();
-            if (argc < 0) {
+            int temp_argc = (int) args.size();
+            if (temp_argc < 0) {
                 std::cerr << "Error: Invalid argc size" << std::endl;
                 exit(EXIT_FAILURE);
             }
 
             // Allocate an array of char* for argv.
-            char **argv = new char *[argc];
+            char **temp_argv = new char *[temp_argc];
 
-            for (int i = 0; i < argc; ++i) {
+            for (int i = 0; i < temp_argc; ++i) {
                 // Allocate enough space for the string plus the null terminator.
-                argv[i] = new char[args[i].size() + 1];
-                std::strcpy(argv[i], args[i].c_str());
+                temp_argv[i] = new char[args[i].size() + 1];
+                std::strcpy(temp_argv[i], args[i].c_str());
             }
 
-            AlgorithmConfiguration ac(argc, argv);
+            AlgorithmConfiguration ac(temp_argc, temp_argv);
             _t.stop();
 
             Solver solver(ac);
             solver.solve();
 
-            for (int i = 0; i < argc; ++i) { delete[] argv[i]; }
-            delete[] argv;
+            for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
+            delete[] temp_argv;
 
             Profiler::instance().print_table_ascii_colored(std::cout);
         }

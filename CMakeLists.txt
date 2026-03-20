@@ -33,6 +33,11 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL TRUE)
 
 # ---------------------------
+# OpenMP
+# ---------------------------
+find_package(OpenMP REQUIRED)
+
+# ---------------------------
 # KaHIP selection by config
 # ---------------------------
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -58,6 +63,7 @@ message(STATUS "Build type          : ${CMAKE_BUILD_TYPE}")
 message(STATUS "Selected KaHIP root : ${KAHIP_ROOT}")
 message(STATUS "Found KaHIP library : ${KAHIP_LIBRARY}")
 message(STATUS "Found KaHIP include : ${KAHIP_INCLUDE_DIR}")
+message(STATUS "Found OpenMP        : ${OpenMP_CXX_FOUND}")
 
 if(NOT KAHIP_LIBRARY OR NOT KAHIP_INCLUDE_DIR)
     message(FATAL_ERROR "KaHIP not found under ${KAHIP_ROOT}")
@@ -93,6 +99,7 @@ target_include_directories(HeiProMap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
 
 target_link_libraries(HeiProMap PUBLIC
         ${KAHIP_LIBRARY}
+        OpenMP::OpenMP_CXX
         m
 )
 
@@ -115,6 +122,10 @@ add_library(libheipromap OBJECT
 
 target_include_directories(libheipromap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
 
+target_link_libraries(libheipromap PUBLIC
+        OpenMP::OpenMP_CXX
+)
+
 # ---------------------------
 # Shared library
 # ---------------------------
@@ -130,6 +141,7 @@ target_include_directories(heipromap
 
 target_link_libraries(heipromap PRIVATE
         ${KAHIP_LIBRARY}
+        OpenMP::OpenMP_CXX
 )
 
 set_target_properties(heipromap PROPERTIES
