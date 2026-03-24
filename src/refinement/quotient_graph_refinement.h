@@ -65,19 +65,7 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-
-        // priority queues
-        IndexedMaxHeap<s64> boundary_vertices_u;
-        IndexedMaxHeap<s64> boundary_vertices_v;
-
-        // store change
-        AlignedArray<vertex_t> moves;
-        size_t moves_size = 0;
-        s64 curr_qap_gain = 0;
-        s64 max_qap_gain = 0;
-        s64 curr_edge_cut_gain = 0;
-        s64 max_edge_cut_gain = 0;
-        size_t best_idx = 0;
+        u64 m_threads = 1;
 
         // active block scheduling
         AlignedArray<u8> active_this_round;
@@ -87,9 +75,11 @@ namespace HeiProMap {
 
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
-        u32 vertex_mark = 0;
+        u32 global_vertex_mark = 0;
 
-        RandomEngine random_engine = RandomEngine(0);
+        std::vector<IndexedMaxHeap<s64> > boundary_vertices_u_vec;
+        std::vector<IndexedMaxHeap<s64> > boundary_vertices_v_vec;
+
         const QuotientGraphRefinementConfiguration *config = nullptr;
 
     public:
@@ -100,31 +90,36 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
+                        const u64 t_threads,
                         const ISerialRefinerConfiguration &i_config) override {
             ScopedTimer _t("io", "QuotientGraphRefinement", "initialize");
 
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
+            m_threads = t_threads;
 
             config = dynamic_cast<const QuotientGraphRefinementConfiguration *>(&i_config);
 
-            // priority queues
-            boundary_vertices_u.initialize(m_n);
-            boundary_vertices_v.initialize(m_n);
-
-            vertex_mark = 0;
+            global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
-
-            moves.initialize(m_n);
-            moves_size = 0;
 
             // active block scheduling
             active_this_round.initialize(m_k);
             active_next_round.initialize(m_k);
-            size_t size = (size_t) m_k * (size_t) m_k;
-            pairs.initialize(size);
+            pairs.initialize(m_k * m_k);
             pairs_size = 0;
+
+            for (size_t i = 0; i < m_threads; ++i) {
+                boundary_vertices_u_vec.push_back(IndexedMaxHeap<s64>());
+                boundary_vertices_v_vec.push_back(IndexedMaxHeap<s64>());
+            }
+
+            #pragma omp parallel for num_threads(m_threads)
+            for (size_t i = 0; i < m_threads; ++i) {
+                boundary_vertices_u_vec[i].initialize(m_n);
+                boundary_vertices_v_vec[i].initialize(m_n);
+            }
         }
 
         void refine(graph_t &g,
@@ -136,50 +131,118 @@ namespace HeiProMap {
                     f64 imbalance) override {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
+            RandomEngine random_engine = RandomEngine(0);
+
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
 
-            u64 iteration = 0;
-            while (iteration < config->max_iteration) {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "get_pairs");
-                iteration += 1;
-
+            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
                 // determine all pairs in the quotient graph
-                pairs_size = 0;
-                if (config->use_active_scheduling) {
+                {
+                    ScopedTimer _t("refinement", "QuotientGraphRefinement", "get_pairs");
+
+                    pairs_size = 0;
+
                     for (partition_t u_id = 0; u_id < m_k; ++u_id) {
                         for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
-                            if (q_graph.has_edge(u_id, v_id) && (active_this_round[u_id] || active_this_round[v_id])) {
-                                pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
+                            if (!q_graph.has_edge(u_id, v_id)) continue;
+
+                            if (config->use_active_scheduling && !(active_this_round[u_id] || active_this_round[v_id])) {
+                                continue;
                             }
+
+                            pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
                         }
                     }
-                } else {
-                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                        for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
-                            if (q_graph.has_edge(u_id, v_id)) {
-                                pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
-                            }
-                        }
-                    }
+                    if (pairs_size == 0) { return; }
                 }
-                if (pairs_size == 0) { return; }
+                //
+                {
+                    ScopedTimer _t("refinement", "QuotientGraphRefinement", "shuffle");
 
-                std::shuffle(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
+                    fast_shuffle_unchecked(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
+                }
 
-                _t.stop();
                 for (size_t j = 0; j < pairs_size; ++j) {
                     auto [u_id, v_id, distance] = pairs[j];
                     // if (d_oracle.last_level_pair(u_id, v_id)) {
                     //     refine_blocks_edge_cut(level, max_level, g, d_oracle, bv_manager, p_manager, q_graph, u_id, v_id);
                     // } else {
-                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax);
+
+                    // priority queues
+                    IndexedMaxHeap<s64> &boundary_vertices_u = boundary_vertices_u_vec[0];
+                    IndexedMaxHeap<s64> &boundary_vertices_v = boundary_vertices_v_vec[0];
+
+                    global_vertex_mark += 1;
+                    refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u, boundary_vertices_v, global_vertex_mark, random_engine);
                     // }
                 }
 
-                std::swap(active_this_round, active_next_round);
-                active_next_round.initialize(m_k, 0);
+                //
+                {
+                    ScopedTimer _t("refinement", "QuotientGraphRefinement", "swap");
+
+                    std::swap(active_this_round, active_next_round);
+                    active_next_round.initialize(m_k, 0);
+                }
             }
+
+            /*
+            AlignedArray<u8> used_this_round;
+            //
+            {
+                ScopedTimer _t("refinement", "QuotientGraphRefinement", "allocate");
+
+                used_this_round.initialize(m_k * m_k);
+            }
+
+            std::vector<std::pair<partition_t, partition_t> > matching;
+
+            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+                //
+                {
+                    ScopedTimer _t("refinement", "QuotientGraphRefinement", "reset_used_edges");
+
+                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+                }
+
+                bool found_matching = false;
+                //
+                {
+                    ScopedTimer _t("refinement", "QuotientGraphRefinement", "matching");
+                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                }
+
+                while (found_matching) {
+                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    for (size_t i = 0; i < matching.size(); ++i) {
+                        partition_t u_id = matching[i].first;
+                        partition_t v_id = matching[i].second;
+
+                        u64 thread_id = omp_get_thread_num();
+
+                        // priority queues
+                        IndexedMaxHeap<s64> &boundary_vertices_u = boundary_vertices_u_vec[thread_id];
+                        IndexedMaxHeap<s64> &boundary_vertices_v = boundary_vertices_v_vec[thread_id];
+
+                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u, boundary_vertices_v, global_vertex_mark);
+                    }
+
+                    //
+                    {
+                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "matching");
+                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                    }
+                }
+
+                // swap active
+                {
+                    ScopedTimer _t("refinement", "QuotientGraphRefinement", "swap_active");
+                    std::swap(active_this_round, active_next_round);
+                    active_next_round.initialize(m_k, 0);
+                }
+            }
+            */
         }
 
         void refine_blocks(const graph_t &g,
@@ -190,25 +253,28 @@ namespace HeiProMap {
                            block_conn_t &block_conn,
                            partition_t u_id,
                            partition_t v_id,
-                           weight_t lmax) {
+                           weight_t lmax,
+                           IndexedMaxHeap<s64> &boundary_vertices_u,
+                           IndexedMaxHeap<s64> &boundary_vertices_v,
+                           vertex_t vertex_mark,
+                           RandomEngine &random_engine) {
             f64 alpha = config->alpha;
             f64 beta = std::log(g.n);
 
             size_t max_n_swaps = 0;
-
+            //
             {
                 ScopedTimer _t("refinement", "QuotientGraphRefinement", "initial_qap");
 
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
                 boundary_vertices_v.clear();
-                vertex_mark += 1;
                 forall_bv_id_iu(bv_manager, u_id, j, u)
                     {
                         forall_bc_ui_id(block_conn, u, i, id)
                             {
                                 if (id == v_id) {
-                                    s64 qap_delta_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                    s64 qap_delta_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                                     boundary_vertices_u.push(u, qap_delta_u);
                                     break;
                                 }
@@ -222,7 +288,7 @@ namespace HeiProMap {
                         forall_bc_ui_id(block_conn, v, i, id)
                             {
                                 if (id == u_id) {
-                                    s64 qap_delta_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
+                                    s64 qap_delta_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
                                     boundary_vertices_v.push(v, qap_delta_v);
                                     break;
                                 }
@@ -234,21 +300,23 @@ namespace HeiProMap {
 
             max_n_swaps = 100000;
 
-            // start executing moves based on the TopGain method
-            vertex_mark += 1;
-            moves_size = 0;
-            best_idx = 0;
-            curr_qap_gain = 0;
-            max_qap_gain = 0;
+            // store change
+            s64 curr_qap_gain = 0;
+            s64 max_qap_gain = 0;
+            // s64 curr_edge_cut_gain = 0;
+            // s64 max_edge_cut_gain = 0;
+            size_t best_idx = 0;
 
             u64 steps_since_last_improvement = 0;
             f64 qap_gain_mean = 0.0;
             f64 qap_gain_var = 0.0;
 
+            std::vector<vertex_t> moves;
+            //
             {
                 ScopedTimer _t("refinement", "QuotientGraphRefinement", "process_queue");
 
-                while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves_size < max_n_swaps) {
+                while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
                     // determine from which block to choose
                     bool choose_u = true;
                     // 1. if one block is empty, then choose the other one
@@ -282,10 +350,10 @@ namespace HeiProMap {
                     boundary_vertices.pop();
 
                     // move the vertex
-                    moves[moves_size++] = vertex;
+                    moves.push_back(vertex);
                     curr_qap_gain += qap_delta;
                     if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
-                        best_idx = moves_size;
+                        best_idx = moves.size();
                         max_qap_gain = curr_qap_gain;
 
                         steps_since_last_improvement = 0;
@@ -341,16 +409,17 @@ namespace HeiProMap {
                     while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
                 }
             }
-
+            //
             {
                 ScopedTimer _t("refinement", "QuotientGraphRefinement", "make_moves");
 
                 // revert all moves in partitioning manager
-                for (size_t i = 0; i < moves_size; i++) {
-                    vertex_t vertex = moves[moves_size - 1 - i];
+                for (size_t i = 0; i < moves.size(); i++) {
+                    vertex_t vertex = moves[moves.size() - 1 - i];
                     weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                    vertex_used[vertex] = vertex_mark - 1;
 
                     p_manager.move(vertex, vertex_weight, vertex_id, move_id);
                 }
@@ -361,6 +430,7 @@ namespace HeiProMap {
                     weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                    vertex_used[vertex] = vertex_mark;
 
                     bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                     q_graph.move(g, p_manager, vertex, vertex_id, move_id);
@@ -375,6 +445,7 @@ namespace HeiProMap {
             }
         }
 
+        /*
         void refine_blocks_edge_cut([[maybe_unused]] const u64 level,
                                     [[maybe_unused]] const u64 max_level,
                                     const graph_t &g,
@@ -391,9 +462,12 @@ namespace HeiProMap {
 
             size_t max_n_swaps = 0;
 
-            // add all boundary vertices with gain
-            boundary_vertices_u.clear();
-            boundary_vertices_v.clear();
+            // priority queues
+            IndexedMaxHeap<s64> boundary_vertices_u;
+            IndexedMaxHeap<s64> boundary_vertices_v;
+            boundary_vertices_u.initialize(m_n);
+            boundary_vertices_v.initialize(m_n);
+
             vertex_mark += 1;
             forall_bv_id_iu(bv_manager, u_id, k, u)
                 {
@@ -526,7 +600,7 @@ namespace HeiProMap {
                 weight_t vertex_weight = g.v_weights[vertex];
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                vertex_used[vertex] = vertex_mark-1;
+                vertex_used[vertex] = vertex_mark - 1;
 
                 p_manager.move(vertex, vertex_weight, vertex_id, move_id);
             }
@@ -550,6 +624,7 @@ namespace HeiProMap {
                 active_next_round[v_id] = 1;
             }
         }
+        */
     };
 }
 

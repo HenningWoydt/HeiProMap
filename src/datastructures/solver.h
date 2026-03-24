@@ -229,10 +229,10 @@ namespace HeiProMap {
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, *config);
+                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, *config);
                 }
             }
-            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.label_propagation_config);
+            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.label_propagation_config);
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -285,11 +285,11 @@ namespace HeiProMap {
             std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms +
                     initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             for (size_t i = 0; i < level_infos.size(); ++i) {
                 print_all_levels(level_infos[i]);
             }
-#endif
+            #endif
 
             return p;
         }
@@ -317,12 +317,12 @@ namespace HeiProMap {
             level_infos.emplace_back();
 
             while (graphs.back().n > ac.k * mult && (is_initial || graphs.size() <= ac.v_cycle_max_depth)) {
-#if ENABLE_PROFILER
+                #if ENABLE_PROFILER
                 level_infos[v_cycle].emplace_back();
                 level_infos[v_cycle][level].level = level;
                 level_infos[v_cycle][level].n = graphs.back().n;
                 level_infos[v_cycle][level].m = graphs.back().m;
-#endif
+                #endif
 
                 level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
@@ -335,12 +335,12 @@ namespace HeiProMap {
                 level += 1;
             }
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle].emplace_back();
             level_infos[v_cycle][level].level = level;
             level_infos[v_cycle][level].n = graphs.back().n;
             level_infos[v_cycle][level].m = graphs.back().m;
-#endif
+            #endif
 
             level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
@@ -349,7 +349,7 @@ namespace HeiProMap {
                 partition(level, level_imbalance);
             }
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle][level].max_b_weight = p_managers[0].max_weight();
             level_infos[v_cycle][level].lmax = level_lmax;
             level_infos[v_cycle][level].imb = (f64) level_infos[v_cycle][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
@@ -357,14 +357,14 @@ namespace HeiProMap {
             level_infos[v_cycle][level].empty_partitions = p_managers[0].n_empty_blocks();
             level_infos[v_cycle][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
             level_infos[v_cycle][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
-#endif
+            #endif
 
             while (!mappings.empty()) {
                 level -= 1;
 
                 level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
-                uncoarsening(v_cycle, level);
+                uncontraction(v_cycle, level);
 
                 u64 n_partitions = is_initial ? 1 : std::min(1 + level * level, max_n_partitions);
                 lp_refine.min_improvement = -10;
@@ -379,16 +379,10 @@ namespace HeiProMap {
                 }
                 lp_refine.min_improvement = 0;
 
-                for (u64 i = 0; i < n_partitions; ++i) {
-                    std::cout << "pre: " << v_cycle << " " << level << " " << i << " " << get_qap(graphs.back(), p_managers[i], d_oracle) << std::endl;
-                }
-
                 rebalancing(v_cycle, level, level_imbalance, n_partitions);
                 refinement(v_cycle, level, level_imbalance, n_partitions);
 
-                for (u64 i = 0; i < n_partitions; ++i) {
-                    std::cout << "aft: " << v_cycle << " " << level << " " << i << " " << get_qap(graphs.back(), p_managers[i], d_oracle) << std::endl;
-                }
+                std::cout << level << " " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << std::endl;
 
                 if (n_partitions > 1) {
                     weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
@@ -409,7 +403,7 @@ namespace HeiProMap {
                     }
                 }
 
-#if ENABLE_PROFILER
+                #if ENABLE_PROFILER
                 level_infos[v_cycle][level].max_b_weight = p_managers[0].max_weight();
                 level_infos[v_cycle][level].lmax = level_lmax;
                 level_infos[v_cycle][level].imb = (f64) level_infos[v_cycle][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
@@ -417,7 +411,7 @@ namespace HeiProMap {
                 level_infos[v_cycle][level].empty_partitions = p_managers[0].n_empty_blocks();
                 level_infos[v_cycle][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
                 level_infos[v_cycle][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
-#endif
+                #endif
             }
         }
 
@@ -440,7 +434,7 @@ namespace HeiProMap {
                             local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
                         }
 
-#pragma omp parallel for schedule(static) num_threads(ac.threads)
+                        #pragma omp parallel for schedule(static) num_threads(ac.threads)
                         for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
                             GlobalMultisectionPartitioner partitioner;
                             partitioner.partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
@@ -534,7 +528,7 @@ namespace HeiProMap {
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+                size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, ac.threads);
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -544,76 +538,82 @@ namespace HeiProMap {
             auto ep = get_time_point();
             coarsening_ms += get_milli_seconds(sp, ep);
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle][level].t_coarsening += get_milli_seconds(sp, ep);
-#endif
+            #endif
         }
 
         void contraction(const u64 v_cycle, [[maybe_unused]] const u64 level) {
             auto sp = get_time_point();
 
             graphs.emplace_back(); // coarse the graph
-            graphs.back().initialize(graphs[graphs.size() - 2], mappings.back());
+            if (ac.threads == 1) {
+                graphs.back().initialize(graphs[graphs.size() - 2], mappings.back());
+            } else {
+                graphs.back().parallel_initialize(graphs[graphs.size() - 2], mappings.back(), ac.k);
+            }
             p_managers[0].contract(mappings.back());
 
             auto ep = get_time_point();
             contraction_ms += get_milli_seconds(sp, ep);
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle][level].t_contraction += get_milli_seconds(sp, ep);
-#endif
+            #endif
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_managers[0], ac.k));
         }
 
-        void uncoarsening(const u64 v_cycle, [[maybe_unused]] const u64 level) {
+        void uncontraction(const u64 v_cycle, [[maybe_unused]] const u64 level) {
             auto sp = get_time_point();
 
             p_managers[0].uncontract(mappings.back());
+            //
+            {
+                ScopedTimer _tt("uncontraction", "misc", "compute_from_scratch");
+                const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
-            ScopedTimer _tt("uncontraction", "misc", "compute_from_scratch");
-            const graph_t &g_uncontracted = graphs[graphs.size() - 2];
+                bv_managers[0].reset();
+                block_conns[0].initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
+                block_conns[0].reset_build();
 
-            bv_managers[0].reset();
-            block_conns[0].initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
-            block_conns[0].reset_build();
+                forall_gu(g_uncontracted, u)
+                    {
+                        const partition_t u_id = p_managers[0][u];
+                        size_t n_different = 0;
 
-            forall_gu(g_uncontracted, u)
-                {
-                    const partition_t u_id = p_managers[0][u];
-                    size_t n_different = 0;
+                        block_conns[0].begin_vertex(g_uncontracted, u);
 
-                    block_conns[0].begin_vertex(g_uncontracted, u);
+                        forall_guivw(g_uncontracted, u, i, v, w)
+                            {
+                                const partition_t v_id = p_managers[0][v];
 
-                    forall_guivw(g_uncontracted, u, i, v, w)
-                        {
-                            const partition_t v_id = p_managers[0][v];
+                                // rebuild block connections
+                                block_conns[0].add_connection(u, v_id, w);
 
-                            // rebuild block connections
-                            block_conns[0].add_connection(u, v_id, w);
+                                // rebuild boundary information
+                                n_different += (u_id != v_id);
+                            }
+                        endfor
 
-                            // rebuild boundary information
-                            n_different += (u_id != v_id);
-                        }
-                    endfor
-
-                    bv_managers[0].add_boundary_vertex_from_count(u, u_id, n_different);
-                }
-            endfor
-            _tt.stop();
-
-            ScopedTimer _t("uncontraction", "misc", "free_graph");
-            graphs.pop_back(); // this is doing uncontraction
-            mappings.pop_back();
-            _t.stop();
+                        bv_managers[0].add_boundary_vertex_from_count(u, u_id, n_different);
+                    }
+                endfor
+            }
+            //
+            {
+                ScopedTimer _t("uncontraction", "misc", "free_graph");
+                graphs.pop_back(); // this is doing uncontraction
+                mappings.pop_back();
+            }
 
             auto ep = get_time_point();
 
             uncontraction_ms += get_milli_seconds(sp, ep);
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle][level].t_uncontraction += get_milli_seconds(sp, ep);
-#endif
+            #endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(),p_managers[0], bv_managers[0], q_graphs[0], block_conns[0] , ac.k));
         }
@@ -633,9 +633,9 @@ namespace HeiProMap {
 
             rebalance_ms += get_milli_seconds(sp, ep);
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle][level].t_rebalance += get_milli_seconds(sp, ep);
-#endif
+            #endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0 ], ac.k));
         }
@@ -667,9 +667,9 @@ namespace HeiProMap {
 
             refinement_ms += get_milli_seconds(sp, ep);
 
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             level_infos[v_cycle][level].t_refinement += get_milli_seconds(sp, ep);
-#endif
+            #endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0 ], ac.k));
         }

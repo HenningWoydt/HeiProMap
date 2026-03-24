@@ -71,6 +71,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
+                        const u64 t_threads,
                         const ISerialRefinerConfiguration &i_config) override {
             m_n = t_n;
             m_m = t_m;

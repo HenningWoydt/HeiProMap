@@ -1,7 +1,7 @@
 /*******************************************************************************
  * MIT License
  *
- * This file is part of HeiProMap.
+ * This file is part of GPU-HeiPa.
  *
  * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
  *
@@ -24,45 +24,44 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ISERIALREFINER_H
-#define HEIPROMAP_ISERIALREFINER_H
+#ifndef GPU_HEIPA_KWAY_BOUNDARY_H
+#define GPU_HEIPA_KWAY_BOUNDARY_H
 
 #include <vector>
 
-#include "../definitions_1.h"
-#include "../definitions_2.h"
-#include "../definitions_3.h"
-#include "../definitions.h"
-
-namespace HeiProMap {
-    class ISerialRefinerConfiguration {
+namespace GPU_HeiPa::ModifiedMetis {
+    class Boundary {
     public:
-        explicit ISerialRefinerConfiguration(const std::string &t_name) { name = t_name; }
+        int curr_n = 0;
+        int max_n = 0;
+        std::vector<int> idx;
+        std::vector<int> val;
 
-        virtual ~ISerialRefinerConfiguration() = default;
+        Boundary(int n = 0) : curr_n(0), max_n(n), idx(n, -1), val(n) {
+        }
 
-        std::string name;
-        bool enabled = false;
-    };
+        void add(int v) {
+            val[curr_n] = v;
+            idx[v] = curr_n++;
+        }
 
-    class ISerialRefiner {
-    public:
-        virtual ~ISerialRefiner() = default;
+        void remove(int v) {
+            int last = val[--curr_n];
+            val[idx[v]] = last;
+            idx[last] = idx[v];
+            idx[v] = -1;
+        }
 
-        virtual void initialize(vertex_t t_n,
-                                vertex_t t_m,
-                                partition_t t_k,
-                                u64 t_threads,
-                                const ISerialRefinerConfiguration &i_config) = 0;
+        bool is_boundary(int v) const {
+            return idx[v] != -1;
+        }
 
-        virtual void refine(graph_t &g,
-                            d_oracle_t &d_oracle,
-                            bv_manager_t &bv_manager,
-                            p_manager_t &p_manager,
-                            q_graph_t &q_graph,
-                            block_conn_t &block_conn,
-                            f64 imbalance) = 0;
+        void reset() {
+            curr_n = 0;
+            std::fill(idx.begin(), idx.end(), -1);
+        }
     };
 }
 
-#endif //HEIPROMAP_ISERIALREFINER_H
+
+#endif //GPU_HEIPA_KWAY_BOUNDARY_H

@@ -112,6 +112,129 @@ namespace HeiProMap {
             }
         }
 
+        bool find_distance_3_matching(AlignedArray<u8> &active_this_round,
+                              AlignedArray<u8> &used_edges_this_round,
+                              std::vector<std::pair<partition_t, partition_t>> &matching) {
+            matching.clear();
+
+            std::vector<u8> vertex_frozen(m_k, 0);
+
+            auto freeze_distance_2 = [&](partition_t x) {
+                vertex_frozen[x] = 1;
+
+                for (partition_t n1 = 0; n1 < m_k; ++n1) {
+                    if (n1 == x || !has_edge(x, n1)) {
+                        continue;
+                    }
+
+                    vertex_frozen[n1] = 1;
+
+                    for (partition_t n2 = 0; n2 < m_k; ++n2) {
+                        if (n2 == n1 || !has_edge(n1, n2)) {
+                            continue;
+                        }
+                        vertex_frozen[n2] = 1;
+                    }
+                }
+            };
+
+            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                if (vertex_frozen[u_id] == 1) { continue; }
+
+                for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
+                    if (!has_edge(u_id, v_id)) { continue; }
+                    if (vertex_frozen[v_id] == 1) { continue; }
+                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) { continue; }
+
+                    size_t eidx = edge_index(u_id, v_id);
+                    if (used_edges_this_round[eidx] == 1) { continue; }
+
+                    matching.emplace_back(u_id, v_id);
+                    used_edges_this_round[eidx] = 1;
+
+                    freeze_distance_2(u_id);
+                    freeze_distance_2(v_id);
+                    break;
+                }
+            }
+
+            return !matching.empty();
+        }
+
+        size_t edge_index(const partition_t u_id, const partition_t v_id) const {
+            partition_t min_id = std::min(u_id, v_id);
+            partition_t max_id = std::max(u_id, v_id);
+            return (size_t)min_id * (size_t)m_k + (size_t)max_id;
+        }
+
+        bool is_valid_distance_3_matching(const std::vector<std::pair<partition_t, partition_t> > &matching) const {
+            std::vector<u8> is_in_matching(m_k, 0);
+
+            for (const auto &[u_id, v_id]: matching) {
+                if (u_id >= m_k || v_id >= m_k) {
+                    std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                    return false;
+                }
+                if (u_id == v_id) {
+                    std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                    return false;
+                }
+                if (!has_edge(u_id, v_id)) {
+                    std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                    return false;
+                }
+                if (is_in_matching[u_id] == 1 || is_in_matching[v_id] == 1) {
+                    std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                    return false;
+                }
+
+                is_in_matching[u_id] = 1;
+                is_in_matching[v_id] = 1;
+            }
+
+            for (const auto &[u_id, v_id]: matching) {
+                // Check all vertices within distance <= 2 from u_id
+                for (partition_t id = 0; id < m_k; ++id) {
+                    if (id != u_id && id != v_id && has_edge(u_id, id) && is_in_matching[id] == 1) {
+                        std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                        return false;
+                    }
+
+                    if (!has_edge(u_id, id)) {
+                        continue;
+                    }
+
+                    for (partition_t id2 = 0; id2 < m_k; ++id2) {
+                        if (id2 != u_id && id2 != v_id && has_edge(id, id2) && is_in_matching[id2] == 1) {
+                            std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                            return false;
+                        }
+                    }
+                }
+
+                // Check all vertices within distance <= 2 from v_id
+                for (partition_t id = 0; id < m_k; ++id) {
+                    if (id != u_id && id != v_id && has_edge(v_id, id) && is_in_matching[id] == 1) {
+                        std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                        return false;
+                    }
+
+                    if (!has_edge(v_id, id)) {
+                        continue;
+                    }
+
+                    for (partition_t id2 = 0; id2 < m_k; ++id2) {
+                        if (id2 != u_id && id2 != v_id && has_edge(id, id2) && is_in_matching[id2] == 1) {
+                            std::cout << "Not Valid 3 Distance Matching" << std::endl;
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
+        }
+
         void write_as_metis(const std::string &file_name) {
             std::ofstream out(file_name);
             if (!out) {

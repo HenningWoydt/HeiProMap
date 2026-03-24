@@ -1,7 +1,7 @@
 /*******************************************************************************
  * MIT License
  *
- * This file is part of HeiProMap.
+ * This file is part of GPU-HeiPa.
  *
  * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
  *
@@ -24,45 +24,41 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ISERIALREFINER_H
-#define HEIPROMAP_ISERIALREFINER_H
+#ifndef GPU_HEIPA_KWAY_GRAPH_H
+#define GPU_HEIPA_KWAY_GRAPH_H
 
 #include <vector>
 
-#include "../definitions_1.h"
-#include "../definitions_2.h"
-#include "../definitions_3.h"
-#include "../definitions.h"
-
-namespace HeiProMap {
-    class ISerialRefinerConfiguration {
+namespace GPU_HeiPa::ModifiedMetis {
+    class Graph {
     public:
-        explicit ISerialRefinerConfiguration(const std::string &t_name) { name = t_name; }
+        int n = -1;
+        int m = -1;
+        int g_weight = -1;
 
-        virtual ~ISerialRefinerConfiguration() = default;
+        std::vector<int> v_weights;
+        std::vector<int> rows;
+        std::vector<int> edges_v;
+        std::vector<int> edges_w;
 
-        std::string name;
-        bool enabled = false;
-    };
+        int mincut = -1;
 
-    class ISerialRefiner {
-    public:
-        virtual ~ISerialRefiner() = default;
+        Graph() = default;
 
-        virtual void initialize(vertex_t t_n,
-                                vertex_t t_m,
-                                partition_t t_k,
-                                u64 t_threads,
-                                const ISerialRefinerConfiguration &i_config) = 0;
+        Graph(int t_n, int t_m, int t_w = 0) : n(t_n), m(t_m), g_weight(t_w), v_weights(t_n), rows(t_n + 1), edges_v(t_m), edges_w(t_m), mincut(0) {
+        }
 
-        virtual void refine(graph_t &g,
-                            d_oracle_t &d_oracle,
-                            bv_manager_t &bv_manager,
-                            p_manager_t &p_manager,
-                            q_graph_t &q_graph,
-                            block_conn_t &block_conn,
-                            f64 imbalance) = 0;
+        void resize(int t_n, int t_m, int t_w = -1) {
+            n = t_n;
+            m = t_m;
+            g_weight = t_w;
+            v_weights.resize(t_n);
+            rows.resize(t_n + 1);
+            edges_v.resize(t_m);
+            edges_w.resize(t_m);
+        }
     };
 }
 
-#endif //HEIPROMAP_ISERIALREFINER_H
+
+#endif //GPU_HEIPA_KWAY_GRAPH_H

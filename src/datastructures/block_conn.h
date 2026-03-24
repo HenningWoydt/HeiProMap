@@ -84,8 +84,6 @@ namespace HeiProMap {
 
             forall_guivw(g, u, i, v, w)
                 {
-                    // remove(v, old_id, w);
-                    // add(v, new_id, w);
                     update(v, old_id, new_id, w);
                 }
             endfor

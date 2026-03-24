@@ -32,6 +32,9 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL TRUE)
 
+set(ENABLE_PROFILER OFF CACHE BOOL "Enable profiler")
+message(STATUS "ENABLE_PROFILER    : ${ENABLE_PROFILER}")
+
 # ---------------------------
 # OpenMP
 # ---------------------------
@@ -122,6 +125,10 @@ add_library(libheipromap OBJECT
 
 target_include_directories(libheipromap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
 
+target_compile_definitions(libheipromap PRIVATE
+        ENABLE_PROFILER=${ENABLE_PROFILER}
+)
+
 target_link_libraries(libheipromap PUBLIC
         OpenMP::OpenMP_CXX
 )
@@ -137,6 +144,10 @@ add_library(heipromap SHARED
 target_include_directories(heipromap
         PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/interface
         PRIVATE ${KAHIP_INCLUDE_DIR}
+)
+
+target_compile_definitions(HeiProMap PRIVATE
+        ENABLE_PROFILER=${ENABLE_PROFILER}
 )
 
 target_link_libraries(heipromap PRIVATE

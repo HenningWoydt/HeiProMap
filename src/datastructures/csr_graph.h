@@ -34,6 +34,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include <omp.h>
+
 #include "../utility/aligned_array.h"
 #include "../definitions.h"
 #include "../utility/matching.h"
@@ -268,7 +270,8 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                     vertex_t map_u = mapping.get(u);
 
-                    forall_guivw(g, u, i, v, w) {
+                    forall_guivw(g, u, i, v, w)
+                        {
                             vertex_t map_v = mapping.get(v);
                             if (map_u == map_v) { continue; }
 
@@ -278,7 +281,7 @@ namespace HeiProMap {
                             if (len == 0) { continue; }
 
                             // insert map_v
-                            vertex_t j = beg + (hash_vertex(map_v) % len);
+                            vertex_t j = beg + (map_v % len);
                             while (true) {
                                 if (j == end) { j = beg; }
                                 if (temp_edges_v[j] == map_v) {
@@ -411,7 +414,8 @@ namespace HeiProMap {
                     for (u64 i = n_mapped_prefix[map_u]; i < n_mapped_prefix[map_u + 1]; ++i) {
                         vertex_t u = mapped_vertices[i];
 
-                        forall_guivw(g, u, j, v, w) {
+                        forall_guivw(g, u, j, v, w)
+                            {
                                 vertex_t map_v = mapping.get(v);
                                 if (map_u == map_v) { continue; }
 
@@ -429,6 +433,148 @@ namespace HeiProMap {
                         endfor
                     }
                     neighborhoods[map_u + 1] = m;
+                }
+            }
+        }
+
+        void parallel_initialize(const CSRGraph &g,
+                                 const Mapping &mapping,
+                                 const u64 threads) {
+            AlignedArray<vertex_t> overest_sizes;
+            AlignedArray<vertex_t> overest_neighborhood;
+            AlignedArray<vertex_t> m_per_thread;
+            AlignedArray<vertex_t> temp_edges_v;
+            AlignedArray<weight_t> temp_edges_w;
+            AlignedArray<vertex_t> sizes;
+            //
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "allocate");
+
+                n = mapping.get_coarse_n();
+                g_weight = g.g_weight;
+                v_weights.initialize(n, 0);
+                overest_sizes.initialize(n, 0);
+                overest_neighborhood.initialize(n + 1);
+            }
+            //
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "overest_sizes");
+
+                // overestimate neighborhood sizes and collect weights
+                for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                    vertex_t map_u = mapping.get(u);
+                    overest_sizes[map_u] += g.deg(u);
+                    v_weights[map_u] += g.v_weights[u];
+                }
+            }
+            //
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "prefix_sum");
+
+                // prefix-sum on overestimated neighborhood
+                overest_neighborhood[0] = 0;
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
+                }
+            }
+            //
+            {
+                ScopedTimer _t_insert_edges("contraction", "CSRGraph", "allocate_insert_edges");
+
+                m_per_thread.initialize(threads, 0);
+                temp_edges_v.initialize(overest_neighborhood[n], g.n);
+                temp_edges_w.initialize(overest_neighborhood[n]);
+                sizes.initialize(n, 0);
+            }
+            //
+            {
+                ScopedTimer _t_insert_edges("contraction", "CSRGraph", "insert_edges");
+
+                // insert edges in overestimated array
+                m = 0;
+
+                // Partition the *coarse* id space [0, m_n) into disjoint slices.
+                auto slice_begin = [&](u64 t) -> vertex_t { return t * n / threads; };
+                auto slice_end = [&](u64 t) -> vertex_t { return (t + 1) * n / threads; };
+
+                #pragma omp parallel num_threads(threads)
+                {
+                    const u64 tid = (u64) omp_get_thread_num();
+                    const vertex_t mu_beg = slice_begin(tid);
+                    const vertex_t mu_end = tid == threads - 1 ? n : slice_end(tid);
+
+                    size_t local_m = 0;
+                    for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                        vertex_t map_u = mapping.get(u);
+                        if (map_u < mu_beg || map_u >= mu_end) continue; // not my bucket range
+
+                        forall_guivw(g, u, i, v, w)
+                            {
+                                vertex_t map_v = mapping.get(v);
+                                if (map_u == map_v) { continue; }
+
+                                vertex_t beg = overest_neighborhood[map_u];
+                                vertex_t end = overest_neighborhood[map_u + 1];
+                                vertex_t len = end - beg;
+                                if (len == 0) { continue; }
+
+                                // insert map_v
+                                vertex_t j = beg + (map_v % len);
+                                while (true) {
+                                    if (j == end) { j = beg; }
+                                    if (temp_edges_v[j] == map_v) {
+                                        temp_edges_w[j] += w;
+                                        break;
+                                    }
+                                    if (temp_edges_v[j] == g.n) {
+                                        temp_edges_v[j] = map_v;
+                                        temp_edges_w[j] = w;
+                                        local_m += 1;
+                                        sizes[map_u] += 1;
+                                        break;
+                                    }
+                                    j += 1;
+                                }
+                            }
+                        endfor
+                    }
+                    m_per_thread[tid] = local_m;
+                }
+
+                m = 0;
+                for (size_t i = 0; i < threads; ++i) { m += m_per_thread[i]; }
+            }
+            //
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "real_neighborhood");
+
+                // insert edges in real array
+                neighborhoods.initialize(n + 1);
+                neighborhoods[0] = 0;
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    neighborhoods[map_u + 1] = neighborhoods[map_u] + sizes[map_u];
+                }
+            }
+            //
+            {
+                ScopedTimer _t("contraction", "CSRGraph", "copy_edges");
+
+                edges_v.initialize(m);
+                edges_w.initialize(m);
+
+                #pragma omp parallel for num_threads(threads)
+                for (vertex_t map_u = 0; map_u < mapping.get_coarse_n(); ++map_u) {
+                    size_t cursor = neighborhoods[map_u];
+                    for (vertex_t j = overest_neighborhood[map_u]; j < overest_neighborhood[map_u + 1]; ++j) {
+                        vertex_t map_v = temp_edges_v[j];
+                        weight_t map_w = temp_edges_w[j];
+
+                        if (map_v != g.n) {
+                            edges_v[cursor] = map_v;
+                            edges_w[cursor] = map_w;
+                            cursor += 1;
+                        }
+                    }
                 }
             }
         }
@@ -481,10 +627,10 @@ namespace HeiProMap {
             }
 
             // move to vector for sorted output
-            std::vector<std::pair<size_t, size_t>> dist;
+            std::vector<std::pair<size_t, size_t> > dist;
             dist.reserve(degree_count.size());
 
-            for (auto &p : degree_count) {
+            for (auto &p: degree_count) {
                 dist.push_back(p); // (degree, count)
             }
 
@@ -492,7 +638,7 @@ namespace HeiProMap {
 
             // print
             std::cout << "#degree count\n";
-            for (auto &[deg, count] : dist) {
+            for (auto &[deg, count]: dist) {
                 std::cout << deg << " " << count << "\n";
             }
         }

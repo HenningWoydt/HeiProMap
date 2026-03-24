@@ -434,8 +434,8 @@ namespace HeiProMap {
             initial_c = 8;
 
             // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -443,22 +443,23 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 3;
             size_constrained_lp_config.min_threshold = 0.10;
+            size_constrained_lp_config.multiplier = 5;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
-            // global_multisection_config.mode_string = "metis-kway";
+            global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 3;
+            global_multisection_config.kappa = 1;
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            label_propagation_config.max_iteration = 1;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = false;
@@ -466,10 +467,11 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.alpha = 100.0;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = false;
-            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.max_iteration = 1;
             quotient_graph_refinement_config.alpha = 1000.0;
-            quotient_graph_refinement_config.min_n_steps = 8;
+            quotient_graph_refinement_config.min_n_steps = 4;
+            quotient_graph_refinement_config.use_preemptive_exit = true;
 
             // enable k-way fm
             k_way_fm_refinement_config.enabled = false;
@@ -529,7 +531,7 @@ namespace HeiProMap {
         }
 
         void set_strong() {
-            initial_c = 16;
+            initial_c = 8;
 
             n_max_partitions = 1;
             n_refinement_iterations = 1;
@@ -567,7 +569,7 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 5;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = false;
+            quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 10;
@@ -576,7 +578,7 @@ namespace HeiProMap {
             k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled = true;
+            multi_try_fm_refinement_config.enabled = false;
             multi_try_fm_refinement_config.max_iteration = 2;
             multi_try_fm_refinement_config.alpha = 1000.0;
             multi_try_fm_refinement_config.min_n_steps = 10;

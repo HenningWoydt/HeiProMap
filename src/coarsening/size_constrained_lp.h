@@ -42,6 +42,7 @@ namespace HeiProMap {
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
         f64 f = 8;
+        weight_t multiplier = 2;
     };
 
     class SizeConstrainedLP {
@@ -56,7 +57,6 @@ namespace HeiProMap {
         AlignedArray<vertex_t> cluster_count;
         AlignedArray<u8> active;
         AlignedArray<u8> active_next;
-        FlatMap<vertex_t, weight_t> flat_map;
         AlignedArray<vertex_t> remap;
         AlignedArray<vertex_t> singletons;
 
@@ -159,7 +159,7 @@ namespace HeiProMap {
             if (singletons_size == 0) { return; }
 
             // 3) For each singleton u: choose best neighbor cluster by summed edge weight
-            flat_map.clear();
+            FlatMap<vertex_t, weight_t> flat_map;
             flat_map.reserve(128);
 
             for (size_t i = 0; i < singletons_size; ++i) {
@@ -218,7 +218,7 @@ namespace HeiProMap {
                      [[maybe_unused]] const p_manager_t &p_manager,
                      Mapping &mapping,
                      f64 imbalance,
-                     weight_t modifier = 2) {
+                     u64 threads) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             weight_t max_w = 0; // (weight_t) ((f64) m_l_max / config->f);
@@ -234,7 +234,7 @@ namespace HeiProMap {
                         max_deg = std::max(max_deg, g.deg(u));
                     }
                 endfor
-                max_w *= modifier;
+                max_w *= config->multiplier;
                 max_w = std::min(max_w, lmax);
             }
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
@@ -289,9 +289,6 @@ namespace HeiProMap {
                 active_next.initialize(g.n, 1);
             }
 
-            flat_map.clear();
-            flat_map.reserve(128);
-
             u64 n_moved = 0;
 
             for (u64 round = 0; round < config->max_rounds; ++round) {
@@ -310,17 +307,24 @@ namespace HeiProMap {
                 // run clustering
                 {
                     ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster");
-                    for (size_t i = 0; i < g.n; ++i) {
-                        vertex_t u = flat_vertices[i];
-                        if (active[u] == 0) { continue; }
+                    #pragma omp parallel num_threads(threads)
+                    {
+                        FlatMap<vertex_t, weight_t> flat_map;
+                        flat_map.reserve(128);
 
-                        weight_t u_w = g.v_weights[u];
-                        partition_t u_id = p_manager[u];
-                        vertex_t current_id = mapping.get(u);
-                        weight_t current_id_w = 0;
 
-                        flat_map.clear();
-                        forall_guivw(g, u, j, v, w)
+                        #pragma omp for schedule(dynamic) reduction(+:n_moved)
+                        for (size_t i = 0; i < g.n; ++i) {
+                            vertex_t u = flat_vertices[i];
+                            if (active[u] == 0) { continue; }
+
+                            weight_t u_w = g.v_weights[u];
+                            partition_t u_id = p_manager[u];
+                            vertex_t current_id = mapping.get(u);
+                            weight_t current_id_w = 0;
+
+                            flat_map.clear();
+                            forall_guivw(g, u, j, v, w)
                             {
                                 partition_t v_id = p_manager[v];
                                 if (u_id != v_id) { continue; }
@@ -333,31 +337,37 @@ namespace HeiProMap {
                                     flat_map.add(id, w);
                                 }
                             }
-                        endfor
+                            endfor
 
-                        vertex_t best_id = current_id;
-                        weight_t best_weight = current_id_w;
-                        for (auto [id, w]: flat_map) {
-                            if (w > best_weight) {
-                                best_weight = w;
-                                best_id = id;
+                            vertex_t best_id = current_id;
+                            weight_t best_weight = current_id_w;
+                            for (auto [id, w]: flat_map) {
+                                if (w > best_weight) {
+                                    best_weight = w;
+                                    best_id = id;
+                                }
                             }
-                        }
 
-                        if (best_id != current_id) {
-                            mapping.set(u, best_id);
-                            cluster_weights[best_id] += u_w;
-                            cluster_weights[current_id] -= u_w;
-                            cluster_count[best_id] += 1;
-                            cluster_count[current_id] -= 1;
+                            if (best_id != current_id) {
+                                mapping.set(u, best_id);
+                                #pragma omp atomic
+                                cluster_weights[best_id] += u_w;
+                                #pragma omp atomic
+                                cluster_weights[current_id] -= u_w;
+                                #pragma omp atomic
+                                cluster_count[best_id] += 1;
+                                #pragma omp atomic
+                                cluster_count[current_id] -= 1;
 
-                            n_moved += 1;
-                            if (round > 0) {
-                                forall_guiv(g, u, j, v)
+                                n_moved += 1;
+                                if (round > 0) {
+                                    forall_guiv(g, u, j, v)
                                     {
+                                        #pragma omp atomic write
                                         active_next[v] = 1;
                                     }
-                                endfor
+                                    endfor
+                                }
                             }
                         }
                     }

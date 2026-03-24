@@ -35,6 +35,7 @@
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/multi_try_fm_refinement.h"
 #include "../utility/qap.h"
+#include "kway_partitioner/kway_core.h"
 
 namespace HeiProMap {
     enum GlobalMultisectionMode {
@@ -176,6 +177,7 @@ namespace HeiProMap {
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_RECURSIVE) {
                     // metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_RECURSIVE, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
+                    kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
                     // metis_partition(*item.g, item.k, item.imb, METIS_PARTITION_KWAY, item.seed, partition);
                 } else if (config.mode == GLOBAL_MULTISECTION_MTKAHYPAR_DEFAULT) {
                     // mtkahypar_partition(*item.g, item.k, item.imb, MTKAHYPAR_DEFAULT, item.seed, partition);

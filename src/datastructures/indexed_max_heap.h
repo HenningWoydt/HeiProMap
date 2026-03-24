@@ -75,8 +75,6 @@ namespace HeiProMap {
         ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {
-            ScopedTimer _t("io", "IndexedMaxHeap", "initialize");
-
             m_n         = t_n;
             m_heap_size = 0;
             m_heap.initialize(m_n);
