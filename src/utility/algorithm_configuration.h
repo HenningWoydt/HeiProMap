@@ -492,38 +492,39 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 2;
             size_constrained_lp_config.min_threshold = 0.10;
+            size_constrained_lp_config.multiplier = 2;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "kaffpa-strong";
-            global_multisection_config.mode_string = "kaffpa-eco";
-            // global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode_string = "kaffpa-eco";
+            global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 3;
+            global_multisection_config.kappa = 1;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha = 10000.0;
-            quotient_graph_refinement_config.min_n_steps = 32;
+            quotient_graph_refinement_config.alpha = 1000.0;
+            quotient_graph_refinement_config.min_n_steps = 4;
 
             // enable multi-try fm
-            multi_try_fm_refinement_config.enabled = true;
+            multi_try_fm_refinement_config.enabled = false;
             multi_try_fm_refinement_config.max_iteration = 3;
             multi_try_fm_refinement_config.alpha = 10000.0;
             multi_try_fm_refinement_config.min_n_steps = 8;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 2;
+            flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 2;
-            flow_based_refinement_config.alpha = 1.0;
+            flow_based_refinement_config.alpha = 2.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
