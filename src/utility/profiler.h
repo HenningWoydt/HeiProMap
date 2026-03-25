@@ -46,8 +46,7 @@
 #endif
 
 namespace HeiProMap {
-
-    static std::string pad_cell(const std::string& text, int width) {
+    static std::string pad_cell(const std::string &text, int width) {
         if (width <= 0) return "";
         if (static_cast<int>(text.size()) <= width) {
             return text + std::string(width - static_cast<int>(text.size()), ' ');
@@ -58,7 +57,7 @@ namespace HeiProMap {
         return text.substr(0, width - 1) + "…";
     }
 
-    static bool stream_is_tty(std::ostream& stream) {
+    static bool stream_is_tty(std::ostream &stream) {
 #if defined(_WIN32)
         DWORD mode;
         HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -69,14 +68,14 @@ namespace HeiProMap {
     }
 
     struct ZebraTheme {
-        const char* even_background = "\x1b[48;5;236m";
-        const char* odd_background = "\x1b[48;5;235m";
-        const char* header_background = "\x1b[48;5;238m";
-        const char* rule_foreground = "\x1b[38;5;240m";
-        const char* text_foreground = "\x1b[38;5;252m";
-        const char* bold_on = "\x1b[1m";
-        const char* bold_off = "\x1b[22m";
-        const char* reset = "\x1b[0m";
+        const char *even_background = "\x1b[48;5;236m";
+        const char *odd_background = "\x1b[48;5;235m";
+        const char *header_background = "\x1b[48;5;238m";
+        const char *rule_foreground = "\x1b[38;5;240m";
+        const char *text_foreground = "\x1b[38;5;252m";
+        const char *bold_on = "\x1b[1m";
+        const char *bold_off = "\x1b[22m";
+        const char *reset = "\x1b[0m";
     };
 
     static ZebraTheme basic_theme() {
@@ -118,30 +117,30 @@ namespace HeiProMap {
 
     class Profiler {
     public:
-        static Profiler& instance() {
+        static Profiler &instance() {
             static Profiler profiler;
             return profiler;
         }
 
-        void add(const char* group_name,
-                 const char* function_name,
-                 const char* kernel_name,
+        void add(const char *group_name,
+                 const char *function_name,
+                 const char *kernel_name,
                  double milliseconds) {
 #if ENABLE_PROFILER
             std::unique_lock<std::shared_mutex> lock(mutex_);
 
-            GroupProfile& group_profile = groups_[group_name];
-            FunctionProfile& function_profile = group_profile.functions[function_name];
+            GroupProfile &group_profile = groups_[group_name];
+            FunctionProfile &function_profile = group_profile.functions[function_name];
 
             function_profile.kernels[kernel_name].add(milliseconds);
             function_profile.aggregate.add(milliseconds);
             group_profile.aggregate.add(milliseconds);
             total_.add(milliseconds);
 #else
-            (void)group_name;
-            (void)function_name;
-            (void)kernel_name;
-            (void)milliseconds;
+            (void) group_name;
+            (void) function_name;
+            (void) kernel_name;
+            (void) milliseconds;
 #endif
         }
 
@@ -151,9 +150,9 @@ namespace HeiProMap {
 #else
             std::shared_lock<std::shared_mutex> lock(mutex_);
 
-            auto escape_json = [](const std::string& text) {
+            auto escape_json = [](const std::string &text) {
                 std::ostringstream escaped;
-                for (char ch : text) {
+                for (char ch: text) {
                     if (ch == '"' || ch == '\\') {
                         escaped << '\\' << ch;
                     } else if (ch == '\n') {
@@ -165,7 +164,7 @@ namespace HeiProMap {
                 return escaped.str();
             };
 
-            auto write_indent = [](std::ostringstream& output, int level) {
+            auto write_indent = [](std::ostringstream &output, int level) {
                 for (int i = 0; i < level; ++i) {
                     output << '\t';
                 }
@@ -189,24 +188,24 @@ namespace HeiProMap {
             output << "\"groups\": {\n";
             ++indent_level;
 
-            std::vector<std::pair<std::string, const GroupProfile*>> sorted_groups;
+            std::vector<std::pair<std::string, const GroupProfile *> > sorted_groups;
             sorted_groups.reserve(groups_.size());
-            for (const auto& group_entry : groups_) {
+            for (const auto &group_entry: groups_) {
                 sorted_groups.emplace_back(group_entry.first, &group_entry.second);
             }
 
             std::sort(
                 sorted_groups.begin(),
                 sorted_groups.end(),
-                [](const auto& left, const auto& right) {
+                [](const auto &left, const auto &right) {
                     return left.second->aggregate.total_ms > right.second->aggregate.total_ms;
                 }
             );
 
             bool first_group = true;
-            for (const auto& group_entry : sorted_groups) {
-                const std::string& group_name = group_entry.first;
-                const GroupProfile* group_profile = group_entry.second;
+            for (const auto &group_entry: sorted_groups) {
+                const std::string &group_name = group_entry.first;
+                const GroupProfile *group_profile = group_entry.second;
 
                 if (!first_group) {
                     output << ",\n";
@@ -224,24 +223,24 @@ namespace HeiProMap {
                 output << "\"functions\": {\n";
                 ++indent_level;
 
-                std::vector<std::pair<std::string, const FunctionProfile*>> sorted_functions;
+                std::vector<std::pair<std::string, const FunctionProfile *> > sorted_functions;
                 sorted_functions.reserve(group_profile->functions.size());
-                for (const auto& function_entry : group_profile->functions) {
+                for (const auto &function_entry: group_profile->functions) {
                     sorted_functions.emplace_back(function_entry.first, &function_entry.second);
                 }
 
                 std::sort(
                     sorted_functions.begin(),
                     sorted_functions.end(),
-                    [](const auto& left, const auto& right) {
+                    [](const auto &left, const auto &right) {
                         return left.second->aggregate.total_ms > right.second->aggregate.total_ms;
                     }
                 );
 
                 bool first_function = true;
-                for (const auto& function_entry : sorted_functions) {
-                    const std::string& function_name = function_entry.first;
-                    const FunctionProfile* function_profile = function_entry.second;
+                for (const auto &function_entry: sorted_functions) {
+                    const std::string &function_name = function_entry.first;
+                    const FunctionProfile *function_profile = function_entry.second;
 
                     if (!first_function) {
                         output << ",\n";
@@ -259,24 +258,24 @@ namespace HeiProMap {
                     output << "\"kernels\": {\n";
                     ++indent_level;
 
-                    std::vector<std::pair<std::string, const TimingStats*>> sorted_kernels;
+                    std::vector<std::pair<std::string, const TimingStats *> > sorted_kernels;
                     sorted_kernels.reserve(function_profile->kernels.size());
-                    for (const auto& kernel_entry : function_profile->kernels) {
+                    for (const auto &kernel_entry: function_profile->kernels) {
                         sorted_kernels.emplace_back(kernel_entry.first, &kernel_entry.second);
                     }
 
                     std::sort(
                         sorted_kernels.begin(),
                         sorted_kernels.end(),
-                        [](const auto& left, const auto& right) {
+                        [](const auto &left, const auto &right) {
                             return left.second->total_ms > right.second->total_ms;
                         }
                     );
 
                     bool first_kernel = true;
-                    for (const auto& kernel_entry : sorted_kernels) {
-                        const std::string& kernel_name = kernel_entry.first;
-                        const TimingStats* kernel_stats = kernel_entry.second;
+                    for (const auto &kernel_entry: sorted_kernels) {
+                        const std::string &kernel_name = kernel_entry.first;
+                        const TimingStats *kernel_stats = kernel_entry.second;
 
                         if (!first_kernel) {
                             output << ",\n";
@@ -333,7 +332,7 @@ namespace HeiProMap {
 #endif
         }
 
-        void print_table_ascii_colored(std::ostream& output_stream = std::cout,
+        void print_table_ascii_colored(std::ostream &output_stream = std::cout,
                                        int max_functions_per_group = -1,
                                        int max_kernels_per_function = -1,
                                        int name_column_width = 48,
@@ -360,19 +359,20 @@ namespace HeiProMap {
 
             ZebraTheme theme = use_basic_colors ? basic_theme() : ZebraTheme{};
 
-            auto colorize_row = [&](const std::string& line, bool is_header, bool is_even_row) -> std::string {
+            auto colorize_row = [&](const std::string &line, bool is_header, bool is_even_row) -> std::string {
                 if (!use_colors) {
                     return line + '\n';
                 }
 
-                const char* background =
-                    is_header ? theme.header_background
-                              : (is_even_row ? theme.even_background : theme.odd_background);
+                const char *background =
+                        is_header
+                            ? theme.header_background
+                            : (is_even_row ? theme.even_background : theme.odd_background);
 
                 return std::string(background) + theme.text_foreground + line + theme.reset + '\n';
             };
 
-            auto colorize_rule = [&](const std::string& line) -> std::string {
+            auto colorize_rule = [&](const std::string &line) -> std::string {
                 if (!use_colors) {
                     return line + '\n';
                 }
@@ -400,16 +400,16 @@ namespace HeiProMap {
                 return total_.total_ms > 0.0 ? (milliseconds * 100.0 / total_.total_ms) : 0.0;
             };
 
-            std::vector<std::pair<std::string, const GroupProfile*>> sorted_groups;
+            std::vector<std::pair<std::string, const GroupProfile *> > sorted_groups;
             sorted_groups.reserve(groups_.size());
-            for (const auto& group_entry : groups_) {
+            for (const auto &group_entry: groups_) {
                 sorted_groups.emplace_back(group_entry.first, &group_entry.second);
             }
 
             std::sort(
                 sorted_groups.begin(),
                 sorted_groups.end(),
-                [](const auto& left, const auto& right) {
+                [](const auto &left, const auto &right) {
                     return left.second->aggregate.total_ms > right.second->aggregate.total_ms;
                 }
             );
@@ -457,11 +457,11 @@ namespace HeiProMap {
 
             output_stream << colorize_rule(make_rule_line());
 
-            auto emit_row = [&](const std::string& scope,
-                                const std::string& calls,
-                                const std::string& total,
-                                const std::string& average,
-                                const std::string& percent) {
+            auto emit_row = [&](const std::string &scope,
+                                const std::string &calls,
+                                const std::string &total,
+                                const std::string &average,
+                                const std::string &percent) {
                 std::string row;
                 row.reserve(128 + scope.size());
 
@@ -477,20 +477,20 @@ namespace HeiProMap {
 
             emit_row("TOTAL", "-", format_milliseconds(total_.total_ms), "-", format_percent(100.0));
 
-            for (const auto& group_entry : sorted_groups) {
-                const std::string& group_name = group_entry.first;
-                const GroupProfile* group_profile = group_entry.second;
+            for (const auto &group_entry: sorted_groups) {
+                const std::string &group_name = group_entry.first;
+                const GroupProfile *group_profile = group_entry.second;
 
-                std::vector<std::pair<std::string, const FunctionProfile*>> sorted_functions;
+                std::vector<std::pair<std::string, const FunctionProfile *> > sorted_functions;
                 sorted_functions.reserve(group_profile->functions.size());
-                for (const auto& function_entry : group_profile->functions) {
+                for (const auto &function_entry: group_profile->functions) {
                     sorted_functions.emplace_back(function_entry.first, &function_entry.second);
                 }
 
                 std::sort(
                     sorted_functions.begin(),
                     sorted_functions.end(),
-                    [](const auto& left, const auto& right) {
+                    [](const auto &left, const auto &right) {
                         return left.second->aggregate.total_ms > right.second->aggregate.total_ms;
                     }
                 );
@@ -508,20 +508,20 @@ namespace HeiProMap {
                     format_percent(percent_of_total(group_profile->aggregate.total_ms))
                 );
 
-                for (const auto& function_entry : sorted_functions) {
-                    const std::string& function_name = function_entry.first;
-                    const FunctionProfile* function_profile = function_entry.second;
+                for (const auto &function_entry: sorted_functions) {
+                    const std::string &function_name = function_entry.first;
+                    const FunctionProfile *function_profile = function_entry.second;
 
-                    std::vector<std::pair<std::string, const TimingStats*>> sorted_kernels;
+                    std::vector<std::pair<std::string, const TimingStats *> > sorted_kernels;
                     sorted_kernels.reserve(function_profile->kernels.size());
-                    for (const auto& kernel_entry : function_profile->kernels) {
+                    for (const auto &kernel_entry: function_profile->kernels) {
                         sorted_kernels.emplace_back(kernel_entry.first, &kernel_entry.second);
                     }
 
                     std::sort(
                         sorted_kernels.begin(),
                         sorted_kernels.end(),
-                        [](const auto& left, const auto& right) {
+                        [](const auto &left, const auto &right) {
                             return left.second->total_ms > right.second->total_ms;
                         }
                     );
@@ -539,9 +539,9 @@ namespace HeiProMap {
                         format_percent(percent_of_total(function_profile->aggregate.total_ms))
                     );
 
-                    for (const auto& kernel_entry : sorted_kernels) {
-                        const std::string& kernel_name = kernel_entry.first;
-                        const TimingStats* kernel_stats = kernel_entry.second;
+                    for (const auto &kernel_entry: sorted_kernels) {
+                        const std::string &kernel_name = kernel_entry.first;
+                        const TimingStats *kernel_stats = kernel_entry.second;
 
                         emit_row(
                             "|   |   +-- [K] " + kernel_name,
@@ -568,14 +568,14 @@ namespace HeiProMap {
 
     struct ScopedTimer {
 #if ENABLE_PROFILER
-        const char* group = nullptr;
-        const char* function = nullptr;
-        const char* kernel = nullptr;
+        const char *group = nullptr;
+        const char *function = nullptr;
+        const char *kernel = nullptr;
         std::chrono::time_point<std::chrono::system_clock> start_time;
         bool stopped = false;
 #endif
 
-        ScopedTimer(const char* group_name, const char* function_name, const char* kernel_name) {
+        ScopedTimer(const char *group_name, const char *function_name, const char *kernel_name) {
 #if ENABLE_PROFILER
             group = group_name;
             function = function_name;
@@ -583,9 +583,9 @@ namespace HeiProMap {
             start_time = get_time_point();
             stopped = false;
 #else
-            (void)group_name;
-            (void)function_name;
-            (void)kernel_name;
+            (void) group_name;
+            (void) function_name;
+            (void) kernel_name;
 #endif
         }
 
@@ -603,7 +603,6 @@ namespace HeiProMap {
             stop();
         }
     };
-
 } // namespace HeiProMap
 
 #endif // HEIPROMAP_PROFILER_H

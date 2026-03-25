@@ -285,11 +285,11 @@ namespace HeiProMap {
             std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms +
                     initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             for (size_t i = 0; i < level_infos.size(); ++i) {
                 print_all_levels(level_infos[i]);
             }
-            #endif
+#endif
 
             return p;
         }
@@ -317,12 +317,12 @@ namespace HeiProMap {
             level_infos.emplace_back();
 
             while (graphs.back().n > ac.k * mult && (is_initial || graphs.size() <= ac.v_cycle_max_depth)) {
-                #if ENABLE_PROFILER
+#if ENABLE_PROFILER
                 level_infos[v_cycle].emplace_back();
                 level_infos[v_cycle][level].level = level;
                 level_infos[v_cycle][level].n = graphs.back().n;
                 level_infos[v_cycle][level].m = graphs.back().m;
-                #endif
+#endif
 
                 level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
@@ -335,12 +335,12 @@ namespace HeiProMap {
                 level += 1;
             }
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle].emplace_back();
             level_infos[v_cycle][level].level = level;
             level_infos[v_cycle][level].n = graphs.back().n;
             level_infos[v_cycle][level].m = graphs.back().m;
-            #endif
+#endif
 
             level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
@@ -349,7 +349,7 @@ namespace HeiProMap {
                 partition(level, level_imbalance);
             }
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle][level].max_b_weight = p_managers[0].max_weight();
             level_infos[v_cycle][level].lmax = level_lmax;
             level_infos[v_cycle][level].imb = (f64) level_infos[v_cycle][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
@@ -357,7 +357,7 @@ namespace HeiProMap {
             level_infos[v_cycle][level].empty_partitions = p_managers[0].n_empty_blocks();
             level_infos[v_cycle][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
             level_infos[v_cycle][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
-            #endif
+#endif
 
             while (!mappings.empty()) {
                 level -= 1;
@@ -403,7 +403,7 @@ namespace HeiProMap {
                     }
                 }
 
-                #if ENABLE_PROFILER
+#if ENABLE_PROFILER
                 level_infos[v_cycle][level].max_b_weight = p_managers[0].max_weight();
                 level_infos[v_cycle][level].lmax = level_lmax;
                 level_infos[v_cycle][level].imb = (f64) level_infos[v_cycle][level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
@@ -411,7 +411,7 @@ namespace HeiProMap {
                 level_infos[v_cycle][level].empty_partitions = p_managers[0].n_empty_blocks();
                 level_infos[v_cycle][level].oload_partitions = p_managers[0].n_oload_blocks(level_lmax);
                 level_infos[v_cycle][level].sum_oload_weights = p_managers[0].sum_oload_weight(level_lmax);
-                #endif
+#endif
             }
         }
 
@@ -434,7 +434,7 @@ namespace HeiProMap {
                             local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
                         }
 
-                        #pragma omp parallel for schedule(static) num_threads(ac.threads)
+#pragma omp parallel for schedule(static) num_threads(ac.threads)
                         for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
                             GlobalMultisectionPartitioner partitioner;
                             partitioner.partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
@@ -538,9 +538,9 @@ namespace HeiProMap {
             auto ep = get_time_point();
             coarsening_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle][level].t_coarsening += get_milli_seconds(sp, ep);
-            #endif
+#endif
         }
 
         void contraction(const u64 v_cycle, [[maybe_unused]] const u64 level) {
@@ -557,9 +557,9 @@ namespace HeiProMap {
             auto ep = get_time_point();
             contraction_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle][level].t_contraction += get_milli_seconds(sp, ep);
-            #endif
+#endif
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_managers[0], ac.k));
         }
@@ -611,9 +611,9 @@ namespace HeiProMap {
 
             uncontraction_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle][level].t_uncontraction += get_milli_seconds(sp, ep);
-            #endif
+#endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(),p_managers[0], bv_managers[0], q_graphs[0], block_conns[0] , ac.k));
         }
@@ -633,9 +633,9 @@ namespace HeiProMap {
 
             rebalance_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle][level].t_rebalance += get_milli_seconds(sp, ep);
-            #endif
+#endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0 ], ac.k));
         }
@@ -667,9 +667,9 @@ namespace HeiProMap {
 
             refinement_ms += get_milli_seconds(sp, ep);
 
-            #if ENABLE_PROFILER
+#if ENABLE_PROFILER
             level_infos[v_cycle][level].t_refinement += get_milli_seconds(sp, ep);
-            #endif
+#endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0 ], ac.k));
         }

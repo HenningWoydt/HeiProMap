@@ -41,9 +41,9 @@ namespace HeiProMap {
 
         std::atomic<size_t> matches_size = 0;
 
-        AlignedArray<vertex_t> partner;         // O(n)
+        AlignedArray<vertex_t> partner; // O(n)
 
-        AlignedArray<vertex_t> o_to_n;          // O(n)
+        AlignedArray<vertex_t> o_to_n; // O(n)
 
     public:
         Matching() = default;

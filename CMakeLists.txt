@@ -100,6 +100,10 @@ add_executable(HeiProMap
 
 target_include_directories(HeiProMap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
 
+target_compile_definitions(HeiProMap PRIVATE
+        ENABLE_PROFILER=${ENABLE_PROFILER}
+)
+
 target_link_libraries(HeiProMap PUBLIC
         ${KAHIP_LIBRARY}
         OpenMP::OpenMP_CXX
@@ -111,54 +115,5 @@ set_target_properties(HeiProMap PROPERTIES
 )
 
 target_link_options(HeiProMap PRIVATE
-        "-Wl,--disable-new-dtags"
-)
-
-# ---------------------------
-# Object library
-# ---------------------------
-add_library(libheipromap OBJECT
-        ${HEADERS}
-        ${SOURCES}
-        ${MAXFLOW_ALG_bk_HEADERS}
-)
-
-target_include_directories(libheipromap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
-
-target_compile_definitions(libheipromap PRIVATE
-        ENABLE_PROFILER=${ENABLE_PROFILER}
-)
-
-target_link_libraries(libheipromap PUBLIC
-        OpenMP::OpenMP_CXX
-)
-
-# ---------------------------
-# Shared library
-# ---------------------------
-add_library(heipromap SHARED
-        lib/libheipromap.cpp
-        $<TARGET_OBJECTS:libheipromap>
-)
-
-target_include_directories(heipromap
-        PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/interface
-        PRIVATE ${KAHIP_INCLUDE_DIR}
-)
-
-target_compile_definitions(HeiProMap PRIVATE
-        ENABLE_PROFILER=${ENABLE_PROFILER}
-)
-
-target_link_libraries(heipromap PRIVATE
-        ${KAHIP_LIBRARY}
-        OpenMP::OpenMP_CXX
-)
-
-set_target_properties(heipromap PROPERTIES
-        BUILD_RPATH "${KAHIP_ROOT}/lib"
-)
-
-target_link_options(heipromap PRIVATE
         "-Wl,--disable-new-dtags"
 )

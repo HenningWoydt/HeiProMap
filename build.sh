@@ -81,4 +81,4 @@ echo "Building HeiProMap Release..."
 rm -rf "${ROOT}/build"
 mkdir "${ROOT}/build"
 cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE=Release
-cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap heipromap
+cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap

@@ -33,7 +33,7 @@ namespace HeiProMap {
         std::vector<std::string> splits;
 
         std::istringstream iss(str);
-        std::string        token;
+        std::string token;
 
         while (std::getline(iss, token, c)) {
             splits.push_back(token);
@@ -48,7 +48,7 @@ namespace HeiProMap {
     }
 
     std::string read_file(const std::string &path) {
-        std::ifstream     t(path);
+        std::ifstream t(path);
         std::stringstream buffer;
         buffer << t.rdbuf();
         return buffer.str();
@@ -56,12 +56,12 @@ namespace HeiProMap {
 
     void line_to_ints(const std::string &line, std::vector<u64> &ints) {
         ints.resize(line.size());
-        u64 idx         = 0;
+        u64 idx = 0;
         u64 curr_number = 0;
 
         for (char c: line) {
             if (c == ' ') {
-                ints[idx]   = curr_number;
+                ints[idx] = curr_number;
                 idx += curr_number != 0;
                 curr_number = 0;
             } else {
@@ -75,8 +75,8 @@ namespace HeiProMap {
     }
 
     void busyFunction(float duration) {
-        auto           start         = std::chrono::high_resolution_clock::now();
-        auto           end           = start;
+        auto start = std::chrono::high_resolution_clock::now();
+        auto end = start;
         volatile float uselessResult = 0.0f;
 
         // Continue running until the specified duration has passed
@@ -87,7 +87,7 @@ namespace HeiProMap {
                 uselessResult -= std::sqrt(static_cast<float>(i + 1)) * std::sqrt(static_cast<float>(i));
             }
             // Update the end time
-            end        = std::chrono::high_resolution_clock::now();
+            end = std::chrono::high_resolution_clock::now();
         }
     }
 
@@ -190,7 +190,7 @@ namespace HeiProMap {
         if (edges[6].v == v) { return 6; }
         if (edges[7].v == v) { return 7; }
 
-        size_t left  = 8;
+        size_t left = 8;
         size_t right = edges.size();
 
         while (left < right) {
@@ -208,7 +208,7 @@ namespace HeiProMap {
     }
 
     size_t own_lower_bound_not_guaranteed(const std::vector<EdgeVW> &edges, vertex_t v) {
-        size_t left  = 0;
+        size_t left = 0;
         size_t right = edges.size();
 
         while (left < right) {
@@ -239,9 +239,9 @@ namespace HeiProMap {
     }
 
     void read_partition(const std::string &file_path, std::vector<partition_t> &p) {
-        partition_t  x;
+        partition_t x;
         std::fstream in(file_path);
-        vertex_t     u = 0;
+        vertex_t u = 0;
         while (in >> x) {
             p[u++] = x;
         }
@@ -280,12 +280,12 @@ namespace HeiProMap {
                      std::vector<u64> &ints) {
         ints.resize(str.size());
 
-        u64 idx         = 0;
+        u64 idx = 0;
         u64 curr_number = 0;
 
         for (const char c: str) {
             if (c == ' ') {
-                ints[idx]   = curr_number;
+                ints[idx] = curr_number;
                 idx += curr_number != 0;
                 curr_number = 0;
             } else {

@@ -139,7 +139,7 @@ namespace HeiProMap {
                 }
 
                 while (found_matching) {
-                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+#pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (size_t i = 0; i < matching.size(); ++i) {
                         partition_t u_id = matching[i].first;
                         partition_t v_id = matching[i].second;

@@ -489,33 +489,34 @@ namespace HeiProMap {
                     // blocks_to_fill.erase(); // todo
                 }
 
-                forall_guiv(g, u, i, v) {
-                    if (!bv_manager.is_boundary(v)) { continue; }
+                forall_guiv(g, u, i, v)
+                    {
+                        if (!bv_manager.is_boundary(v)) { continue; }
 
-                    partition_t v_id = p_manager[v];
-                    if (blocks_to_fill_lookup[v_id] == true) { continue; }
+                        partition_t v_id = p_manager[v];
+                        if (blocks_to_fill_lookup[v_id] == true) { continue; }
 
-                    weight_t v_w = g.v_weights[v];
-                    partition_t best_id = NO_ID;
-                    weight_t best_qap = -std::numeric_limits<weight_t>::max();
+                        weight_t v_w = g.v_weights[v];
+                        partition_t best_id = NO_ID;
+                        weight_t best_qap = -std::numeric_limits<weight_t>::max();
 
-                    for (partition_t move_id: blocks_to_fill) {
-                        if (p_manager.get_bweight(move_id) + v_w <= lmax) {
-                            weight_t qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn);
+                        for (partition_t move_id: blocks_to_fill) {
+                            if (p_manager.get_bweight(move_id) + v_w <= lmax) {
+                                weight_t qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn);
 
-                            if (qap > best_qap) {
-                                best_qap = qap;
-                                best_id = move_id;
+                                if (qap > best_qap) {
+                                    best_qap = qap;
+                                    best_id = move_id;
+                                }
                             }
                         }
-                    }
 
-                    if (best_id != NO_ID) {
-                        heap.push_update(v, best_id, best_qap);
+                        if (best_id != NO_ID) {
+                            heap.push_update(v, best_id, best_qap);
+                        }
                     }
-                } endfor
+                endfor
             }
-
         }
     };
 }

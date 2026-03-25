@@ -35,9 +35,9 @@
 namespace HeiProMap {
     class IndexedUpdateHeapEntry {
     public:
-        vertex_t    u;
+        vertex_t u;
         partition_t id;
-        s64         qap_delta;
+        s64 qap_delta;
 
         bool operator>(const IndexedUpdateHeapEntry &m) const { return qap_delta > m.qap_delta; }
 
@@ -49,12 +49,12 @@ namespace HeiProMap {
     };
 
     class IndexedUpdateHeap {
-        size_t                               m_n         = 0;
-        size_t                               m_heap_size = 0;
+        size_t m_n = 0;
+        size_t m_heap_size = 0;
         AlignedArray<IndexedUpdateHeapEntry> m_heap;
-        AlignedArray<size_t>                 m_indices;
+        AlignedArray<size_t> m_indices;
 
-        u64               m_iteration = 0;
+        u64 m_iteration = 0;
         AlignedArray<u64> m_iteration_counter;
 
     public:
@@ -63,7 +63,7 @@ namespace HeiProMap {
         ~IndexedUpdateHeap() = default;
 
         void initialize(const size_t t_n) {
-            m_n         = t_n;
+            m_n = t_n;
             m_heap_size = 0;
             m_heap.initialize(m_n);
             m_indices.initialize(m_n);
@@ -74,16 +74,16 @@ namespace HeiProMap {
 
         void push(const vertex_t u, const partition_t move_id, const s64 qap_delta) {
             ASSERT(!entry_exists(u));
-            m_indices[u]           = m_heap_size;
+            m_indices[u] = m_heap_size;
             m_iteration_counter[u] = m_iteration;
-            m_heap[m_heap_size]    = {u, move_id, qap_delta};
+            m_heap[m_heap_size] = {u, move_id, qap_delta};
             m_heap_size += 1;
             bubble_up(m_heap_size - 1);
         }
 
         void update(const vertex_t u, const partition_t move_id, const s64 qap_delta) {
             ASSERT(entry_exists(u));
-            m_heap[m_indices[u]].id        = move_id;
+            m_heap[m_indices[u]].id = move_id;
             m_heap[m_indices[u]].qap_delta = qap_delta;
             bubble_up(m_indices[u]);
             bubble_down(m_indices[u]);
@@ -139,7 +139,7 @@ namespace HeiProMap {
             size_t last_index = m_heap_size - 1;
             m_indices[m_heap[0].u] = HEAP_TOMBSTONE;
             if (last_index > 0) {
-                m_heap[0]              = m_heap[last_index];
+                m_heap[0] = m_heap[last_index];
                 m_indices[m_heap[0].u] = 0;
                 m_heap_size -= 1;
                 bubble_down(0);
@@ -170,9 +170,9 @@ namespace HeiProMap {
             size_t last_index = m_heap_size - 1;
 
             while (true) {
-                size_t left_child_index  = 2 * index + 1;
+                size_t left_child_index = 2 * index + 1;
                 size_t right_child_index = 2 * index + 2;
-                size_t largest_index     = index;
+                size_t largest_index = index;
 
                 if (left_child_index <= last_index && m_heap[left_child_index] > m_heap[largest_index]) {
                     largest_index = left_child_index;

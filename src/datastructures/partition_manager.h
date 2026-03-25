@@ -80,10 +80,34 @@ namespace HeiProMap {
                   const weight_t w,
                   const partition_t old_id,
                   const partition_t new_id) {
+            #pragma omp atomic
+            n_vertices[old_id] -= 1;
+            #pragma omp atomic
+            n_vertices[new_id] += 1;
+            #pragma omp atomic
+            bweights[old_id] -= w;
+            #pragma omp atomic
+            bweights[new_id] += w;
+
+            partition[u] = new_id;
+        }
+
+        /**
+         * O(1) operation
+         * @param u
+         * @param w
+         * @param old_id
+         * @param new_id
+         */
+        void move_serial(const vertex_t u,
+                  const weight_t w,
+                  const partition_t old_id,
+                  const partition_t new_id) {
             n_vertices[old_id] -= 1;
             n_vertices[new_id] += 1;
             bweights[old_id] -= w;
             bweights[new_id] += w;
+
             partition[u] = new_id;
         }
 

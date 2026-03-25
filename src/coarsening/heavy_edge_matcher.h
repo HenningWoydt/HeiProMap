@@ -39,14 +39,14 @@ namespace HeiProMap {
     };
 
     class HeavyEdgeMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
 
-        const HeavyEdgeMatcherConfiguration *config        = nullptr;
-        RandomEngine                        *random_engine = nullptr;
+        const HeavyEdgeMatcherConfiguration *config = nullptr;
+        RandomEngine *random_engine = nullptr;
 
-        u32               mark = 0;
+        u32 mark = 0;
         AlignedArray<u32> used;
 
     public:
@@ -59,11 +59,11 @@ namespace HeiProMap {
                         const HeavyEdgeMatcherConfiguration &i_config) {
             ScopedTimer _t("io", "HeavyEdgeMatcher", "initialize");
 
-            m_n     = t_n;
-            m_m     = t_m;
-            m_k     = t_k;
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
 
-            config        = dynamic_cast<const HeavyEdgeMatcherConfiguration *>(&i_config);
+            config = dynamic_cast<const HeavyEdgeMatcherConfiguration *>(&i_config);
             random_engine = &t_random_engine;
 
             mark = 0;
@@ -110,8 +110,8 @@ namespace HeiProMap {
                 {
                     if (used[u] == mark) { continue; }
 
-                    weight_t u_w        = g.v_weights[u];
-                    vertex_t best_v     = u;
+                    weight_t u_w = g.v_weights[u];
+                    vertex_t best_v = u;
                     weight_t max_weight = 0;
 
                     forall_guivw(g, u, j, v, w)
@@ -123,14 +123,14 @@ namespace HeiProMap {
                             if (u_w + v_w > lmax) { continue; }
 
                             if (w > max_weight) {
-                                best_v     = v;
+                                best_v = v;
                                 max_weight = w;
                             }
                         }
                     endfor
 
                     if (best_v != u) {
-                        used[u]      = mark;
+                        used[u] = mark;
                         used[best_v] = mark;
 
                         matching.add(u, best_v);

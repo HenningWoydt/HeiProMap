@@ -305,13 +305,12 @@ namespace HeiProMap {
                     }
                 }
                 // run clustering
-                {
-                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster");
+                if (threads > 1) {
+                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster_threaded");
                     #pragma omp parallel num_threads(threads)
                     {
                         FlatMap<vertex_t, weight_t> flat_map;
                         flat_map.reserve(128);
-
 
                         #pragma omp for schedule(dynamic) reduction(+:n_moved)
                         for (size_t i = 0; i < g.n; ++i) {
@@ -325,18 +324,18 @@ namespace HeiProMap {
 
                             flat_map.clear();
                             forall_guivw(g, u, j, v, w)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (u_id != v_id) { continue; }
+                                {
+                                    partition_t v_id = p_manager[v];
+                                    if (u_id != v_id) { continue; }
 
-                                vertex_t id = mapping.get(v);
-                                if (id == current_id) {
-                                    current_id_w += w;
-                                } else {
-                                    if (u_w + cluster_weights[id] > max_w) { continue; }
-                                    flat_map.add(id, w);
+                                    vertex_t id = mapping.get(v);
+                                    if (id == current_id) {
+                                        current_id_w += w;
+                                    } else {
+                                        if (u_w + cluster_weights[id] > max_w) { continue; }
+                                        flat_map.add(id, w);
+                                    }
                                 }
-                            }
                             endfor
 
                             vertex_t best_id = current_id;
@@ -362,12 +361,73 @@ namespace HeiProMap {
                                 n_moved += 1;
                                 if (round > 0) {
                                     forall_guiv(g, u, j, v)
-                                    {
-                                        #pragma omp atomic write
-                                        active_next[v] = 1;
-                                    }
+                                        {
+                                            #pragma omp atomic write
+                                            active_next[v] = 1;
+                                        }
                                     endfor
                                 }
+                            }
+                        }
+                    }
+                } else {
+                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster_serial");
+                    FlatMap<vertex_t, weight_t> flat_map;
+                    flat_map.reserve(128);
+
+                    for (size_t i = 0; i < g.n; ++i) {
+                        vertex_t u = flat_vertices[i];
+                        if (active[u] == 0) { continue; }
+
+                        weight_t u_w = g.v_weights[u];
+                        partition_t u_id = p_manager[u];
+
+                        vertex_t current_id = mapping.get(u);
+                        weight_t current_id_w = 0;
+
+                        vertex_t best_id = current_id;
+                        weight_t best_weight = 0;
+
+                        flat_map.clear();
+                        forall_guivw(g, u, j, v, w)
+                            {
+                                partition_t v_id = p_manager[v];
+                                if (u_id != v_id) { continue; }
+
+                                vertex_t id = mapping.get(v);
+                                if (id == current_id) {
+                                    current_id_w += w;
+                                } else {
+                                    if (u_w + cluster_weights[id] > max_w) { continue; }
+
+                                    weight_t new_w = flat_map.add_and_ret(id, w);
+                                    if (new_w > best_weight) {
+                                        best_weight = new_w;
+                                        best_id = id;
+                                    }
+                                }
+                            }
+                        endfor
+
+                        if (current_id_w > best_weight) {
+                            best_weight = current_id_w;
+                            best_id = current_id;
+                        }
+
+                        if (best_id != current_id) {
+                            mapping.set(u, best_id);
+                            cluster_weights[best_id] += u_w;
+                            cluster_weights[current_id] -= u_w;
+                            cluster_count[best_id] += 1;
+                            cluster_count[current_id] -= 1;
+
+                            n_moved += 1;
+                            if (round > 0) {
+                                forall_guiv(g, u, j, v)
+                                    {
+                                        active_next[v] = 1;
+                                    }
+                                endfor
                             }
                         }
                     }

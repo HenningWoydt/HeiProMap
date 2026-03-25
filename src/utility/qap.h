@@ -33,9 +33,9 @@
 
 namespace HeiProMap {
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
-    inline weight_t get_qap(GraphT &g,
-                            PartitionManagerT &p_manager,
-                            DistanceOracleT &d_oracle) {
+    inline weight_t get_qap(const GraphT &g,
+                            const PartitionManagerT &p_manager,
+                            const DistanceOracleT &d_oracle) {
         ScopedTimer _t("misc", "misc", "get_qap");
 
         weight_t qap = 0;
@@ -58,25 +58,25 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename DistanceOracleT>
-    inline weight_t get_qap(GraphT &g,
-                            AlignedArray<partition_t> &partition,
-                            DistanceOracleT &d_oracle) {
+    inline weight_t get_qap(const GraphT &g,
+                            const AlignedArray<partition_t> &partition,
+                            const DistanceOracleT &d_oracle) {
         ScopedTimer _t("misc", "misc", "get_qap");
 
         weight_t qap = 0;
 
         forall_gu(g, u)
-        {
-            partition_t u_id = partition[u];
-
-            forall_guivw(g, u, i, v, w)
             {
-                partition_t v_id = partition[v];
-                weight_t d = d_oracle.get(u_id, v_id);
-                qap += (d * w);
+                partition_t u_id = partition[u];
+
+                forall_guivw(g, u, i, v, w)
+                    {
+                        partition_t v_id = partition[v];
+                        weight_t d = d_oracle.get(u_id, v_id);
+                        qap += (d * w);
+                    }
+                endfor
             }
-            endfor
-        }
         endfor
 
         return qap;

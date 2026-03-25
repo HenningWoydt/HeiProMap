@@ -113,8 +113,8 @@ namespace HeiProMap {
         }
 
         bool find_distance_3_matching(AlignedArray<u8> &active_this_round,
-                              AlignedArray<u8> &used_edges_this_round,
-                              std::vector<std::pair<partition_t, partition_t>> &matching) {
+                                      AlignedArray<u8> &used_edges_this_round,
+                                      std::vector<std::pair<partition_t, partition_t> > &matching) {
             matching.clear();
 
             std::vector<u8> vertex_frozen(m_k, 0);
@@ -164,7 +164,7 @@ namespace HeiProMap {
         size_t edge_index(const partition_t u_id, const partition_t v_id) const {
             partition_t min_id = std::min(u_id, v_id);
             partition_t max_id = std::max(u_id, v_id);
-            return (size_t)min_id * (size_t)m_k + (size_t)max_id;
+            return (size_t) min_id * (size_t) m_k + (size_t) max_id;
         }
 
         bool is_valid_distance_3_matching(const std::vector<std::pair<partition_t, partition_t> > &matching) const {

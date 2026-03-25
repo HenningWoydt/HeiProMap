@@ -41,7 +41,7 @@ namespace HeiProMap {
     class IndexedMaxHeapEntry {
     public:
         size_t key = 0;
-        T      val{};
+        T val{};
 
         IndexedMaxHeapEntry() = default;
 
@@ -61,12 +61,12 @@ namespace HeiProMap {
     template<typename T>
     class IndexedMaxHeap {
     private:
-        size_t                               m_n         = 0;
-        size_t                               m_heap_size = 0;
-        AlignedArray<IndexedMaxHeapEntry<T>> m_heap;
-        AlignedArray<size_t>                 m_indices;
+        size_t m_n = 0;
+        size_t m_heap_size = 0;
+        AlignedArray<IndexedMaxHeapEntry<T> > m_heap;
+        AlignedArray<size_t> m_indices;
 
-        u64               m_iteration = 0;
+        u64 m_iteration = 0;
         AlignedArray<u64> m_iteration_counter;
 
     public:
@@ -75,7 +75,7 @@ namespace HeiProMap {
         ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {
-            m_n         = t_n;
+            m_n = t_n;
             m_heap_size = 0;
             m_heap.initialize(m_n);
             m_indices.initialize(m_n);
@@ -86,11 +86,33 @@ namespace HeiProMap {
 
         void push(const size_t key, const T t) {
             ASSERT(!entry_exists(key));
-            m_indices[key]           = m_heap_size;
+            m_indices[key] = m_heap_size;
             m_iteration_counter[key] = m_iteration;
-            m_heap[m_heap_size]      = {key, t};
+            m_heap[m_heap_size] = {key, t};
             m_heap_size += 1;
             bubble_up(m_heap_size - 1);
+        }
+
+        void push_many_heapify(const std::vector<std::pair<size_t, T>> &entries) {
+            // Insert all elements without bubbling
+            for (const auto &e : entries) {
+                const size_t key = e.first;
+                const T &val = e.second;
+
+                ASSERT(!entry_exists(key));
+
+                m_indices[key] = m_heap_size;
+                m_iteration_counter[key] = m_iteration;
+                m_heap[m_heap_size] = {key, val};
+                ++m_heap_size;
+            }
+
+            // Restore heap property in O(n)
+            if (m_heap_size > 1) {
+                for (size_t i = (m_heap_size - 2) / 2 + 1; i > 0; --i) {
+                    bubble_down(i - 1);
+                }
+            }
         }
 
         void update(const size_t key, const T t) {
@@ -139,7 +161,7 @@ namespace HeiProMap {
             size_t last_index = m_heap_size - 1;
             m_indices[m_heap[0].key] = HEAP_TOMBSTONE;
             if (last_index > 0) {
-                m_heap[0]                = m_heap[last_index];
+                m_heap[0] = m_heap[last_index];
                 m_indices[m_heap[0].key] = 0;
                 m_heap_size -= 1;
                 bubble_down(0);
@@ -188,9 +210,9 @@ namespace HeiProMap {
             size_t last_index = m_heap_size - 1;
 
             while (true) {
-                size_t left_child_index  = 2 * index + 1;
+                size_t left_child_index = 2 * index + 1;
                 size_t right_child_index = 2 * index + 2;
-                size_t largest_index     = index;
+                size_t largest_index = index;
 
                 if (left_child_index <= last_index && m_heap[left_child_index].val > m_heap[largest_index].val) {
                     largest_index = left_child_index;

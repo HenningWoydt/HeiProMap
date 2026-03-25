@@ -32,7 +32,7 @@
 
 namespace HeiProMap {
     typedef CSRGraph graph_t;
-    typedef DistanceOracle     d_oracle_t;
+    typedef DistanceOracle d_oracle_t;
 }
 
 #endif //HEIPROMAP_SERIAL_DEFINITIONS_1_H

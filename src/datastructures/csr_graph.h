@@ -497,7 +497,7 @@ namespace HeiProMap {
                 auto slice_begin = [&](u64 t) -> vertex_t { return t * n / threads; };
                 auto slice_end = [&](u64 t) -> vertex_t { return (t + 1) * n / threads; };
 
-                #pragma omp parallel num_threads(threads)
+#pragma omp parallel num_threads(threads)
                 {
                     const u64 tid = (u64) omp_get_thread_num();
                     const vertex_t mu_beg = slice_begin(tid);
@@ -562,7 +562,7 @@ namespace HeiProMap {
                 edges_v.initialize(m);
                 edges_w.initialize(m);
 
-                #pragma omp parallel for num_threads(threads)
+#pragma omp parallel for num_threads(threads)
                 for (vertex_t map_u = 0; map_u < mapping.get_coarse_n(); ++map_u) {
                     size_t cursor = neighborhoods[map_u];
                     for (vertex_t j = overest_neighborhood[map_u]; j < overest_neighborhood[map_u + 1]; ++j) {

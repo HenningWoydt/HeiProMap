@@ -54,7 +54,6 @@ namespace HeiProMap {
                                 const PartitionManagerT &p_manager,
                                 vertex_t u,
                                 partition_t id) {
-
         forall_guiv(g, u, i, v)
             {
                 partition_t v_id = p_manager[v];

@@ -115,7 +115,7 @@ namespace HeiProMap {
                 boundary_vertices_v_vec.push_back(IndexedMaxHeap<s64>());
             }
 
-            #pragma omp parallel for num_threads(m_threads)
+#pragma omp parallel for num_threads(m_threads)
             for (size_t i = 0; i < m_threads; ++i) {
                 boundary_vertices_u_vec[i].initialize(m_n);
                 boundary_vertices_v_vec[i].initialize(m_n);
@@ -274,7 +274,7 @@ namespace HeiProMap {
                         forall_bc_ui_id(block_conn, u, i, id)
                             {
                                 if (id == v_id) {
-                                    s64 qap_delta_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
+                                    weight_t qap_delta_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                                     boundary_vertices_u.push(u, qap_delta_u);
                                     break;
                                 }
@@ -298,7 +298,7 @@ namespace HeiProMap {
                 endfor
             }
 
-            max_n_swaps = 100000;
+            max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
 
             // store change
             s64 curr_qap_gain = 0;
@@ -362,7 +362,7 @@ namespace HeiProMap {
                     }
 
                     // make move in structures
-                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
                     vertex_used[vertex] = vertex_mark;
 
                     steps_since_last_improvement += 1;
@@ -421,7 +421,7 @@ namespace HeiProMap {
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
                     vertex_used[vertex] = vertex_mark - 1;
 
-                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
                 }
 
                 // make all moves to best index
@@ -435,7 +435,7 @@ namespace HeiProMap {
                     bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
                     q_graph.move(g, p_manager, vertex, vertex_id, move_id);
                     block_conn.move(g, vertex, vertex_id, move_id);
-                    p_manager.move(vertex, vertex_weight, vertex_id, move_id);
+                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
                 }
             }
 

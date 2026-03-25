@@ -36,10 +36,10 @@
 namespace HeiProMap {
     class DistanceOracle {
         std::vector<partition_t> m_hierarchy;
-        std::vector<weight_t>    m_distance;
-        partition_t              m_k = 0;
+        std::vector<weight_t> m_distance;
+        partition_t m_k = 0;
 
-        AlignedArray<weight_t>    m_mtx;
+        AlignedArray<weight_t> m_mtx;
         AlignedArray<partition_t> m_h_mtx;
 
     public:
@@ -48,23 +48,23 @@ namespace HeiProMap {
             ScopedTimer _t("io", "DistanceOracle", "initialize");
 
             m_hierarchy = t_hierarchy;
-            m_distance  = t_distance;
-            m_k         = prod<partition_t>(m_hierarchy);
+            m_distance = t_distance;
+            m_k = prod<partition_t>(m_hierarchy);
 
             size_t size = (size_t) m_k * (size_t) m_k;
             m_mtx.initialize(size);
             m_h_mtx.initialize(size);
 
-            std::vector<std::vector<partition_t>> locs(m_k, std::vector<partition_t>(m_hierarchy.size()));
-            for (partition_t                      id = 0; id < m_k; ++id) {
+            std::vector<std::vector<partition_t> > locs(m_k, std::vector<partition_t>(m_hierarchy.size()));
+            for (partition_t id = 0; id < m_k; ++id) {
                 determine_loc(id, locs[id]);
             }
 
             for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                m_mtx[u_id * m_k + u_id]   = 0;
+                m_mtx[u_id * m_k + u_id] = 0;
                 m_h_mtx[u_id * m_k + u_id] = 0;
                 for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
-                    weight_t d               = determine_distance(locs[u_id], locs[v_id]);
+                    weight_t d = determine_distance(locs[u_id], locs[v_id]);
                     m_mtx[u_id * m_k + v_id] = d;
                     m_mtx[v_id * m_k + u_id] = d;
 
@@ -102,12 +102,12 @@ namespace HeiProMap {
             ASSERT(u_loc.size() == m_hierarchy.size());
 
             u64 r_start = 0;
-            u64 r_end   = m_k;
+            u64 r_end = m_k;
 
-            u64      s = m_hierarchy.size();
+            u64 s = m_hierarchy.size();
             for (u64 i = 0; i < m_hierarchy.size(); ++i) {
                 u64 n_parts = m_hierarchy[s - 1 - i];
-                u64 add     = (r_end - r_start) / n_parts;
+                u64 add = (r_end - r_start) / n_parts;
 
                 for (u64 j = 0; j < n_parts; ++j) {
                     if (r_start <= u_id && u_id < r_start + add) {
@@ -131,7 +131,7 @@ namespace HeiProMap {
             ASSERT(v_loc.size() == m_hierarchy.size());
 
             // determine the distance
-            u64      s = m_hierarchy.size();
+            u64 s = m_hierarchy.size();
             for (u64 i = 0; i < m_hierarchy.size(); ++i) {
                 if (u_loc[s - 1 - i] != v_loc[s - 1 - i]) {
                     return m_distance[s - 1 - i];
@@ -150,7 +150,7 @@ namespace HeiProMap {
             ASSERT(v_loc.size() == m_hierarchy.size());
 
             // determine the distance
-            u64      s = m_hierarchy.size();
+            u64 s = m_hierarchy.size();
             for (u64 i = 0; i < m_hierarchy.size(); ++i) {
                 if (u_loc[s - 1 - i] != v_loc[s - 1 - i]) {
                     return s - 1 - i;

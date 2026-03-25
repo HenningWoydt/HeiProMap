@@ -43,17 +43,17 @@ namespace HeiProMap {
     };
 
     class GreedyEdgeMatcher {
-        vertex_t    m_n     = 0;
-        vertex_t    m_m     = 0;
-        partition_t m_k     = 0;
+        vertex_t m_n = 0;
+        vertex_t m_m = 0;
+        partition_t m_k = 0;
 
-        const GreedyEdgeMatcherConfiguration *config        = nullptr;
-        RandomEngine                         *random_engine = nullptr;
+        const GreedyEdgeMatcherConfiguration *config = nullptr;
+        RandomEngine *random_engine = nullptr;
 
         AlignedArray<EdgeUVW> edges;
-        size_t                edges_size = 0;
+        size_t edges_size = 0;
 
-        u32               mark = 0;
+        u32 mark = 0;
         AlignedArray<u32> used;
 
     public:
@@ -66,11 +66,11 @@ namespace HeiProMap {
                         const GreedyEdgeMatcherConfiguration &i_config) {
             ScopedTimer _t("io", "GreedyEdgeMatcher", "initialize");
 
-            m_n     = t_n;
-            m_m     = t_m;
-            m_k     = t_k;
+            m_n = t_n;
+            m_m = t_m;
+            m_k = t_k;
 
-            config        = dynamic_cast<const GreedyEdgeMatcherConfiguration *>(&i_config);
+            config = dynamic_cast<const GreedyEdgeMatcherConfiguration *>(&i_config);
             random_engine = &t_random_engine;
 
             edges.initialize(m_m);
@@ -102,9 +102,9 @@ namespace HeiProMap {
                             continue;
                         }
 
-                        const vertex_t v      = g.edges_v[g.neighborhoods[u]];
-                        const weight_t ew     = g.edges_w[g.neighborhoods[u]];
-                        const f32      rating = (f32) ew / (f32) (g.deg(u) * g.deg(v));
+                        const vertex_t v = g.edges_v[g.neighborhoods[u]];
+                        const weight_t ew = g.edges_w[g.neighborhoods[u]];
+                        const f32 rating = (f32) ew / (f32) (g.deg(u) * g.deg(v));
                         edges[edges_size++] = {u, v, rating};
                     }
                 endfor
@@ -128,7 +128,6 @@ namespace HeiProMap {
                         matching.add(u, v);
                     }
                 }
-
             }
 
             // handle all other vertices
@@ -169,7 +168,6 @@ namespace HeiProMap {
 
                     matching.add(u, v);
                 }
-
             }
 
             matching.set_translation();

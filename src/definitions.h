@@ -33,17 +33,17 @@
 #include <string>
 
 namespace HeiProMap {
-    typedef int8_t  s8;
+    typedef int8_t s8;
     typedef int16_t s16;
     typedef int32_t s32;
     typedef int64_t s64;
 
-    typedef uint8_t  u8;
+    typedef uint8_t u8;
     typedef uint16_t u16;
     typedef uint32_t u32;
     typedef uint64_t u64;
 
-    typedef float  f32;
+    typedef float f32;
     typedef double f64;
 
     typedef u64 vertex_t;
@@ -59,7 +59,7 @@ namespace HeiProMap {
         std::string description;
         std::string default_val;
         std::string input;
-        bool        is_set;
+        bool is_set;
     };
 
     /**
@@ -125,12 +125,13 @@ namespace HeiProMap {
     public:
         vertex_t u;
         vertex_t v;
-        f32      w;
+        f32 w;
 
     public:
         EdgeUVW() = default;
 
-        EdgeUVW(const vertex_t u, const vertex_t v, const f32 w) : u(u), v(v), w(w) {}
+        EdgeUVW(const vertex_t u, const vertex_t v, const f32 w) : u(u), v(v), w(w) {
+        }
 
         bool operator<(const EdgeUVW &e) const {
             return w < e.w;
@@ -156,7 +157,8 @@ namespace HeiProMap {
     public:
         EdgeUVWeight() = default;
 
-        EdgeUVWeight(const vertex_t u, const vertex_t v, const weight_t w) : u(u), v(v), w(w) {}
+        EdgeUVWeight(const vertex_t u, const vertex_t v, const weight_t w) : u(u), v(v), w(w) {
+        }
 
         bool operator<(const EdgeUVWeight &e) const {
             return w < e.w;
@@ -176,12 +178,13 @@ namespace HeiProMap {
     class Swap {
     public:
         vertex_t u;
-        s64      qap_delta;
+        s64 qap_delta;
 
     public:
         Swap() = default;
 
-        Swap(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {}
+        Swap(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {
+        }
 
         bool operator>(const Swap &m) const {
             return qap_delta > m.qap_delta;
@@ -198,18 +201,18 @@ namespace HeiProMap {
 
     class KWayFMMove {
     public:
-        vertex_t    u;
+        vertex_t u;
         partition_t u_id;
         partition_t to_move_id;
-        s64         qap_delta;
+        s64 qap_delta;
 
         KWayFMMove() = default;
 
         KWayFMMove(const vertex_t t_u, const partition_t t_u_id, const partition_t t_to_move, const s64 t_qap_delta) {
-            u          = t_u;
-            u_id       = t_u_id;
+            u = t_u;
+            u_id = t_u_id;
             to_move_id = t_to_move;
-            qap_delta  = t_qap_delta;
+            qap_delta = t_qap_delta;
         }
 
         bool operator>(const KWayFMMove &m) const {
@@ -232,13 +235,13 @@ namespace HeiProMap {
     class SmallKWayFMMove {
     public:
         partition_t to_move_id;
-        s64         qap_delta;
+        s64 qap_delta;
 
         SmallKWayFMMove() = default;
 
         SmallKWayFMMove(const partition_t t_to_move, const s64 t_qap_delta) {
             to_move_id = t_to_move;
-            qap_delta  = t_qap_delta;
+            qap_delta = t_qap_delta;
         }
 
         bool operator>(const SmallKWayFMMove &m) const {
@@ -260,15 +263,15 @@ namespace HeiProMap {
 
     class Move {
     public:
-        vertex_t    u;
+        vertex_t u;
         partition_t u_id;
         partition_t to_move_id;
 
         Move() = default;
 
         Move(const vertex_t t_u, const vertex_t t_u_id, const partition_t t_to_move) {
-            u          = t_u;
-            u_id       = t_u_id;
+            u = t_u;
+            u_id = t_u_id;
             to_move_id = t_to_move;
         }
     };

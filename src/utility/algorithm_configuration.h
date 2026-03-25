@@ -431,7 +431,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 8;
+            initial_c = 16;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "global-paths";
@@ -441,9 +441,9 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 4;
 
-            size_constrained_lp_config.max_rounds = 3;
+            size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 5;
+            size_constrained_lp_config.multiplier = 16;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -459,16 +459,17 @@ namespace HeiProMap {
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 1;
+            label_propagation_config.max_iteration = 5;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = false;
-            multi_try_fm_refinement_config.max_iteration = 2;
+            multi_try_fm_refinement_config.max_iteration = 1;
             multi_try_fm_refinement_config.alpha = 100.0;
+            multi_try_fm_refinement_config.min_n_steps = 2;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 4;
             quotient_graph_refinement_config.use_preemptive_exit = true;

@@ -33,8 +33,8 @@
 namespace HeiProMap {
     template<typename T>
     class AlignedArray {
-        T      *m_ptr = nullptr;
-        size_t m_n    = 0;
+        T *m_ptr = nullptr;
+        size_t m_n = 0;
 
         static_assert(std::is_trivially_destructible<T>::value,
                       "AlignedArray requires trivially destructible types");
@@ -63,7 +63,7 @@ namespace HeiProMap {
             std::fill_n(m_ptr, size, fill_value);
         }
 
-        void free_memory(){
+        void free_memory() {
             free(m_ptr);
             m_ptr = nullptr;
             m_n = 0;
@@ -85,7 +85,7 @@ namespace HeiProMap {
             if (this != &other) {
                 if (m_n != other.m_n) {
                     free(m_ptr);
-                    m_n   = other.m_n;
+                    m_n = other.m_n;
                     m_ptr = m_n > 0 ? (T *) aligned_alloc(64, m_n * sizeof(T)) : nullptr;
                 }
                 if (m_n > 0) {
@@ -101,10 +101,10 @@ namespace HeiProMap {
             m_n = 0;
 
             m_ptr = other.m_ptr;
-            m_n   = other.m_n;
+            m_n = other.m_n;
 
             other.m_ptr = nullptr;
-            other.m_n   = 0;
+            other.m_n = 0;
         }
 
         AlignedArray &operator=(AlignedArray &&other) noexcept {
@@ -113,10 +113,10 @@ namespace HeiProMap {
                 m_n = 0;
 
                 m_ptr = other.m_ptr;
-                m_n   = other.m_n;
+                m_n = other.m_n;
 
                 other.m_ptr = nullptr;
-                other.m_n   = 0;
+                other.m_n = 0;
             }
             return *this;
         }

@@ -324,7 +324,7 @@ namespace HeiProMap {
 
                 weight_t new_qap = get_qap(g, p_manager, d_oracle);
                 weight_t gain = old_qap - new_qap;
-                std::cout << "B: " << new_qap << " " << p_manager.is_overloaded(lmax) << " " << gain << " " << -path.dist*2 << std::endl;
+                std::cout << "B: " << new_qap << " " << p_manager.is_overloaded(lmax) << " " << gain << " " << -path.dist * 2 << std::endl;
                 std::cout << "----- End Fast-Cycle -----" << std::endl;
 
                 found = true;
