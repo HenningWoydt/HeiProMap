@@ -7,14 +7,14 @@
 
 #include "flow_interface.h"
 
-#include "../../extern/maxflow_algorithms/reimpls/mbk.h"
+#include "../../extern/maxflow_algorithms/nbk/graph.h"
 #include "../../extern/maxflow_algorithms/ibfs/ibfs.h"
 
 namespace HeiProMap {
     template<typename captype = int, typename tcaptype = int, typename flowtype = int>
     class BKAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
     private:
-        reimpls::Graph<captype, tcaptype, flowtype> *g;
+        nbk::Graph<captype, tcaptype, flowtype> *g;
         vertex_t n;
         vertex_t source;
         vertex_t target;
@@ -30,7 +30,7 @@ namespace HeiProMap {
         void initialize(size_t t_n) override {
             n = t_n;
             if (g) delete g;
-            g = new reimpls::Graph<captype, tcaptype, flowtype>(n + 2, (n + 2) * 4 + 1024);
+            g = new nbk::Graph<captype, tcaptype, flowtype>(n + 2, (n + 2) * 4 + 1024);
             g->add_node(n + 2);
             source = n;
             target = n + 1;
@@ -65,7 +65,7 @@ namespace HeiProMap {
         void get_cut(std::vector<u8> &is_left) override {
             is_left.resize(n);
             for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = g->what_segment(u) == reimpls::Graph<captype, tcaptype, flowtype>::SOURCE;
+                is_left[u] = g->what_segment(u) == nbk::SOURCE;
             }
         }
 
@@ -73,7 +73,7 @@ namespace HeiProMap {
             residual_g.initialize(n);
 
             int n_edges = g->get_arc_num();
-            typename reimpls::Graph<captype, tcaptype, flowtype>::arc_id arc = g->get_first_arc();
+            typename nbk::Graph<captype, tcaptype, flowtype>::arc_id arc = g->get_first_arc();
 
             int u, v;
             for (int i = 0; i < n_edges; ++i) {

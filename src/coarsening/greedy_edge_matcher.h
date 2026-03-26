@@ -40,6 +40,7 @@ namespace HeiProMap {
     class GreedyEdgeMatcherConfiguration {
     public:
         bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
+        bool match_triangles = false; // triangle where one vertex is heavily connected and the other two are not.
     };
 
     class GreedyEdgeMatcher {
@@ -98,12 +99,13 @@ namespace HeiProMap {
             if (config->match_pendant_vertices_first) {
                 forall_gu(g, u)
                     {
-                        if (g.deg(u) != 1) {
-                            continue;
-                        }
+                        if (g.deg(u) != 1) { continue; }
 
                         const vertex_t v = g.edges_v[g.neighborhoods[u]];
                         const weight_t ew = g.edges_w[g.neighborhoods[u]];
+
+                        if (g.v_weights[u] + g.v_weights[v] > lmax) { continue; }
+
                         const f32 rating = (f32) ew / (f32) (g.deg(u) * g.deg(v));
                         edges[edges_size++] = {u, v, rating};
                     }
@@ -112,22 +114,78 @@ namespace HeiProMap {
 
                 for (size_t i = 0; i < edges_size; ++i) {
                     const auto &[u, v, w] = edges[i];
-                    if (used[u] == mark || used[v] == mark) {
-                        continue;
-                    }
+                    if (used[u] == mark || used[v] == mark) { continue; }
 
-                    if (g.v_weights[u] + g.v_weights[v] > lmax) {
-                        continue;
-                    }
+                    // use this edge
+                    used[u] = mark;
+                    used[v] = mark;
 
-                    if (used[u] != mark && used[v] != mark) {
-                        // use this edge
-                        used[u] = mark;
-                        used[v] = mark;
-
-                        matching.add(u, v);
-                    }
+                    matching.add(u, v);
                 }
+            }
+
+            if (config->match_triangles) {
+                forall_gu(g, u)
+                    {
+                        if (used[u] == mark) { continue; }
+                        if (g.deg(u) != 2) { continue; }
+
+                        const vertex_t u0 = g.neighborhoods[u];
+                        const vertex_t u1 = u0 + 1;
+
+                        const vertex_t a = g.edges_v[u0];
+                        const vertex_t b = g.edges_v[u1];
+                        const weight_t wa = g.edges_w[u0];
+                        const weight_t wb = g.edges_w[u1];
+
+                        // Try matching u with a if a is also degree 2 and shares b.
+                        if (g.deg(a) == 2 && used[a] != mark) {
+                            const vertex_t a0 = g.neighborhoods[a];
+                            const vertex_t a1 = a0 + 1;
+
+                            const vertex_t a_n0 = g.edges_v[a0];
+                            const vertex_t a_n1 = g.edges_v[a1];
+
+                            if ((a_n0 == u && a_n1 == b) || (a_n1 == u && a_n0 == b)) {
+                                if (u < a && g.v_weights[u] + g.v_weights[a] <= lmax) {
+                                    // weight of edge (u, a) is wa
+                                    const f32 rating = (f32) wa / (f32) (g.deg(u) * g.deg(a));
+                                    edges[edges_size++] = {u, a, rating};
+                                }
+                            }
+                        }
+
+                        // Try matching u with b if b is also degree 2 and shares a.
+                        if (g.deg(b) == 2 && used[b] != mark) {
+                            const vertex_t b0 = g.neighborhoods[b];
+                            const vertex_t b1 = b0 + 1;
+
+                            const vertex_t b_n0 = g.edges_v[b0];
+                            const vertex_t b_n1 = g.edges_v[b1];
+
+                            if ((b_n0 == u && b_n1 == a) || (b_n1 == u && b_n0 == a)) {
+                                if (u < b && g.v_weights[u] + g.v_weights[b] <= lmax) {
+                                    // weight of edge (u, b) is wb
+                                    const f32 rating = (f32) wb / (f32) (g.deg(u) * g.deg(b));
+                                    edges[edges_size++] = {u, b, rating};
+                                }
+                            }
+                        }
+                    }
+                endfor
+
+                std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+
+                for (size_t i = 0; i < edges_size; ++i) {
+                    const auto &[u, v, w] = edges[i];
+                    if (used[u] == mark || used[v] == mark) { continue; }
+
+                    used[u] = mark;
+                    used[v] = mark;
+                    matching.add(u, v);
+                }
+
+                edges_size = 0; // important before the general pass
             }
 
             // handle all other vertices
@@ -135,21 +193,14 @@ namespace HeiProMap {
                 {
                     weight_t u_w = g.v_weights[u];
 
-                    if (used[u] == mark) {
-                        continue;
-                    }
+                    if (used[u] == mark) { continue; }
 
                     forall_guivw(g, u, j, v, w)
                         {
                             weight_t v_w = g.v_weights[v];
 
-                            if (used[v] == mark) {
-                                continue;
-                            }
-
-                            if (g.v_weights[u] + g.v_weights[v] > lmax) {
-                                continue;
-                            }
+                            if (used[v] == mark) { continue; }
+                            if (g.v_weights[u] + g.v_weights[v] > lmax) { continue; }
 
                             const f32 edge_rating = (f32) w / (f32) (u_w * v_w);
                             edges[edges_size++] = {u, v, edge_rating};

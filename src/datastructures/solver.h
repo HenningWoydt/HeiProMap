@@ -219,10 +219,10 @@ namespace HeiProMap {
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
             refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
             // refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
             // refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
             refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
+            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
 
             // refinements.emplace_back(&wave_refinement, &ac.wave_refinement_configuration);
             // refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
@@ -311,7 +311,7 @@ namespace HeiProMap {
             const bool is_initial = (v_cycle == 0);
 
             f64 level_imbalance = 0.0;
-            f64 per_level_imb_add = is_initial ? 1.0 / 400.0 : 0.0;
+            f64 per_level_imb_add = is_initial ? 1.0 / 300.0 : 0.0;
             weight_t level_lmax = 0;
 
             level_infos.emplace_back();
@@ -386,12 +386,18 @@ namespace HeiProMap {
 
                 if (n_partitions > 1) {
                     weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
+                    weight_t worst_qap = best_qap;
                     u64 best_id = 0;
+                    u64 worst_id = 0;
                     for (u64 i = 1; i < n_partitions; ++i) {
                         weight_t qap = get_qap(graphs.back(), p_managers[i], d_oracle);
                         if (qap < best_qap) {
                             best_qap = qap;
                             best_id = i;
+                        }
+                        if (qap > worst_qap) {
+                            worst_qap = qap;
+                            worst_id = i;
                         }
                     }
 
@@ -401,6 +407,11 @@ namespace HeiProMap {
                         std::swap(q_graphs[0], q_graphs[best_id]);
                         std::swap(block_conns[0], block_conns[best_id]);
                     }
+
+                    std::swap(p_managers[worst_id], p_managers[n_partitions - 1]);
+                    std::swap(bv_managers[worst_id], bv_managers[n_partitions - 1]);
+                    std::swap(q_graphs[worst_id], q_graphs[n_partitions - 1]);
+                    std::swap(block_conns[worst_id], block_conns[n_partitions - 1]);
                 }
 
 #if ENABLE_PROFILER
@@ -647,12 +658,8 @@ namespace HeiProMap {
                 lp_refine.refine(graphs.back(), d_oracle, bv_managers[0], p_managers[0], q_graphs[0], block_conns[0], level_imbalance);
             } else {
                 for (u64 i = 0; i < n_partitions; ++i) {
-                    u64 refinement_max_iterations = ac.n_refinement_iterations;
+                    u64 refinement_max_iterations = ac.n_refinement_iterations;// std::max(ac.n_refinement_iterations, level);
                     for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
-                        if (v_cycle >= 1) {
-                            // boundary_pair_refiner(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
-                        }
-
                         for (auto [refiner, config]: refinements) {
                             if (config->enabled) {
                                 refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);

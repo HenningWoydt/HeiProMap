@@ -436,6 +436,7 @@ namespace HeiProMap {
             // set GPA matching algorithm
             // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "greedy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -481,11 +482,12 @@ namespace HeiProMap {
         }
 
         void set_eco() {
-            initial_c = 8;
+            initial_c = 16;
 
             // set GPA matching algorithm
-            coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "size-constrained-lp";
             // coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "greedy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -525,7 +527,7 @@ namespace HeiProMap {
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 2;
-            flow_based_refinement_config.alpha = 2.0;
+            flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
@@ -533,18 +535,22 @@ namespace HeiProMap {
         }
 
         void set_strong() {
-            initial_c = 8;
+            initial_c = 32;
 
-            n_max_partitions = 2;
-            n_refinement_iterations = 2;
-            n_v_cycle = 2;
+            n_max_partitions = 1;
+            n_refinement_iterations = 1;
+            n_v_cycle = 0;
             first_fast_v_cycle = false;
-            v_cycle_max_depth = 5;
+            v_cycle_max_depth = 10;
 
             // set GPA matching algorithm
-            coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "size-constrained-lp";
             // coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "greedy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+
+            greedy_edge_matcher_config.match_pendant_vertices_first = false;
+            greedy_edge_matcher_config.match_triangles = false;
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
@@ -568,7 +574,7 @@ namespace HeiProMap {
             global_multisection_config.kappa = 1;
 
             // enable label propagation
-            label_propagation_config.enabled = false;
+            label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
 
             // enable quotient graph refinement
@@ -589,8 +595,8 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 3;
-            flow_based_refinement_config.alpha = 2.0;
+            flow_based_refinement_config.max_local_iteration = 2;
+            flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
