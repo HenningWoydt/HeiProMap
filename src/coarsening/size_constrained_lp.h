@@ -75,7 +75,7 @@ namespace HeiProMap {
             m_m = t_m;
             m_k = t_k;
 
-            config = dynamic_cast<const SizeConstrainedLPConfiguration *>(&i_config);
+            config = &i_config;
             random_engine = &t_random_engine;
         }
 

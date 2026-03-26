@@ -139,7 +139,7 @@ namespace HeiProMap {
                 }
 
                 while (found_matching) {
-#pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (size_t i = 0; i < matching.size(); ++i) {
                         partition_t u_id = matching[i].first;
                         partition_t v_id = matching[i].second;
@@ -254,13 +254,13 @@ namespace HeiProMap {
                     continue;
                 }
 
-                // determine penalties for all vertices
-                determine_penalties(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, region_marker, region_mark);
-
                 // build a translation table from graph to flow network
                 vertex_t new_u = 0;
                 for (size_t i = 0; i < left_region.size(); ++i) { translation_table.add(left_region[i], new_u++); }
                 for (size_t i = 0; i < right_region.size(); ++i) { translation_table.add(right_region[i], new_u++); }
+
+                // determine penalties for all vertices
+                determine_penalties(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, region_marker, region_mark);
 
                 // build flownetwork
                 build_flow_network(g, d_oracle, left_id, right_id, left_region, right_region, flow_network, translation_table, region_marker, region_mark);
@@ -476,6 +476,7 @@ namespace HeiProMap {
                     }
                 endfor
             }
+
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
                 left_penalties[u] = 0;
@@ -541,6 +542,13 @@ namespace HeiProMap {
                         flow_network.add(new_u, new_v, w * distance);
                     }
                 endfor
+
+                vertex_t new_u = translation_table.get_n(u);
+                weight_t left_penalty = left_penalties[u];
+                weight_t right_penalty = right_penalties[u];
+
+                if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
+                if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
             }
 
             // build right region
@@ -561,19 +569,7 @@ namespace HeiProMap {
                         flow_network.add(new_u, new_v, w * distance);
                     }
                 endfor
-            }
 
-            // add the penalties
-            for (size_t i = 0; i < left_region.size(); ++i) {
-                vertex_t u = left_region[i];
-                vertex_t new_u = translation_table.get_n(u);
-                weight_t left_penalty = left_penalties[u];
-                weight_t right_penalty = right_penalties[u];
-                if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
-                if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
-            }
-            for (size_t i = 0; i < right_region.size(); ++i) {
-                vertex_t u = right_region[i];
                 vertex_t new_u = translation_table.get_n(u);
                 weight_t left_penalty = left_penalties[u];
                 weight_t right_penalty = right_penalties[u];

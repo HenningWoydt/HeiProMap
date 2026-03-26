@@ -366,8 +366,8 @@ namespace HeiProMap {
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                 uncontraction(v_cycle, level);
 
-                u64 n_partitions = is_initial ? 1 : std::min(1 + level * level, max_n_partitions);
-                lp_refine.min_improvement = -10;
+                u64 n_partitions = is_initial ? 1 : std::min(1 + level, max_n_partitions);
+                lp_refine.min_improvement = -1;
                 for (u64 i = 1; i < n_partitions; ++i) {
                     p_managers[i].copy_from(p_managers[0]);
                     bv_managers[i].copy_from(bv_managers[0]);

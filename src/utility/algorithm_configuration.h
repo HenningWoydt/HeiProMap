@@ -535,8 +535,8 @@ namespace HeiProMap {
         void set_strong() {
             initial_c = 8;
 
-            n_max_partitions = 1;
-            n_refinement_iterations = 1;
+            n_max_partitions = 2;
+            n_refinement_iterations = 2;
             n_v_cycle = 2;
             first_fast_v_cycle = false;
             v_cycle_max_depth = 5;
@@ -551,6 +551,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
+            size_constrained_lp_config.multiplier = 2;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
