@@ -299,11 +299,6 @@ namespace HeiProMap {
                 greedy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
             }
 
-            // initialize heavy matching config
-            if (use_default || is_set("--coarsening-algorithm-heavy-matching-pendant-first")) {
-                heavy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-heavy-matching-pendant-first") == "1";
-            }
-
             // initialize global-paths config
             if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
                 global_path_algorithm_config.random_level = std::stoi(get("--coarsening-algorithm-global-paths-random-level"));
@@ -501,15 +496,15 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "kaffpa-strong";
-            // global_multisection_config.mode_string = "kaffpa-eco";
-            global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "kaffpa-eco";
+            // global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 3;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
@@ -519,9 +514,9 @@ namespace HeiProMap {
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = false;
-            multi_try_fm_refinement_config.max_iteration = 3;
+            multi_try_fm_refinement_config.max_iteration = 2;
             multi_try_fm_refinement_config.alpha = 10000.0;
-            multi_try_fm_refinement_config.min_n_steps = 8;
+            multi_try_fm_refinement_config.min_n_steps = 4;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;

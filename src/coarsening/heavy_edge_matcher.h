@@ -35,7 +35,6 @@
 namespace HeiProMap {
     class HeavyEdgeMatcherConfiguration {
     public:
-        bool match_pendant_vertices_first = false; // Vertices with only one neighbor should be handled first.
     };
 
     class HeavyEdgeMatcher {
@@ -83,29 +82,7 @@ namespace HeiProMap {
             matching.initialize(g.n);
 
             mark += 1;
-
-            if (config->match_pendant_vertices_first) {
-                // first check vertices with degree 1
-                forall_gu(g, u)
-                    {
-                        if (used[u] == mark) { continue; }
-                        if (g.deg(u) != 1) { continue; }
-
-                        vertex_t v = g.edges_v[g.neighborhoods[u]];
-
-                        if (used[v] == mark) { continue; }
-
-                        weight_t u_w = g.v_weights[u];
-                        weight_t v_w = g.v_weights[v];
-
-                        if (u_w + v_w > lmax) { continue; }
-
-                        matching.add(u, v);
-                    }
-                endfor
-            }
-
-            // check all other vertices
+            
             forall_gu(g, u)
                 {
                     if (used[u] == mark) { continue; }

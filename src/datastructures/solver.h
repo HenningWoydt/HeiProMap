@@ -531,7 +531,7 @@ namespace HeiProMap {
                 // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
                 // rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+                ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, ac.threads);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
                 he_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
