@@ -379,10 +379,15 @@ namespace HeiProMap {
                 }
                 lp_refine.min_improvement = 0;
 
+                // std::cout << level << " X " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << " " << p_managers[0].sum_oload_weight(level_lmax) << std::endl;
+
                 rebalancing(v_cycle, level, level_imbalance, n_partitions);
+
+                // std::cout << level << " A " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << " " << p_managers[0].sum_oload_weight(level_lmax) << std::endl;
+
                 refinement(v_cycle, level, level_imbalance, n_partitions);
 
-                std::cout << level << " " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << std::endl;
+                // std::cout << level << " B " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << " " << p_managers[0].sum_oload_weight(level_lmax) << std::endl;
 
                 if (n_partitions > 1) {
                     weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);

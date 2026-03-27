@@ -542,6 +542,7 @@ namespace HeiProMap {
             // coarsening_algorithm_string = "size-constrained-lp";
             // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_string = "greedy-matching";
+            // coarsening_algorithm_string = "heavy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             greedy_edge_matcher_config.match_pendant_vertices_first = false;

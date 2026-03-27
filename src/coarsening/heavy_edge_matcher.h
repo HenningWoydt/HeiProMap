@@ -33,6 +33,24 @@
 #include "../utility/random_engine.h"
 
 namespace HeiProMap {
+    f32 edge_noise(vertex_t u, vertex_t v, u32 round) {
+        // order independent
+        const u32 a = u < v ? u : v;
+        const u32 b = u < v ? v : u;
+
+        // simple 32-bit mix (Wang-style)
+        u32 x = a * 0x9e3779b1u;
+        x ^= b * 0x85ebca77u;
+        x ^= round * 0xc2b2ae3du;
+
+        x ^= x >> 16;
+        x *= 0x7feb352du;
+        x ^= x >> 15;
+
+        // map to tiny float in [0, 1e-6)
+        return (f32) (x & 0x00ffffffu) * (1.0f / 16777216.0f) * 1e-6f;
+    }
+
     class HeavyEdgeMatcherConfiguration {
     public:
     };
@@ -45,8 +63,11 @@ namespace HeiProMap {
         const HeavyEdgeMatcherConfiguration *config = nullptr;
         RandomEngine *random_engine = nullptr;
 
-        u32 mark = 0;
-        AlignedArray<u32> used;
+        AlignedArray<vertex_t> preferred;
+        AlignedArray<vertex_t> vertex_list;
+        size_t vertex_list_size = 0;
+        AlignedArray<vertex_t> next_vertex_list;
+        size_t next_vertex_list_size = 0;
 
     public:
         HeavyEdgeMatcher() = default;
@@ -65,8 +86,9 @@ namespace HeiProMap {
             config = dynamic_cast<const HeavyEdgeMatcherConfiguration *>(&i_config);
             random_engine = &t_random_engine;
 
-            mark = 0;
-            used.initialize(m_n, 0);
+            preferred.initialize(m_n);
+            vertex_list.initialize(m_n);
+            next_vertex_list.initialize(m_n);
         }
 
         void match([[maybe_unused]] const size_t level,
@@ -74,51 +96,93 @@ namespace HeiProMap {
                    [[maybe_unused]] p_manager_t &p_manager,
                    Mapping &mapping,
                    f64 imbalance) {
-            ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "match");
-
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             Matching matching;
-            matching.initialize(g.n);
+            //
+            {
+                ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "initialize");
 
-            mark += 1;
-            
-            forall_gu(g, u)
+                matching.initialize(g.n);
+
+                std::iota(preferred.get_ptr(), preferred.get_ptr() + g.n, 0);
+                std::iota(vertex_list.get_ptr(), vertex_list.get_ptr() + g.n, 0);
+                vertex_list_size = g.n;
+            }
+
+            size_t round = 0;
+            size_t n_matched = 0;
+            size_t n_new_matched = 1;
+            while (n_new_matched > 0) {
+                //
                 {
-                    if (used[u] == mark) { continue; }
+                    ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "preferred_neighbor");
 
-                    weight_t u_w = g.v_weights[u];
-                    vertex_t best_v = u;
-                    weight_t max_weight = 0;
+                    for (size_t i = 0; i < vertex_list_size; ++i) {
+                        vertex_t u = vertex_list[i];
 
-                    forall_guivw(g, u, j, v, w)
-                        {
-                            if (used[v] == mark) { continue; }
+                        weight_t u_w = g.v_weights[u];
+                        vertex_t best_v = u;
+                        f32 best_rating = 0;
 
-                            weight_t v_w = g.v_weights[v];
+                        forall_guivw(g, u, j, v, w)
+                            {
+                                if (matching.is_matched(v)) { continue; }
 
-                            if (u_w + v_w > lmax) { continue; }
+                                weight_t v_w = g.v_weights[v];
 
-                            if (w > max_weight) {
-                                best_v = v;
-                                max_weight = w;
+                                if (u_w + v_w > lmax) { continue; }
+
+                                // f32 edge_rating = ((f32) (w * w)) / ((f32) (g.deg(u) * g.deg(v)));
+                                f32 edge_rating = ((f32) (w * w)) / ((f32) (u_w * v_w));
+                                // std::cout << edge_rating << " " << edge_noise(u, v, round) << std::endl;
+                                edge_rating += edge_noise(u, v, round);
+
+                                if (edge_rating > best_rating) {
+                                    best_v = v;
+                                    best_rating = edge_rating;
+                                }
                             }
-                        }
-                    endfor
+                        endfor
 
-                    if (best_v != u) {
-                        used[u] = mark;
-                        used[best_v] = mark;
-
-                        matching.add(u, best_v);
+                        preferred[u] = best_v;
                     }
                 }
-            endfor
 
-            matching.set_translation();
-            mapping.set_coarse_n(matching.get_n_coarse_nodes());
-            for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                mapping.set(u, matching.get_n(u));
+                n_new_matched = 0;
+                next_vertex_list_size = 0;
+                //
+                {
+                    ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "match_preferred");
+
+                    for (size_t i = 0; i < vertex_list_size; ++i) {
+                        vertex_t u = vertex_list[i];
+                        vertex_t v = preferred[u];
+                        vertex_t pref_v = preferred[v];
+
+                        if (u < v && u == pref_v) {
+                            matching.add(u, v);
+                            n_new_matched += 2;
+                        } else if (u == v) {
+                            next_vertex_list[next_vertex_list_size++] = u;
+                        }
+                    }
+                }
+                n_matched += n_new_matched;
+
+                std::swap(next_vertex_list, vertex_list);
+                std::swap(next_vertex_list_size, vertex_list_size);
+                round += 1;
+            }
+
+            {
+                ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "mapping");
+
+                matching.set_translation();
+                mapping.set_coarse_n(matching.get_n_coarse_nodes());
+                for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                    mapping.set(u, matching.get_n(u));
+                }
             }
         }
     };
