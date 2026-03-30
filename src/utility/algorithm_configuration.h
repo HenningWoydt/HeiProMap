@@ -533,10 +533,10 @@ namespace HeiProMap {
             initial_c = 32;
 
             n_max_partitions = 1;
-            n_refinement_iterations = 1;
+            n_refinement_iterations = 3;
             n_v_cycle = 0;
             first_fast_v_cycle = false;
-            v_cycle_max_depth = 10;
+            v_cycle_max_depth = 1;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -591,7 +591,7 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 2;
+            flow_based_refinement_config.max_local_iteration = 3;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
