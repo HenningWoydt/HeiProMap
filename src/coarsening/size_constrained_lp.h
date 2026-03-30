@@ -61,13 +61,13 @@ namespace HeiProMap {
         AlignedArray<vertex_t> singletons;
 
         const SizeConstrainedLPConfiguration *config = nullptr;
-        RandomEngine *random_engine = nullptr;
+        RandomEngine random_engine = RandomEngine(0);
 
     public:
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        RandomEngine &t_random_engine,
+                        const u64 seed,
                         const SizeConstrainedLPConfiguration &i_config) {
             ScopedTimer _t("io", "SizeConstrainedLP", "initialize");
 
@@ -76,7 +76,7 @@ namespace HeiProMap {
             m_k = t_k;
 
             config = &i_config;
-            random_engine = &t_random_engine;
+            random_engine = RandomEngine(seed);
         }
 
         void merge_when_identitiy([[maybe_unused]] const size_t level,
@@ -301,7 +301,7 @@ namespace HeiProMap {
                         [[maybe_unused]] size_t beg = bucket_offsets[i];
                         [[maybe_unused]] size_t end = bucket_offsets[i + 1];
 
-                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine->generator);
+                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine.generator);
                     }
                 }
                 // run clustering
