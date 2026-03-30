@@ -99,7 +99,6 @@ namespace HeiProMap {
                         {
                             if (used[v] == mark) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
-                            if (!bv_manager.is_boundary(v)) { continue; }
                             weight_t v_w = g.v_weights[v];
 
                             if (u_w + v_w > lmax) { continue; }
@@ -121,41 +120,7 @@ namespace HeiProMap {
                 }
             }
 
-            for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                for (size_t i = 0; i < bv_manager.size(id); ++i) {
-                    vertex_t u = bv_manager.get(id, i);
-                    weight_t u_w = g.v_weights[u];
-
-                    if (used[u] == mark) { continue; }
-
-                    f32 counter = 0;
-                    vertex_t chosen_v = 0;
-
-                    forall_guiv(g, u, j, v)
-                        {
-                            if (used[v] == mark) { continue; }
-                            if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.v_weights[v];
-
-                            if (u_w + v_w > lmax) { continue; }
-
-                            counter += 1.0;
-                            // choose with probability 1/counter as it ensures uniform distribution
-                            if (random_engine->get_f32() <= 1.0f / counter) {
-                                chosen_v = v;
-                            }
-                        }
-                    endfor
-                    if (counter > 0) {
-                        used[u] = mark;
-                        used[chosen_v] = mark;
-
-                        matching.add(u, chosen_v);
-                        n_matched += 2;
-                    }
-                }
-            }
-
+            /*
             // 3) Third: all remaining vertices
             forall_gu(g, u)
                 {
@@ -190,6 +155,7 @@ namespace HeiProMap {
                     }
                 }
             endfor
+            */
 
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
