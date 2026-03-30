@@ -91,6 +91,7 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
+                        const u64 seed,
                         const ISerialRefinerConfiguration &i_config) override {
             ScopedTimer _t("io", "QuotientGraphRefinement", "initialize");
 

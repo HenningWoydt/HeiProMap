@@ -229,10 +229,10 @@ namespace HeiProMap {
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
-                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, *config);
+                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), *config);
                 }
             }
-            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.label_propagation_config);
+            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -536,7 +536,7 @@ namespace HeiProMap {
                 // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
                 // rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, ac.threads);
+                ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
                 he_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {

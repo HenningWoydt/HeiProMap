@@ -64,10 +64,17 @@ namespace HeiProMap {
         partition_t m_k = 0;
         u64 m_threads = 1;
 
+        std::vector<AlignedArray<u32> > seen_vecs;
+        std::vector<AlignedArray<u32> > region_vecs;
+        std::vector<TranslationTable<vertex_t> > translation_tables;
+        std::vector<u32> seen_marker_vecs;
+        std::vector<u32> region_marker_vecs;
+
         AlignedArray<weight_t> left_penalties;
         AlignedArray<weight_t> right_penalties;
 
         const FlowBasedRefinementConfiguration *config = nullptr;
+        std::vector<RandomEngine> rnd_engines;
 
     public:
         FlowBasedRefinement() = default;
@@ -78,6 +85,7 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
+                        const u64 seed,
                         const ISerialRefinerConfiguration &i_config) override {
             ScopedTimer _t("io", "FlowBasedRefinement", "initialize");
 
@@ -89,7 +97,23 @@ namespace HeiProMap {
             left_penalties.initialize(m_n);
             right_penalties.initialize(m_n);
 
+            seen_vecs.resize(m_threads);
+            region_vecs.resize(m_threads);
+            translation_tables.resize(m_threads);
+            for (u64 t = 0; t < m_threads; ++t) {
+                seen_vecs[t].initialize(m_n, 0);
+                region_vecs[t].initialize(m_n, 0);
+                translation_tables[t].reserve(m_n, m_n);
+            }
+            seen_marker_vecs.resize(m_threads, 1);
+            region_marker_vecs.resize(m_threads, 1);
+
             config = dynamic_cast<const FlowBasedRefinementConfiguration *>(&i_config);
+
+            rnd_engines.resize(m_threads);
+            for (u64 t = 0; t < m_threads; ++t) {
+                rnd_engines[t] = RandomEngine(seed + t);
+            }
         }
 
         void refine(graph_t &g,
@@ -99,11 +123,12 @@ namespace HeiProMap {
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
                     f64 imbalance) override {
-            RandomEngine random_engine = RandomEngine(0);
+            RandomEngine &random_engine = rnd_engines[0];
 
             // active block scheduling
             AlignedArray<u8> active_this_round;
             AlignedArray<u8> active_next_round;
+            AlignedArray<u8> used_this_round;
 
             //
             {
@@ -111,55 +136,100 @@ namespace HeiProMap {
 
                 active_this_round.initialize(m_k, 1);
                 active_next_round.initialize(m_k, 0);
-            }
-
-            AlignedArray<u8> used_this_round;
-            //
-            {
-                ScopedTimer _t("refinement", "FlowBasedRefinement", "allocate");
-
                 used_this_round.initialize(m_k * m_k);
             }
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
-            for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                //
-                {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "reset_used_edges");
+            if (m_threads > 1 || true) {
+                for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
+                    //
+                    {
+                        ScopedTimer _t("refinement", "FlowBasedRefinement", "reset_used_edges");
 
-                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+                        std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+                    }
+
+                    bool found_matching = false;
+                    //
+                    {
+                        ScopedTimer _t("refinement", "FlowBasedRefinement", "matching");
+
+                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                    }
+
+                    while (found_matching) {
+                        #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                        for (size_t i = 0; i < matching.size(); ++i) {
+                            partition_t u_id = matching[i].first;
+                            partition_t v_id = matching[i].second;
+
+                            u64 thread_id = omp_get_thread_num();
+                            refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                        }
+
+                        //
+                        {
+                            ScopedTimer _t("refinement", "FlowBasedRefinement", "matching");
+
+                            found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                        }
+                    }
+
+                    // swap active
+                    {
+                        ScopedTimer _t("refinement", "FlowBasedRefinement", "swap_active");
+
+                        std::swap(active_this_round, active_next_round);
+                        active_next_round.initialize(m_k, 0);
+                    }
                 }
+            } else {
+                std::vector<std::pair<partition_t, partition_t> > pairs;
 
-                bool found_matching = false;
-                //
-                {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "matching");
-                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                }
+                for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
+                    //
+                    {
+                        ScopedTimer _t("refinement", "FlowBasedRefinement", "get_pairs");
 
-                while (found_matching) {
-                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
-                    for (size_t i = 0; i < matching.size(); ++i) {
-                        partition_t u_id = matching[i].first;
-                        partition_t v_id = matching[i].second;
-
-                        u64 thread_id = omp_get_thread_num();
-                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round);
+                        for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                            for (partition_t v_id = 0; v_id < m_k; ++v_id) {
+                                if (q_graph.has_edge(u_id, v_id)) {
+                                    if (config->use_closed_vertex_set) {
+                                        if (active_this_round[u_id] || active_this_round[v_id]) {
+                                            pairs.emplace_back(u_id, v_id);
+                                        }
+                                    } else {
+                                        pairs.emplace_back(u_id, v_id);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     //
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "matching");
-                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                    }
-                }
+                        ScopedTimer _t("refinement", "FlowBasedRefinement", "shuffle");
 
-                // swap active
-                {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "swap_active");
-                    std::swap(active_this_round, active_next_round);
-                    active_next_round.initialize(m_k, 0);
+                        fast_shuffle_unchecked(pairs.data(), pairs.data() + pairs.size(), random_engine.generator);
+                    }
+
+                    for (size_t i = 0; i < pairs.size(); ++i) {
+                        partition_t u_id = pairs[i].first;
+                        partition_t v_id = pairs[i].second;
+
+                        u64 thread_id = 0;
+                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                    }
+
+
+                    // swap active
+                    {
+                        ScopedTimer _t("refinement", "FlowBasedRefinement", "swap_active");
+
+                        std::swap(active_this_round, active_next_round);
+                        active_next_round.initialize(m_k, 0);
+                    }
                 }
             }
         }
@@ -173,10 +243,13 @@ namespace HeiProMap {
                            partition_t left_id,
                            partition_t right_id,
                            f64 imbalance,
-                           AlignedArray<u8> &active_next_round) {
+                           AlignedArray<u8> &active_next_round,
+                           u64 thread_id,
+                           u32 &seen_mark,
+                           u32 &region_mark) {
             ASSERT(left_id != right_id);
 
-            RandomEngine random_engine = RandomEngine(left_id * right_id + g.n);
+            RandomEngine &random_engine = rnd_engines[thread_id];
 
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) m_k));
 
@@ -202,14 +275,9 @@ namespace HeiProMap {
             ResidualFlowNetwork residual_flow_network;
             SCCGraph scc_graph;
 
-            TranslationTable<vertex_t> translation_table;
-            translation_table.reserve(g.n, g.n);
-
-            std::vector<u32> seen(g.n, 0);
-            u32 seen_mark = 1;
-
-            std::vector<u32> region_marker(g.n, 0);
-            u32 region_mark = 1;
+            TranslationTable<vertex_t> &translation_table = translation_tables[thread_id];
+            AlignedArray<u32> &seen = seen_vecs[thread_id];
+            AlignedArray<u32> &region_marker = region_vecs[thread_id];
 
             while (iteration < max_local_iteration) {
                 left_boundary.clear();
@@ -234,18 +302,9 @@ namespace HeiProMap {
                 u32 left_mark = region_mark - 1;
                 u32 right_mark = region_mark;
                 seen_mark += 2;
-                vertex_t left_seed_vertex = left_boundary[0];
-                vertex_t right_seed_vertex = right_boundary[0];
-                forall_guiv(g, left_seed_vertex, i, v)
-                    {
-                        if (p_manager[v] == right_id) {
-                            right_seed_vertex = v;
-                            break;
-                        }
-                    }
-                endfor
-                weight_t left_region_weight = determine_region(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_region, left_seed_vertex, left_boundary_weight, seen, seen_mark, region_marker, region_mark);
-                weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_seed_vertex, right_boundary_weight, seen, seen_mark, region_marker, region_mark);
+
+                weight_t left_region_weight = determine_region(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_region, left_boundary_weight, seen, seen_mark, region_marker, region_mark);
+                weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_boundary_weight, seen, seen_mark, region_marker, region_mark);
 
                 if (left_region.size() + right_region.size() == 0) {
                     // if both regions are empty, increase their sizes
@@ -395,11 +454,10 @@ namespace HeiProMap {
                                   weight_t max_weight,
                                   std::vector<vertex_t> &boundary,
                                   std::vector<vertex_t> &region,
-                                  vertex_t seed_vertex,
                                   weight_t boundary_weight,
-                                  std::vector<u32> &seen,
+                                  AlignedArray<u32> &seen,
                                   u32 &seen_mark,
-                                  std::vector<u32> &region_marker,
+                                  AlignedArray<u32> &region_marker,
                                   u32 &region_mark) {
             ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "determine_regions");
 
@@ -410,15 +468,10 @@ namespace HeiProMap {
             std::vector<vertex_t> queue;
             weight_t curr_weight = 0;
 
-            if (boundary_weight <= max_weight || true) {
-                for (size_t i = 0; i < boundary.size(); ++i) {
-                    vertex_t u = boundary[i];
-                    queue.push_back(u);
-                    seen[u] = seen_mark - 1;
-                }
-            } else {
-                queue.push_back(seed_vertex);
-                seen[seed_vertex] = seen_mark - 1;
+            for (size_t i = 0; i < boundary.size(); ++i) {
+                vertex_t u = boundary[i];
+                queue.push_back(u);
+                seen[u] = seen_mark - 1;
             }
 
             size_t queue_idx = 0;
@@ -455,7 +508,7 @@ namespace HeiProMap {
                                  partition_t right_id,
                                  std::vector<vertex_t> &left_region,
                                  std::vector<vertex_t> &right_region,
-                                 std::vector<u32> &region_marker,
+                                 AlignedArray<u32> &region_marker,
                                  u32 &region_mark) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "determine_penalties");
 
@@ -501,7 +554,7 @@ namespace HeiProMap {
                                 std::vector<vertex_t> &right_region,
                                 BKAdapter<int, int, int> &flow_network,
                                 TranslationTable<vertex_t> &translation_table,
-                                std::vector<u32> &region_marker,
+                                AlignedArray<u32> &region_marker,
                                 u32 &region_mark) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "build_flow_network");
 
@@ -649,7 +702,7 @@ namespace HeiProMap {
                                         std::vector<vertex_t> &left_region,
                                         std::vector<vertex_t> &right_region,
                                         TranslationTable<vertex_t> &translation_table,
-                                        std::vector<u32> &region_marker,
+                                        AlignedArray<u32> &region_marker,
                                         u32 &region_mark) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "change_boundary");
 

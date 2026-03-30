@@ -235,7 +235,7 @@ namespace HeiProMap {
                         multi_try_config.max_iteration = 10;
                         multi_try_config.min_n_steps = 10;
                         MultiTryFMRefinement multi_try_fm_refinement;
-                        multi_try_fm_refinement.initialize(item.g->n, item.g->m, item.k, 1, multi_try_config);
+                        multi_try_fm_refinement.initialize(item.g->n, item.g->m, item.k, 1, seed, multi_try_config);
                         multi_try_fm_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
 
                         FlowBasedRefinementConfiguration flow_config("refinements");
@@ -243,7 +243,7 @@ namespace HeiProMap {
                         flow_config.max_local_iteration = 10;
                         flow_config.max_global_iteration = 2;
                         FlowBasedRefinement flow_refinement;
-                        flow_refinement.initialize(item.g->n, item.g->m, item.k, 1, flow_config);
+                        flow_refinement.initialize(item.g->n, item.g->m, item.k, 1, seed, flow_config);
                         flow_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
 
                         weight_t temp_edge_cut = get_edge_cut((*item.g), local_p_manager);

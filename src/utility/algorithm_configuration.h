@@ -571,7 +571,7 @@ namespace HeiProMap {
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            label_propagation_config.max_iteration = 25;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;

@@ -68,7 +68,7 @@ namespace HeiProMap {
         // priority queues
         IndexedUpdateHeap heap;
 
-        RandomEngine random_engine = RandomEngine(0);
+        RandomEngine random_engine;
         const MultiTryFmRefinementConfiguration *config = nullptr;
 
     public:
@@ -80,6 +80,7 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
+                        const u64 seed,
                         const ISerialRefinerConfiguration &i_config) override {
             m_n = t_n;
             m_m = t_m;
@@ -100,6 +101,8 @@ namespace HeiProMap {
             moves_size = 0;
 
             heap.initialize(m_n);
+
+            random_engine = RandomEngine(seed);
         }
 
         void refine(graph_t &g,

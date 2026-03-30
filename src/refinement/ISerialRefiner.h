@@ -53,6 +53,7 @@ namespace HeiProMap {
                                 vertex_t t_m,
                                 partition_t t_k,
                                 u64 t_threads,
+                                u64 seed,
                                 const ISerialRefinerConfiguration &i_config) = 0;
 
         virtual void refine(graph_t &g,
