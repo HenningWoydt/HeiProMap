@@ -208,7 +208,7 @@ namespace HeiProMap {
             he_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.heavy_edge_matcher_config);
             rnd_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.random_edge_matcher_config);
             gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.global_path_algorithm_config);
-            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.size_constrained_lp_config);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
             BoundaryEdgeMatcherConfiguration c;
             be_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, c);
 
@@ -387,7 +387,7 @@ namespace HeiProMap {
 
                 refinement(v_cycle, level, level_imbalance, n_partitions);
 
-                // std::cout << level << " B " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << " " << p_managers[0].sum_oload_weight(level_lmax) << std::endl;
+                std::cout << v_cycle << " " << level << " B " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_managers[0], d_oracle) << " " << p_managers[0].sum_oload_weight(level_lmax) << std::endl;
 
                 if (n_partitions > 1) {
                     weight_t best_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
@@ -664,6 +664,13 @@ namespace HeiProMap {
             } else {
                 for (u64 i = 0; i < n_partitions; ++i) {
                     u64 refinement_max_iterations = ac.n_refinement_iterations;// std::max(ac.n_refinement_iterations, level);
+
+                    if (level == 0) {
+                        refinement_max_iterations = ac.n_refinement_iterations;
+                    } else {
+                        refinement_max_iterations = 1;
+                    }
+
                     for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
                         for (auto [refiner, config]: refinements) {
                             if (config->enabled) {
