@@ -311,7 +311,7 @@ namespace HeiProMap {
             const bool is_initial = (v_cycle == 0);
 
             f64 level_imbalance = 0.0;
-            f64 per_level_imb_add = is_initial ? 1.0 / 300.0 : 0.0;
+            f64 per_level_imb_add = is_initial ? 1.0 / 400.0 : 0.0;
             weight_t level_lmax = 0;
 
             level_infos.emplace_back();
@@ -528,13 +528,12 @@ namespace HeiProMap {
             mappings.back().initialize(graphs.back().n);
 
             if (v_cycle > 0) {
-                bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
-            }
-
-            if (random) {
-                be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
+                //bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
+                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+            } else if (random) {
+                // be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
                 // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
-                // rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {

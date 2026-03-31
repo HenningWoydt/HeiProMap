@@ -503,8 +503,8 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-strong";
-            // global_multisection_config.mode_string = "kaffpa-eco";
+            // global_multisection_config.mode_string = "kaffpa-strong";
+            global_multisection_config.mode_string = "kaffpa-eco";
             // global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
@@ -512,7 +512,7 @@ namespace HeiProMap {
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 3;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -521,8 +521,12 @@ namespace HeiProMap {
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 10;
-            quotient_graph_refinement_config.alpha = 1000.0;
+            quotient_graph_refinement_config.alpha = 10000.0;
             quotient_graph_refinement_config.min_n_steps = 10;
+            quotient_graph_refinement_config.use_active_scheduling = true;
+
+            // enable k-way fm
+            k_way_fm_refinement_config.enabled = false;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = false;
@@ -531,7 +535,7 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.min_n_steps = 4;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled = true;
+            flow_based_refinement_config.enabled = false;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 2;
             flow_based_refinement_config.alpha = 1.0;
