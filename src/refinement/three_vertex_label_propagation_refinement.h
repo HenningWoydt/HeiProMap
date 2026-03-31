@@ -172,7 +172,7 @@ namespace HeiProMap {
                     weight_t best_v_weight = 0, best_vv_weight = 0, best_vvv_weight = 0;
                     partition_t best_v_id = 0, best_vv_id = 0, best_vvv_id = 0;
                     partition_t best_new_v_id = 0, best_new_vv_id = 0, best_new_vvv_id = 0;
-                    s64 best_qap_delta = -1;
+                    weight_t best_qap_delta = -1;
 
                     // search for the best triple combination that does not overload
                     for (size_t j = 0; j < vertices.size(); ++j) {
@@ -209,7 +209,7 @@ namespace HeiProMap {
                                             if (overloaded) { continue; }
 
                                             // get the qap delta
-                                            s64 qap_delta = get_qap_delta(g, v, vv, vvv, v_id, vv_id, vvv_id, new_v_id, new_vv_id, new_vvv_id, p_manager, d_oracle);
+                                            weight_t qap_delta = get_qap_delta(g, v, vv, vvv, v_id, vv_id, vvv_id, new_v_id, new_vv_id, new_vvv_id, p_manager, d_oracle);
 
                                             if (qap_delta > best_qap_delta) {
                                                 best_qap_delta = qap_delta;

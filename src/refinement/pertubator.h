@@ -46,7 +46,7 @@ namespace HeiProMap {
             partition_t from;
             partition_t to;
             weight_t weight;
-            s64 gain; // positive = improvement, negative = deterioration
+            weight_t gain; // positive = improvement, negative = deterioration
         };
 
         inline std::vector<weight_t> compute_block_weights(const graph_t &g,
@@ -139,7 +139,7 @@ namespace HeiProMap {
                                 continue;
                             }
 
-                            const s64 gain = get_u_qap_delta(g, u, from_block, to_block, p_manager, d_oracle);
+                            const weight_t gain = get_u_qap_delta(g, u, from_block, to_block, p_manager, d_oracle);
 
                             out.push_back({u, from_block, to_block, u_weight, gain});
                         }
@@ -160,9 +160,9 @@ namespace HeiProMap {
             }
         }
 
-        inline bool better_chain(s64 candidate_gain,
+        inline bool better_chain(weight_t candidate_gain,
                                  const std::vector<PertMove> &candidate_chain,
-                                 s64 best_gain,
+                                 weight_t best_gain,
                                  const std::vector<PertMove> &best_chain) {
             if (candidate_chain.empty()) {
                 return false;
@@ -192,7 +192,7 @@ namespace HeiProMap {
                                                      block_conn_t &block_conn,
                                                      partition_t start_block,
                                                      weight_t lmax,
-                                                     s64 max_total_loss,
+                                                     weight_t max_total_loss,
                                                      u64 max_depth,
                                                      u64 max_branching,
                                                      RandomEngine &random_engine,
@@ -207,8 +207,8 @@ namespace HeiProMap {
             std::vector<PertMove> best_chain;
             std::vector<PertMove> candidates;
 
-            s64 current_gain = 0;
-            s64 best_gain = std::numeric_limits<s64>::lowest();
+            weight_t current_gain = 0;
+            weight_t best_gain = std::numeric_limits<weight_t>::lowest();
 
             auto dfs = [&](auto &&self, partition_t current_block, u64 depth) -> void {
                 if (!current_chain.empty()) {
@@ -309,15 +309,15 @@ namespace HeiProMap {
         //   total_chain_gain >= -max_total_loss
         //
         // You will likely want to tune this.
-        const s64 max_total_loss =
-                std::max<s64>(1, static_cast<s64>(std::ceil(0.01 * static_cast<f64>(g.g_weight))));
+        const weight_t max_total_loss =
+                std::max<weight_t>(1, static_cast<weight_t>(std::ceil(0.01 * static_cast<f64>(g.g_weight))));
 
         // Random start offset to avoid always scanning blocks in the same order.
         partition_t start_offset = static_cast<partition_t>(random_engine.get_u64() % p_manager.k);
 
         for (u64 iter = 0; iter < max_iterations; ++iter) {
             std::vector<PertMove> best_chain_this_iteration;
-            s64 best_gain_this_iteration = std::numeric_limits<s64>::lowest();
+            weight_t best_gain_this_iteration = std::numeric_limits<weight_t>::lowest();
 
             // Try all blocks once in rotated order and keep the best chain.
             for (partition_t step = 0; step < p_manager.k; ++step) {
@@ -343,7 +343,7 @@ namespace HeiProMap {
                     continue;
                 }
 
-                s64 candidate_gain = 0;
+                weight_t candidate_gain = 0;
                 for (const PertMove &m: candidate_chain) {
                     candidate_gain += m.gain;
                 }

@@ -180,13 +180,13 @@ namespace HeiProMap {
 
 
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
-    inline s64 get_u_qap_delta(const GraphT &g,
+    inline weight_t get_u_qap_delta(const GraphT &g,
                                const vertex_t u,
                                const partition_t old_id,
                                const partition_t new_id,
                                const PartitionManagerT &p_manager,
                                DistanceOracleT &d_oracle) {
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         forall_guivw(g, u, i, v, w)
             {
@@ -202,14 +202,14 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
-    inline s64 get_u_qap_delta(const GraphT &g,
+    inline weight_t get_u_qap_delta(const GraphT &g,
                                const vertex_t u,
                                const partition_t old_id,
                                const partition_t new_id,
                                const PartitionManagerT &p_manager,
                                DistanceOracleT &d_oracle,
                                BlockConnT &block_conn) {
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         forall_bc_ui_id_idw(block_conn, u, i, id, idw)
             {
@@ -253,12 +253,12 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT>
-    inline s64 get_u_edge_cut_delta(const GraphT &g,
+    inline weight_t get_u_edge_cut_delta(const GraphT &g,
                                     const vertex_t u,
                                     const partition_t old_id,
                                     const partition_t new_id,
                                     const PartitionManagerT &p_manager) {
-        s64 edge_cut_delta = 0;
+        weight_t edge_cut_delta = 0;
 
         forall_guivw(g, u, i, v, w)
             {
@@ -273,13 +273,13 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT, typename BlockConnT>
-    inline s64 get_u_edge_cut_delta(const GraphT &g,
+    inline weight_t get_u_edge_cut_delta(const GraphT &g,
                                     const vertex_t u,
                                     const partition_t old_id,
                                     const partition_t new_id,
                                     const PartitionManagerT &p_manager,
                                     const BlockConnT &block_conn) {
-        s64 edge_cut_delta = 0;
+        weight_t edge_cut_delta = 0;
 
         forall_bc_ui_id_idw(block_conn, u, i, id, idw)
             {
@@ -296,12 +296,12 @@ namespace HeiProMap {
                                 const vertex_t u,
                                 const partition_t old_id,
                                 const partition_t *blocks,
-                                s64 *blocks_qap_delta,
+                                weight_t *blocks_qap_delta,
                                 const size_t blocks_size,
                                 const p_manager_t &p_manager,
                                 d_oracle_t &d_oracle) {
         blocks = ASSUME_ALIGNED(partition_t*, blocks, 64);
-        blocks_qap_delta = ASSUME_ALIGNED(s64 *, blocks_qap_delta, 64);
+        blocks_qap_delta = ASSUME_ALIGNED(weight_t *, blocks_qap_delta, 64);
 
         // reset all to 0
         std::fill_n(blocks_qap_delta, blocks_size, 0);
@@ -322,7 +322,7 @@ namespace HeiProMap {
     */
 
     /*
-    inline s64 get_qap_delta(const graph_t &g,
+    inline weight_t get_qap_delta(const graph_t &g,
                              const vertex_t u,
                              const partition_t u_old_id,
                              const partition_t u_new_id,
@@ -331,7 +331,7 @@ namespace HeiProMap {
                              const partition_t v_new_id,
                              const p_manager_t &p_manager,
                              d_oracle_t &d_oracle) {
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         // process u
 #pragma GCC unroll 8
@@ -370,7 +370,7 @@ namespace HeiProMap {
     */
 
     /*
-    inline s64 get_qap_delta(const graph_t &g,
+    inline weight_t get_qap_delta(const graph_t &g,
                              const vertex_t v,
                              const vertex_t vv,
                              const vertex_t vvv,
@@ -382,7 +382,7 @@ namespace HeiProMap {
                              const partition_t new_vvv_id,
                              const p_manager_t &p_manager,
                              d_oracle_t &d_oracle) {
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         // process v
 #pragma GCC unroll 8
@@ -445,7 +445,7 @@ namespace HeiProMap {
     */
 
 
-    inline s64 get_u_qap_delta_and_is_boundary(const graph_t &g,
+    inline weight_t get_u_qap_delta_and_is_boundary(const graph_t &g,
                                                const vertex_t u,
                                                const partition_t old_id,
                                                const partition_t new_id,
@@ -456,7 +456,7 @@ namespace HeiProMap {
         is_boundary_old_id = false;
         is_boundary_new_id = false;
 
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
 #pragma GCC unroll 8
         forall_guivw(g, u, i, v, w)
@@ -476,7 +476,7 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
-    inline s64 get_u_qap_delta_and_is_boundary(const GraphT &g,
+    inline weight_t get_u_qap_delta_and_is_boundary(const GraphT &g,
                                                const vertex_t u,
                                                const partition_t old_id,
                                                const partition_t new_id,
@@ -488,7 +488,7 @@ namespace HeiProMap {
         is_boundary_old_id = false;
         is_boundary_new_id = false;
 
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         forall_bc_ui_id_idw(block_conn, u, i, id, idw)
             {
@@ -506,7 +506,7 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
-    inline s64 get_u_qap_delta_and_is_connected_to(const GraphT &g,
+    inline weight_t get_u_qap_delta_and_is_connected_to(const GraphT &g,
                                                    const vertex_t u,
                                                    const partition_t old_id,
                                                    const partition_t new_id,
@@ -515,7 +515,7 @@ namespace HeiProMap {
                                                    DistanceOracleT &d_oracle) {
         is_connected_to_new_id = false;
 
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         forall_guivw(g, u, i, v, w)
             {
@@ -534,7 +534,7 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
-    inline s64 get_u_qap_delta_and_is_connected_to(const GraphT &g,
+    inline weight_t get_u_qap_delta_and_is_connected_to(const GraphT &g,
                                                    const vertex_t u,
                                                    const partition_t old_id,
                                                    const partition_t new_id,
@@ -544,7 +544,7 @@ namespace HeiProMap {
                                                    BlockConnT &block_conn) {
         is_connected_to_new_id = false;
 
-        s64 qap_delta = 0;
+        weight_t qap_delta = 0;
 
         forall_bc_ui_id_idw(block_conn, u, i, id, idw)
             {
@@ -561,7 +561,7 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT>
-    inline s64 get_u_edge_cut_delta_and_is_connected_to(const GraphT &g,
+    inline weight_t get_u_edge_cut_delta_and_is_connected_to(const GraphT &g,
                                                         const vertex_t u,
                                                         const partition_t old_id,
                                                         const partition_t new_id,
@@ -569,7 +569,7 @@ namespace HeiProMap {
                                                         const PartitionManagerT &p_manager) {
         is_connected_to_new_id = false;
 
-        s64 edge_cut_delta = 0;
+        weight_t edge_cut_delta = 0;
 
         forall_guivw(g, u, i, v, w)
             {
@@ -586,7 +586,7 @@ namespace HeiProMap {
     }
 
     template<typename GraphT, typename PartitionManagerT, typename BlockConnT>
-    inline s64 get_u_edge_cut_delta_and_is_connected_to(const GraphT &g,
+    inline weight_t get_u_edge_cut_delta_and_is_connected_to(const GraphT &g,
                                                         const vertex_t u,
                                                         const partition_t old_id,
                                                         const partition_t new_id,
@@ -595,7 +595,7 @@ namespace HeiProMap {
                                                         BlockConnT &block_conn) {
         is_connected_to_new_id = false;
 
-        s64 edge_cut_delta = 0;
+        weight_t edge_cut_delta = 0;
 
         forall_bc_ui_id_idw(block_conn, u, i, id, idw)
             {

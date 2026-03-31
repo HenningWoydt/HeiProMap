@@ -59,14 +59,14 @@ namespace HeiProMap {
         size_t curr_boundary_size = 0;
 
         AlignedArray<partition_t> blocks;
-        AlignedArray<s64> blocks_qap_delta;
+        AlignedArray<weight_t> blocks_qap_delta;
         size_t blocks_size = 0;
 
         RandomEngine random_engine = RandomEngine(0);
         const LightningRefinementConfiguration *config = nullptr;
 
         std::vector<u8> used_blocks;
-        s64 current_qap_delta = 0;
+        weight_t current_qap_delta = 0;
         size_t current_n_moves = 0;
 
     public:
@@ -128,7 +128,7 @@ namespace HeiProMap {
 
                                     if (p_manager.get_bweight(v_id) + u_weight > lmax) {
                                         // would overload
-                                        s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                        weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                                         // if (qap_delta < 0) { continue; }
 
                                         possible_moves.push_back({u, u_id, v_id, qap_delta});
@@ -208,7 +208,7 @@ namespace HeiProMap {
                             if (block_used[v_id] == block_marker) { continue; }
                             if (used_blocks[v_id] == 1) { continue; }
 
-                            s64 qap_delta = get_u_qap_delta(g, u, id, v_id, p_manager, d_oracle);
+                            weight_t qap_delta = get_u_qap_delta(g, u, id, v_id, p_manager, d_oracle);
 
                             if (p_manager.get_bweight(id) - u_weight <= lmax && p_manager.get_bweight(v_id) + u_weight <= lmax) {
                                 if (qap_delta > best_stop_move.qap_delta) {

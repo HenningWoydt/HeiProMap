@@ -49,7 +49,7 @@ namespace HeiProMap {
         size_t curr_boundary_size = 0;
 
         AlignedArray<partition_t> blocks;
-        AlignedArray<s64> blocks_qap_delta;
+        AlignedArray<weight_t> blocks_qap_delta;
         size_t blocks_size = 0;
 
         RandomEngine random_engine;
@@ -136,7 +136,7 @@ namespace HeiProMap {
                                 weight_t v_id_weight = p_manager.get_bweight(id);
 
                                 if (v_id_weight + u_weight <= lmax) {
-                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle, block_conn);
+                                    weight_t qap_delta = get_u_qap_delta(g, u, u_id, id, p_manager, d_oracle, block_conn);
 
                                     if (qap_delta > best_qap_delta) {
                                         best_id = id;

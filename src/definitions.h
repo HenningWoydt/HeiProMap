@@ -178,12 +178,12 @@ namespace HeiProMap {
     class Swap {
     public:
         vertex_t u;
-        s64 qap_delta;
+        weight_t qap_delta;
 
     public:
         Swap() = default;
 
-        Swap(const vertex_t t_u, const s64 qap_delta) : u(t_u), qap_delta(qap_delta) {
+        Swap(const vertex_t t_u, const weight_t qap_delta) : u(t_u), qap_delta(qap_delta) {
         }
 
         bool operator>(const Swap &m) const {
@@ -204,11 +204,11 @@ namespace HeiProMap {
         vertex_t u;
         partition_t u_id;
         partition_t to_move_id;
-        s64 qap_delta;
+        weight_t qap_delta;
 
         KWayFMMove() = default;
 
-        KWayFMMove(const vertex_t t_u, const partition_t t_u_id, const partition_t t_to_move, const s64 t_qap_delta) {
+        KWayFMMove(const vertex_t t_u, const partition_t t_u_id, const partition_t t_to_move, const weight_t t_qap_delta) {
             u = t_u;
             u_id = t_u_id;
             to_move_id = t_to_move;
@@ -235,11 +235,11 @@ namespace HeiProMap {
     class SmallKWayFMMove {
     public:
         partition_t to_move_id;
-        s64 qap_delta;
+        weight_t qap_delta;
 
         SmallKWayFMMove() = default;
 
-        SmallKWayFMMove(const partition_t t_to_move, const s64 t_qap_delta) {
+        SmallKWayFMMove(const partition_t t_to_move, const weight_t t_qap_delta) {
             to_move_id = t_to_move;
             qap_delta = t_qap_delta;
         }

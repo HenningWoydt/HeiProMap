@@ -37,7 +37,7 @@ namespace HeiProMap {
     public:
         vertex_t u;
         partition_t id;
-        s64 qap_delta;
+        weight_t qap_delta;
 
         bool operator>(const IndexedUpdateHeapEntry &m) const { return qap_delta > m.qap_delta; }
 
@@ -72,7 +72,7 @@ namespace HeiProMap {
             m_iteration_counter.initialize(m_n, 0);
         }
 
-        void push(const vertex_t u, const partition_t move_id, const s64 qap_delta) {
+        void push(const vertex_t u, const partition_t move_id, const weight_t qap_delta) {
             ASSERT(!entry_exists(u));
             m_indices[u] = m_heap_size;
             m_iteration_counter[u] = m_iteration;
@@ -81,7 +81,7 @@ namespace HeiProMap {
             bubble_up(m_heap_size - 1);
         }
 
-        void update(const vertex_t u, const partition_t move_id, const s64 qap_delta) {
+        void update(const vertex_t u, const partition_t move_id, const weight_t qap_delta) {
             ASSERT(entry_exists(u));
             m_heap[m_indices[u]].id = move_id;
             m_heap[m_indices[u]].qap_delta = qap_delta;
@@ -89,7 +89,7 @@ namespace HeiProMap {
             bubble_down(m_indices[u]);
         }
 
-        void push_update(const vertex_t u, const partition_t move_id, const s64 qap_delta) {
+        void push_update(const vertex_t u, const partition_t move_id, const weight_t qap_delta) {
             if (entry_exists(u)) {
                 update(u, move_id, qap_delta);
             } else {
@@ -127,7 +127,7 @@ namespace HeiProMap {
 
         partition_t top_id() const { return m_heap[0].id; }
 
-        s64 top_qap_delta() const { return m_heap[0].qap_delta; }
+        weight_t top_qap_delta() const { return m_heap[0].qap_delta; }
 
         bool empty() const { return m_heap_size == 0; }
 

@@ -146,7 +146,7 @@ namespace HeiProMap {
                     partition_t best_v_id = 0;
                     weight_t best_v_weight = 0;
                     partition_t best_v_move_id = 0;
-                    s64 best_qap_delta = -1;
+                    weight_t best_qap_delta = -1;
 
                     // check all neighbors v
                     forall_guiv(g, u, i, v) {
@@ -186,7 +186,7 @@ namespace HeiProMap {
                                     if (u_move_id == v_move_id && u_move_id_weight + u_weight + v_weight > lmax) { continue; }
 
                                     // no overloading is happening, now compute the qap_delta
-                                    s64 qap_delta = get_qap_delta(g, u, u_id, u_move_id, v, v_id, v_move_id, p_manager, d_oracle);
+                                    weight_t qap_delta = get_qap_delta(g, u, u_id, u_move_id, v, v_id, v_move_id, p_manager, d_oracle);
 
                                     if (qap_delta > best_qap_delta) {
                                         best_u_move_id = u_move_id;

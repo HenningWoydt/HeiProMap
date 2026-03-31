@@ -96,7 +96,7 @@ namespace HeiProMap {
                     partition_t v_id = p_manager[v];
                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
-                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                    weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                     if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
                         move.best_qap = qap_delta;
                         move.best_id = v_id;
@@ -110,7 +110,7 @@ namespace HeiProMap {
                 if (v_id == u_id) { continue; }
                 if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
-                s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                 if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
                     move.best_qap = qap_delta;
                     move.best_id = v_id;
@@ -136,7 +136,7 @@ namespace HeiProMap {
                     partition_t v_id = p_manager[v];
                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
-                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                    weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                     if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
                         move.best_qap = qap_delta;
                         move.best_id = v_id;

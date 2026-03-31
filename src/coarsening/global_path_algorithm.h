@@ -77,7 +77,7 @@ namespace HeiProMap {
 
         // for DP
         AlignedArray<f32> dp_w;
-        AlignedArray<s64> dp_m;
+        AlignedArray<weight_t> dp_m;
         AlignedArray<u8> dp_take;
         AlignedArray<vertex_t> dp_edges;
 

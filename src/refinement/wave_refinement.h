@@ -59,7 +59,7 @@ namespace HeiProMap {
         size_t curr_boundary_size = 0;
 
         AlignedArray<partition_t> blocks;
-        AlignedArray<s64> blocks_qap_delta;
+        AlignedArray<weight_t> blocks_qap_delta;
         size_t blocks_size = 0;
 
         RandomEngine random_engine = RandomEngine(0);
@@ -120,17 +120,17 @@ namespace HeiProMap {
                     continue;
                 }
 
-                s64 global_best_qap_delta = -1;
+                weight_t global_best_qap_delta = -1;
                 global_moves.clear();
 
                 for (size_t rep = 0; rep < max_n_repetitions; ++rep) {
-                    s64 moves_qap_sum = 0;
-                    s64 moves_best_qap_sum = 0;
+                    weight_t moves_qap_sum = 0;
+                    weight_t moves_best_qap_sum = 0;
                     size_t moves_best_idx = 0;
                     moves.clear();
 
                     for (size_t add_i = 0; add_i < max_n_add_nodes; ++add_i) {
-                        s64 sum_qap_delta = 0;
+                        weight_t sum_qap_delta = 0;
                         size_t n_pos_moves = 0;
 
                         if (p_manager.get_bweight(v_id) == lmax) { continue; }
@@ -143,7 +143,7 @@ namespace HeiProMap {
                                 forall_guiv(g, u, j, v) {
                                         if (p_manager[v] != v_id) { continue; }
 
-                                        s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                        weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
 
                                         if (qap_delta > 0) {
                                             possible_pos_moves.push_back({u, u_id, v_id, qap_delta});
@@ -164,8 +164,8 @@ namespace HeiProMap {
                         // randomly choose one move
                         if (n_pos_moves > 0) {
                             // choose a positive move
-                            s64 threshold = random_engine.get_f32(0.0, 1.0) * sum_qap_delta;
-                            s64 c = 0;
+                            weight_t threshold = random_engine.get_f32(0.0, 1.0) * sum_qap_delta;
+                            weight_t c = 0;
                             for (size_t i = 0; i < possible_pos_moves.size(); ++i) {
                                 if (c <= threshold && c + possible_pos_moves[i].qap_delta > threshold) {
                                     m = possible_pos_moves[i];
@@ -174,7 +174,7 @@ namespace HeiProMap {
                             }
                         } else {
                             // choose a negative move
-                            s64 temp = -std::numeric_limits<s64>::max();
+                            weight_t temp = -std::numeric_limits<weight_t>::max();
                             size_t idx = 0;
                             for (size_t i = 0; i < possible_neg_moves.size(); ++i) {
                                 if (possible_neg_moves[i].qap_delta > temp) {

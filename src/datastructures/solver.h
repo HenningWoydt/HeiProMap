@@ -62,7 +62,7 @@ namespace HeiProMap {
         f64 init_time = 0.0;
 
         // statistics
-        s64 initial_qap = 0;
+        weight_t initial_qap = 0;
         weight_t initial_max_block_weight = 0;
 
         std::vector<graph_t> graphs;

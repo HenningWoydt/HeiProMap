@@ -122,7 +122,7 @@ namespace HeiProMap {
                                     if (block_used[v_id] == block_marker) { continue; }
                                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
-                                    s64 qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                                    weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                                     heap.emplace(u, u_id, v_id, qap_delta);
 
                                     block_used[v_id] = block_marker;
@@ -134,8 +134,8 @@ namespace HeiProMap {
 
                 moves_size = 0;
                 size_t best_idx = 0;
-                s64 curr_qap_gain = 0;
-                s64 max_qap_gain = 0;
+                weight_t curr_qap_gain = 0;
+                weight_t max_qap_gain = 0;
 
                 f64 steps_since_last_improvement = 0.0;
                 f64 qap_gain_mean = 0.0;
@@ -154,7 +154,7 @@ namespace HeiProMap {
                     if (vertex_used[vertex] == vertex_marker) { continue; }
                     if (p_manager.get_bweight(move_id) + vertex_weight > lmax) { continue; }
 
-                    s64 temp_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);
+                    weight_t temp_qap_delta = get_u_qap_delta(g, vertex, vertex_id, move_id, p_manager, d_oracle);
                     if (temp_qap_delta != move.qap_delta) { continue; }
 
                     moves[moves_size++] = Move(vertex, vertex_id, move_id);
@@ -198,7 +198,7 @@ namespace HeiProMap {
                                     if (block_used[v_id] == block_marker) { continue; }
                                     if (p_manager.get_bweight(v_id) + neighbor_weight > lmax) { continue; }
 
-                                    s64 qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
+                                    weight_t qap_delta = get_u_qap_delta(g, neighbor, neighbor_id, v_id, p_manager, d_oracle);
                                     heap.emplace(neighbor, neighbor_id, v_id, qap_delta);
 
                                     block_used[v_id] = block_marker;
