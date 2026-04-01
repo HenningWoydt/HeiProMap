@@ -70,7 +70,7 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 seed) {
-            ScopedTimer _t("io", "Rebalancer", "initialize");
+            ScopedTimer _t("rebalance", "Rebalancer", "initialize");
 
             m_n = t_n;
             m_m = t_m;

@@ -53,6 +53,7 @@ namespace HeiProMap {
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GREEDY_MATCHING,
+        COARSENING_ALG_APPROX_GREEDY_MATCHING,
         COARSENING_ALG_HEAVY_MATCHING,
         COARSENING_ALG_RANDOM_MATCHING,
         COARSENING_ALG_GLOBAL_PATHS,
@@ -62,6 +63,7 @@ namespace HeiProMap {
     inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
         if (str == "greedy-matching") return COARSENING_ALG_GREEDY_MATCHING;
+        if (str == "approx-greedy-matching") return COARSENING_ALG_APPROX_GREEDY_MATCHING;
         if (str == "heavy-matching") return COARSENING_ALG_HEAVY_MATCHING;
         if (str == "random-matching") return COARSENING_ALG_RANDOM_MATCHING;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
@@ -75,6 +77,8 @@ namespace HeiProMap {
                 return "UNDEFINED";
             case COARSENING_ALG_GREEDY_MATCHING:
                 return "greedy-matching";
+            case COARSENING_ALG_APPROX_GREEDY_MATCHING:
+                return "approx-greedy-matching";
             case COARSENING_ALG_HEAVY_MATCHING:
                 return "heavy-matching";
             case COARSENING_ALG_RANDOM_MATCHING:
@@ -294,11 +298,6 @@ namespace HeiProMap {
         }
 
         void set_coarsening_algorithm(const bool use_default = false) {
-            // initialize greedy matching config
-            if (use_default || is_set("--coarsening-algorithm-greedy-matching-pendant-first")) {
-                greedy_edge_matcher_config.match_pendant_vertices_first = get("--coarsening-algorithm-greedy-matching-pendant-first") == "1";
-            }
-
             // initialize global-paths config
             if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
                 global_path_algorithm_config.random_level = std::stoi(get("--coarsening-algorithm-global-paths-random-level"));
@@ -431,6 +430,7 @@ namespace HeiProMap {
             // set GPA matching algorithm
             // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "random-matching";
             // coarsening_algorithm_string = "greedy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
@@ -444,14 +444,14 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            // global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
-            global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -477,7 +477,7 @@ namespace HeiProMap {
         }
 
         void set_eco() {
-            initial_c = 32;
+            initial_c = 8;
 
             n_max_partitions = 1;
             n_refinement_iterations = 1;
@@ -489,9 +489,8 @@ namespace HeiProMap {
             // coarsening_algorithm_string = "size-constrained-lp";
             // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_string = "greedy-matching";
+            // coarsening_algorithm_string = "random-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            greedy_edge_matcher_config.match_pendant_vertices_first = false;
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
@@ -504,8 +503,8 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "kaffpa-strong";
-            global_multisection_config.mode_string = "kaffpa-eco";
-            // global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode_string = "kaffpa-eco";
+            global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
@@ -546,7 +545,7 @@ namespace HeiProMap {
         }
 
         void set_strong() {
-            initial_c = 32;
+            initial_c = 8;
 
             n_max_partitions = 1;
             n_refinement_iterations = 1;
@@ -558,11 +557,10 @@ namespace HeiProMap {
             // coarsening_algorithm_string = "size-constrained-lp";
             // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_string = "greedy-matching";
+            // coarsening_algorithm_string = "approx-greedy-matching";
+            // coarsening_algorithm_string = "random-matching";
             // coarsening_algorithm_string = "heavy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            greedy_edge_matcher_config.match_pendant_vertices_first = false;
-            greedy_edge_matcher_config.match_triangles = false;
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
@@ -574,8 +572,8 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            // global_multisection_config.mode_string = "kaffpa-fast";
-            global_multisection_config.mode_string = "kaffpa-strong";
+            global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode_string = "kaffpa-strong";
             // global_multisection_config.mode_string = "kaffpa-eco";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";

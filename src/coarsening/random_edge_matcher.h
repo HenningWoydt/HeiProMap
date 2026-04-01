@@ -42,8 +42,8 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
 
-        const RandomEdgeMatcherConfiguration *config = nullptr;
-        RandomEngine *random_engine = nullptr;
+        RandomEdgeMatcherConfiguration config;
+        RandomEngine random_engine = RandomEngine(0);
 
         u32 mark = 0;
         AlignedArray<u32> used;
@@ -54,16 +54,16 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
-                        RandomEngine &t_random_engine,
-                        const RandomEdgeMatcherConfiguration &i_config) {
-            ScopedTimer _t("io", "RandomEdgeMatcher", "initialize");
+                        const u64 seed,
+                        RandomEdgeMatcherConfiguration &i_config) {
+            ScopedTimer _t("coarsening", "RandomEdgeMatcher", "initialize");
 
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
 
-            config = dynamic_cast<const RandomEdgeMatcherConfiguration *>(&i_config);
-            random_engine = &t_random_engine;
+            config = i_config;
+            random_engine = RandomEngine(seed);
 
             mark = 0;
             used.initialize(m_n, 0);
@@ -87,7 +87,6 @@ namespace HeiProMap {
             forall_gu(g, u)
                 {
                     if (used[u] == mark) { continue; }
-                    if (g.deg(u) != 1) { continue; }
 
                     weight_t u_w = g.v_weights[u];
 
@@ -104,7 +103,7 @@ namespace HeiProMap {
 
                             counter += 1.0;
                             // choose with probability 1/counter as it ensures uniform distribution
-                            if (random_engine->get_f32() <= 1.0f / counter) {
+                            if (random_engine.get_f32() <= 1.0f / counter) {
                                 chosen_v = v;
                             }
                         }
@@ -117,74 +116,12 @@ namespace HeiProMap {
                     }
                 }
             endfor
-
-            forall_gu(g, u)
-                {
-                    if (used[u] == mark) { continue; }
-
-                    weight_t u_w = g.v_weights[u];
-
-                    f32 counter = 0;
-                    vertex_t chosen_v = 0;
-
-                    forall_guiv(g, u, j, v)
-                        {
-                            if (used[v] == mark) { continue; }
-                            if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.v_weights[v];
-
-                            if (u_w + v_w > lmax) { continue; }
-
-                            counter += 1.0;
-                            // choose with probability 1/counter as it ensures uniform distribution
-                            if (random_engine->get_f32() <= 1.0f / counter) {
-                                chosen_v = v;
-                            }
-                        }
-                    endfor
-                    if (counter > 0) {
-                        used[u] = mark;
-                        used[chosen_v] = mark;
-
-                        matching.add(u, chosen_v);
-                    }
-                }
-            endfor
-
-            /*
-#if ASSERT_ENABLED
-            for (size_t i = 0; i < matching.size(); ++i) {
-                const auto& [u, v] = matching[i];
-                ASSERT(u != v);
-            }
-#endif
-
-#if ASSERT_ENABLED
-            std::vector<u8> hit(g.get_n(), 0);
-            for (size_t i = 0; i < matching.size(); ++i) {
-                const auto& [u, v] = matching[i];
-                hit[u] += 1;
-                hit[v] += 1;
-
-                if (hit[u] == 2) {
-                    ASSERT(false);
-                }
-                if (hit[v] == 2) {
-                    ASSERT(false);
-                }
-            }
-#endif
-             */
 
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
                 mapping.set(u, matching.get_n(u));
             }
-        }
-
-        JSONString get_stats() {
-            return {};
         }
     };
 }

@@ -48,7 +48,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k) {
-            ScopedTimer _t("io", "BlockConn", "initialize");
+            ScopedTimer _t("misc", "BlockConn", "initialize");
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;

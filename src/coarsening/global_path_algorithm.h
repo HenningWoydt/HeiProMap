@@ -90,7 +90,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         RandomEngine &t_random_engine,
                         const GlobalPathAlgorithmConfiguration &i_config) {
-            ScopedTimer _t("io", "GlobalPathAlgorithmMatcher", "initialize");
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "initialize");
 
             m_n = t_n;
             m_m = t_m;

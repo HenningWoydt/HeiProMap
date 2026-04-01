@@ -631,7 +631,7 @@ namespace HeiProMap {
             dist.reserve(degree_count.size());
 
             for (auto &p: degree_count) {
-                dist.push_back(p); // (degree, count)
+                dist.emplace_back(p); // (degree, count)
             }
 
             std::sort(dist.begin(), dist.end());

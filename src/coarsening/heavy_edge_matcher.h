@@ -77,7 +77,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         RandomEngine &t_random_engine,
                         const HeavyEdgeMatcherConfiguration &i_config) {
-            ScopedTimer _t("io", "HeavyEdgeMatcher", "initialize");
+            ScopedTimer _t("coarsening", "HeavyEdgeMatcher", "initialize");
 
             m_n = t_n;
             m_m = t_m;

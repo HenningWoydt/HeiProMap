@@ -44,7 +44,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t g_weight) {
-            ScopedTimer _t("io", "PartitionManager", "initialize");
+            ScopedTimer _t("misc", "PartitionManager", "initialize");
 
             n = t_n;
             k = t_k;

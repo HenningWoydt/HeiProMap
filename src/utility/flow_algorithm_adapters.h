@@ -4,6 +4,13 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <algorithm>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+#include <fstream>
+#include <stdexcept>
+#include <cstdint>
 
 #include "flow_interface.h"
 
@@ -11,6 +18,33 @@
 #include "../../extern/maxflow_algorithms/ibfs/ibfs.h"
 
 namespace HeiProMap {
+    struct CanonicalEdge {
+        vertex_t u;
+        vertex_t v;
+        weight_t w;
+
+        bool operator<(const CanonicalEdge &other) const {
+            if (u != other.u) return u < other.u;
+            if (v != other.v) return v < other.v;
+            return w < other.w;
+        }
+    };
+
+    static uint64_t fnv1a_64(const std::string &data) {
+        uint64_t hash = 14695981039346656037ull;
+        for (unsigned char c: data) {
+            hash ^= static_cast<uint64_t>(c);
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
+
+    static std::string to_hex(uint64_t x) {
+        std::ostringstream oss;
+        oss << std::hex << std::setw(16) << std::setfill('0') << x;
+        return oss.str();
+    }
+
     template<typename captype = int, typename tcaptype = int, typename flowtype = int>
     class BKAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
     private:
@@ -18,6 +52,24 @@ namespace HeiProMap {
         vertex_t n;
         vertex_t source;
         vertex_t target;
+
+        struct Edge {
+            vertex_t u;
+            vertex_t v;
+            weight_t w;
+        };
+
+        struct TerminalEdge {
+            vertex_t v;
+            weight_t w;
+        };
+
+        // Original graph edges between normal vertices
+        std::vector<Edge> edges;
+
+        // Optional: keep terminal connections too
+        std::vector<TerminalEdge> s_edges;
+        std::vector<TerminalEdge> t_edges;
 
     public:
         BKAdapter() : g(nullptr), n(0), source(0), target(0) {
@@ -28,31 +80,43 @@ namespace HeiProMap {
         }
 
         void initialize(size_t t_n) override {
-            n = t_n;
+            n = static_cast<vertex_t>(t_n);
+
             if (g) delete g;
             g = new nbk::Graph<captype, tcaptype, flowtype>(n + 2, (n + 2) * 4 + 1024);
             g->add_node(n + 2);
+
             source = n;
             target = n + 1;
+
+            edges.clear();
+            s_edges.clear();
+            t_edges.clear();
         }
 
         void add(vertex_t u, vertex_t v, weight_t w) override {
             ASSERT(u < n);
             ASSERT(v < n);
             ASSERT(w >= 0);
+
             g->add_edge(u, v, w, w);
+            edges.push_back({u, v, w});
         }
 
         void add_s_edge(vertex_t v, weight_t w) override {
             ASSERT(v < n);
             ASSERT(w >= 0);
+
             g->add_edge(source, v, w, 0);
+            s_edges.push_back({v, w});
         }
 
         void add_t_edge(vertex_t v, weight_t w) override {
             ASSERT(v < n);
             ASSERT(w >= 0);
+
             g->add_edge(v, target, w, 0);
+            t_edges.push_back({v, w});
         }
 
         void solve() override {
@@ -65,7 +129,7 @@ namespace HeiProMap {
         void get_cut(std::vector<u8> &is_left) override {
             is_left.resize(n);
             for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = g->what_segment(u) == nbk::SOURCE;
+                is_left[u] = (g->what_segment(u) == nbk::SOURCE) ? 1 : 0;
             }
         }
 
@@ -98,184 +162,116 @@ namespace HeiProMap {
             }
         }
 
-        void print() const override {
-        }
-    };
-
-    template<typename captype = int64_t, typename tcaptype = int64_t, typename flowtype = int64_t>
-    class IBFSAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
-    private:
-        struct Edge {
-            vertex_t u;
-            vertex_t v;
-            captype cap_uv;
-            captype cap_vu;
-        };
-
-        using GraphT = ibfs::IBFSGraph<captype, tcaptype, flowtype>;
-
-        GraphT *g = nullptr;
-        vertex_t n = 0;
-
-        // Buffered problem instance
-        std::vector<Edge> edges;
-        std::vector<tcaptype> source_caps; // SOURCE -> v
-        std::vector<tcaptype> sink_caps; // v -> SINK
-
-        // Reuse bookkeeping
-        bool capacity_initialized = false;
-        size_t reserved_n = 0;
-        size_t reserved_m = 0;
-
-        bool built = false;
-        bool solved = false;
-
-    public:
-        IBFSAdapter()
-            : g(new GraphT(GraphT::IB_INIT_FAST)) {
-        }
-
-        ~IBFSAdapter() override {
-            delete g;
-        }
-
-        void initialize(size_t t_n) override {
-            n = static_cast<vertex_t>(t_n);
-
-            edges.clear();
-            source_caps.assign(n, 0);
-            sink_caps.assign(n, 0);
-
-            built = false;
-            solved = false;
-        }
-
-        void add(vertex_t u, vertex_t v, weight_t w) override {
-            ASSERT(u < n);
-            ASSERT(v < n);
-            ASSERT(u != v);
-            ASSERT(w >= 0);
-
-            edges.push_back({
-                u,
-                v,
-                static_cast<captype>(w),
-                static_cast<captype>(w)
-            });
-        }
-
-        void add_s_edge(vertex_t v, weight_t w) override {
-            ASSERT(v < n);
-            ASSERT(w >= 0);
-            source_caps[v] += static_cast<tcaptype>(w);
-        }
-
-        void add_t_edge(vertex_t v, weight_t w) override {
-            ASSERT(v < n);
-            ASSERT(w >= 0);
-            sink_caps[v] += static_cast<tcaptype>(w);
-        }
-
-        void solve() override {
-            build_if_needed();
-            g->computeMaxFlow();
-            solved = true;
-        }
-
-        void get_cut(std::vector<u8> &is_left) override {
-            ASSERT(solved);
-
-            is_left.resize(n);
-            for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = static_cast<u8>(g->isNodeOnSrcSide(static_cast<int64_t>(u), 0) == 1);
-            }
-        }
-
-        void build_residual_network(ResidualFlowNetwork &residual_g) override {
-            ASSERT(solved);
-
-            residual_g.initialize(n);
-
-            // Terminal residuals from node excess:
-            //   excess > 0  => residual SOURCE -> node
-            //   excess < 0  => residual node -> SINK
-            for (vertex_t u = 0; u < n; ++u) {
-                const auto &node = g->nodes[u];
-                if (node.excess > 0) {
-                    residual_g.add_edge_from_source(u, static_cast<weight_t>(node.excess));
-                } else if (node.excess < 0) {
-                    residual_g.add_edge_to_target(u, static_cast<weight_t>(-node.excess));
-                }
+        void save_graph(const std::string &filename) const {
+            std::ofstream out(filename);
+            if (!out) {
+                throw std::runtime_error("Failed to open METIS output file: " + filename);
             }
 
-            // Residual ordinary arcs
-            for (vertex_t u = 0; u < n; ++u) {
-                auto *a = g->nodes[u].firstArc;
-                auto *a_end = (g->nodes + (u + 1))->firstArc;
-                for (; a != a_end; ++a) {
-                    if (a->rCap > 0) {
-                        vertex_t v = static_cast<vertex_t>(a->head - g->nodes);
-                        residual_g.add_directed_edge(u, v, static_cast<weight_t>(a->rCap));
-                    }
-                }
-            }
-        }
+            const vertex_t total_n = n + 2;
+            const vertex_t source_id = n;
+            const vertex_t target_id = n + 1;
 
-        void print() const override {
-        }
+            // adjacency list
+            std::vector<std::vector<std::pair<vertex_t, weight_t> > > adj(total_n);
 
-    private:
-        void ensure_capacity() {
-            const size_t m = edges.size();
-
-            if (!capacity_initialized) {
-                g->initSize(static_cast<int64_t>(n), static_cast<int64_t>(m));
-                reserved_n = n;
-                reserved_m = m;
-                capacity_initialized = true;
-                return;
-            }
-
-            // IBFS reset() only reuses already allocated storage for the original size.
-            // If the new instance exceeds that size, we must recreate the graph.
-            if (n > reserved_n || m > reserved_m) {
-                delete g;
-                g = new GraphT(GraphT::IB_INIT_FAST);
-                g->initSize(static_cast<int64_t>(n), static_cast<int64_t>(m));
-                reserved_n = n;
-                reserved_m = m;
-                capacity_initialized = true;
-                return;
-            }
-
-            g->reset();
-        }
-
-        void build_if_needed() {
-            if (built) return;
-
-            ensure_capacity();
-
-            for (vertex_t u = 0; u < n; ++u) {
-                g->addNode(
-                    static_cast<int64_t>(u),
-                    source_caps[u],
-                    sink_caps[u]
-                );
-            }
-
+            // normal edges (undirected)
             for (const auto &e: edges) {
-                g->addEdge(
-                    static_cast<int64_t>(e.u),
-                    static_cast<int64_t>(e.v),
-                    e.cap_uv,
-                    e.cap_vu
-                );
+                adj[e.u].push_back({e.v, e.w});
+                adj[e.v].push_back({e.u, e.w});
             }
 
-            g->initGraph();
+            // source edges
+            for (const auto &e: s_edges) {
+                adj[source_id].push_back({e.v, e.w});
+                adj[e.v].push_back({source_id, e.w});
+            }
 
-            built = true;
+            // target edges
+            for (const auto &e: t_edges) {
+                adj[e.v].push_back({target_id, e.w});
+                adj[target_id].push_back({e.v, e.w});
+            }
+
+            // count undirected edges
+            size_t m = edges.size() + s_edges.size() + t_edges.size();
+
+            // header: edge-weighted graph
+            out << total_n << " " << m << " 001\n";
+
+            // write adjacency (1-based indexing)
+            for (vertex_t u = 0; u < total_n; ++u) {
+                for (size_t i = 0; i < adj[u].size(); ++i) {
+                    out << (adj[u][i].first + 1) << " " << adj[u][i].second;
+                    if (i + 1 < adj[u].size()) out << " ";
+                }
+                out << "\n";
+            }
+        }
+
+        void save_cut(const std::vector<u8> &is_left, const std::string &filename) const {
+            std::ofstream out(filename);
+            if (!out) {
+                throw std::runtime_error("Failed to open cut output file: " + filename);
+            }
+
+            for (vertex_t u = 0; u < n; ++u) {
+                out << (is_left[u] ? 1 : 0) << "\n";
+            }
+        }
+
+        std::string canonical_graph_string() const {
+            std::vector<CanonicalEdge> all_edges;
+            all_edges.reserve(edges.size() + s_edges.size() + t_edges.size());
+
+            // Normal undirected edges: normalize as (min(u,v), max(u,v))
+            for (const auto &e: edges) {
+                vertex_t a = std::min(e.u, e.v);
+                vertex_t b = std::max(e.u, e.v);
+                all_edges.push_back({a, b, e.w});
+            }
+
+            // Artificial source = n, target = n + 1
+            for (const auto &e: s_edges) {
+                all_edges.push_back({source, e.v, e.w});
+            }
+
+            for (const auto &e: t_edges) {
+                all_edges.push_back({e.v, target, e.w});
+            }
+
+            std::sort(all_edges.begin(), all_edges.end());
+
+            std::ostringstream oss;
+            oss << "n=" << n << ";";
+            oss << "source=" << source << ";";
+            oss << "target=" << target << ";";
+
+            for (const auto &e: all_edges) {
+                oss << e.u << "," << e.v << "," << e.w << ";";
+            }
+
+            return oss.str();
+        }
+
+        std::string graph_hash() const {
+            return to_hex(fnv1a_64(canonical_graph_string()));
+        }
+
+        void save_graph_and_cut_with_hash(const std::vector<u8> &is_left,
+                                          const std::string &directory,
+                                          const std::string &prefix = "graph") const {
+            namespace fs = std::filesystem;
+
+            fs::create_directories(directory);
+
+            const std::string hash = graph_hash();
+
+            const fs::path graph_file = fs::path(directory) / (prefix + "_" + hash + ".metis");
+            const fs::path cut_file = fs::path(directory) / (prefix + "_" + hash + ".cut");
+
+            save_graph(graph_file.string());
+            save_cut(is_left, cut_file.string());
         }
     };
 } // namespace HeiProMap

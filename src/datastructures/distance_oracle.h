@@ -45,7 +45,7 @@ namespace HeiProMap {
     public:
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance) {
-            ScopedTimer _t("io", "DistanceOracle", "initialize");
+            ScopedTimer _t("misc", "DistanceOracle", "initialize");
 
             m_hierarchy = t_hierarchy;
             m_distance = t_distance;

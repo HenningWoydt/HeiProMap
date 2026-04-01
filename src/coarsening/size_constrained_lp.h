@@ -69,7 +69,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const u64 seed,
                         const SizeConstrainedLPConfiguration &i_config) {
-            ScopedTimer _t("io", "SizeConstrainedLP", "initialize");
+            ScopedTimer _t("coarsening", "SizeConstrainedLP", "initialize");
 
             m_n = t_n;
             m_m = t_m;

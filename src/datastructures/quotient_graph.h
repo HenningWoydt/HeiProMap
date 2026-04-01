@@ -181,7 +181,7 @@ namespace HeiProMap {
 
     public:
         void initialize(const partition_t t_k) {
-            ScopedTimer _t("io", "QuotientGraph", "initialize");
+            ScopedTimer _t("misc", "QuotientGraph", "initialize");
 
             m_k = t_k;
 
