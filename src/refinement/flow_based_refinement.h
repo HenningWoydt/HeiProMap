@@ -72,6 +72,7 @@ namespace HeiProMap {
 
         const FlowBasedRefinementConfiguration *config = nullptr;
         std::vector<RandomEngine> rnd_engines;
+        std::vector<my_reimpls::MemoryStack> flow_mem_stacks;
 
     public:
         FlowBasedRefinement() = default;
@@ -108,6 +109,7 @@ namespace HeiProMap {
             for (u64 t = 0; t < m_threads; ++t) {
                 rnd_engines[t] = RandomEngine(seed + t);
             }
+            flow_mem_stacks.resize(m_threads);
         }
 
         void refine(graph_t &g,
@@ -262,10 +264,7 @@ namespace HeiProMap {
             std::vector<vertex_t> left_region;
             std::vector<vertex_t> right_region;
 
-            BKAdapter<int, int, int> flow_network;
-            // IBFSAdapter<int, int, int> flow_network;
-            // IBFSAdapter<int, int, int> flow_network;
-            // HiPrAdapter<int, int, int> flow_network;
+            EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
             ResidualFlowNetwork residual_flow_network;
             SCCGraph scc_graph;
 
@@ -331,9 +330,6 @@ namespace HeiProMap {
                 {
                     ScopedTimer _t("refinement", "FlowBasedRefinement", "get_cut");
                     flow_network.get_cut(is_left);
-
-                    // std::string folder = "networks/";
-                    // flow_network.save_graph_and_cut_with_hash(is_left, folder);
                 }
 
                 bool is_valid;
@@ -510,7 +506,7 @@ namespace HeiProMap {
                                                partition_t right_id,
                                                std::vector<vertex_t> &left_region,
                                                std::vector<vertex_t> &right_region,
-                                               BKAdapter<int, int, int> &flow_network,
+                                               IFlowAlgorithm<int, int, int> &flow_network,
                                                TranslationTable<vertex_t> &translation_table,
                                                AlignedArray<u32> &region_marker,
                                                u32 &region_mark) {
@@ -602,7 +598,7 @@ namespace HeiProMap {
                                              partition_t right_id,
                                              std::vector<vertex_t> &left_region,
                                              std::vector<vertex_t> &right_region,
-                                             BKAdapter<int, int, int> &flow_network,
+                                             IFlowAlgorithm<int, int, int> &flow_network,
                                              TranslationTable<vertex_t> &translation_table,
                                              AlignedArray<u32> &region_marker,
                                              u32 &region_mark) {

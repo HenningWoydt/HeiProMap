@@ -30,12 +30,6 @@ echo "Downloading KaHIP 3.19..."
   rm -f v3.19.tar.gz
 )
 
-echo "Cloning maxflow_algorithms..."
-(
-  cd extern
-  git clone https://github.com/patmjen/maxflow_algorithms
-)
-
 # -----------------------------
 # Build KaHIP Release
 # -----------------------------

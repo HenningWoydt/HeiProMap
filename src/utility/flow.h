@@ -31,8 +31,6 @@
 #include <stack>
 #include <vector>
 
-#include "../../extern/maxflow_algorithms/nbk/graph.h"
-
 #include "../definitions.h"
 #include "macros.h"
 #include "random_engine.h"

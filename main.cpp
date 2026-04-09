@@ -55,7 +55,7 @@ int main(const int argc, char *argv[]) {
                 {"--imbalance", "0.03"},
                 {"--config", "strong"},
                 {"--seed", "0"},
-                {"--threads", "16"},
+                {"--threads", "1"},
             };
 
             std::vector<std::string> args = {"HeiProMap"};
