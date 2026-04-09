@@ -322,7 +322,6 @@ namespace HeiProMap {
 
                 // solve the flow network
                 {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_flow_network");
                     flow_network.solve();
                 }
 

@@ -95,10 +95,6 @@ add_executable(HeiProMap
 
 target_include_directories(HeiProMap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
 
-target_compile_definitions(HeiProMap PRIVATE
-        ENABLE_PROFILER=${ENABLE_PROFILER}
-)
-
 target_link_libraries(HeiProMap PUBLIC
         ${KAHIP_LIBRARY}
         OpenMP::OpenMP_CXX

@@ -14,6 +14,7 @@
 
 #include "flow_interface.h"
 #include "my_eibfs_i.h"
+#include "profiler.h"
 
 namespace HeiProMap {
     template<typename captype = int, typename tcaptype = int, typename flowtype = int>
@@ -36,10 +37,11 @@ namespace HeiProMap {
         std::vector<uint32_t> deg;
 
         my_reimpls::MemoryStack &mem_stack;
-        std::unique_ptr<my_reimpls::IBFSGraph<captype, tcaptype, flowtype> > g;
+        my_reimpls::IBFSGraph<captype, tcaptype, flowtype> g;
 
     public:
-        explicit EIBFSAdapter(my_reimpls::MemoryStack &t_mem_stack) : mem_stack(t_mem_stack) {}
+        explicit EIBFSAdapter(my_reimpls::MemoryStack &t_mem_stack) : mem_stack(t_mem_stack) {
+        }
 
         ~EIBFSAdapter() override = default;
 
@@ -51,7 +53,6 @@ namespace HeiProMap {
             s_cap.assign(n, 0);
             t_cap.assign(n, 0);
             deg.assign(n, 0);
-            g.reset();
         }
 
         void add(vertex_t u, vertex_t v, weight_t w) override {
@@ -74,23 +75,34 @@ namespace HeiProMap {
         }
 
         void solve() override {
-            g = std::make_unique<my_reimpls::IBFSGraph<captype, tcaptype, flowtype> >(static_cast<int64_t>(n), static_cast<int64_t>(edges.size()), mem_stack);
-
-            for (uint32_t u = 0; u < n; ++u) {
-                g->addNode(u, s_cap[u], t_cap[u], deg[u]);
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_construct");
+                g = my_reimpls::IBFSGraph<captype, tcaptype, flowtype>(static_cast<int64_t>(n), static_cast<int64_t>(edges.size()), mem_stack);
             }
-            for (auto &e: edges) {
-                g->addEdge(static_cast<uint32_t>(e.u), static_cast<uint32_t>(e.v), static_cast<captype>(e.w), static_cast<captype>(e.w));
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_addNode");
+                for (uint32_t u = 0; u < n; ++u) {
+                    g.addNode(u, s_cap[u], t_cap[u], deg[u]);
+                }
             }
-            g->computeMaxFlow();
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_addEdge");
+                for (auto &e: edges) {
+                    g.addEdge(static_cast<uint32_t>(e.u), static_cast<uint32_t>(e.v), static_cast<captype>(e.w), static_cast<captype>(e.w));
+                }
+            }
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_maxflow");
+                g.computeMaxFlow();
+            }
         }
 
-        flowtype get_flow_value() const { return static_cast<flowtype>(g->getFlow()); }
+        flowtype get_flow_value() const { return static_cast<flowtype>(g.getFlow()); }
 
         void get_cut(std::vector<u8> &is_left) override {
             is_left.resize(n);
             for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = g->isNodeOnSrcSide(static_cast<uint32_t>(u)) ? 1 : 0;
+                is_left[u] = g.isNodeOnSrcSide(static_cast<uint32_t>(u)) ? 1 : 0;
             }
         }
 
@@ -99,9 +111,9 @@ namespace HeiProMap {
 
             // Internal arcs: iterate CSR and emit arcs with positive residual capacity
             for (uint32_t u = 0; u < n; ++u) {
-                for (uint32_t i = g->arcBegin(u); i < g->arcEnd(u); ++i) {
-                    uint32_t v = g->arcHead(i);
-                    captype rc = g->arcResCap(i);
+                for (uint32_t i = g.arcBegin(u); i < g.arcEnd(u); ++i) {
+                    uint32_t v = g.arcHead(i);
+                    captype rc = g.arcResCap(i);
                     if (rc > 0 && v < n) {
                         residual_g.add_directed_edge(u, v, static_cast<weight_t>(rc));
                     }
@@ -120,7 +132,7 @@ namespace HeiProMap {
             for (uint32_t u = 0; u < n; ++u) {
                 tcaptype sc = s_cap[u];
                 tcaptype tc = t_cap[u];
-                tcaptype excess = g->getExcess(u);
+                tcaptype excess = g.getExcess(u);
                 // Original excess = sc - tc. After solve, excess = (sc - tc) - pushed_net.
                 // pushed_net = (sc - tc) - excess
                 // The min(sc,tc) was already cancelled in addNode, so:
