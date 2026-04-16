@@ -535,7 +535,7 @@ namespace HeiProMap {
                 rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (random) {
                 // be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
-                // size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
+                // size_constrained_lp.cluster<false, false>(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
                 rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
@@ -548,7 +548,16 @@ namespace HeiProMap {
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                size_constrained_lp.cluster(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, ac.threads);
+                const auto &cg = graphs.back();
+                if (cg.uniform_v_weights && cg.uniform_e_weights) {
+                    size_constrained_lp.cluster<true, true>(level, cg, p_managers[0], mappings.back(), level_imbalance, ac.threads);
+                } else if (cg.uniform_v_weights) {
+                    size_constrained_lp.cluster<true, false>(level, cg, p_managers[0], mappings.back(), level_imbalance, ac.threads);
+                } else if (cg.uniform_e_weights) {
+                    size_constrained_lp.cluster<false, true>(level, cg, p_managers[0], mappings.back(), level_imbalance, ac.threads);
+                } else {
+                    size_constrained_lp.cluster<false, false>(level, cg, p_managers[0], mappings.back(), level_imbalance, ac.threads);
+                }
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -567,10 +576,11 @@ namespace HeiProMap {
             auto sp = get_time_point();
 
             graphs.emplace_back(); // coarse the graph
+            const auto &prev = graphs[graphs.size() - 2];
             if (ac.threads == 1) {
-                graphs.back().initialize(graphs[graphs.size() - 2], mappings.back());
+                graphs.back().initialize<false, false>(prev, mappings.back());
             } else {
-                graphs.back().parallel_initialize(graphs[graphs.size() - 2], mappings.back(), ac.k);
+                graphs.back().parallel_initialize<false, false>(prev, mappings.back(), ac.k);
             }
             p_managers[0].contract(mappings.back());
 

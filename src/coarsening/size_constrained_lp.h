@@ -79,6 +79,7 @@ namespace HeiProMap {
             random_engine = RandomEngine(seed);
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void merge_when_identitiy([[maybe_unused]] const size_t level,
                                   const graph_t &g,
                                   [[maybe_unused]] const p_manager_t &p_manager,
@@ -135,6 +136,7 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void merge_singletons([[maybe_unused]] const size_t level,
                               const graph_t &g,
                               [[maybe_unused]] const p_manager_t &p_manager,
@@ -213,6 +215,7 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void cluster([[maybe_unused]] const size_t level,
                      const graph_t &g,
                      [[maybe_unused]] const p_manager_t &p_manager,
@@ -445,7 +448,7 @@ namespace HeiProMap {
                 }
             }
 
-            merge_singletons(level, g, p_manager, mapping, max_w);
+            merge_singletons<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
 
             bool ident_mapping = true;
             // is identity mapping
@@ -459,7 +462,7 @@ namespace HeiProMap {
                 endfor
             }
             if (ident_mapping) {
-                merge_when_identitiy(level, g, p_manager, mapping, max_w);
+                merge_when_identitiy<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
             }
 
             // map to a continuous range
