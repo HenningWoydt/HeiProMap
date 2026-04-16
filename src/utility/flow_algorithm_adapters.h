@@ -126,24 +126,61 @@ namespace HeiProMap {
         void build_residual_network(ResidualFlowNetwork &residual_g) override {
             residual_g.initialize(n);
 
-            for (uint32_t i = 0; i < g.get_num_arcs(); ++i) {
-                const auto &arc = g.arcList[i];
-                vertex_t u = arc.from;
-                vertex_t v = arc.to;
-                captype rc_uv = arc.capacity - arc.flow;
-                captype rc_vu = arc.flow;
-
-                if (u < n && v < n) {
-                    if (rc_uv > 0) residual_g.add_directed_edge(u, v, static_cast<weight_t>(rc_uv));
-                    if (rc_vu > 0) residual_g.add_directed_edge(v, u, static_cast<weight_t>(rc_vu));
-                } else if (u == n && v < n) { // Source to node v
-                    if (rc_uv > 0) residual_g.add_edge_from_source(v, static_cast<weight_t>(rc_uv));
-                    if (rc_vu > 0) residual_g.add_edge_to_source(v, static_cast<weight_t>(rc_vu));
-                } else if (u < n && v == n + 1) { // Node u to sink
-                    if (rc_uv > 0) residual_g.add_edge_to_target(u, static_cast<weight_t>(rc_uv));
-                    if (rc_vu > 0) residual_g.add_edge_from_target(u, static_cast<weight_t>(rc_vu));
+            // HPF is a pseudoflow solver — arc flow values are NOT valid network flow.
+            // Use cut labels to determine the residual network.
+            // Cut edges (source→target side): saturated, residual only backward.
+            // Same-side edges: conservatively assume residual in both directions.
+            for (const auto &e : edges) {
+                bool u_src = (g.what_label(e.u) == my_reimpls_hpf::Hpf<captype>::source_side);
+                bool v_src = (g.what_label(e.v) == my_reimpls_hpf::Hpf<captype>::source_side);
+                if (u_src == v_src) {
+                    residual_g.add_directed_edge(e.u, e.v, 1);
+                    residual_g.add_directed_edge(e.v, e.u, 1);
+                } else if (u_src) {
+                    // u on source side, v on target: saturated u→v, residual only v→u
+                    residual_g.add_directed_edge(e.v, e.u, 1);
+                } else {
+                    // v on source side, u on target: saturated v→u, residual only u→v
+                    residual_g.add_directed_edge(e.u, e.v, 1);
                 }
             }
+
+            // Terminal edges: s→u crosses cut if u on target side, u→t crosses cut if u on source side
+            for (vertex_t u = 0; u < n; ++u) {
+                bool u_src = (g.what_label(u) == my_reimpls_hpf::Hpf<captype>::source_side);
+                if (s_cap[u] > 0) {
+                    if (u_src) {
+                        // s→u same side (both source), residual in both directions
+                        residual_g.add_edge_from_source(u, 1);
+                        residual_g.add_edge_to_source(u, 1);
+                    } else {
+                        // s→u crosses cut (saturated), residual only u→s
+                        residual_g.add_edge_to_source(u, 1);
+                    }
+                }
+                if (t_cap[u] > 0) {
+                    if (!u_src) {
+                        // u→t same side (both target), residual in both directions
+                        residual_g.add_edge_to_target(u, 1);
+                        residual_g.add_edge_from_target(u, 1);
+                    } else {
+                        // u→t crosses cut (saturated), residual only t→u
+                        residual_g.add_edge_from_target(u, 1);
+                    }
+                }
+            }
+        }
+
+        flowtype compute_cut_value(const std::vector<u8> &is_left) const override {
+            flowtype val = 0;
+            for (const auto &e : edges) {
+                if (is_left[e.u] != is_left[e.v]) val += static_cast<flowtype>(e.w);
+            }
+            for (vertex_t u = 0; u < n; ++u) {
+                if (is_left[u]) val += static_cast<flowtype>(t_cap[u]);
+                else val += static_cast<flowtype>(s_cap[u]);
+            }
+            return val;
         }
     };
 
@@ -288,6 +325,18 @@ namespace HeiProMap {
                 // Residual t->u (flow that can be returned)
                 if (flow_to_t > 0) residual_g.add_edge_from_target(u, static_cast<weight_t>(flow_to_t));
             }
+        }
+
+        flowtype compute_cut_value(const std::vector<u8> &is_left) const override {
+            flowtype val = 0;
+            for (const auto &e : edges) {
+                if (is_left[e.u] != is_left[e.v]) val += static_cast<flowtype>(e.w);
+            }
+            for (vertex_t u = 0; u < n; ++u) {
+                if (is_left[u]) val += static_cast<flowtype>(t_cap[u]);
+                else val += static_cast<flowtype>(s_cap[u]);
+            }
+            return val;
         }
     };
 } // namespace HeiProMap

@@ -264,6 +264,7 @@ namespace HeiProMap {
             std::vector<vertex_t> left_region;
             std::vector<vertex_t> right_region;
 
+            // HPF_HLAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
             EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
             ResidualFlowNetwork residual_flow_network;
             SCCGraph scc_graph;
