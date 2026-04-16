@@ -52,6 +52,8 @@ namespace HeiProMap {
         vertex_t n = 0;
         vertex_t m = 0;
         weight_t g_weight = 0;
+        bool uniform_v_weights = true;
+        bool uniform_e_weights = true;
 
         AlignedArray<weight_t> v_weights;
         AlignedArray<size_t> neighborhoods;
@@ -132,75 +134,21 @@ namespace HeiProMap {
             edges_w.initialize(m);
             has_v_weights = fmt[1] == '1';
             has_e_weights = fmt[2] == '1';
+            uniform_v_weights = !has_v_weights;
+            uniform_e_weights = !has_e_weights;
 
             _t_read_header.stop();
             ScopedTimer _t_read_edges("io", "CSRGraph", "read_edges");
 
             ++p;
-            vertex_t u = 0;
-            size_t curr_m = 0;
-            while (p < end) {
-                // skip comment lines
-                while (*p == '%') {
-                    while (*p != '\n') { ++p; }
-                    ++p;
-                }
-
-                // skip whitespaces
-                while (*p == ' ') { ++p; }
-
-                // read in vertex weight
-                weight_t vw = 1;
-                if (has_v_weights) {
-                    vw = 0;
-                    while (*p != ' ' && *p != '\n') {
-                        vw = vw * 10 + (weight_t) (*p - '0');
-                        ++p;
-                    }
-
-                    // skip whitespaces
-                    while (*p == ' ') { ++p; }
-                }
-                v_weights[u] = vw;
-                g_weight += vw;
-
-                // read in edges
-                while (*p != '\n' && p < end) {
-                    vertex_t v = 0;
-                    weight_t w = 1;
-
-                    while (*p != ' ' && *p != '\n') {
-                        v = v * 10 + (vertex_t) (*p - '0');
-                        ++p;
-                    }
-
-                    // skip whitespaces
-                    while (*p == ' ') { ++p; }
-
-                    if (has_e_weights) {
-                        w = 0;
-                        while (*p != ' ' && *p != '\n') {
-                            w = w * 10 + (weight_t) (*p - '0');
-                            ++p;
-                        }
-
-                        // skip whitespaces
-                        while (*p == ' ') { ++p; }
-                    }
-
-                    edges_v[curr_m] = v - 1;
-                    edges_w[curr_m] = w;
-                    ++curr_m;
-                }
-                neighborhoods[u + 1] = curr_m;
-                ++u;
-                ++p;
-            }
-
-            if (curr_m != m) {
-                std::cerr << "Number of expected edges " << m << " not equal to number edges " << curr_m << " found!\n";
-                munmap_file(mm);
-                exit(EXIT_FAILURE);
+            if (has_v_weights && has_e_weights) {
+                read_edges<true, true>(p, end);
+            } else if (has_v_weights && !has_e_weights) {
+                read_edges<true, false>(p, end);
+            } else if (!has_v_weights && has_e_weights) {
+                read_edges<false, true>(p, end);
+            } else {
+                read_edges<false, false>(p, end);
             }
 
             _t_read_edges.stop();
@@ -212,6 +160,8 @@ namespace HeiProMap {
             n = t_n;
             m = t_m;
             g_weight = t_g_weight;
+            uniform_v_weights = false;
+            uniform_e_weights = false;
 
             v_weights.initialize(n, 0);
             neighborhoods.initialize(n + 1);
@@ -228,6 +178,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
+                uniform_v_weights = false;
+                uniform_e_weights = false;
                 v_weights.initialize(n, 0);
             }
             AlignedArray<vertex_t> overest_sizes;
@@ -334,6 +286,7 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void initialize(const CSRGraph &g,
                         const Mapping &mapping) {
             AlignedArray<vertex_t> n_mapped;
@@ -350,6 +303,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
+                uniform_v_weights = false;
+                uniform_e_weights = false;
                 v_weights.initialize(n, 0);
                 neighborhoods.initialize(n + 1);
                 neighborhoods[0] = 0;
@@ -373,7 +328,11 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                     vertex_t map_u = mapping.get(u);
                     n_mapped[map_u] += 1;
-                    v_weights[map_u] += g.v_weights[u];
+                    if constexpr (t_uniform_v_weights) {
+                        v_weights[map_u] += 1;
+                    } else {
+                        v_weights[map_u] += g.v_weights[u];
+                    }
                 }
             }
             // prefix sum on n_mapped
@@ -414,10 +373,11 @@ namespace HeiProMap {
                     for (u64 i = n_mapped_prefix[map_u]; i < n_mapped_prefix[map_u + 1]; ++i) {
                         vertex_t u = mapped_vertices[i];
 
-                        forall_guivw(g, u, j, v, w)
+                        forall_guiv(g, u, j, v)
                             {
                                 vertex_t map_v = mapping.get(v);
                                 if (map_u == map_v) { continue; }
+                                weight_t w = t_uniform_e_weights ? 1 : g.edges_w[j];
 
                                 if (seen[map_v] == epoch) {
                                     size_t k = idx[map_v];
@@ -437,6 +397,7 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void parallel_initialize(const CSRGraph &g,
                                  const Mapping &mapping,
                                  const u64 threads) {
@@ -452,6 +413,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
+                uniform_v_weights = false;
+                uniform_e_weights = false;
                 v_weights.initialize(n, 0);
                 overest_sizes.initialize(n, 0);
                 overest_neighborhood.initialize(n + 1);
@@ -464,14 +427,12 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                     vertex_t map_u = mapping.get(u);
                     overest_sizes[map_u] += g.deg(u);
-                    v_weights[map_u] += g.v_weights[u];
+                    v_weights[map_u] += t_uniform_v_weights ? 1 : g.v_weights[u];
                 }
             }
             //
             {
                 ScopedTimer _t("contraction", "CSRGraph", "prefix_sum");
-
-                // prefix-sum on overestimated neighborhood
                 overest_neighborhood[0] = 0;
                 for (vertex_t map_u = 0; map_u < n; ++map_u) {
                     overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
@@ -508,10 +469,11 @@ namespace HeiProMap {
                         vertex_t map_u = mapping.get(u);
                         if (map_u < mu_beg || map_u >= mu_end) continue; // not my bucket range
 
-                        forall_guivw(g, u, i, v, w)
+                        forall_guiv(g, u, i, v)
                             {
                                 vertex_t map_v = mapping.get(v);
                                 if (map_u == map_v) { continue; }
+                                weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
 
                                 vertex_t beg = overest_neighborhood[map_u];
                                 vertex_t end = overest_neighborhood[map_u + 1];
@@ -640,6 +602,66 @@ namespace HeiProMap {
             std::cout << "#degree count\n";
             for (auto &[deg, count]: dist) {
                 std::cout << deg << " " << count << "\n";
+            }
+        }
+
+    private:
+        template<bool has_v_weights, bool has_e_weights>
+        void read_edges(char *p, const char *end) {
+            vertex_t u = 0;
+            size_t curr_m = 0;
+            while (p < end) {
+                while (*p == '%') {
+                    while (*p != '\n') { ++p; }
+                    ++p;
+                }
+
+                while (*p == ' ') { ++p; }
+
+                weight_t vw = 1;
+                if constexpr (has_v_weights) {
+                    vw = 0;
+                    while (*p != ' ' && *p != '\n') {
+                        vw = vw * 10 + (weight_t) (*p - '0');
+                        ++p;
+                    }
+                    while (*p == ' ') { ++p; }
+                    if (vw != 1) { uniform_v_weights = false; }
+                }
+                v_weights[u] = vw;
+                g_weight += vw;
+
+                while (*p != '\n' && p < end) {
+                    vertex_t v = 0;
+                    while (*p != ' ' && *p != '\n') {
+                        v = v * 10 + (vertex_t) (*p - '0');
+                        ++p;
+                    }
+                    while (*p == ' ') { ++p; }
+
+                    weight_t w = 1;
+                    if constexpr (has_e_weights) {
+                        w = 0;
+                        while (*p != ' ' && *p != '\n') {
+                            w = w * 10 + (weight_t) (*p - '0');
+                            ++p;
+                        }
+                        while (*p == ' ') { ++p; }
+                        if (w != 1) { uniform_e_weights = false; }
+                    }
+
+                    edges_v[curr_m] = v - 1;
+                    edges_w[curr_m] = w;
+                    ++curr_m;
+                }
+                neighborhoods[u + 1] = curr_m;
+                ++u;
+                ++p;
+            }
+
+            if (curr_m != m) {
+                std::cerr << "Number of expected edges " << m << " not equal to number edges " << curr_m << " found!\n";
+                exit(EXIT_FAILURE);
             }
         }
     };
