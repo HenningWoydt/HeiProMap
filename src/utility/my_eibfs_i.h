@@ -5,68 +5,14 @@
 #include <algorithm>
 #include <cstring>
 
+#include "memory_stack.h"
+
 #define MY_LIKELY(x)   __builtin_expect(!!(x), 1)
 #define MY_UNLIKELY(x) __builtin_expect(!!(x), 0)
 
 namespace my_reimpls {
     static constexpr uint32_t INVALID_NODE = UINT32_MAX;
     static constexpr uint32_t INVALID_ARC = UINT32_MAX;
-
-    inline uint64_t align64(uint64_t n) { return (n + 63) & ~uint64_t(63); }
-
-    // O(1) operations this class can algorithmically not be sped up
-    class MemoryStack {
-        static constexpr size_t ALIGNMENT = 64;
-        char *buffer = nullptr;
-        size_t capacity = 0;
-        size_t offset = 0;
-
-    public:
-        ~MemoryStack() { std::free(buffer); }
-
-        MemoryStack() = default;
-
-        MemoryStack(const MemoryStack &) = delete;
-
-        MemoryStack &operator=(const MemoryStack &) = delete;
-
-        MemoryStack(MemoryStack &&other) noexcept : buffer(other.buffer), capacity(other.capacity), offset(other.offset) {
-            other.buffer = nullptr;
-            other.capacity = 0;
-            other.offset = 0;
-        }
-
-        MemoryStack &operator=(MemoryStack &&other) noexcept {
-            if (this != &other) {
-                std::free(buffer);
-                buffer = other.buffer;
-                capacity = other.capacity;
-                offset = other.offset;
-                other.buffer = nullptr;
-                other.capacity = 0;
-                other.offset = 0;
-            }
-            return *this;
-        }
-
-        void ensure(size_t total_bytes) {
-            total_bytes = align64(total_bytes);
-            if (total_bytes > capacity) {
-                std::free(buffer);
-                buffer = static_cast<char *>(std::aligned_alloc(ALIGNMENT, total_bytes));
-                capacity = total_bytes;
-            }
-        }
-
-        void *get_memory(size_t size) {
-            size = align64(size);
-            void *ptr = buffer + offset;
-            offset += size;
-            return ptr;
-        }
-
-        void clear() { offset = 0; }
-    };
 
     // O(1) operations this class can algorithmically not be sped up
     template<class T>
@@ -353,16 +299,16 @@ namespace my_reimpls {
     public:
         IBFSGraph() = default;
 
-        IBFSGraph(int64_t t_n, int64_t t_n_edges, MemoryStack &mem_stack) {
+        IBFSGraph(int64_t t_n, int64_t t_n_edges, HeiProMap::MemoryStack &mem_stack) {
             n = t_n;
             m = t_n_edges * 2;
 
-            uint64_t arcMemsize = align64(sizeof(ArcData<Cap>) * t_n_edges * 2);
-            uint64_t nodeMemsize = align64(sizeof(VertexData<Term>) * (t_n + 1));
-            uint64_t rowMemsize = align64(sizeof(uint32_t) * (t_n + 1));
-            uint64_t ptrMemsize = align64(sizeof(uint32_t) * t_n * 2);
-            uint64_t bucketMemsize = align64(sizeof(uint32_t) * (t_n + 1)) * 3;
-            uint64_t activeMemsize = align64(sizeof(uint32_t) * t_n) * 3;
+            uint64_t arcMemsize = HeiProMap::align64(sizeof(ArcData<Cap>) * t_n_edges * 2);
+            uint64_t nodeMemsize = HeiProMap::align64(sizeof(VertexData<Term>) * (t_n + 1));
+            uint64_t rowMemsize = HeiProMap::align64(sizeof(uint32_t) * (t_n + 1));
+            uint64_t ptrMemsize = HeiProMap::align64(sizeof(uint32_t) * t_n * 2);
+            uint64_t bucketMemsize = HeiProMap::align64(sizeof(uint32_t) * (t_n + 1)) * 3;
+            uint64_t activeMemsize = HeiProMap::align64(sizeof(uint32_t) * t_n) * 3;
             uint64_t totalMemsize = arcMemsize + ptrMemsize + nodeMemsize + rowMemsize + bucketMemsize + activeMemsize;
             mem_stack.ensure(totalMemsize);
             mem_stack.clear();
@@ -431,16 +377,16 @@ namespace my_reimpls {
         // Pass 1: call initNodes() then incDeg() for each arc endpoint
         // Pass 2: call finalizeRows() then addEdgeDirect/setTerminal, then finalize()
 
-        void initNodes(int64_t t_n, int64_t t_n_edges, MemoryStack &t_mem_stack) {
+        void initNodes(int64_t t_n, int64_t t_n_edges, HeiProMap::MemoryStack &t_mem_stack) {
             n = t_n;
             m = t_n_edges * 2;
 
-            uint64_t arcMemsize = align64(sizeof(ArcData<Cap>) * t_n_edges * 2);
-            uint64_t nodeMemsize = align64(sizeof(VertexData<Term>) * (t_n + 1));
-            uint64_t rowMemsize = align64(sizeof(uint32_t) * (t_n + 1));
-            uint64_t ptrMemsize = align64(sizeof(uint32_t) * t_n * 2);
-            uint64_t bucketMemsize = align64(sizeof(uint32_t) * (t_n + 1)) * 3;
-            uint64_t activeMemsize = align64(sizeof(uint32_t) * t_n) * 3;
+            uint64_t arcMemsize = HeiProMap::align64(sizeof(ArcData<Cap>) * t_n_edges * 2);
+            uint64_t nodeMemsize = HeiProMap::align64(sizeof(VertexData<Term>) * (t_n + 1));
+            uint64_t rowMemsize = HeiProMap::align64(sizeof(uint32_t) * (t_n + 1));
+            uint64_t ptrMemsize = HeiProMap::align64(sizeof(uint32_t) * t_n * 2);
+            uint64_t bucketMemsize = HeiProMap::align64(sizeof(uint32_t) * (t_n + 1)) * 3;
+            uint64_t activeMemsize = HeiProMap::align64(sizeof(uint32_t) * t_n) * 3;
             uint64_t totalMemsize = arcMemsize + ptrMemsize + nodeMemsize + rowMemsize + bucketMemsize + activeMemsize;
             t_mem_stack.ensure(totalMemsize);
             t_mem_stack.clear();

@@ -199,6 +199,8 @@ namespace HeiProMap {
 
             // Refinement Two Vertex Label Propagation
             {"--refinement-two-vertex-label-propagation-enable", "", "Enables Label Propagation with two vertices.", "0", "", false},
+            // Refinement Flow Based
+            {"--refinement-flow-enable", "", "Enables the flow based refinement.", "0", "", false},
         };
 
     public:
@@ -364,6 +366,11 @@ namespace HeiProMap {
             // initialize two vertex label propagation
             if (use_default || is_set("--refinement-two-vertex-label-propagation-enable")) {
                 // two_vertex_label_propagation_config.enabled = get("--refinement-two-vertex-label-propagation-enable") == "1";
+            }
+
+            // initialize flow based refinement
+            if (use_default || is_set("--refinement-flow-enable")) {
+                flow_based_refinement_config.enabled = get("--refinement-flow-enable") == "1";
             }
         }
 

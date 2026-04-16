@@ -42,7 +42,7 @@
 #include "utils.h"
 
 #ifndef ENABLE_PROFILER
-#define ENABLE_PROFILER 0
+#define ENABLE_PROFILER 1
 #endif
 
 namespace HeiProMap {

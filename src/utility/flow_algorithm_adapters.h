@@ -14,9 +14,139 @@
 
 #include "flow_interface.h"
 #include "my_eibfs_i.h"
+#include "my_hpf_hl.h"
 #include "profiler.h"
 
 namespace HeiProMap {
+    template<typename captype = int, typename tcaptype = int, typename flowtype = int>
+    class HPF_HLAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
+        struct Edge {
+            vertex_t u, v;
+            weight_t w;
+        };
+
+        vertex_t n = 0;
+        std::vector<Edge> edges;
+        std::vector<tcaptype> s_cap, t_cap;
+
+        MemoryStack &mem_stack;
+        my_reimpls_hpf::Hpf<captype> g;
+
+    public:
+        explicit HPF_HLAdapter(MemoryStack &t_mem_stack) : mem_stack(t_mem_stack), g(0, 0, t_mem_stack) {
+        }
+
+        ~HPF_HLAdapter() override = default;
+
+        void initialize(size_t t_n) override {
+            n = t_n;
+            edges.clear();
+            s_cap.assign(n, 0);
+            t_cap.assign(n, 0);
+        }
+
+        void add(vertex_t u, vertex_t v, weight_t w) override {
+            ASSERT(u < n && v < n && w >= 0);
+            edges.push_back({u, v, w});
+        }
+
+        void add_s_edge(vertex_t v, weight_t w) override {
+            ASSERT(v < n && w >= 0);
+            s_cap[v] += static_cast<tcaptype>(w);
+        }
+
+        void add_t_edge(vertex_t v, weight_t w) override {
+            ASSERT(v < n && w >= 0);
+            t_cap[v] += static_cast<tcaptype>(w);
+        }
+
+        void solve() override {
+            size_t s_count = 0;
+            size_t t_count = 0;
+            for (vertex_t u = 0; u < n; ++u) {
+                if (s_cap[u] > 0) s_count++;
+                if (t_cap[u] > 0) t_count++;
+            }
+
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_construct");
+                g.reset(n + 2, edges.size() * 2 + s_count + t_count, mem_stack);
+                g.add_node(n + 2);
+                g.set_source(n);
+                g.set_sink(n + 1);
+            }
+
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_addEdge");
+                for (const auto &e: edges) {
+                    g.add_edge(e.u, e.v, static_cast<captype>(e.w));
+                    g.add_edge(e.v, e.u, static_cast<captype>(e.w));
+                }
+                for (vertex_t u = 0; u < n; ++u) {
+                    if (s_cap[u] > 0) g.add_edge(n, u, static_cast<captype>(s_cap[u]));
+                    if (t_cap[u] > 0) g.add_edge(u, n + 1, static_cast<captype>(t_cap[u]));
+                }
+            }
+
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_maxflow");
+                g.mincut();
+            }
+        }
+
+        flowtype get_flow_value() const override {
+            flowtype cut_value = 0;
+
+            for (const auto &e: edges) {
+                const bool u_on_source_side = g.what_label(e.u) == my_reimpls_hpf::Hpf<captype>::source_side;
+                const bool v_on_source_side = g.what_label(e.v) == my_reimpls_hpf::Hpf<captype>::source_side;
+                if (u_on_source_side != v_on_source_side) {
+                    cut_value += static_cast<flowtype>(e.w);
+                }
+            }
+
+            for (vertex_t u = 0; u < n; ++u) {
+                if (g.what_label(u) == my_reimpls_hpf::Hpf<captype>::source_side) {
+                    cut_value += static_cast<flowtype>(t_cap[u]);
+                } else {
+                    cut_value += static_cast<flowtype>(s_cap[u]);
+                }
+            }
+
+            return cut_value;
+        }
+
+        void get_cut(std::vector<u8> &is_left) override {
+            is_left.resize(n);
+            for (vertex_t u = 0; u < n; ++u) {
+                is_left[u] = (g.what_label(u) == my_reimpls_hpf::Hpf<captype>::source_side) ? 1 : 0;
+            }
+        }
+
+        void build_residual_network(ResidualFlowNetwork &residual_g) override {
+            residual_g.initialize(n);
+
+            for (uint32_t i = 0; i < g.get_num_arcs(); ++i) {
+                const auto &arc = g.arcList[i];
+                vertex_t u = arc.from;
+                vertex_t v = arc.to;
+                captype rc_uv = arc.capacity - arc.flow;
+                captype rc_vu = arc.flow;
+
+                if (u < n && v < n) {
+                    if (rc_uv > 0) residual_g.add_directed_edge(u, v, static_cast<weight_t>(rc_uv));
+                    if (rc_vu > 0) residual_g.add_directed_edge(v, u, static_cast<weight_t>(rc_vu));
+                } else if (u == n && v < n) { // Source to node v
+                    if (rc_uv > 0) residual_g.add_edge_from_source(v, static_cast<weight_t>(rc_uv));
+                    if (rc_vu > 0) residual_g.add_edge_to_source(v, static_cast<weight_t>(rc_vu));
+                } else if (u < n && v == n + 1) { // Node u to sink
+                    if (rc_uv > 0) residual_g.add_edge_to_target(u, static_cast<weight_t>(rc_uv));
+                    if (rc_vu > 0) residual_g.add_edge_from_target(u, static_cast<weight_t>(rc_vu));
+                }
+            }
+        }
+    };
+
     template<typename captype = int, typename tcaptype = int, typename flowtype = int>
     class EIBFSAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
     private:
@@ -36,11 +166,11 @@ namespace HeiProMap {
         std::vector<tcaptype> s_cap, t_cap; // per-node terminal caps
         std::vector<uint32_t> deg;
 
-        my_reimpls::MemoryStack &mem_stack;
+        MemoryStack &mem_stack;
         my_reimpls::IBFSGraph<captype, tcaptype, flowtype> g;
 
     public:
-        explicit EIBFSAdapter(my_reimpls::MemoryStack &t_mem_stack) : mem_stack(t_mem_stack) {
+        explicit EIBFSAdapter(MemoryStack &t_mem_stack) : mem_stack(t_mem_stack) {
         }
 
         ~EIBFSAdapter() override = default;

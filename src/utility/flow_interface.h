@@ -23,6 +23,8 @@ namespace HeiProMap {
 
         virtual void solve() = 0;
 
+        virtual flowtype get_flow_value() const = 0;
+
         virtual void get_cut(std::vector<u8> &is_left) = 0;
 
         virtual void build_residual_network(ResidualFlowNetwork &residual_g) = 0;

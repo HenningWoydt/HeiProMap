@@ -72,7 +72,7 @@ namespace HeiProMap {
 
         const FlowBasedRefinementConfiguration *config = nullptr;
         std::vector<RandomEngine> rnd_engines;
-        std::vector<my_reimpls::MemoryStack> flow_mem_stacks;
+        std::vector<HeiProMap::MemoryStack> flow_mem_stacks;
 
     public:
         FlowBasedRefinement() = default;
@@ -264,7 +264,7 @@ namespace HeiProMap {
             std::vector<vertex_t> left_region;
             std::vector<vertex_t> right_region;
 
-            EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
+            HPF_HLAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
             ResidualFlowNetwork residual_flow_network;
             SCCGraph scc_graph;
 
