@@ -137,7 +137,7 @@ namespace HeiProMap {
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
-            if (m_threads > 1 || true) {
+            if (m_threads > 1) {
                 for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                     //
                     {
@@ -264,7 +264,7 @@ namespace HeiProMap {
             std::vector<vertex_t> left_region;
             std::vector<vertex_t> right_region;
 
-            HPF_HLAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
+            EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
             ResidualFlowNetwork residual_flow_network;
             SCCGraph scc_graph;
 
@@ -274,6 +274,7 @@ namespace HeiProMap {
 
             std::vector<vertex_t> queue;
             std::vector<u8> is_left;
+            std::vector<u8> is_left_2;
 
             while (iteration < max_local_iteration) {
                 left_boundary.clear();
@@ -303,8 +304,7 @@ namespace HeiProMap {
                 weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
 
                 if (left_region.size() + right_region.size() == 0) {
-                    // if both regions are empty, increase their sizes
-                    if (alpha == alpha_upper_bound) { return; }
+                    if (alpha >= alpha_upper_bound) { return; }
                     alpha = std::min(alpha_modifier * alpha, alpha_upper_bound);
                     continue;
                 }
@@ -338,14 +338,13 @@ namespace HeiProMap {
                     is_valid = cut_is_valid(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
                 }
 
-                if (!is_valid) {
-                    if (!config->use_closed_vertex_set) {
-                        if (alpha == 1.0) { return; }
-                        if (alpha == alpha_upper_bound) { return; }
-                        alpha = std::max(alpha / alpha_modifier, 1.0);
-                        continue;
-                    }
+                if (!is_valid && !config->use_closed_vertex_set) {
+                    if (alpha <= 1.0) { return; }
+                    alpha = std::max(alpha / alpha_modifier, 1.0);
+                    continue;
+                }
 
+                if (config->use_closed_vertex_set) {
                     // build residual network
                     {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "build_residual_network");
@@ -367,21 +366,20 @@ namespace HeiProMap {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "scc_find");
                         weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
                         weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
-                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, config->closed_vertex_sets_repeats, random_engine, is_left);
+                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, config->closed_vertex_sets_repeats, random_engine, is_left_2);
                     }
                     //
                     if (!closure_found) {
-                        if (alpha == 1.0) { return; }
+                        if (alpha <= 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
+                    std::swap(is_left, is_left_2);
                 }
 
                 // check if the cut actually changes the partition
                 if (!cut_changes_partition(is_left, left_region, right_region, translation_table)) {
-                    // cut is valid, but does not change anything
-                    if (alpha == 1.0) { return; }
-                    if (alpha == alpha_upper_bound) { return; }
+                    if (alpha <= 1.0) { return; }
                     alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
                 }
