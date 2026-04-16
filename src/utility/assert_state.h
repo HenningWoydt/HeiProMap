@@ -37,7 +37,7 @@
 
 namespace HeiProMap {
     inline bool assert_csr_structure(const graph_t &g) {
-        ScopedTimer _t("assert", "misc", "assert_no_self_loops");
+        ScopedTimer _t("assert", "misc", "assert_csr_structure");
 
         ASSERT(g.neighborhoods[0] == 0);
         ASSERT(g.neighborhoods[g.n] == g.m);
