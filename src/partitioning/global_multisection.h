@@ -227,29 +227,6 @@ namespace HeiProMap {
                         }
                     endfor
                     local_block_conn.compute_from_scratch((*item.g), local_p_manager);
-
-                    weight_t edge_cut = get_edge_cut((*item.g), local_p_manager);
-                    weight_t diff = 1;
-                    while (diff > 0) {
-                        MultiTryFmRefinementConfiguration multi_try_config("refinements");
-                        multi_try_config.max_iteration = 10;
-                        multi_try_config.min_n_steps = 10;
-                        MultiTryFMRefinement multi_try_fm_refinement;
-                        multi_try_fm_refinement.initialize(item.g->n, item.g->m, item.k, 1, seed, multi_try_config);
-                        multi_try_fm_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
-
-                        FlowBasedRefinementConfiguration flow_config("refinements");
-                        flow_config.alpha = 1.0;
-                        flow_config.max_local_iteration = 10;
-                        flow_config.max_global_iteration = 2;
-                        FlowBasedRefinement flow_refinement;
-                        flow_refinement.initialize(item.g->n, item.g->m, item.k, 1, seed, flow_config);
-                        flow_refinement.refine((*item.g), local_distance_oracle, local_boundary_manager, local_p_manager, local_quotient_graph, local_block_conn, item.imb);
-
-                        weight_t temp_edge_cut = get_edge_cut((*item.g), local_p_manager);
-                        diff = edge_cut - temp_edge_cut;
-                        edge_cut = temp_edge_cut;
-                    }
                 }
 
                 if (item.identifier->size() == l - 1) {
