@@ -579,8 +579,8 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-fast";
-            // global_multisection_config.mode_string = "kaffpa-strong";
+            // global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "kaffpa-strong";
             // global_multisection_config.mode_string = "kaffpa-eco";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
@@ -611,8 +611,8 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 2;
+            flow_based_refinement_config.max_global_iteration = 2;
+            flow_based_refinement_config.max_local_iteration = 3;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
