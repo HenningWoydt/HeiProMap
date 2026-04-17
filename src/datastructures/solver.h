@@ -378,7 +378,7 @@ namespace HeiProMap {
                     block_conns[i].copy_from(block_conns[0]);
 
                     // perturbate(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
-                    lp_refine.refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
+                    lp_refine.refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 }
                 lp_refine.min_improvement = 0;
 
@@ -538,7 +538,16 @@ namespace HeiProMap {
                 // size_constrained_lp.cluster<false, false>(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
                 rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
-                ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+                const auto &cg = graphs.back();
+                if (cg.uniform_v_weights && cg.uniform_e_weights) {
+                    ge_matcher.match<true, true>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                } else if (cg.uniform_v_weights) {
+                    ge_matcher.match<true, false>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                } else if (cg.uniform_e_weights) {
+                    ge_matcher.match<false, true>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                } else {
+                    ge_matcher.match<false, false>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                }
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_APPROX_GREEDY_MATCHING) {
                 approx_ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
@@ -674,7 +683,7 @@ namespace HeiProMap {
             auto sp = get_time_point();
 
             if (ac.first_fast_v_cycle && v_cycle == 0) {
-                lp_refine.refine(graphs.back(), d_oracle, bv_managers[0], p_managers[0], q_graphs[0], block_conns[0], level_imbalance);
+                lp_refine.refine(graphs.back(), d_oracle, bv_managers[0], p_managers[0], q_graphs[0], block_conns[0], level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
             } else {
                 for (u64 i = 0; i < n_partitions; ++i) {
                     u64 refinement_max_iterations = ac.n_refinement_iterations; // std::max(ac.n_refinement_iterations, level);
@@ -688,7 +697,7 @@ namespace HeiProMap {
                     for (u64 refinement_i = 0; refinement_i < refinement_max_iterations; ++refinement_i) {
                         for (auto [refiner, config]: refinements) {
                             if (config->enabled) {
-                                refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance);
+                                refiner->refine(graphs.back(), d_oracle, bv_managers[i], p_managers[i], q_graphs[i], block_conns[i], level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_managers[0], bv_managers[0], q_graphs[0], block_conns[0], ac.k));
                             }
                         }

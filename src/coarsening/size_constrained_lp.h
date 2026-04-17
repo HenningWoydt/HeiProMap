@@ -80,12 +80,12 @@ namespace HeiProMap {
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
-        void merge_when_identitiy([[maybe_unused]] const size_t level,
+        void merge_when_identity([[maybe_unused]] const size_t level,
                                   const graph_t &g,
                                   [[maybe_unused]] const p_manager_t &p_manager,
                                   Mapping &mapping,
                                   weight_t max_w) {
-            ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_when_identitiy");
+            ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_when_identity");
 
             // 2) collect active cluster ids
             std::vector<vertex_t> ids;
@@ -320,7 +320,7 @@ namespace HeiProMap {
                             vertex_t u = flat_vertices[i];
                             if (active[u] == 0) { continue; }
 
-                            weight_t u_w = g.v_weights[u];
+                            weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
                             partition_t u_id = p_manager[u];
                             vertex_t current_id = mapping.get(u);
                             weight_t current_id_w = 0;
@@ -382,7 +382,7 @@ namespace HeiProMap {
                         vertex_t u = flat_vertices[i];
                         if (active[u] == 0) { continue; }
 
-                        weight_t u_w = g.v_weights[u];
+                        weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
                         partition_t u_id = p_manager[u];
 
                         vertex_t current_id = mapping.get(u);
@@ -392,25 +392,47 @@ namespace HeiProMap {
                         weight_t best_weight = 0;
 
                         flat_map.clear();
-                        forall_guivw(g, u, j, v, w)
-                            {
-                                partition_t v_id = p_manager[v];
-                                if (u_id != v_id) { continue; }
+                        if constexpr (t_uniform_e_weights) {
+                            forall_guiv(g, u, j, v)
+                                {
+                                    partition_t v_id = p_manager[v];
+                                    if (u_id != v_id) { continue; }
 
-                                vertex_t id = mapping.get(v);
-                                if (id == current_id) {
-                                    current_id_w += w;
-                                } else {
-                                    if (u_w + cluster_weights[id] > max_w) { continue; }
+                                    vertex_t id = mapping.get(v);
+                                    if (id == current_id) {
+                                        current_id_w += 1;
+                                    } else {
+                                        if (!t_uniform_v_weights && u_w + cluster_weights[id] > max_w) { continue; }
 
-                                    weight_t new_w = flat_map.add_and_ret(id, w);
-                                    if (new_w > best_weight) {
-                                        best_weight = new_w;
-                                        best_id = id;
+                                        weight_t new_w = flat_map.add_and_ret(id, 1);
+                                        if (new_w > best_weight) {
+                                            best_weight = new_w;
+                                            best_id = id;
+                                        }
                                     }
                                 }
-                            }
-                        endfor
+                            endfor
+                        } else {
+                            forall_guivw(g, u, j, v, w)
+                                {
+                                    partition_t v_id = p_manager[v];
+                                    if (u_id != v_id) { continue; }
+
+                                    vertex_t id = mapping.get(v);
+                                    if (id == current_id) {
+                                        current_id_w += w;
+                                    } else {
+                                        if (!t_uniform_v_weights && u_w + cluster_weights[id] > max_w) { continue; }
+
+                                        weight_t new_w = flat_map.add_and_ret(id, w);
+                                        if (new_w > best_weight) {
+                                            best_weight = new_w;
+                                            best_id = id;
+                                        }
+                                    }
+                                }
+                            endfor
+                        }
 
                         if (current_id_w > best_weight) {
                             best_weight = current_id_w;
@@ -462,7 +484,7 @@ namespace HeiProMap {
                 endfor
             }
             if (ident_mapping) {
-                merge_when_identitiy<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
+                merge_when_identity<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
             }
 
             // map to a continuous range

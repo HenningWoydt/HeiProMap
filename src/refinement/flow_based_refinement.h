@@ -118,7 +118,23 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
-                    f64 imbalance) override {
+                    f64 imbalance,
+                    bool uniform_v_weights,
+                    bool uniform_e_weights) override {
+            if (uniform_v_weights && uniform_e_weights)      refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_v_weights)                      refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_e_weights)                      refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else                                             refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+        }
+
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void refine_impl(graph_t &g,
+                    d_oracle_t &d_oracle,
+                    bv_manager_t &bv_manager,
+                    p_manager_t &p_manager,
+                    q_graph_t &q_graph,
+                    block_conn_t &block_conn,
+                    f64 imbalance) {
             RandomEngine &random_engine = rnd_engines[0];
 
             // active block scheduling
@@ -264,8 +280,8 @@ namespace HeiProMap {
             std::vector<vertex_t> left_region;
             std::vector<vertex_t> right_region;
 
-            // HPF_HLAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
-            EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
+            // EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
+            PushRelabelAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
             ResidualFlowNetwork residual_flow_network;
             SCCGraph scc_graph;
 

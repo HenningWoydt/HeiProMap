@@ -432,7 +432,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 16;
+            initial_c = 4;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "global-paths";
@@ -446,14 +446,14 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 16;
+            size_constrained_lp_config.multiplier = 64;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
-            // global_multisection_config.mode_string = "metis-kway";
+            global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
             // global_multisection_config.mode_string = "mtkahypar-quality";
             // global_multisection_config.mode_string = "mtkahypar-highestquality";
@@ -462,7 +462,7 @@ namespace HeiProMap {
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            label_propagation_config.max_iteration = 25;
 
             // enable multi-try fm
             multi_try_fm_refinement_config.enabled = false;
@@ -472,7 +472,7 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 2;
+            quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 4;
             quotient_graph_refinement_config.use_preemptive_exit = true;
@@ -510,8 +510,8 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "kaffpa-strong";
-            // global_multisection_config.mode_string = "kaffpa-eco";
-            global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "kaffpa-eco";
+            // global_multisection_config.mode_string = "kaffpa-fast";
             // global_multisection_config.mode_string = "metis-recursive";
             // global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "mtkahypar-default";
@@ -541,9 +541,9 @@ namespace HeiProMap {
             multi_try_fm_refinement_config.min_n_steps = 4;
 
             // enable flow based refinement
-            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 2;
+            flow_based_refinement_config.max_local_iteration = 1;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
@@ -558,7 +558,7 @@ namespace HeiProMap {
             n_refinement_iterations = 1;
             n_v_cycle = 0;
             first_fast_v_cycle = false;
-            v_cycle_max_depth = 2;
+            v_cycle_max_depth = 3;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -611,7 +611,7 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 2;
+            flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 3;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;

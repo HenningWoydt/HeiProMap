@@ -15,6 +15,7 @@
 #include "flow_interface.h"
 #include "my_eibfs_i.h"
 #include "my_hpf_hl.h"
+#include "my_pr.h"
 #include "profiler.h"
 
 namespace HeiProMap {
@@ -339,6 +340,168 @@ namespace HeiProMap {
             return val;
         }
     };
+
+    template<typename captype = int, typename tcaptype = int, typename flowtype = int>
+    class PushRelabelAdapter : public IFlowAlgorithm<captype, tcaptype, flowtype> {
+    private:
+        struct Edge {
+            vertex_t u, v;
+            weight_t w;
+        };
+
+        vertex_t n = 0;
+        std::vector<Edge> edges;
+        std::vector<tcaptype> s_cap, t_cap;
+
+        my_pr::MemoryStack pr_mem;
+        my_pr::PushRelabel<captype> g;
+
+    public:
+        explicit PushRelabelAdapter(MemoryStack &) : pr_mem(), g() {}
+
+        ~PushRelabelAdapter() override = default;
+
+        void initialize(size_t t_n) override {
+            n = static_cast<vertex_t>(t_n);
+            edges.clear();
+            s_cap.assign(n, 0);
+            t_cap.assign(n, 0);
+        }
+
+        void add(vertex_t u, vertex_t v, weight_t w) override {
+            ASSERT(u < n && v < n && w >= 0);
+            edges.push_back({u, v, w});
+        }
+
+        void add_s_edge(vertex_t v, weight_t w) override {
+            ASSERT(v < n && w >= 0);
+            s_cap[v] += static_cast<tcaptype>(w);
+        }
+
+        void add_t_edge(vertex_t v, weight_t w) override {
+            ASSERT(v < n && w >= 0);
+            t_cap[v] += static_cast<tcaptype>(w);
+        }
+
+        void solve() override {
+            vertex_t src = n;
+            vertex_t snk = n + 1;
+
+            size_t s_count = 0, t_count = 0;
+            for (vertex_t u = 0; u < n; ++u) {
+                if (s_cap[u] > 0) s_count++;
+                if (t_cap[u] > 0) t_count++;
+            }
+
+            int total_edges = static_cast<int>(edges.size() + s_count + t_count);
+
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_construct");
+                g.init(static_cast<int>(n + 2), static_cast<int>(src), static_cast<int>(snk), total_edges, pr_mem);
+            }
+
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_addEdge");
+                for (const auto &e : edges) {
+                    g.add_edge(static_cast<int>(e.u), static_cast<int>(e.v), static_cast<captype>(e.w), static_cast<captype>(e.w));
+                }
+                for (vertex_t u = 0; u < n; ++u) {
+                    if (s_cap[u] > 0) g.add_edge(static_cast<int>(src), static_cast<int>(u), static_cast<captype>(s_cap[u]));
+                    if (t_cap[u] > 0) g.add_edge(static_cast<int>(u), static_cast<int>(snk), static_cast<captype>(t_cap[u]));
+                }
+            }
+
+            {
+                ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_maxflow");
+                g.maxflow();
+            }
+        }
+
+        flowtype get_flow_value() const override {
+            flowtype val = 0;
+            for (const auto &e : edges) {
+                bool u_src = (g.what_label(static_cast<int>(e.u)) == my_pr::SOURCE);
+                bool v_src = (g.what_label(static_cast<int>(e.v)) == my_pr::SOURCE);
+                if (u_src != v_src) val += static_cast<flowtype>(e.w);
+            }
+            for (vertex_t u = 0; u < n; ++u) {
+                if (g.what_label(static_cast<int>(u)) == my_pr::SOURCE)
+                    val += static_cast<flowtype>(t_cap[u]);
+                else
+                    val += static_cast<flowtype>(s_cap[u]);
+            }
+            return val;
+        }
+
+        void get_cut(std::vector<u8> &is_left) override {
+            is_left.resize(n);
+            for (vertex_t u = 0; u < n; ++u) {
+                is_left[u] = (g.what_label(static_cast<int>(u)) == my_pr::SOURCE) ? 1 : 0;
+            }
+        }
+
+        void build_residual_network(ResidualFlowNetwork &residual_g) override {
+            residual_g.initialize(n);
+
+            // Push-relabel is a preflow solver — arc residuals after maxflow are NOT
+            // a valid flow residual. Use cut labels to reconstruct the residual.
+            for (const auto &e : edges) {
+                bool u_src = (g.what_label(static_cast<int>(e.u)) == my_pr::SOURCE);
+                bool v_src = (g.what_label(static_cast<int>(e.v)) == my_pr::SOURCE);
+                if (u_src == v_src) {
+                    residual_g.add_directed_edge(e.u, e.v, 1);
+                    residual_g.add_directed_edge(e.v, e.u, 1);
+                } else if (u_src) {
+                    residual_g.add_directed_edge(e.v, e.u, 1);
+                } else {
+                    residual_g.add_directed_edge(e.u, e.v, 1);
+                }
+            }
+
+            for (vertex_t u = 0; u < n; ++u) {
+                bool u_src = (g.what_label(static_cast<int>(u)) == my_pr::SOURCE);
+                if (s_cap[u] > 0) {
+                    if (u_src) {
+                        residual_g.add_edge_from_source(u, 1);
+                        residual_g.add_edge_to_source(u, 1);
+                    } else {
+                        residual_g.add_edge_to_source(u, 1);
+                    }
+                }
+                if (t_cap[u] > 0) {
+                    if (!u_src) {
+                        residual_g.add_edge_to_target(u, 1);
+                        residual_g.add_edge_from_target(u, 1);
+                    } else {
+                        residual_g.add_edge_from_target(u, 1);
+                    }
+                }
+            }
+        }
+
+        flowtype compute_cut_value(const std::vector<u8> &is_left) const override {
+            flowtype val = 0;
+            for (const auto &e : edges) {
+                if (is_left[e.u] != is_left[e.v]) val += static_cast<flowtype>(e.w);
+            }
+            for (vertex_t u = 0; u < n; ++u) {
+                if (is_left[u]) val += static_cast<flowtype>(t_cap[u]);
+                else val += static_cast<flowtype>(s_cap[u]);
+            }
+            return val;
+        }
+
+        void dump_instance(std::ostream &os) const {
+            os << "n " << n << "\n";
+            for (const auto &e : edges)
+                os << "e " << e.u << " " << e.v << " " << e.w << "\n";
+            for (vertex_t u = 0; u < n; ++u)
+                if (s_cap[u] > 0) os << "s " << u << " " << s_cap[u] << "\n";
+            for (vertex_t u = 0; u < n; ++u)
+                if (t_cap[u] > 0) os << "t " << u << " " << t_cap[u] << "\n";
+        }
+    };
+
 } // namespace HeiProMap
 
 #endif // HEIPROMAP_FLOW_ALGORITHM_ADAPTERS_H

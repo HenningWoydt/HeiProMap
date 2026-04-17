@@ -635,6 +635,113 @@ namespace HeiProMap {
         return qap;
     }
     */
+
+    // =========================================================================
+    // Template-optimized gain functions for uniform weight specialization
+    // =========================================================================
+
+    template<bool t_uniform_e_weights, typename GraphT, typename PartitionManagerT, typename DistanceOracleT, typename BlockConnT>
+    inline weight_t get_u_qap_delta_t(const GraphT &g,
+                                      const vertex_t u,
+                                      const partition_t old_id,
+                                      const partition_t new_id,
+                                      const PartitionManagerT &p_manager,
+                                      DistanceOracleT &d_oracle,
+                                      BlockConnT &block_conn) {
+        weight_t qap_delta = 0;
+
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                qap_delta += (d_oracle.get(id, old_id) - d_oracle.get(id, new_id)) * idw;
+            }
+        endfor
+
+        return qap_delta;
+    }
+
+    template<bool t_uniform_e_weights, typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline weight_t get_u_qap_delta_and_is_connected_to_t(const GraphT &g,
+                                                          const vertex_t u,
+                                                          const partition_t old_id,
+                                                          const partition_t new_id,
+                                                          bool &is_connected_to_new_id,
+                                                          const PartitionManagerT &p_manager,
+                                                          DistanceOracleT &d_oracle) {
+        is_connected_to_new_id = false;
+        weight_t qap_delta = 0;
+
+        if constexpr (t_uniform_e_weights) {
+            forall_guiv(g, u, i, v)
+                {
+                    partition_t v_id = p_manager[v];
+                    is_connected_to_new_id |= (v_id == new_id);
+                    qap_delta += d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id);
+                }
+            endfor
+        } else {
+            forall_guivw(g, u, i, v, w)
+                {
+                    partition_t v_id = p_manager[v];
+                    is_connected_to_new_id |= (v_id == new_id);
+                    qap_delta += (d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id)) * w;
+                }
+            endfor
+        }
+
+        return qap_delta;
+    }
+
+    template<bool t_uniform_e_weights, typename GraphT, typename PartitionManagerT, typename BlockConnT>
+    inline weight_t get_u_edge_cut_delta_t(const GraphT &g,
+                                           const vertex_t u,
+                                           const partition_t old_id,
+                                           const partition_t new_id,
+                                           const PartitionManagerT &p_manager,
+                                           const BlockConnT &block_conn) {
+        weight_t edge_cut_delta = 0;
+
+        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+            {
+                edge_cut_delta -= (id != new_id) * idw;
+                edge_cut_delta += (id != old_id) * idw;
+            }
+        endfor
+
+        return edge_cut_delta;
+    }
+
+    template<bool t_uniform_e_weights, typename GraphT, typename PartitionManagerT>
+    inline weight_t get_u_edge_cut_delta_and_is_connected_to_t(const GraphT &g,
+                                                               const vertex_t u,
+                                                               const partition_t old_id,
+                                                               const partition_t new_id,
+                                                               bool &is_connected_to_new_id,
+                                                               const PartitionManagerT &p_manager) {
+        is_connected_to_new_id = false;
+        weight_t edge_cut_delta = 0;
+
+        if constexpr (t_uniform_e_weights) {
+            forall_guiv(g, u, i, v)
+                {
+                    partition_t v_id = p_manager[v];
+                    is_connected_to_new_id |= (v_id == new_id);
+                    edge_cut_delta -= (v_id != new_id);
+                    edge_cut_delta += (v_id != old_id);
+                }
+            endfor
+        } else {
+            forall_guivw(g, u, i, v, w)
+                {
+                    partition_t v_id = p_manager[v];
+                    is_connected_to_new_id |= (v_id == new_id);
+                    edge_cut_delta -= (v_id != new_id) * w;
+                    edge_cut_delta += (v_id != old_id) * w;
+                }
+            endfor
+        }
+
+        return edge_cut_delta;
+    }
 }
 
 #endif //HEIPROMAP_QAP_H

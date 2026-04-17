@@ -80,13 +80,14 @@ namespace HeiProMap {
             thread_edges.resize(m_threads);
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void match([[maybe_unused]] const size_t level,
                    const graph_t &g,
                    const p_manager_t &p_manager,
                    Mapping &mapping,
                    f64 imbalance) {
             if (m_threads == 1) {
-                match_serial(level, g, p_manager, mapping, imbalance);
+                match_serial<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, imbalance);
                 return;
             }
 
@@ -123,34 +124,30 @@ namespace HeiProMap {
                     #pragma omp for
                     forall_gu(g, u)
                         {
-                            weight_t u_w = g.v_weights[u];
+                            weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
                             forall_guivw(g, u, j, v, w)
                                 {
                                     if (u >= v) { continue; }
-                                    if (u_w + g.v_weights[v] > lmax) { continue; }
+                                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                                    if (u_w + v_w > lmax) { continue; }
                                     if (p_manager[u] != p_manager[v]) { continue; }
 
-                                    // const f32 edge_rating = (f32) w;
-                                    // const f32 edge_rating = (f32) (w) / (f32) (u_w * g.v_weights[v]);
-                                    // const f32 edge_rating = (f32) (w * w) / (f32) (u_w * g.v_weights[v]);
-                                    const f32 edge_rating = (f32) w / std::sqrt((f32) u_w * (f32) g.v_weights[v]);
-                                    // const f32 edge_rating = (f32) w / (f32) (u_w + g.v_weights[v]);  // - crash
-                                    // const f32 edge_rating = (f32) w / (f32) std::min(u_w, g.v_weights[v]);
-                                    // const f32 edge_rating = (f32) w / (f32) std::max(u_w, g.v_weights[v]); // - crash
-                                    // const f32 edge_rating = (f32) w / (f32) (g.deg(u) * g.deg(v));
-                                    // const f32 edge_rating = (f32) w / (f32) ((u_w + g.v_weights[v]) * (g.deg(u) + g.deg(v)));
-                                    // const f32 edge_rating = (f32) w / (f32) (u_w + g.v_weights[v] - w); // -crash
-                                    // const f32 edge_rating = std::pow((f32) w, 1.5f) / std::pow((f32) (u_w * g.v_weights[v]), 0.5f);
-                                    // const f32 edge_rating = std::pow((f32) w, 2.0f) / (f32) (u_w + g.v_weights[v]); // - crash
-                                    // const f32 edge_rating = std::log1p((f32) w) / (f32) (u_w * g.v_weights[v]);
-                                    // const f32 edge_rating = ((f32) w / (f32) (u_w * g.v_weights[v])) * ((f32) w / (f32) std::max<weight_t>(1, std::min(u_w, g.v_weights[v])));
+                                    weight_t ew = t_uniform_e_weights ? 1 : w;
+
+                                    f32 edge_rating;
+                                    if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                                        edge_rating = 1.0f;
+                                    } else if constexpr (t_uniform_v_weights) {
+                                        edge_rating = (f32) ew;
+                                    } else {
+                                        edge_rating = (f32) ew / std::sqrt((f32) u_w * (f32) v_w);
+                                    }
 
                                     min_rating = std::min(min_rating, edge_rating);
                                     max_rating = std::max(max_rating, edge_rating);
 
                                     thread_edges[t_id].emplace_back(u, v, edge_rating);
-                                    // edges[edges_size++] = {u, v, edge_rating};
                                 }
                             endfor
                         }
@@ -265,6 +262,7 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void match_serial([[maybe_unused]] const size_t level,
                           const graph_t &g,
                           const p_manager_t &p_manager,
@@ -280,65 +278,78 @@ namespace HeiProMap {
                 matching.initialize(g.n);
             }
 
-            edges_size = 0;
+            if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                // Fast path: all edges equally rated, skip rating/sorting.
+                // For each unmatched vertex, pick a random eligible neighbor.
+                {
+                    ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "choose");
 
-            f32 min_rating = std::numeric_limits<f32>::max();
-            f32 max_rating = std::numeric_limits<f32>::min();
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        if (matching.is_matched(u)) { continue; }
 
-            // handle all other vertices
-            {
-                ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "rate_edges");
-
-                forall_gu(g, u)
-                    {
-                        u64 t_id = omp_get_thread_num();
-                        weight_t u_w = g.v_weights[u];
-
-                        forall_guivw(g, u, j, v, w)
+                        forall_guiv(g, u, j, v)
                             {
-                                if (u >= v) { continue; }
-                                if (u_w + g.v_weights[v] > lmax) { continue; }
+                                if (matching.is_matched(v)) { continue; }
                                 if (p_manager[u] != p_manager[v]) { continue; }
-
-                                // const f32 edge_rating = (f32) w;
-                                // const f32 edge_rating = (f32) (w) / (f32) (u_w * g.v_weights[v]);
-                                // const f32 edge_rating = (f32) (w * w) / (f32) (u_w * g.v_weights[v]);
-                                const f32 edge_rating = (f32) w / std::sqrt((f32) u_w * (f32) g.v_weights[v]);
-                                // const f32 edge_rating = (f32) w / (f32) (u_w + g.v_weights[v]);  // - crash
-                                // const f32 edge_rating = (f32) w / (f32) std::min(u_w, g.v_weights[v]);
-                                // const f32 edge_rating = (f32) w / (f32) std::max(u_w, g.v_weights[v]); // - crash
-                                // const f32 edge_rating = (f32) w / (f32) (g.deg(u) * g.deg(v));
-                                // const f32 edge_rating = (f32) w / (f32) ((u_w + g.v_weights[v]) * (g.deg(u) + g.deg(v)));
-                                // const f32 edge_rating = (f32) w / (f32) (u_w + g.v_weights[v] - w); // -crash
-                                // const f32 edge_rating = std::pow((f32) w, 1.5f) / std::pow((f32) (u_w * g.v_weights[v]), 0.5f);
-                                // const f32 edge_rating = std::pow((f32) w, 2.0f) / (f32) (u_w + g.v_weights[v]); // - crash
-                                // const f32 edge_rating = std::log1p((f32) w) / (f32) (u_w * g.v_weights[v]);
-                                // const f32 edge_rating = ((f32) w / (f32) (u_w * g.v_weights[v])) * ((f32) w / (f32) std::max<weight_t>(1, std::min(u_w, g.v_weights[v])));
-
-                                min_rating = std::min(min_rating, edge_rating);
-                                max_rating = std::max(max_rating, edge_rating);
-
-                                edges[edges_size++] = {u, v, edge_rating};
+                                matching.add(u, v);
+                                break;
                             }
                         endfor
                     }
-                endfor
-            }
+                }
+            } else {
+                edges_size = 0;
 
-            if (min_rating != max_rating) {
-                ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "sort");
+                f32 min_rating = std::numeric_limits<f32>::max();
+                f32 max_rating = std::numeric_limits<f32>::min();
 
-                std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
-            }
+                {
+                    ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "rate_edges");
 
-            {
-                ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "choose");
+                    forall_gu(g, u)
+                        {
+                            weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
-                for (size_t i = 0; i < edges_size; ++i) {
-                    const auto &[u, v, w] = edges[i];
-                    if (!matching.is_matched(u) && !matching.is_matched(v)) {
-                        // use this edge
-                        matching.add(u, v);
+                            forall_guivw(g, u, j, v, w)
+                                {
+                                    if (u >= v) { continue; }
+                                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                                    if (u_w + v_w > lmax) { continue; }
+                                    if (p_manager[u] != p_manager[v]) { continue; }
+
+                                    weight_t ew = t_uniform_e_weights ? 1 : w;
+
+                                    f32 edge_rating;
+                                    if constexpr (t_uniform_v_weights) {
+                                        edge_rating = (f32) ew;
+                                    } else {
+                                        edge_rating = (f32) ew / std::sqrt((f32) u_w * (f32) v_w);
+                                    }
+
+                                    min_rating = std::min(min_rating, edge_rating);
+                                    max_rating = std::max(max_rating, edge_rating);
+
+                                    edges[edges_size++] = {u, v, edge_rating};
+                                }
+                            endfor
+                        }
+                    endfor
+                }
+
+                if (min_rating != max_rating) {
+                    ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "sort");
+
+                    std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
+                }
+
+                {
+                    ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "choose");
+
+                    for (size_t i = 0; i < edges_size; ++i) {
+                        const auto &[u, v, w] = edges[i];
+                        if (!matching.is_matched(u) && !matching.is_matched(v)) {
+                            matching.add(u, v);
+                        }
                     }
                 }
             }

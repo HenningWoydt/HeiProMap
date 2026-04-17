@@ -62,7 +62,9 @@ namespace HeiProMap {
                             p_manager_t &p_manager,
                             q_graph_t &q_graph,
                             block_conn_t &block_conn,
-                            f64 imbalance) = 0;
+                            f64 imbalance,
+                            bool uniform_v_weights,
+                            bool uniform_e_weights) = 0;
     };
 }
 

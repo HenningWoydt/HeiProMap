@@ -102,7 +102,23 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
-                    f64 imbalance) override {
+                    f64 imbalance,
+                    bool uniform_v_weights,
+                    bool uniform_e_weights) override {
+            if (uniform_v_weights && uniform_e_weights)      refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_v_weights)                      refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_e_weights)                      refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else                                             refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+        }
+
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void refine_impl(graph_t &g,
+                    d_oracle_t &d_oracle,
+                    bv_manager_t &bv_manager,
+                    p_manager_t &p_manager,
+                    q_graph_t &q_graph,
+                    block_conn_t &block_conn,
+                    f64 imbalance) {
             ScopedTimer _t("refinement", "WaveRefinement", "refine");
 
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
