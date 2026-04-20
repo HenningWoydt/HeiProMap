@@ -2,19 +2,9 @@
 set -euo pipefail
 
 ROOT="$(pwd)"
-FAST=0
-
 for arg in "$@"; do
-  case "$arg" in
-    --fast)
-      FAST=1
-      ;;
-    *)
-      echo "Unknown argument: $arg" >&2
-      echo "Usage: $0 [--fast]" >&2
-      exit 1
-      ;;
-  esac
+  echo "Unknown argument: $arg" >&2
+  exit 1
 done
 
 calc_jobs() {
@@ -28,9 +18,15 @@ JOBS="${MAX_THREADS:-$(calc_jobs)}"
 
 echo "Root: $ROOT"
 echo "Jobs: $JOBS"
-echo "Fast: $FAST"
 
-if [ "$FAST" -eq 0 ]; then
+KAHIP_RELEASE_SO="${ROOT}/extern/local/kahip-release/lib/libkahip.so"
+KAHIP_DEBUG_SO="${ROOT}/extern/local/kahip-debug/lib/libkahip.so"
+
+if [ -f "$KAHIP_RELEASE_SO" ] && [ -f "$KAHIP_DEBUG_SO" ]; then
+  echo "KaHIP libraries found; skipping download and build."
+else
+  echo "KaHIP libraries not found; building from source..."
+
   # -----------------------------
   # Fetch dependencies
   # -----------------------------
@@ -85,8 +81,32 @@ if [ "$FAST" -eq 0 ]; then
       -DCMAKE_CXX_FLAGS_DEBUG=""
     cmake --build . --target install --parallel 1 --verbose
   )
+fi
+
+# -----------------------------
+# TBB
+# -----------------------------
+TBB_LOCAL="${ROOT}/extern/local/tbb"
+
+if ldconfig -p 2>/dev/null | grep -q libtbb.so; then
+  echo "System TBB found; skipping local build."
+elif [ -f "${TBB_LOCAL}/lib/libtbb.so" ]; then
+  echo "Local TBB found; skipping build."
 else
-  echo "Fast mode enabled; skipping KaHIP download and build."
+  echo "TBB not found; building from source..."
+  TBB_VERSION="v2021.13.0"
+  (
+    cd "${ROOT}/extern"
+    wget -q -O tbb.tar.gz "https://github.com/oneapi-src/oneTBB/archive/refs/tags/${TBB_VERSION}.tar.gz"
+    tar -xzf tbb.tar.gz
+    rm -f tbb.tar.gz
+    mv oneTBB-* oneTBB
+    cmake -S oneTBB -B oneTBB/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX="${TBB_LOCAL}" \
+      -DTBB_TEST=OFF
+    cmake --build oneTBB/build --target install --parallel "$JOBS"
+  )
 fi
 
 # -----------------------------
@@ -95,5 +115,11 @@ fi
 echo "Building HeiProMap Release..."
 rm -rf "${ROOT}/build"
 mkdir "${ROOT}/build"
-cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE=Release
+
+CMAKE_EXTRA_ARGS=""
+if [ -f "${TBB_LOCAL}/lib/libtbb.so" ]; then
+  CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL}"
+fi
+
+cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA_ARGS}
 cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap

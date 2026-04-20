@@ -41,6 +41,11 @@ message(STATUS "ENABLE_PROFILER    : ${ENABLE_PROFILER}")
 find_package(OpenMP REQUIRED)
 
 # ---------------------------
+# TBB
+# ---------------------------
+find_package(TBB REQUIRED)
+
+# ---------------------------
 # KaHIP selection by config
 # ---------------------------
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -67,6 +72,7 @@ message(STATUS "Selected KaHIP root : ${KAHIP_ROOT}")
 message(STATUS "Found KaHIP library : ${KAHIP_LIBRARY}")
 message(STATUS "Found KaHIP include : ${KAHIP_INCLUDE_DIR}")
 message(STATUS "Found OpenMP        : ${OpenMP_CXX_FOUND}")
+message(STATUS "Found TBB           : ${TBB_FOUND}")
 
 if(NOT KAHIP_LIBRARY OR NOT KAHIP_INCLUDE_DIR)
     message(FATAL_ERROR "KaHIP not found under ${KAHIP_ROOT}")
@@ -98,8 +104,8 @@ target_include_directories(HeiProMap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
 target_link_libraries(HeiProMap PUBLIC
         ${KAHIP_LIBRARY}
         OpenMP::OpenMP_CXX
+        TBB::tbb
         m
-        tbb
 )
 
 set_target_properties(HeiProMap PROPERTIES
