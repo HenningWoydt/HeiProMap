@@ -33,7 +33,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL TRUE)
 
 set(ENABLE_PROFILER OFF CACHE BOOL "Enable profiler")
-message(STATUS "ENABLE_PROFILER    : ${ENABLE_PROFILER}")
+set(ENABLE_ASSERTS OFF CACHE BOOL "Enable assertions")
 
 # ---------------------------
 # OpenMP
@@ -68,11 +68,27 @@ find_path(KAHIP_INCLUDE_DIR
 )
 
 message(STATUS "Build type          : ${CMAKE_BUILD_TYPE}")
+message(STATUS "ENABLE_PROFILER     : ${ENABLE_PROFILER}")
+message(STATUS "ENABLE_ASSERTS      : ${ENABLE_ASSERTS}")
 message(STATUS "Selected KaHIP root : ${KAHIP_ROOT}")
 message(STATUS "Found KaHIP library : ${KAHIP_LIBRARY}")
 message(STATUS "Found KaHIP include : ${KAHIP_INCLUDE_DIR}")
-message(STATUS "Found OpenMP        : ${OpenMP_CXX_FOUND}")
-message(STATUS "Found TBB           : ${TBB_FOUND}")
+if(OpenMP_CXX_FOUND)
+    message(STATUS "Found OpenMP        : TRUE")
+    message(STATUS "OpenMP version      : ${OpenMP_CXX_VERSION}")
+else()
+    message(STATUS "Found OpenMP        : FALSE")
+endif()
+if(TBB_FOUND)
+    message(STATUS "Found TBB           : TRUE")
+else()
+    message(STATUS "Found TBB           : FALSE")
+endif()
+message(STATUS "TBB version         : ${TBB_VERSION}")
+if(TARGET TBB::tbb)
+    get_target_property(_TBB_INCLUDE TBB::tbb INTERFACE_INCLUDE_DIRECTORIES)
+    message(STATUS "TBB include         : ${_TBB_INCLUDE}")
+endif()
 
 if(NOT KAHIP_LIBRARY OR NOT KAHIP_INCLUDE_DIR)
     message(FATAL_ERROR "KaHIP not found under ${KAHIP_ROOT}")
@@ -115,3 +131,13 @@ set_target_properties(HeiProMap PROPERTIES
 target_link_options(HeiProMap PRIVATE
         "-Wl,--disable-new-dtags"
 )
+
+if(ENABLE_PROFILER)
+    target_compile_definitions(HeiProMap PRIVATE ENABLE_PROFILER=1)
+else()
+    target_compile_definitions(HeiProMap PRIVATE ENABLE_PROFILER=0)
+endif()
+
+if(ENABLE_ASSERTS)
+    target_compile_definitions(HeiProMap PRIVATE ASSERT_ENABLED=true)
+endif()

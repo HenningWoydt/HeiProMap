@@ -37,7 +37,7 @@
 #include "ISerialRefiner.h"
 #include "quotient_graph_refinement.h"
 #include "../utility/flow.h"
-#include "../utility/flow_algorithm_adapters.h"
+#include "../utility/push_relabel.h"
 #include "../utility/random_engine.h"
 #include "../utility/utils.h"
 #include "../utility/assert_state.h"
@@ -72,7 +72,21 @@ namespace HeiProMap {
 
         const FlowBasedRefinementConfiguration *config = nullptr;
         std::vector<RandomEngine> rnd_engines;
-        std::vector<HeiProMap::MemoryStack> flow_mem_stacks;
+
+        // per-thread persistent storage to avoid repeated allocations
+        std::vector<std::vector<vertex_t>> left_boundaries;
+        std::vector<std::vector<vertex_t>> right_boundaries;
+        std::vector<std::vector<vertex_t>> left_regions;
+        std::vector<std::vector<vertex_t>> right_regions;
+        std::vector<std::vector<vertex_t>> queues;
+        std::vector<std::vector<u8>> is_left_vecs;
+        std::vector<std::vector<u8>> is_left_2_vecs;
+        std::vector<std::vector<u8>> s_connected_vecs;
+        std::vector<std::vector<u8>> t_connected_vecs;
+        std::vector<PushRelabel<int>> prs;
+        std::vector<MemoryStack> pr_mems;
+        std::vector<ResidualFlowNetwork> residual_flow_networks;
+        std::vector<SCCGraph> scc_graphs;
 
     public:
         FlowBasedRefinement() = default;
@@ -109,7 +123,20 @@ namespace HeiProMap {
             for (u64 t = 0; t < m_threads; ++t) {
                 rnd_engines[t] = RandomEngine(seed + t);
             }
-            flow_mem_stacks.resize(m_threads);
+
+            left_boundaries.resize(m_threads);
+            right_boundaries.resize(m_threads);
+            left_regions.resize(m_threads);
+            right_regions.resize(m_threads);
+            queues.resize(m_threads);
+            is_left_vecs.resize(m_threads);
+            is_left_2_vecs.resize(m_threads);
+            s_connected_vecs.resize(m_threads);
+            t_connected_vecs.resize(m_threads);
+            prs.resize(m_threads);
+            pr_mems.resize(m_threads);
+            residual_flow_networks.resize(m_threads);
+            scc_graphs.resize(m_threads);
         }
 
         void refine(graph_t &g,
@@ -177,7 +204,7 @@ namespace HeiProMap {
                             partition_t v_id = matching[i].second;
 
                             u64 thread_id = omp_get_thread_num();
-                            refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                         }
 
                         //
@@ -231,7 +258,7 @@ namespace HeiProMap {
                         partition_t v_id = pairs[i].second;
 
                         u64 thread_id = 0;
-                        refine_blocks(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                        refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                     }
 
 
@@ -246,6 +273,7 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_blocks(graph_t &g,
                            d_oracle_t &d_oracle,
                            bv_manager_t &bv_manager,
@@ -272,26 +300,28 @@ namespace HeiProMap {
             u64 max_local_iteration = config->max_local_iteration;
             u64 iteration = 0;
 
-            std::vector<vertex_t> left_boundary;
-            std::vector<vertex_t> right_boundary;
+            std::vector<vertex_t> &left_boundary = left_boundaries[thread_id];
+            std::vector<vertex_t> &right_boundary = right_boundaries[thread_id];
             weight_t left_boundary_weight;
             weight_t right_boundary_weight;
 
-            std::vector<vertex_t> left_region;
-            std::vector<vertex_t> right_region;
+            std::vector<vertex_t> &left_region = left_regions[thread_id];
+            std::vector<vertex_t> &right_region = right_regions[thread_id];
 
-            // EIBFSAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
-            PushRelabelAdapter<int, int, int> flow_network(flow_mem_stacks[thread_id]);
-            ResidualFlowNetwork residual_flow_network;
-            SCCGraph scc_graph;
+            PushRelabel<int> &pr = prs[thread_id];
+            MemoryStack &pr_mem = pr_mems[thread_id];
+            ResidualFlowNetwork &residual_flow_network = residual_flow_networks[thread_id];
+            SCCGraph &scc_graph = scc_graphs[thread_id];
 
             TranslationTable<vertex_t> &translation_table = translation_tables[thread_id];
             AlignedArray<u32> &seen = seen_vecs[thread_id];
             AlignedArray<u32> &region_marker = region_vecs[thread_id];
 
-            std::vector<vertex_t> queue;
-            std::vector<u8> is_left;
-            std::vector<u8> is_left_2;
+            std::vector<vertex_t> &queue = queues[thread_id];
+            std::vector<u8> &is_left = is_left_vecs[thread_id];
+            std::vector<u8> &is_left_2 = is_left_2_vecs[thread_id];
+            std::vector<u8> &s_connected = s_connected_vecs[thread_id];
+            std::vector<u8> &t_connected = t_connected_vecs[thread_id];
 
             while (iteration < max_local_iteration) {
                 left_boundary.clear();
@@ -304,7 +334,7 @@ namespace HeiProMap {
                 iteration += 1;
 
                 // get boundary vertices
-                determine_boundary_vertices(g, bv_manager, p_manager, block_conn, left_id, right_id, left_boundary, right_boundary, left_boundary_weight, right_boundary_weight, random_engine);
+                determine_boundary_vertices<t_uniform_v_weights>(g, bv_manager, p_manager, block_conn, left_id, right_id, left_boundary, right_boundary, left_boundary_weight, right_boundary_weight, random_engine);
 
                 // calc max weight for each bfs
                 weight_t adapt_lmax = std::ceil((1.0 + (imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k));
@@ -317,8 +347,8 @@ namespace HeiProMap {
                 u32 right_mark = region_mark;
                 seen_mark += 2;
 
-                weight_t left_region_weight = determine_region(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_region, left_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
-                weight_t right_region_weight = determine_region(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
+                weight_t left_region_weight = determine_region<false>(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_region, left_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
+                weight_t right_region_weight = determine_region<false>(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
 
                 if (left_region.size() + right_region.size() == 0) {
                     if (alpha >= alpha_upper_bound) { return; }
@@ -332,27 +362,32 @@ namespace HeiProMap {
                 for (size_t i = 0; i < right_region.size(); ++i) { translation_table.add(right_region[i], new_u++); }
 
                 if (!d_oracle.last_level_pair(left_id, right_id)) {
-                    build_flow_network_with_penalties(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, flow_network, translation_table, region_marker, region_mark);
+                    build_flow_network_with_penalties<t_uniform_e_weights>(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
                 } else {
-                    build_flow_network_no_penalties(g, p_manager, left_id, right_id, left_region, right_region, flow_network, translation_table, region_marker, region_mark);
+                    build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
                 }
 
                 // solve the flow network
                 {
-                    flow_network.solve();
+                    ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_maxflow");
+                    pr.maxflow();
                 }
 
                 // get the cut
                 {
                     ScopedTimer _t("refinement", "FlowBasedRefinement", "get_cut");
-                    flow_network.get_cut(is_left);
+                    size_t flow_n = left_region.size() + right_region.size();
+                    is_left.resize(flow_n);
+                    for (size_t i = 0; i < flow_n; ++i) {
+                        is_left[i] = (pr.what_label(static_cast<int>(i)) == SOURCE) ? 1 : 0;
+                    }
                 }
 
                 bool is_valid;
                 // check if cut is valid
                 {
                     ScopedTimer _t("refinement", "FlowBasedRefinement", "cut_is_valid");
-                    is_valid = cut_is_valid(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
+                    is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
                 }
 
                 if (!is_valid && !config->use_closed_vertex_set) {
@@ -362,10 +397,11 @@ namespace HeiProMap {
                 }
 
                 if (config->use_closed_vertex_set) {
-                    // build residual network
+                    // build residual network from cut labels
                     {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "build_residual_network");
-                        flow_network.build_residual_network(residual_flow_network);
+                        build_residual_from_cut(g, pr, left_region, right_region, translation_table, region_marker, region_mark, s_connected, t_connected, residual_flow_network);
+                        residual_flow_network.finalize();
                     }
                     // build scc graph
                     {
@@ -383,7 +419,8 @@ namespace HeiProMap {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "scc_find");
                         weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
                         weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
-                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, config->closed_vertex_sets_repeats, random_engine, is_left_2);
+                        f64 avg_weight = (f64) g.g_weight / (f64) m_k;
+                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
                     }
                     //
                     if (!closure_found) {
@@ -404,13 +441,14 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                change_boundary(g, bv_manager, p_manager, q_graph, block_conn, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
+                change_boundary<false>(g, bv_manager, p_manager, q_graph, block_conn, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
 
                 active_next_round[left_id] = 1;
                 active_next_round[right_id] = 1;
             }
         }
 
+        template<bool t_uniform_v_weights>
         void determine_boundary_vertices(const graph_t &g,
                                          const bv_manager_t &bv_manager,
                                          const p_manager_t &p_manager,
@@ -431,7 +469,7 @@ namespace HeiProMap {
                         {
                             if (id == right_id) {
                                 left_boundary.push_back(u);
-                                left_boundary_weight += g.v_weights[u];
+                                left_boundary_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
                                 break;
                             }
                         }
@@ -447,7 +485,7 @@ namespace HeiProMap {
                         {
                             if (id == left_id) {
                                 right_boundary.push_back(u);
-                                right_boundary_weight += g.v_weights[u];
+                                right_boundary_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
                                 break;
                             }
                         }
@@ -457,6 +495,7 @@ namespace HeiProMap {
             fast_shuffle_unchecked(right_boundary.data(), right_boundary.data() + right_boundary.size(), random_engine.generator);
         }
 
+        template<bool t_uniform_v_weights>
         weight_t determine_region(const graph_t &g,
                                   const p_manager_t &p_manager,
                                   partition_t id,
@@ -491,10 +530,10 @@ namespace HeiProMap {
                 vertex_t u = queue[queue_idx++];
                 if (seen[u] == seen_mark) { continue; }
 
-                if (curr_weight + g.v_weights[u] <= max_weight) {
+                if (curr_weight + (t_uniform_v_weights ? 1 : g.v_weights[u]) <= max_weight) {
                     region.push_back(u);
                     region_marker[u] = mark;
-                    curr_weight += g.v_weights[u];
+                    curr_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
                     forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
@@ -513,6 +552,7 @@ namespace HeiProMap {
             return curr_weight;
         }
 
+        template<bool t_uniform_e_weights>
         void build_flow_network_with_penalties(const graph_t &g,
                                                const p_manager_t &p_manager,
                                                d_oracle_t &d_oracle,
@@ -520,10 +560,13 @@ namespace HeiProMap {
                                                partition_t right_id,
                                                std::vector<vertex_t> &left_region,
                                                std::vector<vertex_t> &right_region,
-                                               IFlowAlgorithm<int, int, int> &flow_network,
+                                               PushRelabel<int> &pr,
+                                               MemoryStack &pr_mem,
                                                TranslationTable<vertex_t> &translation_table,
                                                AlignedArray<u32> &region_marker,
-                                               u32 &region_mark) {
+                                               u32 &region_mark,
+                                               std::vector<u8> &s_connected,
+                                               std::vector<u8> &t_connected) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "build_flow_network_with_penalties");
 
             u32 left_mark = region_mark - 1;
@@ -531,214 +574,258 @@ namespace HeiProMap {
 
             weight_t distance = d_oracle.get(left_id, right_id);
 
-            size_t n = left_region.size() + right_region.size();
-            flow_network.initialize(n);
+            int n = static_cast<int>(left_region.size() + right_region.size());
+            int src = n, snk = n + 1;
+
+            // loose upper bound: sum of degrees + 2 terminal edges per vertex
+            int m = 2 * n;
+            for (size_t j = 0; j < left_region.size(); ++j) {
+                m += static_cast<int>(g.neighborhoods[left_region[j] + 1] - g.neighborhoods[left_region[j]]);
+            }
+            for (size_t j = 0; j < right_region.size(); ++j) {
+                m += static_cast<int>(g.neighborhoods[right_region[j] + 1] - g.neighborhoods[right_region[j]]);
+            }
+
+            pr.init(n + 2, src, snk, m, pr_mem);
+            s_connected.assign(n, 0);
+            t_connected.assign(n, 0);
 
             // build left region: left-left, left-right, and penalties
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
-                ASSERT(region_marker[u] == left_mark);
-
-                vertex_t new_u = translation_table.get_n(u);
-                weight_t left_penalty = 0;
-                weight_t right_penalty = 0;
+                int new_u = static_cast<int>(translation_table.get_n(u));
+                int left_penalty = 0;
+                int right_penalty = 0;
 
                 forall_guivw(g, u, i, v, w)
                     {
                         if (region_marker[v] == right_mark) {
-                            vertex_t new_v = translation_table.get_n(v);
-                            ASSERT(new_u != new_v);
-                            flow_network.add(new_u, new_v, w * distance);
+                            int new_v = static_cast<int>(translation_table.get_n(v));
+                            int cap = t_uniform_e_weights ? static_cast<int>(distance) : static_cast<int>(w * distance);
+                            pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         if (region_marker[v] == left_mark) {
-                            if (u < v) { continue; } // no double edges
-
-                            vertex_t new_v = translation_table.get_n(v);
-                            ASSERT(new_u != new_v);
-                            flow_network.add(new_u, new_v, w * distance);
+                            if (u < v) { continue; }
+                            int new_v = static_cast<int>(translation_table.get_n(v));
+                            int cap = t_uniform_e_weights ? static_cast<int>(distance) : static_cast<int>(w * distance);
+                            pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         partition_t v_id = p_manager[v];
-                        left_penalty += w * d_oracle.get(left_id, v_id);
-                        right_penalty += w * d_oracle.get(right_id, v_id);
+                        if constexpr (t_uniform_e_weights) {
+                            left_penalty += static_cast<int>(d_oracle.get(left_id, v_id));
+                            right_penalty += static_cast<int>(d_oracle.get(right_id, v_id));
+                        } else {
+                            left_penalty += static_cast<int>(w * d_oracle.get(left_id, v_id));
+                            right_penalty += static_cast<int>(w * d_oracle.get(right_id, v_id));
+                        }
                     }
                 endfor
 
-                if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
-                if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
+                if (left_penalty > 0) { pr.add_edge(new_u, snk, left_penalty); t_connected[new_u] = 1; }
+                if (right_penalty > 0) { pr.add_edge(src, new_u, right_penalty); s_connected[new_u] = 1; }
             }
 
             // build right region: only right-right and penalties
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
-                ASSERT(region_marker[u] == right_mark);
-
-                vertex_t new_u = translation_table.get_n(u);
-                weight_t left_penalty = 0;
-                weight_t right_penalty = 0;
+                int new_u = static_cast<int>(translation_table.get_n(u));
+                int left_penalty = 0;
+                int right_penalty = 0;
 
                 forall_guivw(g, u, i, v, w)
                     {
                         if (region_marker[v] == right_mark) {
-                            if (u < v) { continue; } // no double edges
-
-                            vertex_t new_v = translation_table.get_n(v);
-                            ASSERT(new_u != new_v);
-                            flow_network.add(new_u, new_v, w * distance);
+                            if (u < v) { continue; }
+                            int new_v = static_cast<int>(translation_table.get_n(v));
+                            int cap = t_uniform_e_weights ? static_cast<int>(distance) : static_cast<int>(w * distance);
+                            pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         if (region_marker[v] == left_mark) {
-                            continue; // cross edges already handled in left loop
+                            continue;
                         }
 
                         partition_t v_id = p_manager[v];
-                        left_penalty += w * d_oracle.get(left_id, v_id);
-                        right_penalty += w * d_oracle.get(right_id, v_id);
+                        if constexpr (t_uniform_e_weights) {
+                            left_penalty += static_cast<int>(d_oracle.get(left_id, v_id));
+                            right_penalty += static_cast<int>(d_oracle.get(right_id, v_id));
+                        } else {
+                            left_penalty += static_cast<int>(w * d_oracle.get(left_id, v_id));
+                            right_penalty += static_cast<int>(w * d_oracle.get(right_id, v_id));
+                        }
                     }
                 endfor
 
-                if (left_penalty > 0) { flow_network.add_t_edge(new_u, left_penalty); }
-                if (right_penalty > 0) { flow_network.add_s_edge(new_u, right_penalty); }
+                if (left_penalty > 0) { pr.add_edge(new_u, snk, left_penalty); t_connected[new_u] = 1; }
+                if (right_penalty > 0) { pr.add_edge(src, new_u, right_penalty); s_connected[new_u] = 1; }
             }
         }
 
+        template<bool t_uniform_e_weights>
         void build_flow_network_no_penalties(const graph_t &g,
                                              const p_manager_t &p_manager,
                                              partition_t left_id,
                                              partition_t right_id,
                                              std::vector<vertex_t> &left_region,
                                              std::vector<vertex_t> &right_region,
-                                             IFlowAlgorithm<int, int, int> &flow_network,
+                                             PushRelabel<int> &pr,
+                                             MemoryStack &pr_mem,
                                              TranslationTable<vertex_t> &translation_table,
                                              AlignedArray<u32> &region_marker,
-                                             u32 &region_mark) {
+                                             u32 &region_mark,
+                                             std::vector<u8> &s_connected,
+                                             std::vector<u8> &t_connected) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "build_flow_network_no_penalties");
 
             u32 left_mark = region_mark - 1;
             u32 right_mark = region_mark;
 
-            size_t n = left_region.size() + right_region.size();
-            flow_network.initialize(n);
+            int n = static_cast<int>(left_region.size() + right_region.size());
+            int src = n, snk = n + 1;
+
+            // loose upper bound: sum of degrees + 2 terminal edges per vertex
+            int m = 2 * n;
+            for (size_t j = 0; j < left_region.size(); ++j) {
+                m += static_cast<int>(g.neighborhoods[left_region[j] + 1] - g.neighborhoods[left_region[j]]);
+            }
+            for (size_t j = 0; j < right_region.size(); ++j) {
+                m += static_cast<int>(g.neighborhoods[right_region[j] + 1] - g.neighborhoods[right_region[j]]);
+            }
+
+            pr.init(n + 2, src, snk, m, pr_mem);
+            s_connected.assign(n, 0);
+            t_connected.assign(n, 0);
 
             // build left region
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
-                ASSERT(region_marker[u] == left_mark);
-
-                weight_t w_left = 0;
-                weight_t w_right = 0;
+                int new_u = static_cast<int>(translation_table.get_n(u));
+                int w_left = 0;
+                int w_right = 0;
 
                 forall_guivw(g, u, i, v, w)
                     {
-                        if (region_marker[v] == left_mark) {
-                            // v belongs to the left region
-                            if (u < v) { continue; } // no double edges
-
-                            vertex_t new_u = translation_table.get_n(u);
-                            vertex_t new_v = translation_table.get_n(v);
-
-                            ASSERT(new_u != new_v);
-
-                            flow_network.add(new_u, new_v, w);
-                            continue;
-                        }
-
-                        if (region_marker[v] == right_mark) {
-                            // v belongs to the right region
-                            if (u < v) { continue; } // no double edges
-
-                            vertex_t new_u = translation_table.get_n(u);
-                            vertex_t new_v = translation_table.get_n(v);
-
-                            ASSERT(new_u != new_v);
-
-                            flow_network.add(new_u, new_v, w);
+                        if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
+                            if (u < v) { continue; }
+                            int new_v = static_cast<int>(translation_table.get_n(v));
+                            int cap = t_uniform_e_weights ? 1 : static_cast<int>(w);
+                            pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         partition_t v_id = p_manager[v];
-
-                        if (v_id == left_id) {
-                            // v belongs to left block, but not left region
-                            w_left += w;
-                            continue;
-                        }
-
-                        if (v_id == right_id) {
-                            // v belongs to right block, but not right region
-                            w_right += w;
-                            continue;
-                        }
+                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); }
+                        else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                     }
                 endfor
 
-                vertex_t new_u = translation_table.get_n(u);
-                if (w_left > 0) { flow_network.add_s_edge(new_u, w_left); }
-                if (w_right > 0) { flow_network.add_t_edge(new_u, w_right); }
+                if (w_left > 0) { pr.add_edge(src, new_u, w_left); s_connected[new_u] = 1; }
+                if (w_right > 0) { pr.add_edge(new_u, snk, w_right); t_connected[new_u] = 1; }
             }
 
             // build right region
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
-                ASSERT(region_marker[u] == right_mark);
-
-                weight_t w_left = 0;
-                weight_t w_right = 0;
+                int new_u = static_cast<int>(translation_table.get_n(u));
+                int w_left = 0;
+                int w_right = 0;
 
                 forall_guivw(g, u, i, v, w)
                     {
-                        if (region_marker[v] == left_mark) {
-                            // v belongs to the left region
-                            if (u < v) { continue; } // no double edges
-
-                            vertex_t new_u = translation_table.get_n(u);
-                            vertex_t new_v = translation_table.get_n(v);
-
-                            ASSERT(new_u != new_v);
-
-                            flow_network.add(new_u, new_v, w);
-                            continue;
-                        }
-
-                        if (region_marker[v] == right_mark) {
-                            // v belongs to the right region
-                            if (u < v) { continue; } // no double edges
-
-                            vertex_t new_u = translation_table.get_n(u);
-                            vertex_t new_v = translation_table.get_n(v);
-
-                            ASSERT(new_u != new_v);
-
-                            flow_network.add(new_u, new_v, w);
+                        if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
+                            if (u < v) { continue; }
+                            int new_v = static_cast<int>(translation_table.get_n(v));
+                            int cap = t_uniform_e_weights ? 1 : static_cast<int>(w);
+                            pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         partition_t v_id = p_manager[v];
-
-                        if (v_id == left_id) {
-                            // v belongs to left block, but not left region
-                            w_left += w;
-                            continue;
-                        }
-
-                        if (v_id == right_id) {
-                            // v belongs to right block, but not right region
-                            w_right += w;
-                            continue;
-                        }
+                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); }
+                        else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                     }
                 endfor
 
-                vertex_t new_u = translation_table.get_n(u);
-                if (w_left > 0) { flow_network.add_s_edge(new_u, w_left); }
-                if (w_right > 0) { flow_network.add_t_edge(new_u, w_right); }
+                if (w_left > 0) { pr.add_edge(src, new_u, w_left); s_connected[new_u] = 1; }
+                if (w_right > 0) { pr.add_edge(new_u, snk, w_right); t_connected[new_u] = 1; }
             }
         }
 
+        void build_residual_from_cut(const graph_t &g,
+                                     PushRelabel<int> &pr,
+                                     std::vector<vertex_t> &left_region,
+                                     std::vector<vertex_t> &right_region,
+                                     TranslationTable<vertex_t> &translation_table,
+                                     AlignedArray<u32> &region_marker,
+                                     u32 &region_mark,
+                                     std::vector<u8> &s_connected,
+                                     std::vector<u8> &t_connected,
+                                     ResidualFlowNetwork &residual_g) {
+            u32 left_mark = region_mark - 1;
+            u32 right_mark = region_mark;
+            vertex_t flow_n = left_region.size() + right_region.size();
+
+            residual_g.initialize(flow_n);
+
+            // Internal edges from cut labels
+            auto add_region_edges = [&](std::vector<vertex_t> &region) {
+                for (size_t j = 0; j < region.size(); ++j) {
+                    vertex_t u = region[j];
+                    int new_u = static_cast<int>(translation_table.get_n(u));
+                    bool u_src = (pr.what_label(new_u) == SOURCE);
+
+                    forall_guiv(g, u, i, v)
+                        {
+                            if (region_marker[v] != left_mark && region_marker[v] != right_mark) { continue; }
+                            if (u < v) { continue; }
+
+                            int new_v = static_cast<int>(translation_table.get_n(v));
+                            bool v_src = (pr.what_label(new_v) == SOURCE);
+
+                            if (u_src == v_src) {
+                                residual_g.add_directed_edge(new_u, new_v, 1);
+                                residual_g.add_directed_edge(new_v, new_u, 1);
+                            } else if (u_src) {
+                                residual_g.add_directed_edge(new_v, new_u, 1);
+                            } else {
+                                residual_g.add_directed_edge(new_u, new_v, 1);
+                            }
+                        }
+                    endfor
+                }
+            };
+
+            add_region_edges(left_region);
+            add_region_edges(right_region);
+
+            // Terminal edges from tracked connectivity
+            for (vertex_t i = 0; i < flow_n; ++i) {
+                bool u_src = (pr.what_label(static_cast<int>(i)) == SOURCE);
+                if (s_connected[i]) {
+                    if (u_src) {
+                        residual_g.add_edge_from_source(i, 1);
+                        residual_g.add_edge_to_source(i, 1);
+                    } else {
+                        residual_g.add_edge_to_source(i, 1);
+                    }
+                }
+                if (t_connected[i]) {
+                    if (!u_src) {
+                        residual_g.add_edge_to_target(i, 1);
+                        residual_g.add_edge_from_target(i, 1);
+                    } else {
+                        residual_g.add_edge_from_target(i, 1);
+                    }
+                }
+            }
+        }
+
+        template<bool t_uniform_v_weights>
         bool cut_is_valid(const graph_t &g,
                           const p_manager_t &p_manager,
                           partition_t left_id,
@@ -754,7 +841,7 @@ namespace HeiProMap {
             weight_t right_weight = p_manager.get_bweight(right_id);
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
-                weight_t u_weight = g.v_weights[u];
+                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
                 vertex_t new_u = translation_table.get_n(u);
                 if (is_left[new_u] == 0) {
                     left_weight -= u_weight;
@@ -764,7 +851,7 @@ namespace HeiProMap {
 
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
-                weight_t u_weight = g.v_weights[u];
+                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
                 vertex_t new_u = translation_table.get_n(u);
                 if (is_left[new_u] == 1) {
                     right_weight -= u_weight;
@@ -799,6 +886,7 @@ namespace HeiProMap {
             return false;
         }
 
+        template<bool t_uniform_v_weights>
         std::vector<u8> change_boundary(const graph_t &g,
                                         bv_manager_t &bv_manager,
                                         p_manager_t &p_manager,
@@ -836,7 +924,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, u, left_id, right_id);
                     block_conn.move(g, u, left_id, right_id);
-                    p_manager.move(u, g.v_weights[u], left_id, right_id);
+                    p_manager.move(u, t_uniform_v_weights ? 1 : g.v_weights[u], left_id, right_id);
                 }
             }
             for (size_t j = 0; j < right_region.size(); ++j) {
@@ -856,12 +944,13 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, u, right_id, left_id);
                     block_conn.move(g, u, right_id, left_id);
-                    p_manager.move(u, g.v_weights[u], right_id, left_id);
+                    p_manager.move(u, t_uniform_v_weights ? 1 : g.v_weights[u], right_id, left_id);
                 }
             }
             return changed;
         }
 
+        template<bool t_uniform_v_weights>
         void revert_boundary(const graph_t &g,
                              bv_manager_t &bv_manager,
                              p_manager_t &p_manager,
@@ -888,7 +977,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, old_u, left_id, right_id);
                     block_conn.move(g, old_u, left_id, right_id);
-                    p_manager.move(old_u, g.v_weights[old_u], left_id, right_id);
+                    p_manager.move(old_u, t_uniform_v_weights ? 1 : g.v_weights[old_u], left_id, right_id);
                 } else {
                     if (bv_manager.is_boundary(old_u)) {
                         bv_manager.move(g, p_manager, old_u, right_id, left_id);
@@ -898,7 +987,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, old_u, right_id, left_id);
                     block_conn.move(g, old_u, right_id, left_id);
-                    p_manager.move(old_u, g.v_weights[old_u], right_id, left_id);
+                    p_manager.move(old_u, t_uniform_v_weights ? 1 : g.v_weights[old_u], right_id, left_id);
                 }
             }
         }

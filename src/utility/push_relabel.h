@@ -5,37 +5,11 @@
 #include <cstring>
 #include <algorithm>
 
-namespace my_pr {
+#include "memory_stack.h"
+
+namespace HeiProMap {
 
 enum Label : int { SOURCE = 0, SINK = 1 };
-
-inline size_t align64(size_t n) { return (n + 63) & ~size_t(63); }
-
-class MemoryStack {
-    char* buf = nullptr;
-    size_t cap = 0, off = 0;
-public:
-    ~MemoryStack() { std::free(buf); }
-    MemoryStack() = default;
-    MemoryStack(const MemoryStack&) = delete;
-    MemoryStack& operator=(const MemoryStack&) = delete;
-
-    void ensure(size_t bytes) {
-        bytes = align64(bytes);
-        if (bytes > cap) {
-            std::free(buf);
-            buf = static_cast<char*>(std::aligned_alloc(64, bytes));
-            cap = bytes;
-        }
-    }
-    void* alloc(size_t bytes) {
-        bytes = align64(bytes);
-        void* p = buf + off;
-        off += bytes;
-        return p;
-    }
-    void reset() { off = 0; }
-};
 
 template<class T>
 class Array {
@@ -88,7 +62,6 @@ class PushRelabel {
     int tmp_count;
 
     Array<int> init_side;  // n: 0=sink, 1=source (warm-start)
-    bool has_warm_start;
 
     MemoryStack* mem;
 
@@ -205,14 +178,13 @@ public:
     PushRelabel() : n(0), s(0), t(0), total_arcs(0), max_active(0),
         fifo_head(0), fifo_tail(0),
         work(0), work_limit(0), phase2(false), tmp_count(0),
-        has_warm_start(false), mem(nullptr) {}
+         mem(nullptr) {}
 
     void init(int n_, int s_, int t_, int m, MemoryStack& stack) {
         n = n_; s = s_; t = t_;
         mem = &stack;
         tmp_count = 0;
         total_arcs = 2 * m;
-        has_warm_start = false;
 
         int bkt_size = 2 * n + 1;
         size_t tmp_or_bfs = std::max(align64(m * sizeof(TmpEdge)), align64(n * sizeof(int)));
@@ -231,34 +203,26 @@ public:
                     + tmp_or_bfs;                       // tmp_edges / bfs_queue
 
         mem->ensure(need);
-        mem->reset();
+        mem->clear();
 
-        arcs.init(mem->alloc(total_arcs * sizeof(Arc)));
-        first.init(mem->alloc((n + 1) * sizeof(int)));
-        excess.init(mem->alloc(n * sizeof(Cap)));
-        height.init(mem->alloc(n * sizeof(int)));
-        cur.init(mem->alloc(n * sizeof(int)));
-        cnt.init(mem->alloc(bkt_size * sizeof(int)));
-        bucket_head.init(mem->alloc(bkt_size * sizeof(int)));
-        bucket_next.init(mem->alloc(n * sizeof(int)));
-        fifo.init(mem->alloc(n * sizeof(int)));
-        in_fifo.init(mem->alloc(n * sizeof(int)));
-        init_side.init(mem->alloc(n * sizeof(int)));
-        void* shared = mem->alloc(tmp_or_bfs);
+        arcs.init(mem->get_memory(total_arcs * sizeof(Arc)));
+        first.init(mem->get_memory((n + 1) * sizeof(int)));
+        excess.init(mem->get_memory(n * sizeof(Cap)));
+        height.init(mem->get_memory(n * sizeof(int)));
+        cur.init(mem->get_memory(n * sizeof(int)));
+        cnt.init(mem->get_memory(bkt_size * sizeof(int)));
+        bucket_head.init(mem->get_memory(bkt_size * sizeof(int)));
+        bucket_next.init(mem->get_memory(n * sizeof(int)));
+        fifo.init(mem->get_memory(n * sizeof(int)));
+        in_fifo.init(mem->get_memory(n * sizeof(int)));
+        init_side.init(mem->get_memory(n * sizeof(int)));
+        void* shared = mem->get_memory(tmp_or_bfs);
         tmp_edges.init(shared);
         bfs_queue.init(shared);
     }
 
     void add_edge(int u, int v, Cap cap, Cap rev_cap = 0) {
         tmp_edges[tmp_count++] = {u, v, cap, rev_cap};
-    }
-
-    // Set initial cut for warm-start. source_nodes are node IDs on the source side.
-    void set_initial_cut(const int* source_nodes, int count) {
-        std::memset(init_side.data(), 0, n * sizeof(int));
-        for (int i = 0; i < count; i++)
-            init_side[source_nodes[i]] = 1;
-        has_warm_start = true;
     }
 
     void build() {
@@ -317,35 +281,6 @@ public:
             }
         }
 
-        if (has_warm_start) {
-            // Pre-route flow along cut edges: for each source-side node u
-            // with excess, push as much as possible through edges to
-            // sink-side neighbors. This simulates the flow implied by the
-            // initial cut, so push-relabel only needs to fix the delta.
-            for (int u = 0; u < n; u++) {
-                if (!init_side[u] || u == s || excess[u] <= 0) continue;
-                for (int i = first[u]; i < first[u + 1]; i++) {
-                    if (excess[u] <= 0) break;
-                    int v = arcs[i].to;
-                    // Push to sink-side neighbors (not s, not t)
-                    if (init_side[v] || v == s || arcs[i].cap <= 0) continue;
-                    Cap d = std::min(excess[u], arcs[i].cap);
-                    arcs[i].cap -= d;
-                    arcs[arcs[i].rev].cap += d;
-                    excess[u] -= d;
-                    excess[v] += d;
-                }
-            }
-            // Now sink-side nodes may have more excess; source-side nodes
-            // may have less (or zero). Re-enqueue everyone with excess.
-            fifo_head = fifo_tail = 0;
-            std::memset(in_fifo.data(), 0, n * sizeof(int));
-            for (int u = 0; u < n; u++) {
-                if (excess[u] > 0 && u != s && u != t)
-                    fifo_enqueue(u);
-            }
-        }
-
         global_relabel();
 
         // Phase 1: FIFO
@@ -398,6 +333,6 @@ public:
     }
 };
 
-} // namespace my_pr
+} // namespace HeiProMap
 
 #endif //FLOW_MY_PR_H

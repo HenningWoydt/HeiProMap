@@ -558,7 +558,7 @@ namespace HeiProMap {
             n_refinement_iterations = 1;
             n_v_cycle = 0;
             first_fast_v_cycle = false;
-            v_cycle_max_depth = 3;
+            v_cycle_max_depth = 100;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";

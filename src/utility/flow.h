@@ -42,7 +42,14 @@ namespace HeiProMap {
         vertex_t n = 0;
         vertex_t source = 0;
         vertex_t target = 0;
-        std::vector<std::vector<EdgeVW> > edges;
+
+        // CSR representation
+        std::vector<vertex_t> offsets;   // size n+3 (n+2 nodes + sentinel)
+        std::vector<vertex_t> neighbors; // flat neighbor array
+
+        // temporary edge buffer used during construction
+        std::vector<std::pair<vertex_t, vertex_t>> edge_buf;
+        std::vector<vertex_t> write_pos;
 
     public:
         ResidualFlowNetwork() = default;
@@ -51,52 +58,37 @@ namespace HeiProMap {
             n = t_n;
             source = n;
             target = n + 1;
-
-            if (edges.size() != n + 2) {
-                edges.resize(n + 2);
-            }
-            for (auto &vec: edges) {
-                vec.clear();
-            }
+            edge_buf.clear();
         }
 
-        void add_directed_edge(vertex_t u, vertex_t v, weight_t w) {
-            // for (auto &e: edges[u]) { ASSERT(e.v != v); }
+        void add_directed_edge(vertex_t u, vertex_t v, [[maybe_unused]] weight_t w) { edge_buf.emplace_back(u, v); }
+        void add_edge_to_source(vertex_t u, [[maybe_unused]] weight_t w) { edge_buf.emplace_back(u, source); }
+        void add_edge_to_target(vertex_t u, [[maybe_unused]] weight_t w) { edge_buf.emplace_back(u, target); }
+        void add_edge_from_source(vertex_t u, [[maybe_unused]] weight_t w) { edge_buf.emplace_back(source, u); }
+        void add_edge_from_target(vertex_t u, [[maybe_unused]] weight_t w) { edge_buf.emplace_back(target, u); }
 
-            edges[u].emplace_back(v, w);
-        }
+        void finalize() {
+            vertex_t total_nodes = n + 2;
+            offsets.assign(total_nodes + 1, 0);
 
-        void add_edge_to_source(vertex_t u, weight_t w) {
-            // for (auto &e: edges[u]) { ASSERT(e.v != source); }
+            for (auto &[u, v]: edge_buf) { offsets[u + 1]++; }
+            for (vertex_t i = 1; i <= total_nodes; ++i) { offsets[i] += offsets[i - 1]; }
 
-            edges[u].emplace_back(source, w);
-        }
-
-        void add_edge_to_target(vertex_t u, weight_t w) {
-            // for (auto &e: edges[u]) { ASSERT(e.v != target); }
-
-            edges[u].emplace_back(target, w);
-        }
-
-        void add_edge_from_source(vertex_t u, weight_t w) {
-            // for (auto &e: edges[source]) { ASSERT(e.v != u); }
-
-            edges[source].emplace_back(u, w);
-        }
-
-        void add_edge_from_target(vertex_t u, weight_t w) {
-            // for (auto &e: edges[target]) { ASSERT(e.v != u); }
-
-            edges[target].emplace_back(u, w);
+            neighbors.resize(edge_buf.size());
+            // use a copy of offsets as write cursors
+            write_pos.assign(offsets.begin(), offsets.begin() + total_nodes);
+            for (auto &[u, v]: edge_buf) { neighbors[write_pos[u]++] = v; }
         }
 
         vertex_t get_n() const { return n; }
-
         vertex_t get_source() const { return source; }
-
         vertex_t get_target() const { return target; }
 
-        const std::vector<EdgeVW> &operator[](vertex_t i) const { return edges[i]; }
+        // CSR access: neighbors of node u are neighbors[offsets[u]..offsets[u+1])
+        vertex_t neighbor_count(vertex_t u) const { return offsets[u + 1] - offsets[u]; }
+        vertex_t neighbor_at(vertex_t u, size_t i) const { return neighbors[offsets[u] + i]; }
+        vertex_t offset_begin(vertex_t u) const { return offsets[u]; }
+        vertex_t offset_end(vertex_t u) const { return offsets[u + 1]; }
     };
 
     class SCCGraph {
@@ -173,8 +165,8 @@ namespace HeiProMap {
             // build the graph and the reversed graph
             for (vertex_t u = 0; u < n; ++u) {
                 vertex_t scc_u = scc_id[u];
-                for (const auto [v, w]: residual_flow_network[u]) {
-                    vertex_t scc_v = scc_id[v];
+                for (size_t j = 0; j < residual_flow_network.neighbor_count(u); ++j) {
+                    vertex_t scc_v = scc_id[residual_flow_network.neighbor_at(u, j)];
                     if (scc_u == scc_v) { continue; }
                     edges[scc_u].emplace_back(scc_v);
                     rev_edges[scc_v].emplace_back(scc_u);
@@ -245,8 +237,8 @@ namespace HeiProMap {
             // build the graph and the reversed graph
             for (vertex_t u = 0; u < n; ++u) {
                 vertex_t scc_u = scc_id[u];
-                for (const auto [v, w]: residual_flow_network[u]) {
-                    vertex_t scc_v = scc_id[v];
+                for (size_t j = 0; j < residual_flow_network.neighbor_count(u); ++j) {
+                    vertex_t scc_v = scc_id[residual_flow_network.neighbor_at(u, j)];
                     if (scc_u == scc_v) { continue; }
                     edges[scc_u].emplace_back(scc_v);
                     rev_edges[scc_v].emplace_back(scc_u);
@@ -339,11 +331,12 @@ namespace HeiProMap {
                                weight_t right_non_region_weight,
                                weight_t left_lmax,
                                weight_t right_lmax,
+                               f64 avg_weight,
                                size_t repeats,
                                RandomEngine &rnd_engine,
                                std::vector<u8> &is_left) {
             bool closure_found = false;
-            weight_t best_diff = -1;
+            f64 best_cost = std::numeric_limits<f64>::max();
             best_closure.resize(n_scc);
 
             // determine which sccs do not have to be considered
@@ -351,6 +344,15 @@ namespace HeiProMap {
             std::fill(is_active.begin(), is_active.end(), 1);
             for (vertex_t scc_u: scc_s_successors) { is_active[scc_u] = 0; }
             for (vertex_t scc_u: scc_t_predecessors) { is_active[scc_u] = 0; }
+
+            // count active SCCs and use exact method for small DAGs
+            vertex_t n_active = 0;
+            for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
+                if (is_active[scc_u] == 1) { ++n_active; }
+            }
+            if (n_active <= 24) {
+                return find_best_closure_exact(left_non_region_weight, right_non_region_weight, left_lmax, right_lmax, avg_weight, is_active, is_left);
+            }
 
             // determine in degree of each vertex
             in_deg.resize(n_scc);
@@ -417,12 +419,12 @@ namespace HeiProMap {
                 }
 
                 if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
-                    weight_t left = left_non_region_weight + closure_weight;
-                    weight_t right = right_non_region_weight + complement_weight;
-                    weight_t diff = std::min(left_lmax - left, right_lmax - right);
-                    if (diff > best_diff) {
+                    f64 left = (f64)(left_non_region_weight + closure_weight);
+                    f64 right = (f64)(right_non_region_weight + complement_weight);
+                    f64 cost = (left - avg_weight) * (left - avg_weight) + (right - avg_weight) * (right - avg_weight);
+                    if (cost < best_cost) {
                         closure_found = true;
-                        best_diff = diff;
+                        best_cost = cost;
                         best_closure = in_closure;
                     }
                 }
@@ -435,12 +437,12 @@ namespace HeiProMap {
                     complement_weight += scc_weights[scc_u];
 
                     if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
-                        weight_t left = left_non_region_weight + closure_weight;
-                        weight_t right = right_non_region_weight + complement_weight;
-                        weight_t diff = std::min(left_lmax - left, right_lmax - right);
-                        if (diff > best_diff) {
+                        f64 left = (f64)(left_non_region_weight + closure_weight);
+                        f64 right = (f64)(right_non_region_weight + complement_weight);
+                        f64 cost = (left - avg_weight) * (left - avg_weight) + (right - avg_weight) * (right - avg_weight);
+                        if (cost < best_cost) {
                             closure_found = true;
-                            best_diff = diff;
+                            best_cost = cost;
                             best_closure = in_closure;
                         }
                     }
@@ -453,115 +455,181 @@ namespace HeiProMap {
             return closure_found;
         }
 
-        bool find_best_closure_old(weight_t left_non_region_weight,
-                                   weight_t right_non_region_weight,
-                                   weight_t left_lmax,
-                                   weight_t right_lmax,
-                                   size_t repeats,
-                                   RandomEngine &rnd_engine,
-                                   std::vector<u8> &is_left) {
+        bool find_best_closure_exact(weight_t left_non_region_weight,
+                                     weight_t right_non_region_weight,
+                                     weight_t left_lmax,
+                                     weight_t right_lmax,
+                                     f64 avg_weight,
+                                     const std::vector<u8> &t_is_active,
+                                     std::vector<u8> &is_left) {
+            // Collect active SCCs and compute fixed weights
+            std::vector<vertex_t> active_nodes;
+            for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
+                if (t_is_active[scc_u] == 1) { active_nodes.push_back(scc_u); }
+            }
+            vertex_t m = active_nodes.size();
+
+            weight_t s_weight = 0;
+            for (vertex_t scc_u: scc_s_successors) { s_weight += scc_weights[scc_u]; }
+            weight_t t_weight = 0;
+            for (vertex_t scc_u: scc_t_predecessors) { t_weight += scc_weights[scc_u]; }
+            weight_t total_active_weight = 0;
+            for (vertex_t i = 0; i < m; ++i) { total_active_weight += scc_weights[active_nodes[i]]; }
+
+            // Max closure weight that could satisfy left constraint
+            weight_t max_w = left_lmax - left_non_region_weight - s_weight;
+            if (max_w < 0) { return false; }
+            // Min closure weight that could satisfy right constraint
+            weight_t min_w = total_active_weight - (right_lmax - right_non_region_weight - t_weight);
+
+            // Build local topo order of active nodes
+            std::vector<vertex_t> local_id(n_scc, UNVISITED);
+            for (vertex_t i = 0; i < m; ++i) { local_id[active_nodes[i]] = i; }
+
+            std::vector<vertex_t> local_in_deg(m, 0);
+            std::vector<std::vector<vertex_t>> local_preds(m);
+            for (vertex_t i = 0; i < m; ++i) {
+                vertex_t scc_u = active_nodes[i];
+                for (vertex_t scc_v: edges[scc_u]) {
+                    if (local_id[scc_v] == UNVISITED) { continue; }
+                    vertex_t j = local_id[scc_v];
+                    local_in_deg[j] += 1;
+                    local_preds[j].push_back(i);
+                }
+            }
+
+            std::vector<vertex_t> local_topo;
+            local_topo.reserve(m);
+            std::vector<vertex_t> q;
+            for (vertex_t i = 0; i < m; ++i) {
+                if (local_in_deg[i] == 0) { q.push_back(i); }
+            }
+            while (!q.empty()) {
+                vertex_t i = q.back();
+                q.pop_back();
+                local_topo.push_back(i);
+                vertex_t scc_u = active_nodes[i];
+                for (vertex_t scc_v: edges[scc_u]) {
+                    if (local_id[scc_v] == UNVISITED) { continue; }
+                    vertex_t j = local_id[scc_v];
+                    if (--local_in_deg[j] == 0) { q.push_back(j); }
+                }
+            }
+
+            // DP: dp[w] = 1 means closure weight w is achievable
+            // Process nodes in topo order. For each node, we can include it
+            // only if all its active predecessors are included.
+            // We track a bitmask per weight to know which nodes are "must be included"
+            // -- too expensive. Instead: process in topo order, for each node either
+            // include (add weight) or exclude (then all successors must be excluded).
+            //
+            // Better formulation: process in REVERSE topo order.
+            // dp[i][w] = can we achieve active-closure-weight w considering nodes
+            //            local_topo[i..m-1], where node i is the last in topo order.
+            // In reverse topo: if we exclude node i, we can still include or exclude
+            // later nodes (earlier in topo). If we include node i, all its predecessors
+            // (earlier in reverse topo = later in topo) must also be included -- but
+            // they haven't been decided yet.
+            //
+            // Correct approach: process in topo order with "forced inclusion" tracking.
+            // Use a 1D DP array. For each node in topo order:
+            //   - If node has no active predecessors excluded, it CAN be included.
+            //   - We branch: include (add weight) or exclude (mark successors as blocked).
+            //
+            // Since tracking blocked status per-node requires exponential states,
+            // we use a different formulation:
+            //
+            // A valid closure = any antichain-bounded downward-closed set.
+            // Enumerate by processing topo order and using DP on achievable weights,
+            // but only allow including node i if we can prove all preds are included.
+            // Since we process in topo order, all preds of node i come before it.
+            // We need to know WHICH nodes are included -- that's exponential.
+            //
+            // Practical exact approach for small m: bitmask DP.
+            // For m <= 24, use bitmask enumeration of valid closures.
+
+            if (m == 0) {
+                // No active nodes, check if fixed assignment is feasible
+                weight_t left = left_non_region_weight + s_weight;
+                weight_t right = right_non_region_weight + t_weight + total_active_weight;
+                if (left <= left_lmax && right <= right_lmax) {
+                    best_closure.resize(n_scc);
+                    std::fill(best_closure.begin(), best_closure.end(), 0);
+                    for (vertex_t scc_u: scc_s_successors) { best_closure[scc_u] = 1; }
+                    is_left.resize(n - 2);
+                    for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
+                    return true;
+                }
+                return false;
+            }
+
+            // Bitmask enumeration for small DAGs
+            // A subset S is a valid closure iff for every node i in S,
+            // all predecessors of i are also in S.
+            // Precompute predecessor masks.
+            std::vector<u64> pred_mask(m, 0);
+            for (vertex_t i = 0; i < m; ++i) {
+                for (vertex_t p: local_preds[i]) {
+                    pred_mask[i] |= (1ULL << p);
+                }
+            }
+            // Transitive closure of pred_mask: pred_mask[i] should include
+            // all ancestors, not just direct predecessors.
+            for (vertex_t idx = 0; idx < local_topo.size(); ++idx) {
+                vertex_t i = local_topo[idx];
+                for (vertex_t p: local_preds[i]) {
+                    pred_mask[i] |= pred_mask[p];
+                }
+            }
+
             bool closure_found = false;
-            weight_t best_diff = -1;
-            best_closure.resize(n_scc);
+            f64 best_cost = std::numeric_limits<f64>::max();
+            u64 best_mask = 0;
 
-            // determine which sccs do not have to be considered
-            is_active.resize(n_scc);
-            std::fill(is_active.begin(), is_active.end(), 1);
-            for (vertex_t scc_u: scc_s_successors) { is_active[scc_u] = 0; }
-            for (vertex_t scc_u: scc_t_predecessors) { is_active[scc_u] = 0; }
-
-            for (size_t i = 0; i < repeats; ++i) {
-                // determine in degree of each vertex
-                in_deg.resize(n_scc);
-                std::fill(in_deg.begin(), in_deg.end(), 0);
-                for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
-                    if (is_active[scc_u] == 0) { continue; }
-                    for (vertex_t scc_v: edges[scc_u]) {
-                        if (is_active[scc_v] == 0) { continue; }
-                        in_deg[scc_v] += 1;
-                    }
-                }
-
-                // push roots into stack
-                stack.clear();
-                for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
-                    if (is_active[scc_u] == 0) { continue; }
-                    if (in_deg[scc_u] == 0) { stack.push_back(scc_u); }
-                }
-                std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
-
-                // determine the random topological order
-                topo_order.clear();
-                while (!stack.empty()) {
-                    vertex_t scc_u = stack.back();
-                    stack.pop_back();
-
-                    topo_order.push_back(scc_u);
-
-                    for (vertex_t scc_v: edges[scc_u]) {
-                        if (is_active[scc_v] == 0) { continue; }
-                        in_deg[scc_v] -= 1;
-                        if (in_deg[scc_v] == 0) { stack.push_back(scc_v); }
-                    }
-                    std::shuffle(stack.begin(), stack.end(), rnd_engine.generator);
-                }
-
-                // go through the order and determine the best closure
-                weight_t closure_weight = 0;
-                in_closure.resize(n_scc);
-                std::fill(in_closure.begin(), in_closure.end(), 0);
-                for (vertex_t scc_u: scc_s_successors) {
-                    in_closure[scc_u] = 1;
-                    closure_weight += scc_weights[scc_u];
-                }
-
-                for (vertex_t scc_u: topo_order) {
-                    if (is_active[scc_u] == 0) { continue; }
-
-                    in_closure[scc_u] = 1;
-                    closure_weight += scc_weights[scc_u];
-                }
-
-                weight_t complement_weight = 0;
-                for (vertex_t scc_u: scc_t_predecessors) {
-                    in_closure[scc_u] = 0;
-                    complement_weight += scc_weights[scc_u];
-                }
-
-                if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
-                    weight_t left = left_non_region_weight + closure_weight;
-                    weight_t right = right_non_region_weight + complement_weight;
-                    weight_t diff = std::min(left_lmax - left, right_lmax - right);
-                    if (diff > best_diff) {
-                        closure_found = true;
-                        best_diff = diff;
-                        best_closure = in_closure;
-                    }
-                }
-
-                for (vertex_t scc_u: topo_order) {
-                    if (is_active[scc_u] == 0) { continue; }
-
-                    in_closure[scc_u] = 0;
-                    closure_weight -= scc_weights[scc_u];
-                    complement_weight += scc_weights[scc_u];
-
-                    if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
-                        weight_t left = left_non_region_weight + closure_weight;
-                        weight_t right = right_non_region_weight + complement_weight;
-                        weight_t diff = std::min(left_lmax - left, right_lmax - right);
-                        if (diff > best_diff) {
-                            closure_found = true;
-                            best_diff = diff;
-                            best_closure = in_closure;
+            u64 total = 1ULL << m;
+            for (u64 mask = 0; mask < total; ++mask) {
+                // Check closure property: for each included node, all ancestors included
+                bool valid = true;
+                for (vertex_t i = 0; i < m; ++i) {
+                    if ((mask >> i) & 1) {
+                        if ((mask & pred_mask[i]) != pred_mask[i]) {
+                            valid = false;
+                            break;
                         }
+                    }
+                }
+                if (!valid) { continue; }
+
+                weight_t w = 0;
+                for (vertex_t i = 0; i < m; ++i) {
+                    if ((mask >> i) & 1) { w += scc_weights[active_nodes[i]]; }
+                }
+
+                weight_t left_w = left_non_region_weight + s_weight + w;
+                weight_t right_w = right_non_region_weight + t_weight + (total_active_weight - w);
+                if (left_w <= left_lmax && right_w <= right_lmax) {
+                    f64 dl = (f64)left_w - avg_weight;
+                    f64 dr = (f64)right_w - avg_weight;
+                    f64 cost = dl * dl + dr * dr;
+                    if (cost < best_cost) {
+                        closure_found = true;
+                        best_cost = cost;
+                        best_mask = mask;
                     }
                 }
             }
 
+            if (!closure_found) { return false; }
+
+            best_closure.resize(n_scc);
+            std::fill(best_closure.begin(), best_closure.end(), 0);
+            for (vertex_t scc_u: scc_s_successors) { best_closure[scc_u] = 1; }
+            for (vertex_t i = 0; i < m; ++i) {
+                if ((best_mask >> i) & 1) { best_closure[active_nodes[i]] = 1; }
+            }
+
             is_left.resize(n - 2);
             for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
-
             return closure_found;
         }
 
@@ -571,7 +639,8 @@ namespace HeiProMap {
             S.push_back(v);
             P.push_back(v);
 
-            for (auto [u, w]: residual_flow_network[v]) {
+            for (size_t j = 0; j < residual_flow_network.neighbor_count(v); ++j) {
+                vertex_t u = residual_flow_network.neighbor_at(v, j);
                 if (index[u] == UNVISITED) {
                     dfs(u, residual_flow_network);
                 } else if (scc_id[u] == UNVISITED) {
@@ -605,10 +674,9 @@ namespace HeiProMap {
 
             while (!dfs_stack.empty()) {
                 auto &[v, i] = dfs_stack.top(); // current node and index into its neighbors
-                const auto &neighbors = residual_flow_network[v];
 
-                if (i < neighbors.size()) {
-                    vertex_t u = neighbors[i++].v;
+                if (i < residual_flow_network.neighbor_count(v)) {
+                    vertex_t u = residual_flow_network.neighbor_at(v, i++);
                     if (index[u] == UNVISITED) {
                         index[u] = idx++;
                         S.push_back(u);
@@ -638,93 +706,6 @@ namespace HeiProMap {
             }
         }
     };
-
-    /*
-    class FlowNetwork {
-        vertex_t n;
-        bk::Graph<int, int, int> g;
-        vertex_t source;
-        vertex_t target;
-
-    public:
-        FlowNetwork() : g(bk::Graph<int, int, int>(1024*16, 1024*16)) {
-            n = 0;
-            source = 0;
-            target = 0;
-        }
-
-        void initialize(size_t t_n) {
-            n = t_n;
-            g.reset();
-            g.add_node(n + 2);
-            source = n;
-            target = n + 1;
-        }
-
-        void add(vertex_t u, vertex_t v, weight_t w) {
-            ASSERT(u < n);
-            ASSERT(v < n);
-            ASSERT(w >= 0);
-            g.add_edge(u, v, w, w);
-        }
-
-        void add_s_edge(vertex_t v, weight_t w) {
-            ASSERT(v < n);
-            ASSERT(w >= 0);
-            g.add_edge(source, v, w, 0);
-        }
-
-        void add_t_edge(vertex_t v, weight_t w) {
-            ASSERT(v < n);
-            ASSERT(w >= 0);
-            g.add_edge(v, target, w, 0);
-        }
-
-        void build_residual_network(ResidualFlowNetwork &residual_g) {
-            residual_g.initialize(n);
-
-            int n_edges = g.get_arc_num();
-            bk::Graph<int, int, int>::arc_id arc = g.get_first_arc();
-
-            int u, v;
-            for (int i = 0; i < n_edges; ++i) {
-                g.get_arc_ends(arc, u, v);
-                weight_t w = g.get_rcap(arc);
-
-                if (w > 0) {
-                    if (u == (int) source) {
-                        residual_g.add_edge_from_source(v, w);
-                    } else if (v == (int) source) {
-                        residual_g.add_edge_to_source(u, w);
-                    } else if (u == (int) target) {
-                        residual_g.add_edge_from_target(v, w);
-                    } else if (v == (int) target) {
-                        residual_g.add_edge_to_target(u, w);
-                    } else {
-                        residual_g.add_directed_edge(u, v, w);
-                    }
-                }
-
-                arc = g.get_next_arc(arc);
-            }
-        }
-
-        void solve() {
-            const int INF = std::numeric_limits<int>::max() / 2;
-            g.add_tweights(source, INF, 0);
-            g.add_tweights(target, 0, INF);
-
-            g.maxflow();
-        }
-
-        void get_cut(std::vector<u8> &is_left) {
-            is_left.resize(n);
-            for (vertex_t u = 0; u < n; ++u) {
-                is_left[u] = g.what_segment(u) == bk::SOURCE;
-            }
-        }
-    };
-    */
 }
 
 #endif //HEIPROMAP_FLOW_H
