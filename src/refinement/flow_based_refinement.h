@@ -463,9 +463,9 @@ namespace HeiProMap {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "determine_boundary_vertices");
 
             left_boundary_weight = 0;
-            for (size_t i = 0; i < bv_manager.size(left_id); ++i) { const vertex_t u = bv_manager.get(left_id, i);
+            forall_bv_id_iu(bv_manager, left_id, i, u)
                 {
-                    for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) { const partition_t id = block_conn.get_id(j);
+                    forall_bc_ui_id(block_conn, u, j, id)
                         {
                             if (id == right_id) {
                                 left_boundary.push_back(u);
@@ -473,15 +473,15 @@ namespace HeiProMap {
                                 break;
                             }
                         }
-                    }
+                    endfor
                 }
-            }
+            endfor
             fast_shuffle_unchecked(left_boundary.data(), left_boundary.data() + left_boundary.size(), random_engine.generator);
 
             right_boundary_weight = 0;
-            for (size_t i = 0; i < bv_manager.size(right_id); ++i) { const vertex_t u = bv_manager.get(right_id, i);
+            forall_bv_id_iu(bv_manager, right_id, i, u)
                 {
-                    for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) { const partition_t id = block_conn.get_id(j);
+                    forall_bc_ui_id(block_conn, u, j, id)
                         {
                             if (id == left_id) {
                                 right_boundary.push_back(u);
@@ -489,9 +489,9 @@ namespace HeiProMap {
                                 break;
                             }
                         }
-                    }
+                    endfor
                 }
-            }
+            endfor
             fast_shuffle_unchecked(right_boundary.data(), right_boundary.data() + right_boundary.size(), random_engine.generator);
         }
 
@@ -534,7 +534,7 @@ namespace HeiProMap {
                     region.push_back(u);
                     region_marker[u] = mark;
                     curr_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
+                    forall_guiv(g, u, i, v)
                         {
                             partition_t v_id = p_manager[v];
                             if (v_id != id) { continue; }
@@ -544,7 +544,7 @@ namespace HeiProMap {
                                 seen[v] = seen_mark - 1;
                             }
                         }
-                    }
+                    endfor
                 }
                 seen[u] = seen_mark;
             }
@@ -597,7 +597,7 @@ namespace HeiProMap {
                 int left_penalty = 0;
                 int right_penalty = 0;
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
+                forall_guivw(g, u, i, v, w)
                     {
                         if (region_marker[v] == right_mark) {
                             int new_v = static_cast<int>(translation_table.get_n(v));
@@ -623,7 +623,7 @@ namespace HeiProMap {
                             right_penalty += static_cast<int>(w * d_oracle.get(right_id, v_id));
                         }
                     }
-                }
+                endfor
 
                 if (left_penalty > 0) { pr.add_edge(new_u, snk, left_penalty); t_connected[new_u] = 1; }
                 if (right_penalty > 0) { pr.add_edge(src, new_u, right_penalty); s_connected[new_u] = 1; }
@@ -636,7 +636,7 @@ namespace HeiProMap {
                 int left_penalty = 0;
                 int right_penalty = 0;
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
+                forall_guivw(g, u, i, v, w)
                     {
                         if (region_marker[v] == right_mark) {
                             if (u < v) { continue; }
@@ -659,7 +659,7 @@ namespace HeiProMap {
                             right_penalty += static_cast<int>(w * d_oracle.get(right_id, v_id));
                         }
                     }
-                }
+                endfor
 
                 if (left_penalty > 0) { pr.add_edge(new_u, snk, left_penalty); t_connected[new_u] = 1; }
                 if (right_penalty > 0) { pr.add_edge(src, new_u, right_penalty); s_connected[new_u] = 1; }
@@ -708,7 +708,7 @@ namespace HeiProMap {
                 int w_left = 0;
                 int w_right = 0;
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
+                forall_guivw(g, u, i, v, w)
                     {
                         if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                             if (u < v) { continue; }
@@ -722,7 +722,7 @@ namespace HeiProMap {
                         if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                         else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                     }
-                }
+                endfor
 
                 if (w_left > 0) { pr.add_edge(src, new_u, w_left); s_connected[new_u] = 1; }
                 if (w_right > 0) { pr.add_edge(new_u, snk, w_right); t_connected[new_u] = 1; }
@@ -735,7 +735,7 @@ namespace HeiProMap {
                 int w_left = 0;
                 int w_right = 0;
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
+                forall_guivw(g, u, i, v, w)
                     {
                         if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                             if (u < v) { continue; }
@@ -749,7 +749,7 @@ namespace HeiProMap {
                         if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                         else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                     }
-                }
+                endfor
 
                 if (w_left > 0) { pr.add_edge(src, new_u, w_left); s_connected[new_u] = 1; }
                 if (w_right > 0) { pr.add_edge(new_u, snk, w_right); t_connected[new_u] = 1; }
@@ -779,7 +779,7 @@ namespace HeiProMap {
                     int new_u = static_cast<int>(translation_table.get_n(u));
                     bool u_src = (pr.what_label(new_u) == SOURCE);
 
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
+                    forall_guiv(g, u, i, v)
                         {
                             if (region_marker[v] != left_mark && region_marker[v] != right_mark) { continue; }
                             if (u < v) { continue; }
@@ -796,7 +796,7 @@ namespace HeiProMap {
                                 residual_g.add_directed_edge(new_u, new_v, 1);
                             }
                         }
-                    }
+                    endfor
                 }
             };
 
