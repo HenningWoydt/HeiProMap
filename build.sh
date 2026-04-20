@@ -88,12 +88,10 @@ fi
 # -----------------------------
 TBB_LOCAL="${ROOT}/extern/local/tbb"
 
-if ldconfig -p 2>/dev/null | grep -q libtbb.so; then
-  echo "System TBB found; skipping local build."
-elif [ -f "${TBB_LOCAL}/lib/libtbb.so" ]; then
+if [ -f "${TBB_LOCAL}/lib/libtbb.so" ]; then
   echo "Local TBB found; skipping build."
 else
-  echo "TBB not found; building from source..."
+  echo "TBB not found locally; building from source..."
   TBB_VERSION="v2021.13.0"
   (
     cd "${ROOT}/extern"
@@ -116,10 +114,7 @@ echo "Building HeiProMap Release..."
 rm -rf "${ROOT}/build"
 mkdir "${ROOT}/build"
 
-CMAKE_EXTRA_ARGS=""
-if [ -f "${TBB_LOCAL}/lib/libtbb.so" ]; then
-  CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL}"
-fi
+CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL}"
 
 cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA_ARGS}
 cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
