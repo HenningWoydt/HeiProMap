@@ -137,11 +137,11 @@ namespace HeiProMap {
                 {
                     curr_boundary_size = 0;
                     for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                        forall_bv_id_iu(bv_manager, id, i, u)
+                        for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                             {
                                 curr_boundary[curr_boundary_size++] = u;
                             }
-                        endfor
+                        }
                     }
                     fast_shuffle_unchecked(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
                 }
@@ -165,7 +165,7 @@ namespace HeiProMap {
                         u64 tid = omp_get_thread_num();
                         RandomEngine &rng = rnd_engines[tid];
 
-                        forall_bc_ui_id(block_conn, u, i, id)
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
                             {
                                 if (id == u_id) { continue; }
                                 weight_t v_id_weight = p_manager.get_bweight(id);
@@ -181,7 +181,7 @@ namespace HeiProMap {
                                     }
                                 }
                             }
-                        endfor
+                        }
 
                         proposed_moves[j] = {best_id, best_qap_delta, u_weight};
                     }
@@ -219,7 +219,7 @@ namespace HeiProMap {
                         weight_t best_qap_delta = min_improvement;
                         f32 counter = 0;
 
-                        forall_bc_ui_id(block_conn, u, i, id)
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
                             {
                                 if (id == u_id) { continue; }
                                 weight_t v_id_weight = p_manager.get_bweight(id);
@@ -235,7 +235,7 @@ namespace HeiProMap {
                                     }
                                 }
                             }
-                        endfor
+                        }
 
                         if (best_id != NO_ID && (best_qap_delta >= min_improvement || random_engine.get_f32() < 0.5)) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);

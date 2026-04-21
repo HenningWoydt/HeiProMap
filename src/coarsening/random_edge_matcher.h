@@ -84,7 +84,7 @@ namespace HeiProMap {
 
             mark += 1;
 
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 {
                     if (used[u] == mark) { continue; }
 
@@ -93,7 +93,7 @@ namespace HeiProMap {
                     f32 counter = 0;
                     vertex_t chosen_v = 0;
 
-                    forall_guiv(g, u, j, v)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                         {
                             if (used[v] == mark) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
@@ -107,7 +107,7 @@ namespace HeiProMap {
                                 chosen_v = v;
                             }
                         }
-                    endfor
+                    }
                     if (counter > 0) {
                         used[u] = mark;
                         used[chosen_v] = mark;
@@ -115,7 +115,7 @@ namespace HeiProMap {
                         matching.add(u, chosen_v);
                     }
                 }
-            endfor
+            }
 
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());

@@ -55,11 +55,11 @@ namespace HeiProMap {
             std::vector<weight_t> block_weights(p_manager.k, 0);
 
             for (partition_t b = 0; b < p_manager.k; ++b) {
-                forall_bv_id_iu(bv_manager, b, i, u)
+                for (size_t i = 0; i < bv_manager.size(b); ++i) { const vertex_t u = bv_manager.get(b, i);
                     {
                         block_weights[b] += g.v_weights[u];
                     }
-                endfor
+                }
             }
 
             return block_weights;
@@ -110,7 +110,7 @@ namespace HeiProMap {
 
             std::vector<u8> seen_block(p_manager.k, false);
 
-            forall_bv_id_iu(bv_manager, from_block, i, u)
+            for (size_t i = 0; i < bv_manager.size(from_block); ++i) { const vertex_t u = bv_manager.get(from_block, i);
                 {
                     if (used_vertices[u]) {
                         continue;
@@ -120,7 +120,7 @@ namespace HeiProMap {
 
                     std::fill(seen_block.begin(), seen_block.end(), false);
 
-                    forall_guiv(g, u, j, v)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                         {
                             const partition_t to_block = p_manager[v];
 
@@ -143,9 +143,9 @@ namespace HeiProMap {
 
                             out.push_back({u, from_block, to_block, u_weight, gain});
                         }
-                    endfor
+                    }
                 }
-            endfor
+            }
         }
 
         inline void shuffle_candidates(RandomEngine &random_engine,

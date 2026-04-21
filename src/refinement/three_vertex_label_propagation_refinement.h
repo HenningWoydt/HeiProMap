@@ -128,10 +128,10 @@ namespace HeiProMap {
 
                 curr_boundary_size = 0;
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u) {
+                    for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i); {
                             curr_boundary[curr_boundary_size++] = u;
                         }
-                    endfor
+                    }
                 }
                 std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
 
@@ -148,22 +148,22 @@ namespace HeiProMap {
                     std::vector<u8> inserted(g.n, 0);
                     inserted[u] = 1;
 
-                    forall_guiv(g, u, j, uu) {
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t uu = g.edges_v[j]; {
                             if (uu >= u) { continue; }
                             if (inserted[uu] == 0) {
                                 vertices.push_back(uu);
                                 inserted[uu] = 1;
                             }
-                            forall_guiv(g, uu, k, uuu) {
+                            for (size_t k = g.neighborhoods[uu]; k < g.neighborhoods[uu + 1]; ++k) { const vertex_t uuu = g.edges_v[k]; {
                                     if (uuu >= uu || uuu >= u) { continue; }
                                     if (inserted[uuu] == 0) {
                                         vertices.push_back(uuu);
                                         inserted[uuu] = 1;
                                     }
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
 
                     // collect for all vertices the connected partitions
                     std::vector<u8> id_inserted(m_k);
@@ -174,14 +174,14 @@ namespace HeiProMap {
                         partition_t v_id = p_manager[v];
                         std::fill(id_inserted.begin(), id_inserted.end(), 0);
 
-                        forall_guiv(g, v, k, vv) {
+                        for (size_t k = g.neighborhoods[v]; k < g.neighborhoods[v + 1]; ++k) { const vertex_t vv = g.edges_v[k]; {
                                 partition_t vv_id = p_manager[vv];
                                 if (v_id == vv_id || id_inserted[vv_id] == 1) { continue; }
 
                                 partitions[j].push_back(vv_id);
                                 id_inserted[vv_id] = 1;
                             }
-                        endfor
+                        }
                     }
 
                     vertex_t best_v = 0, best_vv = 0, best_vvv = 0;

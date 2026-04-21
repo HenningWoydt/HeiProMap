@@ -125,7 +125,7 @@ namespace HeiProMap {
                         vertex_t best_v = u;
                         f32 best_rating = 0;
 
-                        forall_guivw(g, u, j, v, w)
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                             {
                                 if (matching.is_matched(v)) { continue; }
 
@@ -143,7 +143,7 @@ namespace HeiProMap {
                                     best_rating = edge_rating;
                                 }
                             }
-                        endfor
+                        }
 
                         preferred[u] = best_v;
                     }

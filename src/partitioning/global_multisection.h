@@ -148,12 +148,12 @@ namespace HeiProMap {
 
             // initialize the translation table of the first graph
             vertex_t temp_new_u = 0;
-            forall_gu(g, old_u)
+            for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
                 {
                     first_graph.tt->add(old_u, temp_new_u);
                     temp_new_u += 1;
                 }
-            endfor
+            }
 
             // fill in other information
             first_graph.k = hierarchy.back();
@@ -206,13 +206,13 @@ namespace HeiProMap {
                     local_block_conn.initialize(item.g->n, item.g->m, item.k);
                     local_distance_oracle.initialize({item.k}, {1});
 
-                    forall_gu((*item.g), u)
+                    for (vertex_t u = 0; u < (*item.g).n; ++u) {
                         {
                             const partition_t u_id = partition[u];
                             const weight_t u_w = item.g->v_weights[u];
                             local_p_manager.set(u, u_w, u_id);
 
-                            forall_guivw((*item.g), u, i, v, w)
+                            for (size_t i = (*item.g).neighborhoods[u]; i < (*item.g).neighborhoods[u + 1]; ++i) { const vertex_t v = (*item.g).edges_v[i]; const weight_t w = (*item.g).edges_w[i];
                                 {
                                     const partition_t v_id = partition[v];
 
@@ -223,9 +223,9 @@ namespace HeiProMap {
                                         }
                                     }
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
                     local_block_conn.compute_from_scratch((*item.g), local_p_manager);
                 }
 

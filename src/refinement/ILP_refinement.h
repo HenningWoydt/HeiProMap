@@ -199,26 +199,26 @@ namespace HeiProMap {
             GRBLinExpr v_weight = 0;
 
             vertices_size = 0;
-            forall_bv_id_iu(bv_manager, u_id, i, u)
+            for (size_t i = 0; i < bv_manager.size(u_id); ++i) { const vertex_t u = bv_manager.get(u_id, i);
                 {
                     vertices[vertices_size++] = u;
                     vars[u]                   = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
                 }
-            endfor
-            forall_bv_id_iu(bv_manager, v_id, i, v)
+            }
+            for (size_t i = 0; i < bv_manager.size(v_id); ++i) { const vertex_t v = bv_manager.get(v_id, i);
                 {
                     vertices[vertices_size++] = v;
                     vars[v]                   = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
                 }
-            endfor
+            }
 
-            forall_bv_id_iu(bv_manager, u_id, i, u)
+            for (size_t i = 0; i < bv_manager.size(u_id); ++i) { const vertex_t u = bv_manager.get(u_id, i);
                 {
                     total_u_id_weight += g.weight(u);
 
                     weight_t penalty_u_id = 0;
                     weight_t penalty_v_id = 0;
-                    forall_guivw(g, u, j, vv, w)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t vv = g.edges_v[j]; const weight_t w = g.edges_w[j];
                         {
                             partition_t vv_id = p_manager[vv];
                             if (vv_id == v_id) {
@@ -230,7 +230,7 @@ namespace HeiProMap {
                                 penalty_v_id += 2 * w * d_oracle.get(vv_id, v_id);
                             }
                         }
-                    endfor
+                    }
 
                     penalty += penalty_u_id * (1 - vars[u]); // penalty if in u_id
                     penalty += penalty_v_id * vars[u]; // penalty if in v_id
@@ -238,15 +238,15 @@ namespace HeiProMap {
                     u_weight += g.weight(u) * (1 - vars[u]);
                     v_weight += g.weight(u) * vars[u];
                 }
-            endfor
+            }
 
-            forall_bv_id_iu(bv_manager, v_id, i, v)
+            for (size_t i = 0; i < bv_manager.size(v_id); ++i) { const vertex_t v = bv_manager.get(v_id, i);
                 {
                     total_v_id_weight += g.weight(v);
 
                     weight_t penalty_u_id = 0;
                     weight_t penalty_v_id = 0;
-                    forall_guivw(g, v, j, vv, w)
+                    for (size_t j = g.neighborhoods[v]; j < g.neighborhoods[v + 1]; ++j) { const vertex_t vv = g.edges_v[j]; const weight_t w = g.edges_w[j];
                         {
                             partition_t vv_id = p_manager[vv];
                             if (vv_id == u_id) {
@@ -258,7 +258,7 @@ namespace HeiProMap {
                                 penalty_v_id += 2 * w * d_oracle.get(vv_id, v_id);
                             }
                         }
-                    endfor
+                    }
 
                     penalty += penalty_u_id * (1 - vars[v]); // penalty if in u_id
                     penalty += penalty_v_id * vars[v]; // penalty if in v_id
@@ -266,7 +266,7 @@ namespace HeiProMap {
                     u_weight += g.weight(v) * (1 - vars[v]);
                     v_weight += g.weight(v) * vars[v];
                 }
-            endfor
+            }
 
             model.addConstr(u_weight <= m_lmax - (p_manager.get_bweight(u_id) - total_u_id_weight));
             model.addConstr(v_weight <= m_lmax - (p_manager.get_bweight(v_id) - total_v_id_weight));
@@ -353,7 +353,7 @@ namespace HeiProMap {
                 weight_t penalty_u_id = 0;
                 weight_t penalty_v_id = 0;
 
-                forall_guivw(g, u, j, vv, w)
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t vv = g.edges_v[j]; const weight_t w = g.edges_w[j];
                     {
                         partition_t vv_id = p_manager[vv];
                         if (vv_id == u_id || vv_id == v_id) {
@@ -365,7 +365,7 @@ namespace HeiProMap {
                             penalty_v_id += 2 * w * d_oracle.get(vv_id, v_id);
                         }
                     }
-                endfor
+                }
 
                 penalty += penalty_u_id * (1 - vars[u]); // penalty if in u_id
                 penalty += penalty_v_id * vars[u]; // penalty if in v_id

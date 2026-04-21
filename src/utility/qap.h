@@ -40,19 +40,19 @@ namespace HeiProMap {
 
         weight_t qap = 0;
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         partition_t v_id = p_manager[v];
                         weight_t d = d_oracle.get(u_id, v_id);
                         qap += (d * w);
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         return qap;
     }
@@ -65,19 +65,19 @@ namespace HeiProMap {
 
         weight_t qap = 0;
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = partition[u];
 
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         partition_t v_id = partition[v];
                         weight_t d = d_oracle.get(u_id, v_id);
                         qap += (d * w);
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         return qap;
     }
@@ -89,16 +89,16 @@ namespace HeiProMap {
 
         weight_t edge_cut = 0;
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         if (p_manager[u] == p_manager[v]) { continue; }
                         edge_cut += w;
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         return edge_cut;
     }
@@ -113,13 +113,13 @@ namespace HeiProMap {
         for (vertex_t u: vertices) {
             partition_t u_id = p_manager[u];
 
-            forall_guivw(g, u, i, v, w)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                 {
                     partition_t v_id = p_manager[v];
                     weight_t d = d_oracle.get(u_id, v_id);
                     qap += (d * w);
                 }
-            endfor
+            }
         }
 
         return qap;
@@ -135,18 +135,18 @@ namespace HeiProMap {
         weight_t qap = 0;
         weight_t local_qap = 0;
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_bc_ui_id_idw(block_conn, u, i, id, id_w)
+                for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t id_w = block_conn.get_w(i);
                     {
                         weight_t d = d_oracle.get(u_id, id);
                         local_qap += (d * id_w);
                     }
-                endfor
+                }
             }
-        endfor
+        }
         qap += local_qap;
 
         return qap;
@@ -160,20 +160,20 @@ namespace HeiProMap {
         ScopedTimer _t("misc", "misc", "get_qap_per_layer");
 
         std::vector<weight_t> final_qap(l, 0);
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         partition_t v_id = p_manager[v];
                         weight_t d = d_oracle.get(u_id, v_id);
                         partition_t layer_id = d_oracle.get_h(u_id, v_id);
                         final_qap[layer_id] += (d * w);
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         return final_qap;
     }
@@ -188,7 +188,7 @@ namespace HeiProMap {
                                DistanceOracleT &d_oracle) {
         weight_t qap_delta = 0;
 
-        forall_guivw(g, u, i, v, w)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 partition_t v_id = p_manager[v];
                 weight_t old_d = d_oracle.get(v_id, old_id);
@@ -196,7 +196,7 @@ namespace HeiProMap {
 
                 qap_delta += (old_d - new_d) * w;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -211,14 +211,14 @@ namespace HeiProMap {
                                BlockConnT &block_conn) {
         weight_t qap_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 weight_t old_d = d_oracle.get(id, old_id);
                 weight_t new_d = d_oracle.get(id, new_id);
 
                 qap_delta += (old_d - new_d) * idw;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -232,7 +232,7 @@ namespace HeiProMap {
                                                             DistanceOracleT &d_oracle,
                                                             BlockConnT &block_conn,
                                                             std::vector<weight_t> &qap_deltas) {
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 weight_t old_d = d_oracle.get(id, old_id);
 
@@ -240,7 +240,7 @@ namespace HeiProMap {
                     qap_deltas[j] += (old_d - d_oracle.get(id, new_ids[j])) * idw;
                 }
             }
-        endfor
+        }
 
         std::pair<partition_t, weight_t> best = {new_ids[0], qap_deltas[0]};
         for (size_t j = 1; j < new_ids.size(); j++) {
@@ -260,14 +260,14 @@ namespace HeiProMap {
                                     const PartitionManagerT &p_manager) {
         weight_t edge_cut_delta = 0;
 
-        forall_guivw(g, u, i, v, w)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 partition_t v_id = p_manager[v];
 
                 edge_cut_delta -= (v_id != new_id) * w;
                 edge_cut_delta += (v_id != old_id) * w;
             }
-        endfor
+        }
 
         return edge_cut_delta;
     }
@@ -281,12 +281,12 @@ namespace HeiProMap {
                                     const BlockConnT &block_conn) {
         weight_t edge_cut_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 edge_cut_delta -= (id != new_id) * idw;
                 edge_cut_delta += (id != old_id) * idw;
             }
-        endfor
+        }
 
         return edge_cut_delta;
     }
@@ -307,7 +307,7 @@ namespace HeiProMap {
         std::fill_n(blocks_qap_delta, blocks_size, 0);
 
 #pragma GCC unroll 8
-        forall_guivw(g, u, j, v, w)
+        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
             {
                 partition_t v_id = p_manager[v];
                 weight_t old_d = d_oracle.get(v_id, old_id);
@@ -317,7 +317,7 @@ namespace HeiProMap {
                     blocks_qap_delta[i] += (old_d - new_d) * w;
                 }
             }
-        endfor
+        }
     }
     */
 
@@ -335,7 +335,7 @@ namespace HeiProMap {
 
         // process u
 #pragma GCC unroll 8
-        forall_guivw(g, u, i, neighbor, w)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 if (neighbor != v) {
                     partition_t neighbor_id = p_manager[neighbor];
@@ -349,11 +349,11 @@ namespace HeiProMap {
                     qap_delta += (old_d - new_d) * w;
                 }
             }
-        endfor
+        }
 
         // process v
 #pragma GCC unroll 8
-        forall_guivw(g, v, i, neighbor, w)
+        for (size_t i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 if (neighbor == u) { continue; }
 
@@ -363,7 +363,7 @@ namespace HeiProMap {
                 weight_t new_d = d_oracle.get(neighbor_id, v_new_id);
                 qap_delta += (old_d - new_d) * w;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -386,7 +386,7 @@ namespace HeiProMap {
 
         // process v
 #pragma GCC unroll 8
-        forall_guivw(g, v, i, neighbor, w)
+        for (size_t i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 if (neighbor == vv) {
                     weight_t old_d = d_oracle.get(v_id, vv_id);
@@ -404,11 +404,11 @@ namespace HeiProMap {
                     qap_delta += (old_d - new_d) * w;
                 }
             }
-        endfor
+        }
 
         // process vv
 #pragma GCC unroll 8
-        forall_guivw(g, vv, i, neighbor, w)
+        for (size_t i = g.neighborhoods[vv]; i < g.neighborhoods[vv + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 if (neighbor == v) { continue; }
                 if (neighbor == vvv) {
@@ -423,11 +423,11 @@ namespace HeiProMap {
                     qap_delta += (old_d - new_d) * w;
                 }
             }
-        endfor
+        }
 
         // process vvv
 #pragma GCC unroll 8
-        forall_guivw(g, vvv, i, neighbor, w)
+        for (size_t i = g.neighborhoods[vvv]; i < g.neighborhoods[vvv + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 if (neighbor == v) { continue; }
                 if (neighbor == vv) { continue; }
@@ -438,7 +438,7 @@ namespace HeiProMap {
                 weight_t new_d = d_oracle.get(neighbor_id, new_vvv_id);
                 qap_delta += (old_d - new_d) * w;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -459,7 +459,7 @@ namespace HeiProMap {
         weight_t qap_delta = 0;
 
 #pragma GCC unroll 8
-        forall_guivw(g, u, i, v, w)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 partition_t v_id = p_manager[v];
 
@@ -470,7 +470,7 @@ namespace HeiProMap {
                 weight_t new_d = d_oracle.get(v_id, new_id);
                 qap_delta += (old_d - new_d) * w;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -490,7 +490,7 @@ namespace HeiProMap {
 
         weight_t qap_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 is_boundary_old_id |= (id != old_id);
                 is_boundary_new_id |= (id != new_id);
@@ -499,7 +499,7 @@ namespace HeiProMap {
                 weight_t new_d = d_oracle.get(id, new_id);
                 qap_delta += (old_d - new_d) * idw;
             }
-        endfor
+        }
 
 
         return qap_delta;
@@ -517,7 +517,7 @@ namespace HeiProMap {
 
         weight_t qap_delta = 0;
 
-        forall_guivw(g, u, i, v, w)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 partition_t v_id = p_manager[v];
 
@@ -528,7 +528,7 @@ namespace HeiProMap {
 
                 qap_delta += (old_d - new_d) * w;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -546,7 +546,7 @@ namespace HeiProMap {
 
         weight_t qap_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 is_connected_to_new_id |= (id == new_id);
 
@@ -555,7 +555,7 @@ namespace HeiProMap {
 
                 qap_delta += (old_d - new_d) * idw;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -571,7 +571,7 @@ namespace HeiProMap {
 
         weight_t edge_cut_delta = 0;
 
-        forall_guivw(g, u, i, v, w)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
             {
                 partition_t v_id = p_manager[v];
 
@@ -580,7 +580,7 @@ namespace HeiProMap {
                 edge_cut_delta -= (v_id != new_id) * w;
                 edge_cut_delta += (v_id != old_id) * w;
             }
-        endfor
+        }
 
         return edge_cut_delta;
     }
@@ -597,14 +597,14 @@ namespace HeiProMap {
 
         weight_t edge_cut_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 is_connected_to_new_id |= (id == new_id);
 
                 edge_cut_delta -= (id != new_id) * idw;
                 edge_cut_delta += (id != old_id) * idw;
             }
-        endfor
+        }
 
         return edge_cut_delta;
     }
@@ -617,20 +617,20 @@ namespace HeiProMap {
                                         size_t l) {
         std::vector<weight_t> qap(l, 0);
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
 
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         partition_t v_id = p_manager[v];
                         weight_t distance = d_oracle.get(u_id, v_id);
                         weight_t level = d_oracle.get_h(u_id, v_id);
                         qap[level] += w * distance;
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         return qap;
     }
@@ -650,11 +650,11 @@ namespace HeiProMap {
                                       BlockConnT &block_conn) {
         weight_t qap_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 qap_delta += (d_oracle.get(id, old_id) - d_oracle.get(id, new_id)) * idw;
             }
-        endfor
+        }
 
         return qap_delta;
     }
@@ -671,21 +671,21 @@ namespace HeiProMap {
         weight_t qap_delta = 0;
 
         if constexpr (t_uniform_e_weights) {
-            forall_guiv(g, u, i, v)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                 {
                     partition_t v_id = p_manager[v];
                     is_connected_to_new_id |= (v_id == new_id);
                     qap_delta += d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id);
                 }
-            endfor
+            }
         } else {
-            forall_guivw(g, u, i, v, w)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                 {
                     partition_t v_id = p_manager[v];
                     is_connected_to_new_id |= (v_id == new_id);
                     qap_delta += (d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id)) * w;
                 }
-            endfor
+            }
         }
 
         return qap_delta;
@@ -700,12 +700,12 @@ namespace HeiProMap {
                                            const BlockConnT &block_conn) {
         weight_t edge_cut_delta = 0;
 
-        forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
             {
                 edge_cut_delta -= (id != new_id) * idw;
                 edge_cut_delta += (id != old_id) * idw;
             }
-        endfor
+        }
 
         return edge_cut_delta;
     }
@@ -721,23 +721,23 @@ namespace HeiProMap {
         weight_t edge_cut_delta = 0;
 
         if constexpr (t_uniform_e_weights) {
-            forall_guiv(g, u, i, v)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                 {
                     partition_t v_id = p_manager[v];
                     is_connected_to_new_id |= (v_id == new_id);
                     edge_cut_delta -= (v_id != new_id);
                     edge_cut_delta += (v_id != old_id);
                 }
-            endfor
+            }
         } else {
-            forall_guivw(g, u, i, v, w)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                 {
                     partition_t v_id = p_manager[v];
                     is_connected_to_new_id |= (v_id == new_id);
                     edge_cut_delta -= (v_id != new_id) * w;
                     edge_cut_delta += (v_id != old_id) * w;
                 }
-            endfor
+            }
         }
 
         return edge_cut_delta;

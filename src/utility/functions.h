@@ -38,14 +38,14 @@ namespace HeiProMap {
                             vertex_t u) {
         partition_t u_id = p_manager[u];
 
-        forall_guiv(g, u, i, v)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
             {
                 partition_t v_id = p_manager[v];
                 if (u_id != v_id) {
                     return true;
                 }
             }
-        endfor
+        }
         return false;
     }
 
@@ -54,14 +54,14 @@ namespace HeiProMap {
                                 const PartitionManagerT &p_manager,
                                 vertex_t u,
                                 partition_t id) {
-        forall_guiv(g, u, i, v)
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
             {
                 partition_t v_id = p_manager[v];
                 if (id == v_id) {
                     return true;
                 }
             }
-        endfor
+        }
         return false;
     }
 }

@@ -264,7 +264,7 @@ namespace HeiProMap {
             ASSERT(old_id < m_k);
             ASSERT(new_id != old_id);
 
-            forall_guivw(g, u, i, v, w)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                 {
                     const partition_t v_id = p_manager[v];
 
@@ -278,7 +278,7 @@ namespace HeiProMap {
                         add_edge(new_id, v_id, w);
                     }
                 }
-            endfor
+            }
         }
 
         void copy_from(const QuotientGraph &q) {

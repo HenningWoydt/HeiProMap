@@ -2,9 +2,36 @@
 set -euo pipefail
 
 ROOT="$(pwd)"
-for arg in "$@"; do
-  echo "Unknown argument: $arg" >&2
-  exit 1
+ENABLE_PROFILER="OFF"
+BUILD_TYPE="Release"
+
+show_help() {
+  echo "Usage: $0 [options]"
+  echo "Options:"
+  echo "  -p, --profiler    Enable the profiler (ENABLE_PROFILER=ON)"
+  echo "  -d, --debug       Build in Debug mode"
+  echo "  -h, --help        Show this help message"
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -p|--profiler)
+      ENABLE_PROFILER="ON"
+      shift
+      ;;
+    -d|--debug)
+      BUILD_TYPE="Debug"
+      shift
+      ;;
+    -h|--help)
+      show_help
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
 done
 
 calc_jobs() {
@@ -108,13 +135,13 @@ else
 fi
 
 # -----------------------------
-# Build HeiProMap Release
+# Build HeiProMap
 # -----------------------------
-echo "Building HeiProMap Release..."
+echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER})..."
 rm -rf "${ROOT}/build"
 mkdir "${ROOT}/build"
 
-CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL}"
+CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER}"
 
-cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA_ARGS}
+cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
 cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap

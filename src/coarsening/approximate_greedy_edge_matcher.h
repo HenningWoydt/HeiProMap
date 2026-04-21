@@ -174,7 +174,7 @@ namespace HeiProMap {
             if (config.match_pendant_vertices_first) {
                 ScopedTimer _t("coarsening", "ApproximateGreedyEdgeMatcher", "match_pendant");
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         if (g.deg(u) != 1) { continue; }
 
@@ -188,7 +188,7 @@ namespace HeiProMap {
                         const f32 rating = (f32) ew / (f32) (g.deg(u) * g.deg(v));
                         edges[edges_size++] = {u, v, rating};
                     }
-                endfor
+                }
 
                 std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
@@ -207,7 +207,7 @@ namespace HeiProMap {
             if (config.match_triangles) {
                 ScopedTimer _t("coarsening", "ApproximateGreedyEdgeMatcher", "match_triangles");
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         if (used[u] == mark) { continue; }
                         if (g.deg(u) != 2) { continue; }
@@ -254,7 +254,7 @@ namespace HeiProMap {
                             }
                         }
                     }
-                endfor
+                }
 
                 std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
 
@@ -274,7 +274,7 @@ namespace HeiProMap {
             {
                 ScopedTimer _t("coarsening", "ApproximateGreedyEdgeMatcher", "rate_edges");
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         if (used[u] == mark) { continue; }
 
@@ -318,7 +318,7 @@ namespace HeiProMap {
                             }
                         }
                     }
-                endfor
+                }
             }
 
             {

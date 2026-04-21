@@ -50,7 +50,7 @@ namespace HeiProMap {
     inline bool assert_no_self_loops(const graph_t &g) {
         ScopedTimer _t("assert", "misc", "assert_no_self_loops");
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     for (size_t j = i + 1; j < g.neighborhoods[u + 1]; ++j) {
@@ -58,7 +58,7 @@ namespace HeiProMap {
                     }
                 }
             }
-        endfor
+        }
         return true;
     }
 
@@ -66,7 +66,7 @@ namespace HeiProMap {
         ScopedTimer _t("assert", "misc", "assert_no_double_edges");
 
         std::vector<vertex_t> manual;
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 manual.clear();
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
@@ -75,7 +75,7 @@ namespace HeiProMap {
                 std::sort(manual.begin(), manual.end());
                 ASSERT(no_duplicates_sorted(manual));
             }
-        endfor
+        }
         return true;
     }
 
@@ -86,11 +86,11 @@ namespace HeiProMap {
 
         std::vector<size_t> sizes(k, 0);
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 sizes[p_manager[u]] += 1;
             }
-        endfor
+        }
 
         for (partition_t id = 0; id < k; ++id) {
             ASSERT(sizes[id] == p_manager.size(id));
@@ -105,13 +105,13 @@ namespace HeiProMap {
         ScopedTimer _t("assert", "misc", "assert_bweights");
 
         std::vector<weight_t> weights(k, 0);
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
 
                 weights[u_id] += g.v_weights[u];
             }
-        endfor
+        }
 
         for (partition_t id = 0; id < k; ++id) {
             ASSERT(weights[id] == p_manager.get_bweight(id));
@@ -126,7 +126,7 @@ namespace HeiProMap {
         ScopedTimer _t("assert", "misc", "assert_correct_vertices_boundary");
 
         std::vector<vertex_t> manual;
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
 
@@ -138,15 +138,15 @@ namespace HeiProMap {
                     }
                 }
             }
-        endfor
+        }
 
         std::vector<vertex_t> automatic;
         for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-            forall_bv_id_iu(bv_manager, id, i, u)
+            for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                 {
                     automatic.push_back(u);
                 }
-            endfor
+            }
         }
 
         std::sort(manual.begin(), manual.end());
@@ -166,10 +166,10 @@ namespace HeiProMap {
 
         std::vector<std::vector<vertex_t> > manual(k);
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
-                forall_guiv(g, u, i, v)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                     {
                         partition_t v_id = p_manager[v];
                         if (u_id != v_id) {
@@ -177,17 +177,17 @@ namespace HeiProMap {
                             break;
                         }
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> automatic;
-            forall_bv_id_iu(bv_manager, id, i, u)
+            for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                 {
                     automatic.push_back(u);
                 }
-            endfor
+            }
 
             std::sort(manual[id].begin(), manual[id].end());
             std::sort(automatic.begin(), automatic.end());
@@ -217,19 +217,19 @@ namespace HeiProMap {
 
         std::map<std::pair<partition_t, partition_t>, weight_t> manual;
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 partition_t u_id = p_manager[u];
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         partition_t v_id = p_manager[v];
                         if (u_id != v_id) {
                             manual[{u_id, v_id}] += w;
                         }
                     }
-                endfor
+                }
             }
-        endfor
+        }
 
         for (auto [pair, w]: manual) {
             partition_t id1 = pair.first;
@@ -250,16 +250,16 @@ namespace HeiProMap {
                                           [[maybe_unused]] const partition_t k) {
         ScopedTimer _t("assert", "misc", "assert_correct_block_conn");
 
-        forall_gu(g, u)
+        for (vertex_t u = 0; u < g.n; ++u) {
             {
                 std::map<partition_t, weight_t> manual_map;
 
-                forall_guivw(g, u, i, v, w)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     {
                         partition_t v_id = p_manager[v];
                         manual_map[v_id] += w;
                     }
-                endfor
+                }
                 std::vector<std::pair<partition_t, weight_t> > manual;
                 for (auto [id, w]: manual_map) {
                     manual.emplace_back(id, w);
@@ -267,11 +267,11 @@ namespace HeiProMap {
 
                 std::vector<std::pair<partition_t, weight_t> > automatic;
 
-                forall_bc_ui_id_idw(block_conn, u, i, id, idw)
+                for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
                     {
                         automatic.emplace_back(id, idw);
                     }
-                endfor
+                }
 
                 std::sort(manual.begin(), manual.end(), [](const auto &a, const auto &b) {
                     return a.first < b.first;
@@ -289,7 +289,7 @@ namespace HeiProMap {
                     ASSERT(manual[i].second == automatic[i].second);
                 }
             }
-        endfor
+        }
 
         return true;
     }

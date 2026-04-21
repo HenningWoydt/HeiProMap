@@ -94,7 +94,7 @@ namespace HeiProMap {
                      const vertex_t u,
                      const partition_t id) {
             u64 n_neighbors = 0;
-            forall_guiv(g, u, i, v)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                 {
                     partition_t v_id = p_manager[v];
                     if (v_id != id) {
@@ -102,7 +102,7 @@ namespace HeiProMap {
                         add(v, v_id);
                     }
                 }
-            endfor
+            }
 
             if (n_neighbors > 0) {
                 m_n_boundary_edges[u] = n_neighbors;
@@ -131,7 +131,7 @@ namespace HeiProMap {
                 remove(u, old_id);
             }
 
-            forall_guiv(g, u, i, v)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                 {
                     partition_t v_id = p_manager[v];
 
@@ -151,7 +151,7 @@ namespace HeiProMap {
                         }
                     }
                 }
-            endfor
+            }
 
             if (m_n_boundary_edges[u] > 0) {
                 emplace(u, new_id);
@@ -168,16 +168,16 @@ namespace HeiProMap {
                 m_boundaries[id].clear();
             }
 
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 {
                     size_t n_different = 0;
                     partition_t u_id = p_manager[u];
 
-                    forall_guiv(g, u, i, v)
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                         {
                             n_different += (u_id != p_manager[v]);
                         }
-                    endfor
+                    }
 
                     if (n_different > 0) {
                         m_n_boundary_edges[u] = n_different;
@@ -185,7 +185,7 @@ namespace HeiProMap {
                         m_boundaries[u_id].push_back(u);
                     }
                 }
-            endfor
+            }
         }
 
         void add_boundary_vertex_from_count(const vertex_t u,

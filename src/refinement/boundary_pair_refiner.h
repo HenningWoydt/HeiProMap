@@ -48,17 +48,17 @@ namespace HeiProMap {
             vertex_t n_vertices = 0;
             vertex_t n_neg_vertices = 0;
             for (partition_t u_id = 0; u_id < p_manager.k; u_id++) {
-                forall_bv_id_iu(bv_manager, u_id, i, u)
+                for (size_t i = 0; i < bv_manager.size(u_id); ++i) { const vertex_t u = bv_manager.get(u_id, i);
                     {
                         size_t n_conns = 0;
                         partition_t last_id = u_id;
-                        forall_bc_ui_id(block_conn, u, j, id)
+                        for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) { const partition_t id = block_conn.get_id(j);
                             {
                                 if (u_id == id) { continue; }
                                 n_conns += 1;
                                 last_id = id;
                             }
-                        endfor
+                        }
 
                         if (n_conns == 1) {
                             n_vertices += 1;
@@ -71,7 +71,7 @@ namespace HeiProMap {
                             }
                         }
                     }
-                endfor
+                }
             }
 
             std::cout << "Found (" << n_vertices << ", " << n_neg_vertices << ") of " << bv_manager.size() << " with exactly one other connected block" << std::endl;
@@ -86,12 +86,12 @@ namespace HeiProMap {
             weight_t max_pos = 0;
             std::vector<vertex_t> vertices(2);
             for (partition_t u_id = 0; u_id < p_manager.k; u_id++) {
-                forall_bv_id_iu(bv_manager, u_id, i, u)
+                for (size_t i = 0; i < bv_manager.size(u_id); ++i) { const vertex_t u = bv_manager.get(u_id, i);
                     {
                         if (gains[u] == X) { continue; } // not interesting vertex
 
                         vertices[0] = u;
-                        forall_guiv(g, u, j, v)
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                             {
                                 partition_t v_id = p_manager[v];
                                 partition_t t_id = target[u];
@@ -120,9 +120,9 @@ namespace HeiProMap {
                                     max_pos = std::max(max_pos, delta);
                                 }
                             }
-                        endfor
+                        }
                     }
-                endfor
+                }
             }
 
             std::cout << "Found " << n_pairs << " pairs, found " << n_pos_pairs << " pos-pairs with " << max_pos << std::endl;

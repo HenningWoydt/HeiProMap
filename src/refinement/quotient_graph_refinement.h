@@ -283,9 +283,9 @@ namespace HeiProMap {
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
                 boundary_vertices_v.clear();
-                forall_bv_id_iu(bv_manager, u_id, j, u)
+                for (size_t j = 0; j < bv_manager.size(u_id); ++j) { const vertex_t u = bv_manager.get(u_id, j);
                     {
-                        forall_bc_ui_id(block_conn, u, i, id)
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
                             {
                                 if (id == v_id) {
                                     weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
@@ -293,13 +293,13 @@ namespace HeiProMap {
                                     break;
                                 }
                             }
-                        endfor
+                        }
                     }
-                endfor
+                }
 
-                forall_bv_id_iu(bv_manager, v_id, j, v)
+                for (size_t j = 0; j < bv_manager.size(v_id); ++j) { const vertex_t v = bv_manager.get(v_id, j);
                     {
-                        forall_bc_ui_id(block_conn, v, i, id)
+                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) { const partition_t id = block_conn.get_id(i);
                             {
                                 if (id == u_id) {
                                     weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
@@ -307,9 +307,9 @@ namespace HeiProMap {
                                     break;
                                 }
                             }
-                        endfor
+                        }
                     }
-                endfor
+                }
             }
 
             max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
@@ -393,7 +393,7 @@ namespace HeiProMap {
                     }
 
                     // we have to push or update the neighbors that were not moved already
-                    forall_guiv(g, vertex, i, neighbor)
+                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) { const vertex_t neighbor = g.edges_v[i];
                         {
                             if (vertex_used[neighbor] == vertex_mark) { continue; }
 
@@ -414,7 +414,7 @@ namespace HeiProMap {
                                 boundary_vertices_v.push_update(neighbor, new_qap_delta);
                             }
                         }
-                    endfor
+                    }
 
                     // remove vertex from u if it is not boundary
                     while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
@@ -484,9 +484,9 @@ namespace HeiProMap {
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
                 boundary_vertices_v.clear();
-                forall_bv_id_iu(bv_manager, u_id, j, u)
+                for (size_t j = 0; j < bv_manager.size(u_id); ++j) { const vertex_t u = bv_manager.get(u_id, j);
                     {
-                        forall_bc_ui_id(block_conn, u, i, id)
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
                             {
                                 if (id == v_id) {
                                     weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
@@ -494,13 +494,13 @@ namespace HeiProMap {
                                     break;
                                 }
                             }
-                        endfor
+                        }
                     }
-                endfor
+                }
 
-                forall_bv_id_iu(bv_manager, v_id, j, v)
+                for (size_t j = 0; j < bv_manager.size(v_id); ++j) { const vertex_t v = bv_manager.get(v_id, j);
                     {
-                        forall_bc_ui_id(block_conn, v, i, id)
+                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) { const partition_t id = block_conn.get_id(i);
                             {
                                 if (id == u_id) {
                                     weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
@@ -508,9 +508,9 @@ namespace HeiProMap {
                                     break;
                                 }
                             }
-                        endfor
+                        }
                     }
-                endfor
+                }
             }
 
             max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
@@ -592,7 +592,7 @@ namespace HeiProMap {
                     }
 
                     // we have to push or update the neighbors that were not moved already
-                    forall_guiv(g, vertex, i, neighbor)
+                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) { const vertex_t neighbor = g.edges_v[i];
                         {
                             if (vertex_used[neighbor] == vertex_mark) { continue; }
 
@@ -613,7 +613,7 @@ namespace HeiProMap {
                                 boundary_vertices_v.push_update(neighbor, new_qap_delta);
                             }
                         }
-                    endfor
+                    }
 
                     // remove vertex from u if it is not boundary
                     while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }

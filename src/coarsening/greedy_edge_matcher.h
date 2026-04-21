@@ -122,11 +122,11 @@ namespace HeiProMap {
                     f32 max_rating = std::numeric_limits<f32>::min();
 
                     #pragma omp for
-                    forall_gu(g, u)
+                    for (vertex_t u = 0; u < g.n; ++u) {
                         {
                             weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
-                            forall_guivw(g, u, j, v, w)
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                                 {
                                     if (u >= v) { continue; }
                                     weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
@@ -149,9 +149,9 @@ namespace HeiProMap {
 
                                     thread_edges[t_id].emplace_back(u, v, edge_rating);
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
 
                     min_ratings[t_id] = min_rating;
                     max_ratings[t_id] = max_rating;
@@ -287,14 +287,14 @@ namespace HeiProMap {
                     for (vertex_t u = 0; u < g.n; ++u) {
                         if (matching.is_matched(u)) { continue; }
 
-                        forall_guiv(g, u, j, v)
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                             {
                                 if (matching.is_matched(v)) { continue; }
                                 if (p_manager[u] != p_manager[v]) { continue; }
                                 matching.add(u, v);
                                 break;
                             }
-                        endfor
+                        }
                     }
                 }
             } else {
@@ -306,11 +306,11 @@ namespace HeiProMap {
                 {
                     ScopedTimer _t("coarsening", "GreedyEdgeMatcher", "rate_edges");
 
-                    forall_gu(g, u)
+                    for (vertex_t u = 0; u < g.n; ++u) {
                         {
                             weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
-                            forall_guivw(g, u, j, v, w)
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                                 {
                                     if (u >= v) { continue; }
                                     weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
@@ -331,9 +331,9 @@ namespace HeiProMap {
 
                                     edges[edges_size++] = {u, v, edge_rating};
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
                 }
 
                 if (min_rating != max_rating) {

@@ -128,10 +128,10 @@ namespace HeiProMap {
 
                 curr_boundary_size = 0;
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u) {
+                    for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i); {
                             curr_boundary[curr_boundary_size++] = u;
                         }
-                    endfor
+                    }
                 }
                 std::shuffle(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
 
@@ -148,14 +148,14 @@ namespace HeiProMap {
                     block_marker += 1;
                     block_used[u_id] = block_marker;
                     u_move_ids_size = 0;
-                    forall_guiv(g, u, i, neighbor) {
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; {
                             partition_t neighbor_id = p_manager[neighbor];
                             if (block_used[neighbor_id] != block_marker) {
                                 u_move_ids[u_move_ids_size++] = neighbor_id;
                                 block_used[neighbor_id] = block_marker;
                             }
                         }
-                    endfor
+                    }
 
                     partition_t best_u_move_id = 0;
                     vertex_t best_v = 0;
@@ -165,7 +165,7 @@ namespace HeiProMap {
                     weight_t best_qap_delta = -1;
 
                     // check all neighbors v
-                    forall_guiv(g, u, i, v) {
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; {
                             if (vertex_used[v] == vertex_marker) { continue; } // vertex was used
                             if (!bv_manager.is_boundary(v)) { continue; }      // vertex is not boundary
 
@@ -176,7 +176,7 @@ namespace HeiProMap {
                             block_marker += 1;
                             block_used[v_id] = block_marker;
                             v_move_ids_size = 0;
-                            forall_guiv(g, v, i, neighbor) {
+                            for (size_t i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) { const vertex_t neighbor = g.edges_v[i]; {
                                     partition_t neighbor_id = p_manager[neighbor];
 
                                     if (block_used[neighbor_id] != block_marker) {
@@ -184,7 +184,7 @@ namespace HeiProMap {
                                         block_used[neighbor_id] = block_marker;
                                     }
                                 }
-                            endfor
+                            }
 
                             // check if moving u to u_ids and v to v_ids simultaneously would improve the score
                             for (size_t j = 0; j < u_move_ids_size; ++j) {
@@ -215,7 +215,7 @@ namespace HeiProMap {
                                 }
                             }
                         }
-                    endfor
+                    }
 
                     if (best_qap_delta > 0) {
                         bv_manager.move(g, p_manager, u, u_id, best_u_move_id);

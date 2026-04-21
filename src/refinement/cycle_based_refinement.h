@@ -179,11 +179,11 @@ namespace HeiProMap {
                 ScopedTimer _t("refinement", "FastCycleRefinement", "get_boundary");
 
                 for (partition_t id = 0; id < p_manager.k; ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u)
+                    for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                         {
                             curr_boundary.push_back(u);
                         }
-                    endfor
+                    }
                 }
                 fast_shuffle_unchecked(curr_boundary.data(), curr_boundary.data() + curr_boundary.size(), random_engine.generator);
             }
@@ -199,11 +199,11 @@ namespace HeiProMap {
 
                 for (auto u: curr_boundary) {
                     bool all_free = true;
-                    forall_guiv(g, u, i, v)
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                         {
                             all_free &= in_independent_set[v] == 0;
                         }
-                    endfor
+                    }
                     if (all_free) {
                         independent_set.push_back(u);
                         in_independent_set[u] = 1;
@@ -217,7 +217,7 @@ namespace HeiProMap {
 
                 for (vertex_t u: independent_set) {
                     partition_t u_id = p_manager[u];
-                    forall_bc_ui_id(block_conn, u, j, new_id)
+                    for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) { const partition_t new_id = block_conn.get_id(j);
                         {
                             if (u_id == new_id) { continue; }
 
@@ -228,7 +228,7 @@ namespace HeiProMap {
                             flat_moves.push_back(move);
                             moves_idx[u_id][new_id].push_back(idx);
                         }
-                    endfor
+                    }
                 }
             }
 
@@ -413,12 +413,12 @@ namespace HeiProMap {
                 ScopedTimer _t("refinement", "CycleRefinement", "get_boundary");
 
                 for (partition_t id = 0; id < p_manager.k; ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u)
+                    for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                         {
                             curr_boundary.push_back(u);
                         }
                     }
-                endfor
+                }
                 fast_shuffle_unchecked(curr_boundary.data(), curr_boundary.data() + curr_boundary.size(), random_engine.generator);
             }
 
@@ -433,11 +433,11 @@ namespace HeiProMap {
 
                 for (auto u: curr_boundary) {
                     bool all_free = true;
-                    forall_guiv(g, u, i, v)
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                         {
                             // all_free &= in_independent_set[v] == 0;
                         }
-                    endfor
+                    }
                     if (all_free) {
                         independent_set.push_back(u);
                         in_independent_set[u] = 1;
@@ -464,7 +464,7 @@ namespace HeiProMap {
 
                 for (auto u: independent_set) {
                     partition_t u_id = p_manager[u];
-                    forall_bc_ui_id(block_conn, u, i, id)
+                    for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
                         {
                             if (id == u_id) { continue; }
 
@@ -477,7 +477,7 @@ namespace HeiProMap {
                             move_id[u_id][id].push_back(n_moves);
                             n_moves += 1;
                         }
-                    endfor
+                    }
                 }
             }
 

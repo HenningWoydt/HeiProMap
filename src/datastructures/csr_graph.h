@@ -222,7 +222,7 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                     vertex_t map_u = mapping.get(u);
 
-                    forall_guivw(g, u, i, v, w)
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                         {
                             vertex_t map_v = mapping.get(v);
                             if (map_u == map_v) { continue; }
@@ -250,7 +250,7 @@ namespace HeiProMap {
                                 j += 1;
                             }
                         }
-                    endfor
+                    }
                 }
             }
             // insert edges in real array
@@ -355,13 +355,13 @@ namespace HeiProMap {
             {
                 ScopedTimer _t("contraction", "CSRGraph", "mapped_vertices");
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         vertex_t map_u = mapping.get(u);
                         mapped_vertices[cursor[map_u]] = u;
                         cursor[map_u] += 1;
                     }
-                endfor
+                }
             }
             // insert edges in real array
             {
@@ -373,7 +373,7 @@ namespace HeiProMap {
                     for (u64 i = n_mapped_prefix[map_u]; i < n_mapped_prefix[map_u + 1]; ++i) {
                         vertex_t u = mapped_vertices[i];
 
-                        forall_guiv(g, u, j, v)
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                             {
                                 vertex_t map_v = mapping.get(v);
                                 if (map_u == map_v) { continue; }
@@ -390,7 +390,7 @@ namespace HeiProMap {
                                     m += 1;
                                 }
                             }
-                        endfor
+                        }
                     }
                     neighborhoods[map_u + 1] = m;
                 }
@@ -469,7 +469,7 @@ namespace HeiProMap {
                         vertex_t map_u = mapping.get(u);
                         if (map_u < mu_beg || map_u >= mu_end) continue; // not my bucket range
 
-                        forall_guiv(g, u, i, v)
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                             {
                                 vertex_t map_v = mapping.get(v);
                                 if (map_u == map_v) { continue; }
@@ -498,7 +498,7 @@ namespace HeiProMap {
                                     j += 1;
                                 }
                             }
-                        endfor
+                        }
                     }
                     m_per_thread[tid] = local_m;
                 }

@@ -91,7 +91,7 @@ namespace HeiProMap {
             partition_t u_id = p_manager[u];
             weight_t u_weight = g.v_weights[u];
 
-            forall_guiv(g, u, j, v)
+            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                 {
                     partition_t v_id = p_manager[v];
                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
@@ -102,7 +102,7 @@ namespace HeiProMap {
                         move.best_id = v_id;
                     }
                 }
-            endfor
+            }
 
             if (move.best_id != m_k) { return move; }
 
@@ -131,7 +131,7 @@ namespace HeiProMap {
             partition_t u_id = p_manager[u];
             weight_t u_weight = g.v_weights[u];
 
-            forall_guiv(g, u, j, v)
+            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                 {
                     partition_t v_id = p_manager[v];
                     if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
@@ -142,7 +142,7 @@ namespace HeiProMap {
                         move.best_id = v_id;
                     }
                 }
-            endfor
+            }
 
             return move;
         }
@@ -201,12 +201,12 @@ namespace HeiProMap {
 
                 for (partition_t id = 0; id < m_k; ++id) {
                     if (p_manager.get_bweight(id) > lmax) {
-                        forall_bv_id_iu(bv_manager, id, i, u)
+                        for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                             {
                                 boundary[cursor[id]] = u;
                                 cursor[id] += 1;
                             }
-                        endfor
+                        }
                     }
                 }
 
@@ -263,7 +263,7 @@ namespace HeiProMap {
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
-                    forall_guiv(g, u, j, v)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                         {
                             if (bv_manager.is_boundary(v) == false) { continue; }
                             if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
@@ -274,7 +274,7 @@ namespace HeiProMap {
                                 global_queue.push(new_move);
                             }
                         }
-                    endfor
+                    }
                 }
                 _t_process_heap.stop();
             }
@@ -335,12 +335,12 @@ namespace HeiProMap {
 
                 for (partition_t id = 0; id < m_k; ++id) {
                     if (p_manager.get_bweight(id) > lmax) {
-                        forall_bv_id_iu(bv_manager, id, i, u)
+                        for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                             {
                                 boundary[cursor[id]] = u;
                                 cursor[id] += 1;
                             }
-                        endfor
+                        }
                     }
                 }
 
@@ -398,7 +398,7 @@ namespace HeiProMap {
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
-                    forall_guiv(g, u, j, v)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                         {
                             if (bv_manager.is_boundary(v) == false) { continue; }
                             if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
@@ -409,7 +409,7 @@ namespace HeiProMap {
                                 global_queue.push(new_move);
                             }
                         }
-                    endfor
+                    }
                 }
 
                 _t_process_heap.stop();
@@ -444,7 +444,7 @@ namespace HeiProMap {
             heap.initialize(g.n);
 
             for (partition_t id = 0; id < m_k; ++id) {
-                forall_bv_id_iu(bv_manager, id, i, u)
+                for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
                     {
                         weight_t u_w = g.v_weights[u];
 
@@ -466,7 +466,7 @@ namespace HeiProMap {
                             heap.push(u, best_id, best_qap);
                         }
                     }
-                endfor
+                }
             }
 
             while (!heap.empty()) {
@@ -489,7 +489,7 @@ namespace HeiProMap {
                     // blocks_to_fill.erase(); // todo
                 }
 
-                forall_guiv(g, u, i, v)
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                     {
                         if (!bv_manager.is_boundary(v)) { continue; }
 
@@ -515,7 +515,7 @@ namespace HeiProMap {
                             heap.push_update(v, best_id, best_qap);
                         }
                     }
-                endfor
+                }
             }
         }
     };

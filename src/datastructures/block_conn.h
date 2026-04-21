@@ -82,11 +82,11 @@ namespace HeiProMap {
                   const partition_t new_id) {
             if (old_id == new_id) return;
 
-            forall_guivw(g, u, i, v, w)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                 {
                     update(v, old_id, new_id, w);
                 }
-            endfor
+            }
         }
 
         void compute_from_scratch(const graph_t &g, const p_manager_t &p_manager) {
@@ -99,18 +99,18 @@ namespace HeiProMap {
             std::fill_n(m_sizes.get_ptr(), g.n, 0);
 
             total_size = 0;
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 {
                     m_start[u] = total_size;
                     total_size += std::min(m_k, g.deg(u));
-                    forall_guivw(g, u, i, v, w)
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                         {
                             partition_t v_id = p_manager[v];
                             add(u, v_id, w);
                         }
-                    endfor
+                    }
                 }
-            endfor
+            }
         }
 
         void copy_from(const BlockConn &bm) {

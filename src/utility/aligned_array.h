@@ -121,11 +121,23 @@ namespace HeiProMap {
             return *this;
         }
 
-        T &operator[](size_t index) { return m_ptr[index]; }
+        T &operator[](size_t index) {
+            T * HEIPROMAP_RESTRICT ptr = HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
+            return ptr[index];
+        }
 
-        const T &operator[](size_t index) const { return m_ptr[index]; }
+        const T &operator[](size_t index) const {
+            const T * HEIPROMAP_RESTRICT ptr = HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
+            return ptr[index];
+        }
 
-        T *get_ptr() { return m_ptr; }
+        T * HEIPROMAP_RESTRICT get_ptr() {
+            return HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
+        }
+
+        const T * HEIPROMAP_RESTRICT get_ptr() const {
+            return HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
+        }
     };
 
     template<typename T>

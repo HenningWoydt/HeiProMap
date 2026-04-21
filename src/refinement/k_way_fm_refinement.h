@@ -124,14 +124,14 @@ namespace HeiProMap {
 
                 // insert all boundary vertices
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, j, u)
+                    for (size_t j = 0; j < bv_manager.size(id); ++j) { const vertex_t u = bv_manager.get(id, j);
                         {
                             partition_t u_id = p_manager[u];
                             weight_t u_weight = g.v_weights[u];
 
                             // find all connected partitions to u
                             block_marker += 1;
-                            forall_guiv(g, u, i, v)
+                            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
                                 {
                                     partition_t v_id = p_manager[v];
                                     if (v_id == u_id) { continue; }
@@ -143,9 +143,9 @@ namespace HeiProMap {
 
                                     block_used[v_id] = block_marker;
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
                 }
 
                 moves_size = 0;
@@ -198,7 +198,7 @@ namespace HeiProMap {
                     if (steps_since_last_improvement > 2.0 && steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) { break; }
 
                     // we have to push or update the neighbors that were not moved already
-                    forall_guiv(g, vertex, i, neighbor)
+                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) { const vertex_t neighbor = g.edges_v[i];
                         {
                             if (vertex_used[neighbor] == vertex_marker) { continue; }
                             if (!is_boundary(g, p_manager, neighbor)) { continue; }
@@ -207,7 +207,7 @@ namespace HeiProMap {
                             weight_t neighbor_weight = g.v_weights[neighbor];
 
                             block_marker += 1;
-                            forall_guiv(g, neighbor, j, v)
+                            for (size_t j = g.neighborhoods[neighbor]; j < g.neighborhoods[neighbor + 1]; ++j) { const vertex_t v = g.edges_v[j];
                                 {
                                     partition_t v_id = p_manager[v];
                                     if (v_id == neighbor_id) { continue; }
@@ -219,9 +219,9 @@ namespace HeiProMap {
 
                                     block_used[v_id] = block_marker;
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
                 }
 
                 // revert all moves in partitioning manager

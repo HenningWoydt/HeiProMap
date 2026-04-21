@@ -154,9 +154,9 @@ namespace HeiProMap {
                         // collect all possible moves
                         possible_pos_moves.clear();
                         possible_neg_moves.clear();
-                        forall_bv_id_iu(bv_manager, u_id, i, u) {
+                        for (size_t i = 0; i < bv_manager.size(u_id); ++i) { const vertex_t u = bv_manager.get(u_id, i); {
                                 if (g.v_weights[u] + p_manager.get_bweight(v_id) > lmax) { continue; }
-                                forall_guiv(g, u, j, v) {
+                                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; {
                                         if (p_manager[v] != v_id) { continue; }
 
                                         weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
@@ -170,9 +170,9 @@ namespace HeiProMap {
                                         }
                                         break;
                                     }
-                                endfor
+                                }
                             }
-                        endfor
+                        }
 
                         if (possible_pos_moves.size() + possible_neg_moves.size() == 0) { break; }
 

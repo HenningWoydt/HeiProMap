@@ -95,7 +95,7 @@ namespace HeiProMap {
                     f32 counter = 0;
                     vertex_t chosen_v = 0;
 
-                    forall_guiv(g, u, j, v)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                         {
                             if (used[v] == mark) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
@@ -109,7 +109,7 @@ namespace HeiProMap {
                                 chosen_v = v;
                             }
                         }
-                    endfor
+                    }
                     if (counter > 0) {
                         used[u] = mark;
                         used[chosen_v] = mark;
@@ -122,7 +122,7 @@ namespace HeiProMap {
 
             /*
             // 3) Third: all remaining vertices
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 {
                     weight_t u_w = g.v_weights[u];
 
@@ -131,7 +131,7 @@ namespace HeiProMap {
                     f32 counter = 0;
                     vertex_t chosen_v = 0;
 
-                    forall_guiv(g, u, j, v)
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                         {
                             if (used[v] == mark) { continue; }
                             if (p_manager[u] != p_manager[v]) { continue; }
@@ -145,7 +145,7 @@ namespace HeiProMap {
                                 chosen_v = v;
                             }
                         }
-                    endfor
+                    }
                     if (counter > 0) {
                         used[u] = mark;
                         used[chosen_v] = mark;
@@ -154,7 +154,7 @@ namespace HeiProMap {
                         n_matched += 2;
                     }
                 }
-            endfor
+            }
             */
 
             matching.set_translation();

@@ -489,7 +489,7 @@ namespace HeiProMap {
                 block_conns[0].initialize(graphs.back().n, graphs.back().m, ac.k);
                 block_conns[0].reset_build();
 
-                forall_gu(graphs.back(), u)
+                for (vertex_t u = 0; u < graphs.back().n; ++u) {
                     {
                         block_conns[0].begin_vertex(graphs.back(), u);
 
@@ -497,7 +497,7 @@ namespace HeiProMap {
                         const weight_t u_w = graphs.back().v_weights[u];
                         p_managers[0].set(u, u_w, u_id);
 
-                        forall_guivw(graphs.back(), u, i, v, w)
+                        for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) { const vertex_t v = graphs.back().edges_v[i]; const weight_t w = graphs.back().edges_w[i];
                             {
                                 const partition_t v_id = p_managers[0][v];
 
@@ -511,9 +511,9 @@ namespace HeiProMap {
                                     }
                                 }
                             }
-                        endfor
+                        }
                     }
-                endfor
+                }
                 _t_allocate.stop();
 
                 initial_qap = get_qap(graphs.back(), p_managers[0], d_oracle);
@@ -643,14 +643,14 @@ namespace HeiProMap {
                 block_conns[0].initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
                 block_conns[0].reset_build();
 
-                forall_gu(g_uncontracted, u)
+                for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
                     {
                         const partition_t u_id = p_managers[0][u];
                         size_t n_different = 0;
 
                         block_conns[0].begin_vertex(g_uncontracted, u);
 
-                        forall_guivw(g_uncontracted, u, i, v, w)
+                        for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) { const vertex_t v = g_uncontracted.edges_v[i]; const weight_t w = g_uncontracted.edges_w[i];
                             {
                                 const partition_t v_id = p_managers[0][v];
 
@@ -660,11 +660,11 @@ namespace HeiProMap {
                                 // rebuild boundary information
                                 n_different += (u_id != v_id);
                             }
-                        endfor
+                        }
 
                         bv_managers[0].add_boundary_vertex_from_count(u, u_id, n_different);
                     }
-                endfor
+                }
             }
             //
             {

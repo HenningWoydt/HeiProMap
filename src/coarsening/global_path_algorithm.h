@@ -157,12 +157,12 @@ namespace HeiProMap {
                     for (vertex_t u = 0; u < g.n; ++u) {
                         if (matching.is_matched(u)) { continue; }
                         partition_t u_id = p_manager[u];
-                        forall_guiv(g, u, j, v)
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                             if (matching.is_matched(v)) { continue; }
                             if (u_id != p_manager[v]) { continue; }
                             matching.add(u, v);
                             break;
-                        endfor
+                        }
                     }
                     finalize_matching(g, matching, mapping);
                     return;
@@ -395,7 +395,7 @@ namespace HeiProMap {
             {
                 ScopedTimer _t_paths("coarsening", "GlobalPathAlgorithmMatcher", "solve_paths");
 #pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     u64 thread_id = omp_get_thread_num();
                     if (IS_ONE_ENDPOINT(m_neighbors[u], u)) {
                         vertex_t v1 = u;
@@ -409,7 +409,7 @@ namespace HeiProMap {
                             solve_path(g, u, path_length[path_id[u]], matching, thread_id);
                         }
                     }
-                endfor
+                }
             }
 
             {
@@ -445,7 +445,7 @@ namespace HeiProMap {
             }
 
 #pragma omp parallel for num_threads(m_threads) schedule(guided)
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 u64 thread_id = omp_get_thread_num();
                 weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
                 partition_t u_id = p_manager[u];
@@ -453,7 +453,7 @@ namespace HeiProMap {
                 f32 local_min = m_thread_infos[thread_id].min_rating;
                 f32 local_max = m_thread_infos[thread_id].max_rating;
 
-                forall_guivw(g, u, j, v, w)
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                     if (u >= v) { continue; }
                     if (u_id != p_manager[v]) { continue; }
                     weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
@@ -480,11 +480,11 @@ namespace HeiProMap {
                     local_min = std::min(local_min, edge_rating);
                     local_max = std::max(local_max, edge_rating);
                     m_thread_infos[thread_id].local_edges.emplace_back(u, v, edge_rating);
-                endfor
+                }
                 
                 m_thread_infos[thread_id].min_rating = local_min;
                 m_thread_infos[thread_id].max_rating = local_max;
-            endfor
+            }
         }
 
         f32 solve_path_length_1(const vertex_t u, Matching &matching) {
@@ -643,17 +643,17 @@ namespace HeiProMap {
         template<bool t_uniform_v_weights>
         void random_matching(const size_t, const graph_t &g, Matching &matching, weight_t lmax) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "random_matching");
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) { continue; }
                 weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
-                forall_guiv(g, u, j, v)
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                     if (matching.is_matched(v)) { continue; }
                     weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
                     if (u_w + v_w > lmax) { continue; }
                     matching.add(u, v);
                     break;
-                endfor
-            endfor
+                }
+            }
         }
 
         void finalize_matching(const graph_t &g, Matching &matching, Mapping &mapping) {
@@ -686,14 +686,14 @@ namespace HeiProMap {
             std::iota(preferred.begin(), preferred.end(), 0);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 if (g.deg(u) != 1 || matching.is_matched(u)) { continue; }
                 vertex_t mid = g.edges_v[g.neighborhoods[u]];
                 weight_t mid_w = t_uniform_e_weights ? 1 : g.edges_w[g.neighborhoods[u]];
                 weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
                 f64 best_rating = -1e18;
                 
-                forall_guivw(g, mid, i, v, w)
+                for (size_t i = g.neighborhoods[mid]; i < g.neighborhoods[mid + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                     if (u == v || g.deg(v) != 1 || matching.is_matched(v)) { continue; }
                     weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
                     if (u_w + v_w > lmax) { continue; }
@@ -701,9 +701,9 @@ namespace HeiProMap {
                     weight_t mw = t_uniform_e_weights ? 1 : w;
                     f64 rating = (f64) (mw + mid_w) + small_noise(u, v);
                     if (rating > best_rating) { best_rating = rating; preferred[u] = v; }
-                endfor
-            endfor
-            forall_gu(g, u) if (g.deg(u) == 1 && !matching.is_matched(u) && preferred[u] != u && preferred[preferred[u]] == u && u < preferred[u]) matching.add(u, preferred[u]); endfor
+                }
+            }
+            for (vertex_t u = 0; u < g.n; ++u) { if (g.deg(u) == 1 && !matching.is_matched(u) && preferred[u] != u && preferred[preferred[u]] == u && u < preferred[u]) matching.add(u, preferred[u]); }
         }
 
         static inline uint64_t hash_combine_u64(uint64_t a, uint64_t b) { return splitmix64(a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2))); }
@@ -721,10 +721,10 @@ namespace HeiProMap {
         template<bool t_uniform_e_weights>
         static inline uint64_t neighborhood_hash(const graph_t &g, vertex_t u) {
             uint64_t x = splitmix64(g.deg(u)), s1 = 0, s2 = 0;
-            forall_guivw(g, u, i, v, w)
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                 uint64_t he = hash_edge<t_uniform_e_weights>(v, w);
                 x ^= he; s1 += he; s2 += splitmix64(he);
-            endfor
+            }
             return hash_combine_u64(x, hash_combine_u64(s1, s2));
         }
 
@@ -732,8 +732,8 @@ namespace HeiProMap {
         static inline bool same_neighborhood(const graph_t &g, vertex_t u, vertex_t v) {
             if (g.deg(u) != g.deg(v)) return false;
             std::vector<std::pair<vertex_t, weight_t>> nu, nv;
-            forall_guivw(g, u, i, x, w) nu.emplace_back(x, t_uniform_e_weights ? 1 : w); endfor
-            forall_guivw(g, v, i, x, w) nv.emplace_back(x, t_uniform_e_weights ? 1 : w); endfor
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t x = g.edges_v[i]; const weight_t w = g.edges_w[i]; nu.emplace_back(x, t_uniform_e_weights ? 1 : w); }
+            for (size_t i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) { const vertex_t x = g.edges_v[i]; const weight_t w = g.edges_w[i]; nv.emplace_back(x, t_uniform_e_weights ? 1 : w); }
             std::sort(nu.begin(), nu.end()); std::sort(nv.begin(), nv.end());
             return nu == nv;
         }
@@ -804,14 +804,14 @@ namespace HeiProMap {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_matchmaker");
             std::vector<vertex_t> preferred(g.n); std::iota(preferred.begin(), preferred.end(), 0);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) continue;
                 weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
                 f64 best_rating = -1e18;
                 
-                forall_guivw(g, u, j, mid, mw_orig)
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t mid = g.edges_v[j]; const weight_t mw_orig = g.edges_w[j];
                     weight_t mid_w = t_uniform_e_weights ? 1 : mw_orig;
-                    forall_guivw(g, mid, i, v, w)
+                    for (size_t i = g.neighborhoods[mid]; i < g.neighborhoods[mid + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
                         if (u != v && !matching.is_matched(v)) {
                             weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
                             if (u_w + v_w <= lmax) {
@@ -820,10 +820,10 @@ namespace HeiProMap {
                                 if (rating > best_rating) { best_rating = rating; preferred[u] = v; }
                             }
                         }
-                    endfor
-                endfor
-            endfor
-            forall_gu(g, u) if (!matching.is_matched(u) && preferred[u] != u && preferred[preferred[u]] == u && u < preferred[u]) matching.add(u, preferred[u]); endfor
+                    }
+                }
+            }
+            for (vertex_t u = 0; u < g.n; ++u) { if (!matching.is_matched(u) && preferred[u] != u && preferred[preferred[u]] == u && u < preferred[u]) matching.add(u, preferred[u]); }
         }
     };
 }

@@ -132,12 +132,12 @@ namespace HeiProMap {
                 used_blocks.clear();
 
                 for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    forall_bv_id_iu(bv_manager, id, i, u) {
+                    for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i); {
                             partition_t u_id = p_manager[u];
                             weight_t u_weight = g.v_weights[u];
 
                             block_marker += 1;
-                            forall_guiv(g, u, i, v) {
+                            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; {
                                     partition_t v_id = p_manager[v];
                                     if (u_id == v_id) { continue; }
                                     if (block_used[v_id] == block_marker) { continue; }
@@ -151,9 +151,9 @@ namespace HeiProMap {
                                         block_used[v_id] = block_marker;
                                     }
                                 }
-                            endfor
+                            }
                         }
-                    endfor
+                    }
                 }
 
                 std::sort(possible_moves.begin(), possible_moves.end(), std::greater<KWayFMMove>());
@@ -214,11 +214,11 @@ namespace HeiProMap {
             std::vector<KWayFMMove> possible_moves;
             KWayFMMove best_stop_move = {0, 0, std::numeric_limits<partition_t>::max(), -1};
 
-            forall_bv_id_iu(bv_manager, id, i, u) {
+            for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i); {
                     weight_t u_weight = g.v_weights[u];
 
                     block_marker += 1;
-                    forall_guiv(g, u, j, v) {
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; {
                             partition_t v_id = p_manager[v];
                             if (id == v_id) { continue; }
                             if (block_used[v_id] == block_marker) { continue; }
@@ -242,9 +242,9 @@ namespace HeiProMap {
                                 possible_moves.push_back({u, id, v_id, qap_delta});
                             }
                         }
-                    endfor
+                    }
                 }
-            endfor
+            }
 
             std::sort(possible_moves.begin(), possible_moves.end(), std::greater<KWayFMMove>());
 

@@ -148,7 +148,7 @@ namespace HeiProMap {
             vertex_t singletons_size = 0;
             singletons.initialize(g.n);
 
-            forall_gu(g, u)
+            for (vertex_t u = 0; u < g.n; ++u) {
                 {
                     vertex_t id = mapping.get(u);
                     if (cluster_count[id] == 1) {
@@ -156,7 +156,7 @@ namespace HeiProMap {
                         singletons_size += 1;
                     }
                 }
-            endfor
+            }
 
             if (singletons_size == 0) { return; }
 
@@ -177,7 +177,7 @@ namespace HeiProMap {
                 weight_t current_id_w = 0;
 
                 flat_map.clear();
-                forall_guivw(g, u, j, v, w)
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                     {
                         partition_t v_id = p_manager[v];
                         if (u_id != v_id) { continue; }
@@ -190,7 +190,7 @@ namespace HeiProMap {
                             flat_map.add(id, w);
                         }
                     }
-                endfor
+                }
 
                 vertex_t best_id = current_id;
                 weight_t best_weight = current_id_w;
@@ -231,12 +231,12 @@ namespace HeiProMap {
                 ScopedTimer _t("coarsening", "SizeConstrainedLP", "max");
 
                 // determine the maximum allowed cluster weight
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         max_w = std::max(max_w, g.v_weights[u]);
                         max_deg = std::max(max_deg, g.deg(u));
                     }
-                endfor
+                }
                 max_w *= config->multiplier;
                 max_w = std::min(max_w, lmax);
             }
@@ -249,25 +249,25 @@ namespace HeiProMap {
                 bucket_sizes.initialize(B, 0);
                 bucket_offsets.initialize(B);
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         size_t d = g.deg(u);
                         size_t b = (d == 0) ? 0 : floor_log2(d);
                         bucket_sizes[b]++;
                     }
-                endfor
+                }
 
                 bucket_offsets[0] = 0;
                 for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         size_t d = g.deg(u);
                         size_t b = (d == 0) ? 0 : floor_log2(d);
                         flat_vertices[bucket_offsets[b]] = u;
                         bucket_offsets[b] += 1;
                     }
-                endfor
+                }
             }
             // setup cluster weights
             {
@@ -276,13 +276,13 @@ namespace HeiProMap {
                 // set each vertex to its own id
                 cluster_weights.initialize(g.n);
                 cluster_count.initialize(g.n);
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         mapping.set(u, u);
                         cluster_weights[u] = g.v_weights[u];
                         cluster_count[u] = 1;
                     }
-                endfor
+                }
             }
             // setup active
             {
@@ -326,7 +326,7 @@ namespace HeiProMap {
                             weight_t current_id_w = 0;
 
                             flat_map.clear();
-                            forall_guivw(g, u, j, v, w)
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                                 {
                                     partition_t v_id = p_manager[v];
                                     if (u_id != v_id) { continue; }
@@ -339,7 +339,7 @@ namespace HeiProMap {
                                         flat_map.add(id, w);
                                     }
                                 }
-                            endfor
+                            }
 
                             vertex_t best_id = current_id;
                             weight_t best_weight = current_id_w;
@@ -363,12 +363,12 @@ namespace HeiProMap {
 
                                 n_moved += 1;
                                 if (round > 0) {
-                                    forall_guiv(g, u, j, v)
+                                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                                         {
                                             #pragma omp atomic write
                                             active_next[v] = 1;
                                         }
-                                    endfor
+                                    }
                                 }
                             }
                         }
@@ -393,7 +393,7 @@ namespace HeiProMap {
 
                         flat_map.clear();
                         if constexpr (t_uniform_e_weights) {
-                            forall_guiv(g, u, j, v)
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                                 {
                                     partition_t v_id = p_manager[v];
                                     if (u_id != v_id) { continue; }
@@ -411,9 +411,9 @@ namespace HeiProMap {
                                         }
                                     }
                                 }
-                            endfor
+                            }
                         } else {
-                            forall_guivw(g, u, j, v, w)
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j]; const weight_t w = g.edges_w[j];
                                 {
                                     partition_t v_id = p_manager[v];
                                     if (u_id != v_id) { continue; }
@@ -431,7 +431,7 @@ namespace HeiProMap {
                                         }
                                     }
                                 }
-                            endfor
+                            }
                         }
 
                         if (current_id_w > best_weight) {
@@ -448,11 +448,11 @@ namespace HeiProMap {
 
                             n_moved += 1;
                             if (round > 0) {
-                                forall_guiv(g, u, j, v)
+                                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) { const vertex_t v = g.edges_v[j];
                                     {
                                         active_next[v] = 1;
                                     }
-                                endfor
+                                }
                             }
                         }
                     }
@@ -477,11 +477,11 @@ namespace HeiProMap {
             {
                 ScopedTimer _t("coarsening", "SizeConstrainedLP", "is_identity_mapping");
 
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         ident_mapping &= u == mapping.get(u);
                     }
-                endfor
+                }
             }
             if (ident_mapping) {
                 merge_when_identity<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
@@ -494,7 +494,7 @@ namespace HeiProMap {
                 // mapping starts at 0 and increments
                 remap.initialize(g.n, m_n);
                 vertex_t new_id = 0;
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         const vertex_t id = mapping.get(u);
                         if (remap[id] == m_n) {
@@ -502,17 +502,17 @@ namespace HeiProMap {
                             new_id += 1;
                         }
                     }
-                endfor
+                }
                 mapping.set_coarse_n(new_id);
 
                 // remap
-                forall_gu(g, u)
+                for (vertex_t u = 0; u < g.n; ++u) {
                     {
                         const vertex_t id = mapping.get(u);
                         const vertex_t map_id = remap[id];
                         mapping.set(u, map_id);
                     }
-                endfor
+                }
             }
         }
     };
