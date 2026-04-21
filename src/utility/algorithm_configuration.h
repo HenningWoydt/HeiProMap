@@ -158,6 +158,7 @@ namespace HeiProMap {
 
             // Coarsening global-path
             {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
+            {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
 
             // Coarsening greedy matching
             {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
@@ -299,10 +300,29 @@ namespace HeiProMap {
             }
         }
 
+        static EdgeRatingFunction string_to_rating_function(const std::string &rating_function) {
+            if (rating_function == "weight") {
+                return EdgeRatingFunction::WEIGHT;
+            } else if (rating_function == "expansion") {
+                return EdgeRatingFunction::EXPANSION;
+            } else if (rating_function == "heavy-edge") {
+                return EdgeRatingFunction::HEAVY_EDGE;
+            } else if (rating_function == "greedy") {
+                return EdgeRatingFunction::GREEDY;
+            } else {
+                std::cerr << "Unknown rating function: " << rating_function << std::endl;
+                exit(1);
+            }
+        }
+
         void set_coarsening_algorithm(const bool use_default = false) {
             // initialize global-paths config
             if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
                 global_path_algorithm_config.random_level = std::stoi(get("--coarsening-algorithm-global-paths-random-level"));
+            }
+
+            if (use_default || is_set("--coarsening-algorithm-global-paths-rating-function")) {
+                global_path_algorithm_config.rating_function = string_to_rating_function(get("--coarsening-algorithm-global-paths-rating-function"));
             }
 
             // actually set which algorithm to use
@@ -494,8 +514,8 @@ namespace HeiProMap {
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
-            // coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_string = "greedy-matching";
+            coarsening_algorithm_string = "global-paths";
+            // coarsening_algorithm_string = "greedy-matching";
             // coarsening_algorithm_string = "random-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
@@ -562,8 +582,8 @@ namespace HeiProMap {
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
-            // coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_string = "greedy-matching";
+            coarsening_algorithm_string = "global-paths";
+            // coarsening_algorithm_string = "greedy-matching";
             // coarsening_algorithm_string = "approx-greedy-matching";
             // coarsening_algorithm_string = "random-matching";
             // coarsening_algorithm_string = "heavy-matching";

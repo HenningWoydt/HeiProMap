@@ -31,8 +31,11 @@
 #include <chrono>
 #include <queue>
 #include <vector>
+#include <cmath>
+#include <omp.h>
 
 #include "../definitions.h"
+#include "../definitions_2.h"
 #include "../utility/JSON_utils.h"
 #include "../utility/random_engine.h"
 
@@ -44,7 +47,6 @@ namespace HeiProMap {
         f32 w2;
     };
 
-#define IS_ENDPOINT(n, u) n.n2 == u
 #define IS_NOT_ENDPOINT(n, u) n.n2 != u
 #define IS_ONE_ENDPOINT(n, u) n.n1 != u && n.n2 == u
 #define IS_UNMATCHED(n, u) n.n1 == u
@@ -52,6 +54,7 @@ namespace HeiProMap {
     class GlobalPathAlgorithmConfiguration {
     public:
         size_t random_level = 4;
+        EdgeRatingFunction rating_function = EdgeRatingFunction::HEAVY_EDGE;
     };
 
     /**
@@ -61,9 +64,36 @@ namespace HeiProMap {
      * > Experimental Algorithms, 6th International Workshop, WEA 2007, Rome, Italy, June 6-8, 2007, Proceedings.
      */
     class GlobalPathAlgorithmMatcher {
+        struct HeapEntry {
+            size_t thread_idx;
+            size_t edge_idx;
+            EdgeUVW edge;
+
+            bool operator<(const HeapEntry &other) const {
+                return edge < other.edge;
+            }
+        };
+
+        struct ThreadInfo {
+            std::vector<EdgeUVW> local_edges;
+            size_t edge_idx = 0;
+            f32 min_rating = std::numeric_limits<f32>::max();
+            f32 max_rating = std::numeric_limits<f32>::min();
+
+            // for DP
+            AlignedArray<f32> dp_w;
+            AlignedArray<s64> dp_m;
+            AlignedArray<u8> dp_take;
+            AlignedArray<vertex_t> dp_edges;
+
+            std::vector<std::pair<vertex_t, vertex_t>> dp_cycle_matches1;
+            std::vector<std::pair<vertex_t, vertex_t>> dp_cycle_matches2;
+        };
+
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
+        u64 m_threads = 1;
 
         const GlobalPathAlgorithmConfiguration *config = nullptr;
         RandomEngine *random_engine = nullptr;
@@ -72,22 +102,14 @@ namespace HeiProMap {
         AlignedArray<u32> path_id;
         AlignedArray<u32> path_length;
 
-        AlignedArray<EdgeUVW> edges;
-        size_t edges_size = 0;
-
-        // for DP
-        AlignedArray<f32> dp_w;
-        AlignedArray<weight_t> dp_m;
-        AlignedArray<u8> dp_take;
-        AlignedArray<vertex_t> dp_edges;
-
-        Matching dp_cycle_matches1;
-        Matching dp_cycle_matches2;
+        std::vector<ThreadInfo> m_thread_infos;
+        std::vector<vertex_t> cycles;
 
     public:
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
+                        const u64 t_threads,
                         RandomEngine &t_random_engine,
                         const GlobalPathAlgorithmConfiguration &i_config) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "initialize");
@@ -95,493 +117,552 @@ namespace HeiProMap {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
+            m_threads = t_threads;
 
-            config = dynamic_cast<const GlobalPathAlgorithmConfiguration *>(&i_config);
+            config = &i_config;
             random_engine = &t_random_engine;
 
             m_neighbors.initialize(m_n);
             path_id.initialize(m_n);
             path_length.initialize(m_n);
 
-            edges.initialize(m_m);
-
-            dp_w.initialize(m_n);
-            dp_m.initialize(m_n);
-            dp_take.initialize(m_n);
-            dp_edges.initialize(m_n);
-
-            dp_cycle_matches1.initialize(m_n);
-            dp_cycle_matches2.initialize(m_n);
+            m_thread_infos.resize(m_threads);
+            size_t edges_per_thread = (m_m / m_threads) + 1;
+            for (u64 i = 0; i < m_threads; ++i) {
+                m_thread_infos[i].local_edges.reserve(edges_per_thread);
+                m_thread_infos[i].dp_w.initialize(m_n);
+                m_thread_infos[i].dp_m.initialize(m_n);
+                m_thread_infos[i].dp_take.initialize(m_n);
+                m_thread_infos[i].dp_edges.initialize(m_n);
+            }
         }
 
-        template<typename PartitionManagerT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void match(const size_t level,
                    const graph_t &g,
-                   const PartitionManagerT &p_manager,
+                   const p_manager_t &p_manager,
                    Mapping &mapping,
                    f64 imbalance) {
-            ScopedTimer _t_match("coarsening", "GlobalPathAlgorithmMatcher", "match");
-
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             Matching matching;
-            matching.initialize(g.n);
+            {
+                ScopedTimer _t_init("coarsening", "GlobalPathAlgorithmMatcher", "allocate_matching");
+                matching.initialize(g.n);
+            }
+
+            if (m_threads == 1) {
+                if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                    ScopedTimer _t_simple("coarsening", "GlobalPathAlgorithmMatcher", "simple_loop");
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        if (matching.is_matched(u)) { continue; }
+                        partition_t u_id = p_manager[u];
+                        forall_guiv(g, u, j, v)
+                            if (matching.is_matched(v)) { continue; }
+                            if (u_id != p_manager[v]) { continue; }
+                            matching.add(u, v);
+                            break;
+                        endfor
+                    }
+                    finalize_matching(g, matching, mapping);
+                    return;
+                }
+            }
 
             if (level < config->random_level) {
-                // use a random matching
-                random_matching(level, g, matching, lmax);
-
-                matching.set_translation();
-                mapping.set_coarse_n(matching.get_n_coarse_nodes());
-                for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                    mapping.set(u, matching.get_n(u));
-                }
-
+                random_matching<t_uniform_v_weights>(level, g, matching, lmax);
+                finalize_matching(g, matching, mapping);
                 return;
             }
 
-            compute_ratings(g, p_manager, lmax);
+            compute_ratings<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, p_manager, lmax);
 
-            std::sort(edges.get_ptr(), edges.get_ptr() + edges_size, std::greater<>());
-
-            for (vertex_t u = 0; u < g.n; ++u) {
-                m_neighbors[u].n1 = u;
-                m_neighbors[u].n2 = u;
+            f32 global_min_rating = std::numeric_limits<f32>::max();
+            f32 global_max_rating = std::numeric_limits<f32>::min();
+            for (u64 i = 0; i < m_threads; ++i) {
+                global_min_rating = std::min(global_min_rating, m_thread_infos[i].min_rating);
+                global_max_rating = std::max(global_max_rating, m_thread_infos[i].max_rating);
             }
 
-            for (size_t i = 0; i < edges_size; ++i) {
-                auto [u, v, w] = edges[i];
-
-                if (IS_NOT_ENDPOINT(m_neighbors[u], u) || IS_NOT_ENDPOINT(m_neighbors[v], v)) {
-                    // u or v is not an endpoint
-                    continue;
-                }
-
-                bool u_unmatched = IS_UNMATCHED(m_neighbors[u], u);
-                bool v_unmatched = IS_UNMATCHED(m_neighbors[v], v);
-
-                if (u_unmatched && v_unmatched) {
-                    // both are unmatched, only one new path of length 1
-                    m_neighbors[u].n1 = v;
-                    m_neighbors[u].w1 = w;
-                    m_neighbors[v].n1 = u;
-                    m_neighbors[v].w1 = w;
-                    path_id[u] = u;
-                    path_id[v] = u;
-                    path_length[u] = 1;
-                    continue;
-                }
-
-                u32 u_id = path_id[u];
-                u32 v_id = path_id[v];
-
-                if (u_unmatched || v_unmatched) {
-                    if (v_unmatched) {
-                        std::swap(u, v);
-                        std::swap(u_id, v_id);
+            {
+                ScopedTimer _t_sort("coarsening", "GlobalPathAlgorithmMatcher", "sort_ratings");
+#pragma omp parallel for num_threads(m_threads) schedule(static, 1)
+                for (u64 i = 0; i < m_threads; ++i) {
+                    if (m_thread_infos[i].min_rating != m_thread_infos[i].max_rating) {
+                        std::sort(m_thread_infos[i].local_edges.begin(), m_thread_infos[i].local_edges.end(), std::greater<>());
                     }
-                    // only one unmatched, enlarge path
-                    m_neighbors[u].n1 = v;
-                    m_neighbors[u].w1 = w;
-                    m_neighbors[v].n2 = u;
-                    m_neighbors[v].w2 = w;
-                    path_id[u] = v_id;
-                    path_length[v_id] += 1;
-                    continue;
+                    m_thread_infos[i].edge_idx = 0;
                 }
+            }
 
-                // cycle
-                if (u_id == v_id) {
-                    if (path_length[u_id] & 1) {
-                        // same path and odd length size, close the cycle
-                        path_length[u_id] += 1; // increase path length
+            {
+                ScopedTimer _t_init("coarsening", "GlobalPathAlgorithmMatcher", "init_paths");
+#pragma omp parallel for num_threads(m_threads)
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    m_neighbors[u].n1 = u;
+                    m_neighbors[u].n2 = u;
+                    path_id[u] = u;
+                    path_length[u] = 0;
+                }
+            }
 
-                        // for u set v as a neighbor
+            cycles.clear();
+
+            {
+                ScopedTimer _t_extract("coarsening", "GlobalPathAlgorithmMatcher", "extract_paths");
+                
+                if (global_min_rating == global_max_rating) {
+                    // Fast path: Process edges in arbitrary order since all ratings are equal
+                    for (u64 t_idx = 0; t_idx < m_threads; ++t_idx) {
+                        for (const auto& e : m_thread_infos[t_idx].local_edges) {
+                            vertex_t u = e.u;
+                            vertex_t v = e.v;
+                            f32 w = e.w;
+
+                            if (IS_NOT_ENDPOINT(m_neighbors[u], u) || IS_NOT_ENDPOINT(m_neighbors[v], v)) {
+                                continue;
+                            }
+
+                            bool u_unmatched = IS_UNMATCHED(m_neighbors[u], u);
+                            bool v_unmatched = IS_UNMATCHED(m_neighbors[v], v);
+
+                            if (u_unmatched && v_unmatched) {
+                                m_neighbors[u].n1 = v;
+                                m_neighbors[u].w1 = w;
+                                m_neighbors[v].n1 = u;
+                                m_neighbors[v].w1 = w;
+                                path_id[u] = u;
+                                path_id[v] = u;
+                                path_length[u] = 1;
+                                continue;
+                            }
+
+                            u32 u_id = path_id[u];
+                            u32 v_id = path_id[v];
+
+                            if (u_unmatched || v_unmatched) {
+                                if (v_unmatched) {
+                                    std::swap(u, v);
+                                    std::swap(u_id, v_id);
+                                }
+                                m_neighbors[u].n1 = v;
+                                m_neighbors[u].w1 = w;
+                                m_neighbors[v].n2 = u;
+                                m_neighbors[v].w2 = w;
+                                path_id[u] = v_id;
+                                path_length[v_id] += 1;
+                                continue;
+                            }
+
+                            if (u_id == v_id) {
+                                if (path_length[u_id] & 1) {
+                                    path_length[u_id] += 1;
+                                    m_neighbors[u].n2 = v;
+                                    m_neighbors[u].w2 = w;
+                                    m_neighbors[v].n2 = u;
+                                    m_neighbors[v].w2 = w;
+                                    cycles.push_back(u);
+                                }
+                                continue;
+                            }
+
+                            m_neighbors[u].n2 = v;
+                            m_neighbors[u].w2 = w;
+                            m_neighbors[v].n2 = u;
+                            m_neighbors[v].w2 = w;
+
+                            vertex_t v1 = v;
+                            vertex_t v2 = u;
+                            u32 id1 = v_id;
+                            u32 id2 = u_id;
+                            if (path_length[u_id] > path_length[v_id]) {
+                                std::swap(v1, v2);
+                                std::swap(id1, id2);
+                            }
+
+                            path_length[id1] += 1 + path_length[id2];
+                            while (m_neighbors[v2].n2 != v2) {
+                                path_id[v2] = id1;
+                                vertex_t temp_last_vertex = v1;
+                                v1 = v2;
+                                v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                            }
+                            path_id[v2] = id1;
+                        }
+                    }
+                } else {
+                    std::priority_queue<HeapEntry> edge_queue;
+                    for (u64 i = 0; i < m_threads; ++i) {
+                        if (!m_thread_infos[i].local_edges.empty()) {
+                            edge_queue.push({i, 0, m_thread_infos[i].local_edges[0]});
+                        }
+                    }
+
+                    while (!edge_queue.empty()) {
+                        HeapEntry top = edge_queue.top();
+                        edge_queue.pop();
+
+                        u64 t_idx = top.thread_idx;
+                        size_t next_idx = top.edge_idx + 1;
+
+                        while (next_idx < m_thread_infos[t_idx].local_edges.size()) {
+                            const auto &e = m_thread_infos[t_idx].local_edges[next_idx];
+                            if (IS_NOT_ENDPOINT(m_neighbors[e.u], e.u) || IS_NOT_ENDPOINT(m_neighbors[e.v], e.v)) {
+                                next_idx++;
+                                continue;
+                            }
+                            edge_queue.push({t_idx, next_idx, e});
+                            break;
+                        }
+
+                        vertex_t u = top.edge.u;
+                        vertex_t v = top.edge.v;
+                        f32 w = top.edge.w;
+
+                        if (IS_NOT_ENDPOINT(m_neighbors[u], u) || IS_NOT_ENDPOINT(m_neighbors[v], v)) {
+                            continue;
+                        }
+
+                        bool u_unmatched = IS_UNMATCHED(m_neighbors[u], u);
+                        bool v_unmatched = IS_UNMATCHED(m_neighbors[v], v);
+
+                        if (u_unmatched && v_unmatched) {
+                            m_neighbors[u].n1 = v;
+                            m_neighbors[u].w1 = w;
+                            m_neighbors[v].n1 = u;
+                            m_neighbors[v].w1 = w;
+                            path_id[u] = u;
+                            path_id[v] = u;
+                            path_length[u] = 1;
+                            continue;
+                        }
+
+                        u32 u_id = path_id[u];
+                        u32 v_id = path_id[v];
+
+                        if (u_unmatched || v_unmatched) {
+                            if (v_unmatched) {
+                                std::swap(u, v);
+                                std::swap(u_id, v_id);
+                            }
+                            m_neighbors[u].n1 = v;
+                            m_neighbors[u].w1 = w;
+                            m_neighbors[v].n2 = u;
+                            m_neighbors[v].w2 = w;
+                            path_id[u] = v_id;
+                            path_length[v_id] += 1;
+                            continue;
+                        }
+
+                        if (u_id == v_id) {
+                            if (path_length[u_id] & 1) {
+                                path_length[u_id] += 1;
+                                m_neighbors[u].n2 = v;
+                                m_neighbors[u].w2 = w;
+                                m_neighbors[v].n2 = u;
+                                m_neighbors[v].w2 = w;
+                                cycles.push_back(u);
+                            }
+                            continue;
+                        }
+
                         m_neighbors[u].n2 = v;
                         m_neighbors[u].w2 = w;
-
-                        // for v set u as a neighbor
                         m_neighbors[v].n2 = u;
                         m_neighbors[v].w2 = w;
 
-                        // solve the cycle
-                        solve_cycle(g, u, path_length[u_id], matching);
-                        path_length[u_id] = 0;
+                        vertex_t v1 = v;
+                        vertex_t v2 = u;
+                        u32 id1 = v_id;
+                        u32 id2 = u_id;
+                        if (path_length[u_id] > path_length[v_id]) {
+                            std::swap(v1, v2);
+                            std::swap(id1, id2);
+                        }
+
+                        path_length[id1] += 1 + path_length[id2];
+                        while (m_neighbors[v2].n2 != v2) {
+                            path_id[v2] = id1;
+                            vertex_t temp_last_vertex = v1;
+                            v1 = v2;
+                            v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                        }
+                        path_id[v2] = id1;
                     }
-                    continue;
                 }
-
-                // two paths, both u and v connect larger paths
-
-                // for u set v as a neighbor
-                m_neighbors[u].n2 = v;
-                m_neighbors[u].w2 = w;
-
-                // for v set u as a neighbor
-                m_neighbors[v].n2 = u;
-                m_neighbors[v].w2 = w;
-
-                vertex_t v1 = v;
-                vertex_t v2 = u;
-                u32 id1 = v_id;
-                u32 id2 = u_id;
-                if (path_length[u_id] > path_length[v_id]) {
-                    std::swap(v1, v2);
-                    std::swap(id1, id2);
-                }
-
-                path_length[id1] += 1 + path_length[id2];
-                while (m_neighbors[v2].n2 != v2) {
-                    path_id[v2] = id1;
-                    vertex_t temp_last_vertex = v1;
-                    v1 = v2;
-                    v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
-                }
-                path_id[v2] = id1;
             }
 
-            // process all paths
+            {
+                ScopedTimer _t_paths("coarsening", "GlobalPathAlgorithmMatcher", "solve_paths");
+#pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
+                forall_gu(g, u)
+                    u64 thread_id = omp_get_thread_num();
+                    if (IS_ONE_ENDPOINT(m_neighbors[u], u)) {
+                        vertex_t v1 = u;
+                        vertex_t v2 = m_neighbors[u].n1;
+                        while (m_neighbors[v2].n2 != v2) {
+                            vertex_t temp_last_vertex = v1;
+                            v1 = v2;
+                            v2 = m_neighbors[v2].n1 == temp_last_vertex ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                        }
+                        if (u < v2) {
+                            solve_path(g, u, path_length[path_id[u]], matching, thread_id);
+                        }
+                    }
+                endfor
+            }
+
+            {
+                ScopedTimer _t_cycles("coarsening", "GlobalPathAlgorithmMatcher", "solve_cycles");
+#pragma omp parallel for num_threads(m_threads) schedule(static)
+                for (size_t i = 0; i < cycles.size(); ++i) {
+                    u64 thread_id = omp_get_thread_num();
+                    vertex_t u = cycles[i];
+                    solve_cycle(g, u, path_length[path_id[u]], matching, thread_id);
+                }
+            }
+
+            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
+                two_hop_degree_one<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, imbalance);
+            }
+            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
+                two_hop_twins<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, imbalance);
+            }
+            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
+                two_hop_matchmaker<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, imbalance);
+            }
+
+            finalize_matching(g, matching, mapping);
+        }
+
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
+        void compute_ratings(const graph_t &g, const p_manager_t &p_manager, weight_t lmax) {
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "compute_ratings");
+            for (u64 i = 0; i < m_threads; ++i) {
+                m_thread_infos[i].local_edges.clear();
+                m_thread_infos[i].min_rating = std::numeric_limits<f32>::max();
+                m_thread_infos[i].max_rating = std::numeric_limits<f32>::min();
+            }
+
+#pragma omp parallel for num_threads(m_threads) schedule(guided)
             forall_gu(g, u)
-                {
-                    if (IS_ONE_ENDPOINT(m_neighbors[u], u) && path_length[path_id[u]] > 0) {
-                        solve_path(g, u, path_length[path_id[u]], matching);
-                        path_length[path_id[u]] = 0;
+                u64 thread_id = omp_get_thread_num();
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                partition_t u_id = p_manager[u];
+                
+                f32 local_min = m_thread_infos[thread_id].min_rating;
+                f32 local_max = m_thread_infos[thread_id].max_rating;
+
+                forall_guivw(g, u, j, v, w)
+                    if (u >= v) { continue; }
+                    if (u_id != p_manager[v]) { continue; }
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+
+                    if (u_w + v_w > lmax) { continue; }
+
+                    weight_t ew = t_uniform_e_weights ? 1 : w;
+
+                    f32 edge_rating;
+                    if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                        edge_rating = 1.0f;
+                    } else {
+                        if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
+                            edge_rating = (f32) ew;
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
+                            edge_rating = (f32) ew / (f32) (u_w * v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::HEAVY_EDGE) {
+                            edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::GREEDY) {
+                            edge_rating = (f32) ew / std::sqrt((f32) u_w * (f32) v_w);
+                        }
                     }
-                }
+                    
+                    local_min = std::min(local_min, edge_rating);
+                    local_max = std::max(local_max, edge_rating);
+                    m_thread_infos[thread_id].local_edges.emplace_back(u, v, edge_rating);
+                endfor
+                
+                m_thread_infos[thread_id].min_rating = local_min;
+                m_thread_infos[thread_id].max_rating = local_max;
             endfor
+        }
 
-            _t_match.stop();
+        f32 solve_path_length_1(const vertex_t u, Matching &matching) {
+            vertex_t v = m_neighbors[u].n1;
+            matching.add(u, v);
+            return m_neighbors[u].w1;
+        }
 
-            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
-                two_hop_degree_one(level, g, p_manager, matching, imbalance);
+        f32 solve_path_length_2(const vertex_t u, Matching &matching) {
+            vertex_t v1 = u;
+            vertex_t v2 = m_neighbors[u].n1;
+            vertex_t v3 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+            f32 w1 = m_neighbors[u].w1;
+            f32 w2 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].w2 : m_neighbors[v2].w1;
+
+            if (w1 > w2) {
+                matching.add(v1, v2);
+                return w1;
+            } else {
+                matching.add(v2, v3);
+                return w2;
             }
-            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
-                two_hop_twins(level, g, p_manager, matching, imbalance);
+        }
+
+        f32 solve_path(const graph_t &g, const vertex_t u, const u32 length, Matching &matching, u64 thread_id) {
+            if (length == 1) return solve_path_length_1(u, matching);
+            if (length == 2) return solve_path_length_2(u, matching);
+
+            auto &ti = m_thread_infos[thread_id];
+            vertex_t v1 = u, v2, v3;
+            f32 w;
+            s64 i = 0;
+
+            ti.dp_edges[i] = v1;
+            v2 = (m_neighbors[v1].n1 == v1) ? m_neighbors[v1].n2 : m_neighbors[v1].n1;
+            w = (m_neighbors[v1].n1 == v1) ? m_neighbors[v1].w2 : m_neighbors[v1].w1;
+            ti.dp_edges[i + 1] = v2;
+            ti.dp_w[i] = w;
+            ti.dp_m[i] = -1;
+            ti.dp_take[i] = 1;
+            i++;
+
+            v3 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+            w = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].w2 : m_neighbors[v2].w1;
+            ti.dp_edges[i + 1] = v3;
+            if (w > ti.dp_w[i - 1]) {
+                ti.dp_w[i] = w;
+                ti.dp_m[i] = -1;
+                ti.dp_take[i] = 1;
+            } else {
+                ti.dp_w[i] = ti.dp_w[i - 1];
+                ti.dp_m[i] = 0;
+                ti.dp_take[i] = 0;
             }
-            if ((f64) matching.size() * 2 < 0.75 * (f64) g.n) {
-                two_hop_matchmaker(level, g, p_manager, matching, imbalance);
+            i++;
+
+            v1 = v2; v2 = v3;
+            while (m_neighbors[v2].n1 != v2 && m_neighbors[v2].n2 != v2) {
+                v3 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                w = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].w2 : m_neighbors[v2].w1;
+                ti.dp_edges[i + 1] = v3;
+
+                if (w + ti.dp_w[i - 2] > ti.dp_w[i - 1]) {
+                    ti.dp_w[i] = w + ti.dp_w[i - 2];
+                    ti.dp_m[i] = i - 2;
+                    ti.dp_take[i] = 1;
+                } else {
+                    ti.dp_w[i] = ti.dp_w[i - 1];
+                    ti.dp_m[i] = i - 1;
+                    ti.dp_take[i] = 0;
+                }
+                v1 = v2; v2 = v3; i++;
             }
 
-            /*
-#if ASSERT_ENABLED
-            for (size_t i = 0; i < matching.size(); ++i) {
-                const auto& [u, v] = matching[i];
-                ASSERT(u != v);
+            s64 idx = i - 1;
+            while (idx != -1) {
+                if (ti.dp_take[idx]) {
+                    matching.add(ti.dp_edges[idx], ti.dp_edges[idx + 1]);
+                }
+                idx = ti.dp_m[idx];
             }
-#endif
+            return ti.dp_w[i - 1];
+        }
 
-#if ASSERT_ENABLED
-            std::vector<u8> hit(g.get_n(), 0);
-            for (size_t i = 0; i < matching.size(); ++i) {
-                const auto& [u, v] = matching[i];
-                hit[u] += 1;
-                hit[v] += 1;
-
-                ASSERT(hit[u] == 1);
-                ASSERT(hit[v] == 1);
+        f32 solve_path(const graph_t &g, const vertex_t u, const u32 length, std::vector<std::pair<vertex_t, vertex_t>> &matches, u64 thread_id) {
+            if (length == 1) {
+                vertex_t v = m_neighbors[u].n1;
+                matches.emplace_back(u, v);
+                return m_neighbors[u].w1;
             }
-#endif
-             */
+            if (length == 2) {
+                vertex_t v1 = u, v2 = m_neighbors[u].n1;
+                vertex_t v3 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                f32 w1 = m_neighbors[u].w1, w2 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].w2 : m_neighbors[v2].w1;
+                if (w1 > w2) matches.emplace_back(v1, v2); else matches.emplace_back(v2, v3);
+                return std::max(w1, w2);
+            }
 
+            auto &ti = m_thread_infos[thread_id];
+            vertex_t v1 = u, v2, v3;
+            f32 w;
+            s64 i = 0;
+            ti.dp_edges[i] = v1;
+            v2 = (m_neighbors[v1].n1 == v1) ? m_neighbors[v1].n2 : m_neighbors[v1].n1;
+            w = (m_neighbors[v1].n1 == v1) ? m_neighbors[v1].w2 : m_neighbors[v1].w1;
+            ti.dp_edges[i + 1] = v2; ti.dp_w[i] = w; ti.dp_m[i] = -1; ti.dp_take[i] = 1; i++;
+            v3 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+            w = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].w2 : m_neighbors[v2].w1;
+            ti.dp_edges[i + 1] = v3;
+            if (w > ti.dp_w[i - 1]) { ti.dp_w[i] = w; ti.dp_m[i] = -1; ti.dp_take[i] = 1; }
+            else { ti.dp_w[i] = ti.dp_w[i - 1]; ti.dp_m[i] = 0; ti.dp_take[i] = 0; }
+            i++;
+            v1 = v2; v2 = v3;
+            while (m_neighbors[v2].n1 != v2 && m_neighbors[v2].n2 != v2) {
+                v3 = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].n2 : m_neighbors[v2].n1;
+                w = (m_neighbors[v2].n1 == v1) ? m_neighbors[v2].w2 : m_neighbors[v2].w1;
+                ti.dp_edges[i + 1] = v3;
+                if (w + ti.dp_w[i - 2] > ti.dp_w[i - 1]) { ti.dp_w[i] = w + ti.dp_w[i - 2]; ti.dp_m[i] = i - 2; ti.dp_take[i] = 1; }
+                else { ti.dp_w[i] = ti.dp_w[i - 1]; ti.dp_m[i] = i - 1; ti.dp_take[i] = 0; }
+                v1 = v2; v2 = v3; i++;
+            }
+            s64 idx = i - 1;
+            while (idx != -1) {
+                if (ti.dp_take[idx]) matches.emplace_back(ti.dp_edges[idx], ti.dp_edges[idx + 1]);
+                idx = ti.dp_m[idx];
+            }
+            return ti.dp_w[i - 1];
+        }
+
+        void solve_cycle(const graph_t &g, const vertex_t u, const u32 length, Matching &matching, u64 thread_id) {
+            auto &ti = m_thread_infos[thread_id];
+            vertex_t n1 = m_neighbors[u].n1, n2 = m_neighbors[u].n2;
+            Neighbors original_u = m_neighbors[u], original_n1 = m_neighbors[n1], original_n2 = m_neighbors[n2];
+
+            ti.dp_cycle_matches1.clear(); ti.dp_cycle_matches2.clear();
+
+            m_neighbors[u].n1 = original_u.n2; m_neighbors[u].w1 = original_u.w2; m_neighbors[u].n2 = u;
+            if (m_neighbors[n1].n1 == u) { m_neighbors[n1].n1 = original_n1.n2; m_neighbors[n1].w1 = original_n1.w2; m_neighbors[n1].n2 = n1; }
+            else { m_neighbors[n1].n2 = n1; }
+            f32 w1 = solve_path(g, u, length - 1, ti.dp_cycle_matches1, thread_id);
+            m_neighbors[u] = original_u; m_neighbors[n1] = original_n1;
+
+            m_neighbors[u].n2 = u;
+            if (m_neighbors[n2].n1 == u) { m_neighbors[n2].n1 = original_n2.n2; m_neighbors[n2].w1 = original_n2.w2; m_neighbors[n2].n2 = n2; }
+            else { m_neighbors[n2].n2 = n2; }
+            f32 w2 = solve_path(g, u, length - 1, ti.dp_cycle_matches2, thread_id);
+            m_neighbors[u] = original_u; m_neighbors[n2] = original_n2;
+
+            if (w1 > w2) {
+                for (auto &[uu, vv] : ti.dp_cycle_matches1) matching.add(uu, vv);
+            } else {
+                for (auto &[uu, vv] : ti.dp_cycle_matches2) matching.add(uu, vv);
+            }
+        }
+
+        template<bool t_uniform_v_weights>
+        void random_matching(const size_t, const graph_t &g, Matching &matching, weight_t lmax) {
+            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "random_matching");
+            forall_gu(g, u)
+                if (matching.is_matched(u)) { continue; }
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                forall_guiv(g, u, j, v)
+                    if (matching.is_matched(v)) { continue; }
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    if (u_w + v_w > lmax) { continue; }
+                    matching.add(u, v);
+                    break;
+                endfor
+            endfor
+        }
+
+        void finalize_matching(const graph_t &g, Matching &matching, Mapping &mapping) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "get_mapping");
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
                 mapping.set(u, matching.get_n(u));
             }
-        }
-
-        template<typename PartitionManagerT>
-        void compute_ratings(const graph_t &g, const PartitionManagerT &p_manager, weight_t lmax) {
-            edges_size = 0;
-            std::vector<EdgeUVW> local_edges;
-
-            forall_gu(g, u)
-                {
-                    weight_t u_w = g.v_weights[u];
-
-                    forall_guivw(g, u, j, v, w)
-                        {
-                            if (u > v) { continue; }
-                            if (p_manager[u] != p_manager[v]) { continue; }
-                            weight_t v_w = g.v_weights[v];
-
-                            // if (u_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-                            // if (v_w > 1.5*av_manager.get_n_active() / 20.0 * m_k) { continue; }
-
-                            if (u_w + v_w > lmax) { continue; }
-
-                            f32 edge_rating;
-
-                            // edge_rating = ((f32) w) / (g.size(u) * g.size(v));
-                            // edge_rating = (f32) w / (f32) (u_w * v_w);
-                            edge_rating = ((f32) (w * w)) / ((f32) (u_w * v_w));
-                            // edge_rating = ((f32) (w * w)) / ((f32) (u_w + v_w));
-                            // edge_rating = ((f32) (w * w * w)) / ((f32) (u_w * v_w));
-                            // edge_rating = (f32) w / (f32) (u_w * v_w * u_w * v_w);
-                            // edge_rating = (f32)w;
-
-                            // edges[edges_size++] = {u, v, edge_rating};
-                            local_edges.push_back({u, v, edge_rating});
-                        }
-                    endfor
-                }
-            endfor
-
-            // Critical section or lock-free append
-            for (const auto &e: local_edges) {
-                edges[edges_size++] = e;
-            }
-        }
-
-        f32 solve_path_length_1([[maybe_unused]] const graph_t &g,
-                                const vertex_t u,
-                                Matching &matching) {
-            vertex_t uu = u;
-            vertex_t vv = m_neighbors[u].n1;
-            f32 w = m_neighbors[u].w1;
-
-            matching.add(uu, vv);
-
-            return w;
-        }
-
-        f32 solve_path_length_2([[maybe_unused]] const graph_t &g,
-                                const vertex_t u,
-                                Matching &matching) {
-            vertex_t v1 = u;
-            vertex_t v2 = m_neighbors[u].n1;
-            vertex_t v3;
-            f32 w1 = m_neighbors[u].w1;
-            f32 w2;
-
-            if (m_neighbors[v2].n1 == v1) {
-                v3 = m_neighbors[v2].n2;
-                w2 = m_neighbors[v2].w2;
-            } else {
-                v3 = m_neighbors[v2].n1;
-                w2 = m_neighbors[v2].w1;
-            }
-
-            vertex_t uu, vv;
-            f32 w;
-            if (w1 > w2) {
-                uu = v1;
-                vv = v2;
-                w = w1;
-            } else {
-                uu = v2;
-                vv = v3;
-                w = w2;
-            }
-
-            matching.add(uu, vv);
-            return w;
-        }
-
-        f32 solve_path(const graph_t &g,
-                       const vertex_t u,
-                       const u32 length,
-                       Matching &matching) {
-            // special case of length 1
-            if (length == 1) {
-                return solve_path_length_1(g, u, matching);
-            }
-
-            // special case of length 2
-            if (length == 2) {
-                return solve_path_length_2(g, u, matching);
-            }
-
-            vertex_t v1, v2, v3;
-            f32 w;
-
-            s64 i = 0;
-
-            // first edge of the path
-            v1 = u;
-            dp_edges[i] = v1;
-            if (m_neighbors[v1].n1 == v1) {
-                v2 = m_neighbors[u].n2;
-                w = m_neighbors[u].w2;
-            } else {
-                v2 = m_neighbors[u].n1;
-                w = m_neighbors[u].w1;
-            }
-            dp_edges[i + 1] = v2; // save edge
-
-            // init dp
-            dp_w[i] = w;
-            dp_m[i] = -1;
-            dp_take[i] = 1;
-            i += 1;
-
-            // second edge of the path
-            if (m_neighbors[v2].n1 == v1) {
-                v3 = m_neighbors[v2].n2;
-                w = m_neighbors[v2].w2;
-            } else {
-                v3 = m_neighbors[v2].n1;
-                w = m_neighbors[v2].w1;
-            }
-            dp_edges[i + 1] = v3; // save edge
-
-            // init dp
-            if (w > dp_w[i - 1]) {
-                dp_w[i] = w;
-                dp_m[i] = -1;
-                dp_take[i] = 1;
-            } else {
-                dp_w[i] = dp_w[i - 1];
-                dp_m[i] = 0;
-                dp_take[i] = 0;
-            }
-            i += 1;
-
-            // all other edges of the path
-            v1 = v2;
-            v2 = v3;
-            while (m_neighbors[v2].n1 != v2 && m_neighbors[v2].n2 != v2) {
-                if (m_neighbors[v2].n1 == v1) {
-                    v3 = m_neighbors[v2].n2;
-                    w = m_neighbors[v2].w2;
-                } else {
-                    v3 = m_neighbors[v2].n1;
-                    w = m_neighbors[v2].w1;
-                }
-                dp_edges[i + 1] = v3; // save edge
-
-                // dp
-                if (w + dp_w[i - 2] > dp_w[i - 1]) {
-                    dp_w[i] = w + dp_w[i - 2];
-                    dp_m[i] = i - 2;
-                    dp_take[i] = 1;
-                } else {
-                    dp_w[i] = dp_w[i - 1];
-                    dp_m[i] = i - 1;
-                    dp_take[i] = 0;
-                }
-
-                v1 = v2;
-                v2 = v3;
-                i += 1;
-            }
-
-            s64 idx = i - 1;
-            while (idx != -1) {
-                if (dp_take[idx]) {
-                    vertex_t uu = dp_edges[idx];
-                    vertex_t vv = dp_edges[idx + 1];
-
-                    matching.add(uu, vv);
-                }
-                idx = dp_m[idx];
-            }
-            return dp_w[i - 1];
-        }
-
-        void solve_cycle(const graph_t &g,
-                         const vertex_t u,
-                         const u32 length,
-                         [[maybe_unused]] Matching &matching) {
-            vertex_t n1 = m_neighbors[u].n1;
-            vertex_t n2 = m_neighbors[u].n2;
-            Neighbors original_u = m_neighbors[u];
-            Neighbors original_n1 = m_neighbors[original_u.n1];
-            Neighbors original_n2 = m_neighbors[original_u.n2];
-
-            f32 matching_weight1 = 0.0;
-            f32 matching_weight2 = 0.0;
-            dp_cycle_matches1.clear();
-            dp_cycle_matches2.clear();
-
-            // cut connection between u and n1, n2 should point to self,
-            m_neighbors[u].n1 = original_u.n2;
-            m_neighbors[u].w1 = original_u.w2;
-            m_neighbors[u].n2 = u;
-
-            if (m_neighbors[n1].n1 == u) {
-                m_neighbors[n1].n1 = original_n1.n2;
-                m_neighbors[n1].w1 = original_n1.w2;
-                m_neighbors[n1].n2 = n1;
-            } else {
-                m_neighbors[n1].n2 = n1;
-            }
-            matching_weight1 = solve_path(g, u, length - 1, dp_cycle_matches1);
-            m_neighbors[u] = original_u;
-            m_neighbors[n1] = original_n1;
-
-            // cut connection between u and n2
-            m_neighbors[u].n2 = u;
-
-            if (m_neighbors[n2].n1 == u) {
-                m_neighbors[n2].n1 = original_n2.n2;
-                m_neighbors[n2].w1 = original_n2.w2;
-                m_neighbors[n2].n2 = n2;
-            } else {
-                m_neighbors[n2].n2 = n2;
-            }
-            matching_weight2 = solve_path(g, u, length - 1, dp_cycle_matches2);
-            m_neighbors[u] = original_u;
-            m_neighbors[n2] = original_n2;
-
-            Matching *dp_cycle_matches = &dp_cycle_matches1;
-            if (matching_weight2 > matching_weight1) {
-                dp_cycle_matches = &dp_cycle_matches2;
-            }
-
-            for (size_t i = 0; i < dp_cycle_matches->size(); ++i) {
-                // matching.add((*dp_cycle_matches)[i].u, (*dp_cycle_matches)[i].v);
-            }
-        }
-
-        void random_matching([[maybe_unused]] const size_t level,
-                             const graph_t &g,
-                             Matching &matching,
-                             weight_t lmax) {
-            std::vector<u8> is_matched(g.n, 0);
-
-            forall_gu(g, u)
-                {
-                    if (is_matched[u]) { continue; }
-                    weight_t u_w = g.v_weights[u];
-                    forall_guiv(g, u, j, v)
-                        {
-                            if (is_matched[v]) { continue; }
-                            weight_t v_w = g.v_weights[v];
-
-                            if (u_w + v_w > lmax) { continue; }
-
-                            is_matched[u] = 1;
-                            is_matched[v] = 1;
-
-                            matching.add(u, v);
-                            break;
-                        }
-                    endfor
-                }
-            endfor
-
-            /*
-            #if ASSERT_ENABLED
-                        for (size_t i = 0; i < matching.size(); ++i) {
-                            const auto& [u, v] = matching[i];
-                            ASSERT(u != v);
-                        }
-            #endif
-
-            #if ASSERT_ENABLED
-                        std::vector<u8> hit(g.get_n(), 0);
-                        for (size_t i = 0; i < matching.size(); ++i) {
-                            const auto& [u, v] = matching[i];
-                            hit[u] += 1;
-                            hit[v] += 1;
-
-                            ASSERT(hit[u] == 1);
-                            ASSERT(hit[v] == 1);
-                        }
-            #endif
-             */
         }
 
         static inline u64 splitmix64(u64 x) {
@@ -592,286 +673,163 @@ namespace HeiProMap {
         }
 
         static f64 small_noise(vertex_t u, vertex_t v) {
-            // order-independent: (u,v) and (v,u) give the same result
-            u64 a = static_cast<u64>(std::min(u, v));
-            u64 b = static_cast<u64>(std::max(u, v));
-
-            // combine the pair into one 64-bit value, then hash it
-            u64 key = a;
-            key = key * 0x9e3779b97f4a7c15ULL + b;
+            u64 a = static_cast<u64>(std::min(u, v)), b = static_cast<u64>(std::max(u, v));
+            u64 key = a * 0x9e3779b97f4a7c15ULL + b;
             u64 h = splitmix64(key);
-
-            // map to [0, 1)
-            constexpr f64 inv = 1.0 / static_cast<f64>(std::numeric_limits<u64>::max());
-            f64 x = static_cast<f64>(h) * inv;
-
-            // tiny positive perturbation
-            constexpr f64 eps = 1e-12;
-            return eps * x;
+            return 1e-12 * (static_cast<f64>(h) / static_cast<f64>(std::numeric_limits<u64>::max()));
         }
 
-        template<typename PartitionManagerT>
-        void two_hop_degree_one(const size_t level,
-                                const graph_t &g,
-                                const PartitionManagerT &p_manager,
-                                Matching &matching,
-                                f64 imbalance) {
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void two_hop_degree_one(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_degree_one");
-
             std::vector<vertex_t> preferred(g.n);
             std::iota(preferred.begin(), preferred.end(), 0);
-
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             forall_gu(g, u)
-                {
-                    if (g.deg(u) != 1) { continue; }
-                    if (matching.is_matched(u)) { continue; }
-
-                    vertex_t preferred_vertex = u;
-                    f64 best_rating = -std::numeric_limits<f64>::max();
-
-                    vertex_t middle_vertex = g.edges_v[g.neighborhoods[u]];
-                    weight_t middle_w = g.edges_w[g.neighborhoods[u]];
-
-                    forall_guivw(g, middle_vertex, i, v, w)
-                        {
-                            if (u == v) { continue; }
-                            if (g.deg(v) != 1) { continue; }
-                            if (matching.is_matched(v)) { continue; }
-                            if (g.v_weights[u] + g.v_weights[v] > lmax) { continue; }
-
-                            f64 rating = (f64) (w + middle_w) + small_noise(u, v);
-
-                            if (rating > best_rating) {
-                                best_rating = rating;
-                                preferred_vertex = v;
-                            }
-                        }
-                    endfor
-                    preferred[u] = preferred_vertex;
-                }
+                if (g.deg(u) != 1 || matching.is_matched(u)) { continue; }
+                vertex_t mid = g.edges_v[g.neighborhoods[u]];
+                weight_t mid_w = t_uniform_e_weights ? 1 : g.edges_w[g.neighborhoods[u]];
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                f64 best_rating = -1e18;
+                
+                forall_guivw(g, mid, i, v, w)
+                    if (u == v || g.deg(v) != 1 || matching.is_matched(v)) { continue; }
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    if (u_w + v_w > lmax) { continue; }
+                    
+                    weight_t mw = t_uniform_e_weights ? 1 : w;
+                    f64 rating = (f64) (mw + mid_w) + small_noise(u, v);
+                    if (rating > best_rating) { best_rating = rating; preferred[u] = v; }
+                endfor
             endfor
-
-            forall_gu(g, u)
-                {
-                    if (g.deg(u) != 1) { continue; }
-                    if (matching.is_matched(u)) { continue; }
-
-                    vertex_t v = preferred[u];
-                    if (u == v) { continue; }
-
-                    if (preferred[v] == u && u < v) {
-                        matching.add(u, v);
-                    }
-                }
-            endfor
+            forall_gu(g, u) if (g.deg(u) == 1 && !matching.is_matched(u) && preferred[u] != u && preferred[preferred[u]] == u && u < preferred[u]) matching.add(u, preferred[u]); endfor
         }
 
-        static inline uint64_t hash_combine_u64(uint64_t a, uint64_t b) {
-            return splitmix64(a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2)));
-        }
+        static inline uint64_t hash_combine_u64(uint64_t a, uint64_t b) { return splitmix64(a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2))); }
 
+        template<bool t_uniform_e_weights>
         static inline uint64_t hash_edge(vertex_t v, weight_t w) {
-            uint64_t hv = splitmix64(static_cast<uint64_t>(v));
-            uint64_t hw = splitmix64(static_cast<uint64_t>(w));
-            return hash_combine_u64(hv, hw);
+            uint64_t hv = splitmix64(v);
+            if constexpr (t_uniform_e_weights) {
+                return hv;
+            } else {
+                return hash_combine_u64(hv, splitmix64(w));
+            }
         }
 
+        template<bool t_uniform_e_weights>
         static inline uint64_t neighborhood_hash(const graph_t &g, vertex_t u) {
-            uint64_t x = splitmix64(static_cast<uint64_t>(g.deg(u)));
-            uint64_t s1 = 0;
-            uint64_t s2 = 0;
-
+            uint64_t x = splitmix64(g.deg(u)), s1 = 0, s2 = 0;
             forall_guivw(g, u, i, v, w)
-                {
-                    uint64_t he = hash_edge(v, w);
-                    x ^= he;
-                    s1 += he;
-                    s2 += splitmix64(he);
-                }
+                uint64_t he = hash_edge<t_uniform_e_weights>(v, w);
+                x ^= he; s1 += he; s2 += splitmix64(he);
             endfor
-
             return hash_combine_u64(x, hash_combine_u64(s1, s2));
         }
 
+        template<bool t_uniform_e_weights>
         static inline bool same_neighborhood(const graph_t &g, vertex_t u, vertex_t v) {
-            if (g.deg(u) != g.deg(v)) {
-                return false;
-            }
-
-            std::vector<std::pair<vertex_t, weight_t> > nu;
-            std::vector<std::pair<vertex_t, weight_t> > nv;
-            nu.reserve(g.deg(u));
-            nv.reserve(g.deg(v));
-
-            forall_guivw(g, u, i, x, w)
-                {
-                    nu.emplace_back(x, w);
-                }
-            endfor
-
-            forall_guivw(g, v, i, x, w)
-                {
-                    nv.emplace_back(x, w);
-                }
-            endfor
-
-            std::sort(nu.begin(), nu.end());
-            std::sort(nv.begin(), nv.end());
-
+            if (g.deg(u) != g.deg(v)) return false;
+            std::vector<std::pair<vertex_t, weight_t>> nu, nv;
+            forall_guivw(g, u, i, x, w) nu.emplace_back(x, t_uniform_e_weights ? 1 : w); endfor
+            forall_guivw(g, v, i, x, w) nv.emplace_back(x, t_uniform_e_weights ? 1 : w); endfor
+            std::sort(nu.begin(), nu.end()); std::sort(nv.begin(), nv.end());
             return nu == nv;
         }
 
-        template<typename PartitionManagerT>
-        void two_hop_twins(const size_t level,
-                           const graph_t &g,
-                           const PartitionManagerT &p_manager,
-                           Matching &matching,
-                           f64 imbalance) {
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void two_hop_twins(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_twins");
+            struct Candidate { uint64_t hash; vertex_t u; };
+            std::vector<Candidate> candidates(g.n);
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            
+            size_t n_unmatched = 0;
+            {
+                std::vector<std::vector<Candidate>> local_candidates(m_threads);
+                for(auto& v : local_candidates) v.reserve(g.n / m_threads);
 
-            struct Candidate {
-                uint64_t hash;
-                vertex_t u;
-            };
-
-            std::vector<Candidate> candidates;
-            candidates.reserve(g.n);
-
-            weight_t lmax = std::ceil((1.0 + imbalance) * (static_cast<f64>(g.g_weight) / static_cast<f64>(p_manager.k)));
-
-            forall_gu(g, u)
+#pragma omp parallel num_threads(m_threads)
                 {
-                    if (matching.is_matched(u)) { continue; }
-                    candidates.push_back({neighborhood_hash(g, u), u});
+                    u64 tid = omp_get_thread_num();
+#pragma omp for schedule(static)
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        if (!matching.is_matched(u)) {
+                            local_candidates[tid].push_back({neighborhood_hash<t_uniform_e_weights>(g, u), u});
+                        }
+                    }
                 }
-            endfor
-
-            std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
-                if (a.hash != b.hash) return a.hash < b.hash;
-                return a.u < b.u;
-            });
-
-            size_t begin = 0;
-            while (begin < candidates.size()) {
-                size_t end = begin + 1;
-                while (end < candidates.size() && candidates[end].hash == candidates[begin].hash) {
-                    ++end;
+                
+                std::vector<size_t> offsets(m_threads + 1, 0);
+                for(u64 i = 0; i < m_threads; ++i) offsets[i+1] = offsets[i] + local_candidates[i].size();
+                n_unmatched = offsets[m_threads];
+                candidates.resize(n_unmatched);
+                
+#pragma omp parallel for num_threads(m_threads) schedule(static)
+                for(u64 i = 0; i < m_threads; ++i) {
+                    std::copy(local_candidates[i].begin(), local_candidates[i].end(), candidates.begin() + offsets[i]);
                 }
+            }
 
-                // Split hash bucket into exact-equality subgroups
-                std::vector<std::vector<vertex_t> > exact_groups;
+            std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) { return (a.hash != b.hash) ? a.hash < b.hash : a.u < b.u; });
 
+            for (size_t begin = 0, end; begin < candidates.size(); begin = end) {
+                for (end = begin + 1; end < candidates.size() && candidates[end].hash == candidates[begin].hash; ++end);
+                std::vector<std::vector<vertex_t>> groups;
                 for (size_t i = begin; i < end; ++i) {
-                    vertex_t u = candidates[i].u;
-                    if (matching.is_matched(u)) { continue; }
-
+                    vertex_t u = candidates[i].u; if (matching.is_matched(u)) continue;
                     bool placed = false;
-                    for (auto &group: exact_groups) {
-                        if (same_neighborhood(g, u, group.front())) {
-                            group.push_back(u);
-                            placed = true;
-                            break;
-                        }
+                    for (auto &group : groups) if (same_neighborhood<t_uniform_e_weights>(g, u, group.front())) { group.push_back(u); placed = true; break; }
+                    if (!placed) groups.push_back({u});
+                }
+                for (auto &group : groups) {
+                    if constexpr (!t_uniform_v_weights) {
+                        std::sort(group.begin(), group.end(), [&](vertex_t a, vertex_t b) { return (g.v_weights[a] != g.v_weights[b]) ? g.v_weights[a] < g.v_weights[b] : a < b; });
                     }
-
-                    if (!placed) {
-                        exact_groups.push_back({u});
+                    for (size_t i = 0; i + 1 < group.size(); ++i) {
+                        if (matching.is_matched(group[i])) continue;
+                        weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[group[i]];
+                        for (size_t j = i + 1; j < group.size(); ++j) {
+                            weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[group[j]];
+                            if (!matching.is_matched(group[j]) && u_w + v_w <= lmax) { matching.add(group[i], group[j]); break; }
+                        }
                     }
                 }
-
-                // Match greedily inside each exact group
-                for (auto &group: exact_groups) {
-                    std::sort(group.begin(), group.end(), [&](vertex_t a, vertex_t b) {
-                        if (g.v_weights[a] != g.v_weights[b]) {
-                            return g.v_weights[a] < g.v_weights[b];
-                        }
-                        return a < b;
-                    });
-
-                    for (size_t i = 0; i + 1 < group.size();) {
-                        vertex_t u = group[i];
-                        if (matching.is_matched(u)) {
-                            ++i;
-                            continue;
-                        }
-
-                        size_t j = i + 1;
-                        while (j < group.size()) {
-                            vertex_t v = group[j];
-                            if (!matching.is_matched(v) &&
-                                g.v_weights[u] + g.v_weights[v] <= lmax) {
-                                matching.add(u, v);
-                                break;
-                            }
-                            ++j;
-                        }
-
-                        ++i;
-                    }
-                }
-
-                begin = end;
             }
         }
 
-        template<typename PartitionManagerT>
-        void two_hop_matchmaker(const size_t level,
-                                const graph_t &g,
-                                const PartitionManagerT &p_manager,
-                                Matching &matching,
-                                f64 imbalance) {
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void two_hop_matchmaker(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
             ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_matchmaker");
-
-            std::vector<vertex_t> preferred(g.n);
-            std::iota(preferred.begin(), preferred.end(), 0);
-
+            std::vector<vertex_t> preferred(g.n); std::iota(preferred.begin(), preferred.end(), 0);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-
             forall_gu(g, u)
-                {
-                    if (matching.is_matched(u)) { continue; }
-
-                    vertex_t preferred_vertex = u;
-                    f64 best_rating = -std::numeric_limits<f64>::max();
-
-                    forall_guivw(g, u, j, middle_vertex, middle_w)
-                        {
-                            forall_guivw(g, middle_vertex, i, v, w)
-                                {
-                                    if (u == v) { continue; }
-                                    if (matching.is_matched(v)) { continue; }
-                                    if (g.v_weights[u] + g.v_weights[v] > lmax) { continue; }
-
-                                    f64 rating = (f64) (w + middle_w) + small_noise(u, v);
-
-                                    if (rating > best_rating) {
-                                        best_rating = rating;
-                                        preferred_vertex = v;
-                                    }
-                                }
-                            endfor
-                            preferred[u] = preferred_vertex;
+                if (matching.is_matched(u)) continue;
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                f64 best_rating = -1e18;
+                
+                forall_guivw(g, u, j, mid, mw_orig)
+                    weight_t mid_w = t_uniform_e_weights ? 1 : mw_orig;
+                    forall_guivw(g, mid, i, v, w)
+                        if (u != v && !matching.is_matched(v)) {
+                            weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                            if (u_w + v_w <= lmax) {
+                                weight_t mw = t_uniform_e_weights ? 1 : w;
+                                f64 rating = (f64) (mw + mid_w) + small_noise(u, v);
+                                if (rating > best_rating) { best_rating = rating; preferred[u] = v; }
+                            }
                         }
                     endfor
-                }
+                endfor
             endfor
-
-            forall_gu(g, u)
-                {
-                    if (matching.is_matched(u)) { continue; }
-
-                    vertex_t v = preferred[u];
-                    if (u == v) { continue; }
-
-                    if (preferred[v] == u && u < v) {
-                        matching.add(u, v);
-                    }
-                }
-            endfor
+            forall_gu(g, u) if (!matching.is_matched(u) && preferred[u] != u && preferred[preferred[u]] == u && u < preferred[u]) matching.add(u, preferred[u]); endfor
         }
     };
 }
+
+#undef IS_NOT_ENDPOINT
+#undef IS_ONE_ENDPOINT
+#undef IS_UNMATCHED
 
 #endif //HEIPROMAP_GLOBAL_PATH_ALGORITHM_H

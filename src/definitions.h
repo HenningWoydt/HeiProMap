@@ -121,6 +121,13 @@ namespace HeiProMap {
         }
     };
 
+    enum struct EdgeRatingFunction {
+        WEIGHT,
+        EXPANSION,
+        HEAVY_EDGE,
+        GREEDY
+    };
+
     class EdgeUVW {
     public:
         vertex_t u;

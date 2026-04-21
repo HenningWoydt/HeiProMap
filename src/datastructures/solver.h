@@ -211,7 +211,7 @@ namespace HeiProMap {
             approx_ge_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), approximate_config);
             he_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.heavy_edge_matcher_config);
             rnd_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.random_edge_matcher_config);
-            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.global_path_algorithm_config);
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
             size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
             BoundaryEdgeMatcherConfiguration c;
             be_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, c);
@@ -555,7 +555,34 @@ namespace HeiProMap {
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
                 rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+                const auto &cg = graphs.back();
+                auto dispatch_match = [&](auto rating_func_const) {
+                    constexpr EdgeRatingFunction rating_func = rating_func_const;
+                    if (cg.uniform_v_weights && cg.uniform_e_weights) {
+                        gpa_matcher.match<true, true, rating_func>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    } else if (cg.uniform_v_weights) {
+                        gpa_matcher.match<true, false, rating_func>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    } else if (cg.uniform_e_weights) {
+                        gpa_matcher.match<false, true, rating_func>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    } else {
+                        gpa_matcher.match<false, false, rating_func>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    }
+                };
+
+                switch (ac.global_path_algorithm_config.rating_function) {
+                    case EdgeRatingFunction::WEIGHT:
+                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::WEIGHT>{});
+                        break;
+                    case EdgeRatingFunction::EXPANSION:
+                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSION>{});
+                        break;
+                    case EdgeRatingFunction::HEAVY_EDGE:
+                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::HEAVY_EDGE>{});
+                        break;
+                    case EdgeRatingFunction::GREEDY:
+                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::GREEDY>{});
+                        break;
+                }
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
                 const auto &cg = graphs.back();
                 if (cg.uniform_v_weights && cg.uniform_e_weights) {
