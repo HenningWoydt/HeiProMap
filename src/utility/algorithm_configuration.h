@@ -422,12 +422,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            // global_multisection_config.mode_string = "kaffpa-fast";
-            // global_multisection_config.mode_string = "metis-recursive";
             global_multisection_config.mode_string = "metis-kway";
-            // global_multisection_config.mode_string = "mtkahypar-default";
-            // global_multisection_config.mode_string = "mtkahypar-quality";
-            // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 10;
 
@@ -469,14 +464,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            // global_multisection_config.mode_string = "kaffpa-strong";
             global_multisection_config.mode_string = "kaffpa-eco";
-            // global_multisection_config.mode_string = "kaffpa-fast";
-            // global_multisection_config.mode_string = "metis-recursive";
-            // global_multisection_config.mode_string = "metis-kway";
-            // global_multisection_config.mode_string = "mtkahypar-default";
-            // global_multisection_config.mode_string = "mtkahypar-quality";
-            // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 3;
 
@@ -530,14 +518,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            // global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode_string = "kaffpa-strong";
-            // global_multisection_config.mode_string = "kaffpa-eco";
-            // global_multisection_config.mode_string = "metis-recursive";
-            // global_multisection_config.mode_string = "metis-kway";
-            // global_multisection_config.mode_string = "mtkahypar-default";
-            // global_multisection_config.mode_string = "mtkahypar-quality";
-            // global_multisection_config.mode_string = "mtkahypar-highestquality";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 
