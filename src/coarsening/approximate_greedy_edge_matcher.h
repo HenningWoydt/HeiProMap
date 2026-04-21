@@ -35,8 +35,9 @@
 #include "../definitions.h"
 #include "../utility/random_engine.h"
 #include "../utility/aligned_array.h"
-#include "../definitions_1.h"
-#include "../definitions_2.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/distance_oracle.h"
+#include "../datastructures/partition_manager.h"
 
 namespace HeiProMap {
     class ApproximateGreedyEdgeMatcherConfiguration {

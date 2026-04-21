@@ -27,8 +27,9 @@
 #ifndef HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
 #define HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
 
-#include "../definitions_1.h"
-#include "../definitions_2.h"
+#include "csr_graph.h"
+#include "distance_oracle.h"
+#include "partition_manager.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
 

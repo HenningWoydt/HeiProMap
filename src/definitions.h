@@ -33,6 +33,19 @@
 #include <string>
 
 namespace HeiProMap {
+    class CSRGraph;
+    typedef CSRGraph graph_t;
+    class DistanceOracle;
+    typedef DistanceOracle d_oracle_t;
+    class PartitionManager;
+    typedef PartitionManager p_manager_t;
+    class BoundaryVertexManager;
+    typedef BoundaryVertexManager bv_manager_t;
+    class QuotientGraph;
+    typedef QuotientGraph q_graph_t;
+    class BlockConn;
+    typedef BlockConn block_conn_t;
+
     typedef int8_t s8;
     typedef int16_t s16;
     typedef int32_t s32;

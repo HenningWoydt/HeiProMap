@@ -32,9 +32,12 @@
 #include <queue>
 
 #include "../definitions.h"
-#include "../definitions_1.h"
-#include "../definitions_2.h"
-#include "../definitions_3.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/distance_oracle.h"
+#include "../datastructures/partition_manager.h"
+#include "../datastructures/boundary_vertex_manger.h"
+#include "../datastructures/quotient_graph.h"
+#include "../datastructures/block_conn.h"
 #include "../utility/random_engine.h"
 #include "../utility/qap.h"
 #include "../utility/indexed_update_heap.h"

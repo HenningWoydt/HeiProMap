@@ -27,8 +27,9 @@
 #ifndef HEIPROMAP_BLOCK_CONN_H
 #define HEIPROMAP_BLOCK_CONN_H
 
-#include "../definitions_1.h"
-#include "../definitions_2.h"
+#include "csr_graph.h"
+#include "distance_oracle.h"
+#include "partition_manager.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
 

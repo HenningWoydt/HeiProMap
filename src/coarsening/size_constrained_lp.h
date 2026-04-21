@@ -30,8 +30,9 @@
 #include <map>
 
 #include "../definitions.h"
-#include "../definitions_1.h"
-#include "../definitions_2.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/distance_oracle.h"
+#include "../datastructures/partition_manager.h"
 #include "../utility/random_engine.h"
 #include "../utility/small_map.h"
 #include "../utility/mapping.h"

@@ -35,7 +35,7 @@
 #include <omp.h>
 
 #include "../definitions.h"
-#include "../definitions_2.h"
+#include "../datastructures/partition_manager.h"
 #include "../utility/JSON_utils.h"
 #include "../utility/random_engine.h"
 

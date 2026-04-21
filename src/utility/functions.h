@@ -27,8 +27,9 @@
 #ifndef HEIPROMAP_FUNCTIONS_H
 #define HEIPROMAP_FUNCTIONS_H
 
-#include "../definitions_1.h"
-#include "../definitions_2.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/distance_oracle.h"
+#include "../datastructures/partition_manager.h"
 #include "../definitions.h"
 
 namespace HeiProMap {
