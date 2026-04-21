@@ -34,19 +34,12 @@
 #include "utils.h"
 #include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
-#include "../refinement/ILP_refinement.h"
-#include "../refinement/k_way_fm_refinement.h"
 #include "../refinement/label_propagation_refinement.h"
-#include "../refinement/multi_try_fm_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
-#include "../refinement/two_vertex_label_propagation_refinement.h"
 #include "../coarsening/heavy_edge_matcher.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/random_edge_matcher.h"
 #include "../partitioning/kaffpa_partitioner.h"
-#include "../refinement/lightning_refinement.h"
-#include "../refinement/three_vertex_label_propagation_refinement.h"
-#include "../refinement/wave_refinement.h"
 
 
 namespace HeiProMap {
@@ -187,19 +180,6 @@ namespace HeiProMap {
             // Refinement quotient graph
             {"--refinement-quotient-graph-enable", "", "Enables the quotient graph refinement.", "0", "", false},
 
-            // Refinement k-Way FM
-            {"--refinement-k-way-fm-enable", "", "Enables the K-Way FM refinement.", "0", "", false},
-            {"--refinement-k-way-fm-max-iterations", "", "How many iterations to run K-Way FM refinement at most.", "1", "", false},
-
-            // Refinement Multi-Try FM
-            {"--refinement-multi-try-fm-enable", "", "Enables the Multi-Try FM refinement.", "0", "", false},
-            {"--refinement-multi-try-fm-max-iterations", "", "How many iterations to run Multi-Try FM refinement at most.", "1", "", false},
-
-            // Refinement Hierarchy Aware Cycles
-            {"--refinement-hierarchy-aware-multi-way-fm-enable", "", "Enables the Hierarchy Aware Multi-Way FM refinement.", "0", "", false},
-
-            // Refinement Two Vertex Label Propagation
-            {"--refinement-two-vertex-label-propagation-enable", "", "Enables Label Propagation with two vertices.", "0", "", false},
             // Refinement Flow Based
             {"--refinement-flow-enable", "", "Enables the flow based refinement.", "0", "", false},
         };
@@ -257,15 +237,7 @@ namespace HeiProMap {
         // refinement algorithms
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
-        KWayFMRefinementConfiguration k_way_fm_refinement_config = KWayFMRefinementConfiguration("K-Way-FM");
-        MultiTryFmRefinementConfiguration multi_try_fm_refinement_config = MultiTryFmRefinementConfiguration("Multi Try-FM");
-        // TwoVertexLabelPropagationConfiguration two_vertex_label_propagation_config = TwoVertexLabelPropagationConfiguration("Two Vertex Label");
-        // ThreeVertexLabelPropagationConfiguration three_vertex_label_propagation_config = ThreeVertexLabelPropagationConfiguration("Three Vertex Label");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
-        // ILPRefinementConfiguration ilp_refinement_configuration                        = ILPRefinementConfiguration("ILP Refinement");
-
-        // WaveRefinementConfiguration wave_refinement_configuration = WaveRefinementConfiguration("Wave Refinement");
-        // LightningRefinementConfiguration lightning_refinement_configuration = LightningRefinementConfiguration("Lightning Refinement");
 
         AlgorithmConfiguration() = default;
 
@@ -367,27 +339,6 @@ namespace HeiProMap {
                 quotient_graph_refinement_config.enabled = get("--refinement-quotient-graph-enable") == "1";
             }
 
-            // initialize K-Way FM refinement configuration
-            if (use_default || is_set("--refinement-k-way-fm-max-iterations")) {
-                k_way_fm_refinement_config.max_iteration = std::stoi(get("--refinement-k-way-fm-max-iterations"));
-            }
-            if (use_default || is_set("--refinement-k-way-fm-enable")) {
-                k_way_fm_refinement_config.enabled = get("--refinement-k-way-fm-enable") == "1";
-            }
-
-            // initialize Multi-Try FM refinement configuration
-            if (use_default || is_set("--refinement-multi-try-fm-max-iterations")) {
-                multi_try_fm_refinement_config.max_iteration = std::stoi(get("--refinement-multi-try-fm-max-iterations"));
-            }
-            if (use_default || is_set("--refinement-multi-try-fm-enable")) {
-                multi_try_fm_refinement_config.enabled = get("--refinement-multi-try-fm-enable") == "1";
-            }
-
-            // initialize two vertex label propagation
-            if (use_default || is_set("--refinement-two-vertex-label-propagation-enable")) {
-                // two_vertex_label_propagation_config.enabled = get("--refinement-two-vertex-label-propagation-enable") == "1";
-            }
-
             // initialize flow based refinement
             if (use_default || is_set("--refinement-flow-enable")) {
                 flow_based_refinement_config.enabled = get("--refinement-flow-enable") == "1";
@@ -484,23 +435,12 @@ namespace HeiProMap {
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 25;
 
-            // enable multi-try fm
-            multi_try_fm_refinement_config.enabled = false;
-            multi_try_fm_refinement_config.max_iteration = 1;
-            multi_try_fm_refinement_config.alpha = 100.0;
-            multi_try_fm_refinement_config.min_n_steps = 2;
-
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 4;
             quotient_graph_refinement_config.use_preemptive_exit = true;
-
-            // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
-            k_way_fm_refinement_config.max_iteration = 1;
-            k_way_fm_refinement_config.alpha = 100.0;
         }
 
         void set_eco() {
@@ -550,15 +490,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha = 10000.0;
             quotient_graph_refinement_config.min_n_steps = 10;
             quotient_graph_refinement_config.use_active_scheduling = true;
-
-            // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
-
-            // enable multi-try fm
-            multi_try_fm_refinement_config.enabled = false;
-            multi_try_fm_refinement_config.max_iteration = 2;
-            multi_try_fm_refinement_config.alpha = 10000.0;
-            multi_try_fm_refinement_config.min_n_steps = 4;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
@@ -620,15 +551,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 10;
 
-            // enable k-way fm
-            k_way_fm_refinement_config.enabled = false;
-
-            // enable multi-try fm
-            multi_try_fm_refinement_config.enabled = false;
-            multi_try_fm_refinement_config.max_iteration = 2;
-            multi_try_fm_refinement_config.alpha = 1000.0;
-            multi_try_fm_refinement_config.min_n_steps = 10;
-
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
@@ -638,10 +560,6 @@ namespace HeiProMap {
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
-
-            // wave_refinement_configuration.enabled = false;
-
-            // lightning_refinement_configuration.enabled = false;
         }
 
         void set_experimental() {

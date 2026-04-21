@@ -47,11 +47,6 @@
 #include "../rebalance/rebalancer.h"
 #include "../partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../refinement/three_vertex_label_propagation_refinement.h"
-#include "../refinement/cycle_based_refinement.h"
-#include "../refinement/boundary_pair_refiner.h"
-#include "../refinement/two_vertex_label_propagation_refinement.h"
-#include "../refinement/pertubator.h"
 #include "../utility/algorithm_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
@@ -89,16 +84,8 @@ namespace HeiProMap {
 
         // refinement
         LabelPropagationRefinement lp_refine;
-        // TwoVertexLabelPropagationRefinement two_vertex_lp_refine;
-        // ThreeVertexLabelPropagationRefinement three_vertex_lp_refine;
         QuotientGraphRefinement qg_refine;
-        KWayFMRefinement k_way_refine;
-        MultiTryFMRefinement multi_try_fm_refinement;
         FlowBasedRefinement flow_based_refinement;
-        // ILPRefinement ilp_refinement;
-
-        // WaveRefinement wave_refinement;
-        // LightningRefinement lightning_refinement;
 
         std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *> > refinements;
 
@@ -219,17 +206,9 @@ namespace HeiProMap {
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
             // refinement
-            // refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
             refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
-            refinements.emplace_back(&k_way_refine, &ac.k_way_fm_refinement_config);
             refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            // refinements.emplace_back(&two_vertex_lp_refine, &ac.two_vertex_label_propagation_config);
-            // refinements.emplace_back(&three_vertex_lp_refine, &ac.three_vertex_label_propagation_config);
-            refinements.emplace_back(&multi_try_fm_refinement, &ac.multi_try_fm_refinement_config);
             refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
-
-            // refinements.emplace_back(&wave_refinement, &ac.wave_refinement_configuration);
-            // refinements.emplace_back(&lightning_refinement, &ac.lightning_refinement_configuration);
 
             for (auto &[refiner, config]: refinements) {
                 if (config->enabled) {
