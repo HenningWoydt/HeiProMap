@@ -38,12 +38,7 @@
 #include "../utility/random_engine.h"
 #include "../utility/utils.h"
 #include "../coarsening/global_path_algorithm.h"
-#include "../coarsening/greedy_edge_matcher.h"
-#include "../coarsening/approximate_greedy_edge_matcher.h"
-#include "../coarsening/heavy_edge_matcher.h"
-#include "../coarsening/random_edge_matcher.h"
 #include "../coarsening/size_constrained_lp.h"
-#include "../coarsening/boundary_edge_matcher.h"
 #include "../rebalance/rebalancer.h"
 #include "../partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
@@ -72,13 +67,8 @@ namespace HeiProMap {
 
         // matching
         std::vector<Mapping> mappings;
-        GreedyEdgeMatcher ge_matcher;
-        ApproximateGreedyEdgeMatcher approx_ge_matcher;
-        HeavyEdgeMatcher he_matcher;
-        RandomEdgeMatcher rnd_matcher;
         GlobalPathAlgorithmMatcher gpa_matcher;
         SizeConstrainedLP size_constrained_lp;
-        BoundaryEdgeMatcher be_matcher;
 
         Rebalancer rebalancer;
 
@@ -193,15 +183,8 @@ namespace HeiProMap {
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             // matching
-            ApproximateGreedyEdgeMatcherConfiguration approximate_config;
-            ge_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.greedy_edge_matcher_config);
-            approx_ge_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), approximate_config);
-            he_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, ac.heavy_edge_matcher_config);
-            rnd_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.random_edge_matcher_config);
             gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
             size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
-            BoundaryEdgeMatcherConfiguration c;
-            be_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine, c);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
@@ -511,28 +494,27 @@ namespace HeiProMap {
 
             if (v_cycle > 0) {
                 //bv_managers[0].compute_from_scratch(graphs.back(), p_managers[0]);
-                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
-            } else if (random) {
-                // be_matcher.match(level, graphs.back(), p_managers[0], bv_managers[0], mappings.back(), level_imbalance);
-                // size_constrained_lp.cluster<false, false>(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance, 10000);
-                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GREEDY_MATCHING) {
                 const auto &cg = graphs.back();
                 if (cg.uniform_v_weights && cg.uniform_e_weights) {
-                    ge_matcher.match<true, true>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    gpa_matcher.match<true, true, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
                 } else if (cg.uniform_v_weights) {
-                    ge_matcher.match<true, false>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    gpa_matcher.match<true, false, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
                 } else if (cg.uniform_e_weights) {
-                    ge_matcher.match<false, true>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    gpa_matcher.match<false, true, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
                 } else {
-                    ge_matcher.match<false, false>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                    gpa_matcher.match<false, false, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
                 }
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_APPROX_GREEDY_MATCHING) {
-                approx_ge_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                he_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
-            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_RANDOM_MATCHING) {
-                rnd_matcher.match(level, graphs.back(), p_managers[0], mappings.back(), level_imbalance);
+            } else if (random) {
+                const auto &cg = graphs.back();
+                if (cg.uniform_v_weights && cg.uniform_e_weights) {
+                    gpa_matcher.match<true, true, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                } else if (cg.uniform_v_weights) {
+                    gpa_matcher.match<true, false, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                } else if (cg.uniform_e_weights) {
+                    gpa_matcher.match<false, true, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                } else {
+                    gpa_matcher.match<false, false, EdgeRatingFunction::GREEDY>(level, cg, p_managers[0], mappings.back(), level_imbalance);
+                }
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 const auto &cg = graphs.back();
                 auto dispatch_match = [&](auto rating_func_const) {

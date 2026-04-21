@@ -32,33 +32,23 @@
 
 #include "../definitions.h"
 #include "utils.h"
-#include "../coarsening/greedy_edge_matcher.h"
 #include "../partitioning/global_multisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
-#include "../coarsening/heavy_edge_matcher.h"
 #include "../coarsening/global_path_algorithm.h"
-#include "../coarsening/random_edge_matcher.h"
+#include "../coarsening/size_constrained_lp.h"
 #include "../partitioning/kaffpa_partitioner.h"
 
 
 namespace HeiProMap {
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
-        COARSENING_ALG_GREEDY_MATCHING,
-        COARSENING_ALG_APPROX_GREEDY_MATCHING,
-        COARSENING_ALG_HEAVY_MATCHING,
-        COARSENING_ALG_RANDOM_MATCHING,
         COARSENING_ALG_GLOBAL_PATHS,
         COARSENING_ALG_SIZE_CONSTRAINED_LP
     };
 
     inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
-        if (str == "greedy-matching") return COARSENING_ALG_GREEDY_MATCHING;
-        if (str == "approx-greedy-matching") return COARSENING_ALG_APPROX_GREEDY_MATCHING;
-        if (str == "heavy-matching") return COARSENING_ALG_HEAVY_MATCHING;
-        if (str == "random-matching") return COARSENING_ALG_RANDOM_MATCHING;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
         if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
         return COARSENING_ALG_UNDEFINED;
@@ -68,14 +58,6 @@ namespace HeiProMap {
         switch (alg) {
             case COARSENING_ALG_UNDEFINED:
                 return "UNDEFINED";
-            case COARSENING_ALG_GREEDY_MATCHING:
-                return "greedy-matching";
-            case COARSENING_ALG_APPROX_GREEDY_MATCHING:
-                return "approx-greedy-matching";
-            case COARSENING_ALG_HEAVY_MATCHING:
-                return "heavy-matching";
-            case COARSENING_ALG_RANDOM_MATCHING:
-                return "random-matching";
             case COARSENING_ALG_GLOBAL_PATHS:
                 return "global-paths";
             case COARSENING_ALG_SIZE_CONSTRAINED_LP:
@@ -147,17 +129,11 @@ namespace HeiProMap {
             {"--seed", "", "Seed for diversifying results.", "", "", false},
 
             /** Coarsening */
-            {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {greedy-matching, heavy-matching, random-matching, global-paths}.", "global-paths", "", false},
+            {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp}.", "global-paths", "", false},
 
             // Coarsening global-path
             {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
-
-            // Coarsening greedy matching
-            {"--coarsening-algorithm-greedy-matching-pendant-first", "", "Whether the greedy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
-
-            // Coarsening heavy matching
-            {"--coarsening-algorithm-heavy-matching-pendant-first", "", "Whether the heavy matching algorithm should handle pendant vertices first. 1 enables first matching pendant vertices, while 0 does not.", "1", "", false},
 
             /** Partitioning */
             {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.", "multisection", "", false},
@@ -216,10 +192,7 @@ namespace HeiProMap {
         std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
 
-        GreedyEdgeMatcherConfiguration greedy_edge_matcher_config;
-        HeavyEdgeMatcherConfiguration heavy_edge_matcher_config;
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
-        RandomEdgeMatcherConfiguration random_edge_matcher_config;
         SizeConstrainedLPConfiguration size_constrained_lp_config;
 
         // partitioning algorithm
@@ -406,10 +379,7 @@ namespace HeiProMap {
             initial_c = 4;
 
             // set GPA matching algorithm
-            // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_string = "size-constrained-lp";
-            // coarsening_algorithm_string = "random-matching";
-            // coarsening_algorithm_string = "greedy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -448,10 +418,7 @@ namespace HeiProMap {
             v_cycle_max_depth = 10;
 
             // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "greedy-matching";
-            // coarsening_algorithm_string = "random-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -500,12 +467,7 @@ namespace HeiProMap {
             v_cycle_max_depth = 100;
 
             // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "greedy-matching";
-            // coarsening_algorithm_string = "approx-greedy-matching";
-            // coarsening_algorithm_string = "random-matching";
-            // coarsening_algorithm_string = "heavy-matching";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
