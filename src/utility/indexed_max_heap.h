@@ -28,8 +28,8 @@
 #define HEIPROMAP_INDEXED_MAX_HEAP_H
 
 #include "../definitions.h"
-#include "../utility/macros.h"
-#include "../utility/aligned_array.h"
+#include "macros.h"
+#include "aligned_array.h"
 
 namespace HeiProMap {
     /**

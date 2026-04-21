@@ -32,7 +32,7 @@
 #include "../utility/utils.h"
 #include "ISerialRefiner.h"
 #include "../utility/qap.h"
-#include "../datastructures/indexed_max_heap.h"
+#include "../utility/indexed_max_heap.h"
 #include "../utility/functions.h"
 
 namespace HeiProMap {
