@@ -358,7 +358,7 @@ namespace HeiProMap {
 
                     vertex_t vertex = boundary_vertices.top_key();
                     weight_t qap_delta = boundary_vertices.top();
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = choose_u ? u_id : v_id;
                     partition_t move_id = choose_u ? v_id : u_id;
                     boundary_vertices.pop();
@@ -430,7 +430,7 @@ namespace HeiProMap {
                 // revert all moves in partitioning manager
                 for (size_t i = 0; i < moves.size(); i++) {
                     vertex_t vertex = moves[moves.size() - 1 - i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
                     vertex_used[vertex] = vertex_mark - 1;
@@ -441,7 +441,7 @@ namespace HeiProMap {
                 // make all moves to best index
                 for (size_t i = 0; i < best_idx; ++i) {
                     vertex_t vertex = moves[i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
                     vertex_used[vertex] = vertex_mark;
@@ -557,7 +557,7 @@ namespace HeiProMap {
 
                     vertex_t vertex = boundary_vertices.top_key();
                     weight_t qap_delta = boundary_vertices.top();
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = choose_u ? u_id : v_id;
                     partition_t move_id = choose_u ? v_id : u_id;
                     boundary_vertices.pop();
@@ -629,7 +629,7 @@ namespace HeiProMap {
                 // revert all moves in partitioning manager
                 for (size_t i = 0; i < moves.size(); i++) {
                     vertex_t vertex = moves[moves.size() - 1 - i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
                     vertex_used[vertex] = vertex_mark - 1;
@@ -640,7 +640,7 @@ namespace HeiProMap {
                 // make all moves to best index
                 for (size_t i = 0; i < best_idx; ++i) {
                     vertex_t vertex = moves[i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                    weight_t vertex_weight = g.v_weights[vertex];
                     partition_t vertex_id = p_manager[vertex];
                     partition_t move_id = u_id == vertex_id ? v_id : u_id;
                     vertex_used[vertex] = vertex_mark;

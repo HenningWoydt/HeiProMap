@@ -155,7 +155,7 @@ namespace HeiProMap {
 
                         if (!bv_manager.is_boundary(u)) { continue; }
 
-                        weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                        weight_t u_weight = g.v_weights[u];
                         partition_t u_id = p_manager[u];
 
                         partition_t best_id = NO_ID;
@@ -212,7 +212,7 @@ namespace HeiProMap {
 
                         if (!bv_manager.is_boundary(u)) { continue; }
 
-                        weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                        weight_t u_weight = g.v_weights[u];
                         partition_t u_id = p_manager[u];
 
                         partition_t best_id = NO_ID;
