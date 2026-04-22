@@ -49,6 +49,7 @@ namespace HeiProMap {
         explicit FlowBasedRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {
         }
 
+        bool use_active_block_scheduling = true;
         u64 max_global_iteration = 1;
         u64 max_local_iteration = 3;
         f64 alpha = 2.0;
@@ -219,8 +220,10 @@ namespace HeiProMap {
                     {
                         ScopedTimer _t("refinement", "FlowBasedRefinement", "swap_active");
 
-                        std::swap(active_this_round, active_next_round);
-                        active_next_round.initialize(m_k, 0);
+                        if (config->use_active_block_scheduling) {
+                            std::swap(active_this_round, active_next_round);
+                            active_next_round.initialize(m_k, 0);
+                        }
                     }
                 }
             } else {

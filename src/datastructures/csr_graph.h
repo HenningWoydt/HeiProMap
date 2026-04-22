@@ -111,17 +111,20 @@ namespace HeiProMap {
             while (*p == ' ') { ++p; }
             if (*p != '\n') {
                 // found fmt
-                fmt[0] = *p;
-                ++p;
-                if (*p != '\n') {
-                    // found fmt
-                    fmt[1] = *p;
+                std::string tmp_fmt;
+                while (*p != ' ' && *p != '\n') {
+                    tmp_fmt += *p;
                     ++p;
-                    if (*p != '\n') {
-                        // found fmt
-                        fmt[2] = *p;
-                        ++p;
-                    }
+                }
+                if (tmp_fmt.size() == 1) {
+                    fmt[2] = tmp_fmt[0];
+                } else if (tmp_fmt.size() == 2) {
+                    fmt[1] = tmp_fmt[0];
+                    fmt[2] = tmp_fmt[1];
+                } else if (tmp_fmt.size() == 3) {
+                    fmt[0] = tmp_fmt[0];
+                    fmt[1] = tmp_fmt[1];
+                    fmt[2] = tmp_fmt[2];
                 }
                 // skip whitespaces
                 while (*p == ' ') { ++p; }
@@ -303,8 +306,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
-                uniform_v_weights = false;
-                uniform_e_weights = false;
+                uniform_v_weights = t_uniform_v_weights;
+                uniform_e_weights = t_uniform_e_weights;
                 v_weights.initialize(n, 0);
                 neighborhoods.initialize(n + 1);
                 neighborhoods[0] = 0;
@@ -413,8 +416,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
-                uniform_v_weights = false;
-                uniform_e_weights = false;
+                uniform_v_weights = t_uniform_v_weights;
+                uniform_e_weights = t_uniform_e_weights;
                 v_weights.initialize(n, 0);
                 overest_sizes.initialize(n, 0);
                 overest_neighborhood.initialize(n + 1);
