@@ -246,6 +246,11 @@ namespace HeiProMap {
                     }
 
                     // create the graphs
+                    for (partition_t i = 0; i < item.k; ++i) {
+                        size_t idx = stack.size() - (item.k - i);
+                        stack[idx].g->neighborhoods[0] = 0;
+                    }
+
                     for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
                         partition_t u_id = partition[old_u];
                         size_t idx = stack.size() - (item.k - u_id);
@@ -259,7 +264,7 @@ namespace HeiProMap {
                         sub_g.v_weights[new_u] = item.g->v_weights[old_u];
 
                         // set the edges
-                        sub_g.neighborhoods[new_u + 1] = sub_g.neighborhoods[new_u];
+                        vertex_t edge_count = 0;
                         for (size_t i = item.g->neighborhoods[old_u]; i < item.g->neighborhoods[old_u + 1]; ++i) {
                             vertex_t old_v = item.g->edges_v[i];
 
@@ -267,11 +272,12 @@ namespace HeiProMap {
                                 // add the edge
                                 vertex_t new_v = sub_tt.get_n(item.tt->get_o(old_v)); // vertex in new graph
 
-                                sub_g.edges_v[sub_g.neighborhoods[new_u + 1]] = new_v;
-                                sub_g.edges_w[sub_g.neighborhoods[new_u + 1]] = item.g->edges_w[i];
-                                sub_g.neighborhoods[new_u + 1] += 1;
+                                sub_g.edges_v[sub_g.neighborhoods[new_u] + edge_count] = new_v;
+                                sub_g.edges_w[sub_g.neighborhoods[new_u] + edge_count] = item.g->edges_w[i];
+                                edge_count += 1;
                             }
                         }
+                        sub_g.neighborhoods[new_u + 1] = sub_g.neighborhoods[new_u] + edge_count;
                     }
 
                     // fill in other information

@@ -54,7 +54,7 @@ namespace HeiProMap {
     class GlobalPathAlgorithmConfiguration {
     public:
         size_t random_level = 4;
-        EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSION;
+        EdgeRatingFunction rating_function = EdgeRatingFunction::HEAVY_EDGE;
     };
 
     /**

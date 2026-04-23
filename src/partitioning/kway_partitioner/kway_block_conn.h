@@ -90,8 +90,8 @@ namespace GPU_HeiPa::ModifiedMetis {
 
             // --- connection disappears ---
             if (old_w > 0 && new_w == 0) {
+                int last_pos = --n_conns[v];
                 int pos = locator[off];
-                int last_pos = n_conns[v] - 1;
 
                 if (pos != last_pos) {
                     int last_id = locator_list[v * k + last_pos];
@@ -101,7 +101,7 @@ namespace GPU_HeiPa::ModifiedMetis {
 
                 locator_list[v * k + last_pos] = -1;
                 locator[off] = -1;
-                --n_conns[v];
+                return;
             }
         }
 

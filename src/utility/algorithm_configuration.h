@@ -374,11 +374,11 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 16;
+            initial_c = 8;
 
             // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
@@ -386,7 +386,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 8;
+            size_constrained_lp_config.multiplier = 16;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -416,19 +416,21 @@ namespace HeiProMap {
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
+            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
-            size_constrained_lp_config.max_rounds = 2;
+            size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 16;
+            size_constrained_lp_config.multiplier = 4;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-eco";
+            // global_multisection_config.mode_string = "metis-kway";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 3;
 
@@ -439,7 +441,7 @@ namespace HeiProMap {
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 10;
-            quotient_graph_refinement_config.alpha = 10000.0;
+            quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 10;
             quotient_graph_refinement_config.use_active_scheduling = true;
 
@@ -492,8 +494,8 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
-            flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 5;
+            flow_based_refinement_config.max_global_iteration = 3;
+            flow_based_refinement_config.max_local_iteration = 3;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;

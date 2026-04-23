@@ -603,12 +603,15 @@ namespace HeiProMap {
         void rebalancing(const u64 v_cycle, const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
 
+            std::cout << "Before: " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
+
             if (level == 0) {
                 rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, level_imbalance);
             } else {
                 rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, level_imbalance);
             }
 
+            std::cout << "After: " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
 
             auto ep = get_time_point();
 

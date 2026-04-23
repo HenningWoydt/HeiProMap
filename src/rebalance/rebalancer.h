@@ -182,7 +182,9 @@ namespace HeiProMap {
             _t_allocate.stop();
 
             bool move_made = true;
-            while (move_made) {
+            u64 iter = 0;
+            while (move_made && iter < 100) {
+                iter++;
                 ScopedTimer _t_get_boundary("rebalance", "Rebalancer", "get_boundary");
                 move_made = false;
 
@@ -236,7 +238,9 @@ namespace HeiProMap {
                 _t_global_heap.stop();
                 ScopedTimer _t_process_heap("rebalance", "Rebalancer", "process_heap");
 
-                while (!global_queue.empty()) {
+                u64 inner_iter = 0;
+                while (!global_queue.empty() && inner_iter < (u64) g.n * 10) {
+                    inner_iter++;
                     RebalancerMove move = global_queue.top();
                     global_queue.pop();
                     vertex_t u = move.u;
@@ -315,7 +319,9 @@ namespace HeiProMap {
             _t_allocate.stop();
 
             bool move_made = true;
-            while (move_made) {
+            u64 iter = 0;
+            while (move_made && iter < 100) {
+                iter++;
                 ScopedTimer _t_get_boundary("rebalance", "LL-Rebalancer", "get_boundary");
                 move_made = false;
 
@@ -371,7 +377,9 @@ namespace HeiProMap {
                 _t_global_heap.stop();
                 ScopedTimer _t_process_heap("rebalance", "LL-Rebalancer", "process_heap");
 
-                while (!global_queue.empty()) {
+                u64 inner_iter = 0;
+                while (!global_queue.empty() && inner_iter < (u64) g.n * 10) {
+                    inner_iter++;
                     RebalancerMove move = global_queue.top();
                     global_queue.pop();
                     vertex_t u = move.u;
@@ -472,7 +480,9 @@ namespace HeiProMap {
                 }
             }
 
-            while (!heap.empty()) {
+            u64 empty_iter = 0;
+            while (!heap.empty() && empty_iter < (u64) g.n * 10) {
+                empty_iter++;
                 vertex_t u = heap.top_u();
                 partition_t u_id = p_manager[u];
                 weight_t u_w = g.v_weights[u];

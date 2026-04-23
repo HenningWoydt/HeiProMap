@@ -398,6 +398,9 @@ namespace GPU_HeiPa::ModifiedMetis {
     }
 
     inline int heavy_edge_matching(const Graph &g, std::vector<int> &matching, std::vector<int> &mapping, int max_v_weight) {
+        if (g.n == 0) {
+            return 0;
+        }
         std::vector<int> perm(g.n);
         std::vector<int> tperm(g.n);
         std::vector<int> degrees(g.n);
@@ -596,6 +599,9 @@ namespace GPU_HeiPa::ModifiedMetis {
     }
 
     inline void FM_2WayCutRefine(Graph &g, Boundary &bnd, BisectInfo &info, std::vector<int> &p_weights, const std::vector<float> &ntpwgts, std::vector<int> &partition, int max_iter) {
+        if (g.n == 0) {
+            return;
+        }
         std::vector<int> moved(g.n, -1);
         std::vector<int> swaps(g.n);
         std::vector<int> perm(g.n);
@@ -874,6 +880,9 @@ namespace GPU_HeiPa::ModifiedMetis {
     }
 
     inline void balance_bisection(Graph &g, Boundary &bnd, BisectInfo &info, const std::vector<float> &ntpwgts, std::vector<int> &p_weights, std::vector<int> &partition, float ubfactor) {
+        if (g.n == 0) {
+            return;
+        }
         if (ComputeLoadImbalanceDiff(g, 2, p_weights, ubfactor) <= 0) { return; }
         if (fabsf(ntpwgts[0] * g.g_weight - p_weights[0]) < 3 * g.g_weight / g.n) { return; }
 
@@ -1096,6 +1105,9 @@ namespace GPU_HeiPa::ModifiedMetis {
     }
 
     inline void bisection(Graph &g, Boundary &bnd, float ubfactor, const std::vector<float> &ntpwgts, std::vector<int> &p_weights, std::vector<int> &partition, BisectInfo &info, int max_tries, int max_iter) {
+        if (g.n == 0) {
+            return;
+        }
         std::vector<int> temp_partition(g.n);
         std::vector<int> queue(g.n);
         std::vector<int> touched(g.n);
@@ -1299,6 +1311,7 @@ namespace GPU_HeiPa::ModifiedMetis {
 
                 graph_stack.push_back(std::move(coarse_g));
             } while (
+                graph_stack.back().n > 0 &&
                 graph_stack.back().n > threshold &&
                 graph_stack.back().n < 0.85 * graph_stack[graph_stack.size() - 2].n &&
                 graph_stack.back().m > graph_stack.back().n / 2
@@ -1454,7 +1467,7 @@ namespace GPU_HeiPa::ModifiedMetis {
                 ms_coarse += get_milli_seconds(sp_coarse, ep_coarse);
 
                 graphs.push_back(std::move(coarse_g));
-            } while (graphs.back().n > threshold && graphs.back().n < 0.85 * graphs[graphs.size() - 2].n && graphs.back().m > graphs.back().n / 2);
+            } while (graphs.back().n > 0 && graphs.back().n > threshold && graphs.back().n < 0.85 * graphs[graphs.size() - 2].n && graphs.back().m > graphs.back().n / 2);
 
             float temp_ubfactor = (float) pow(imb, 1.0 / log(k));
             auto sp_part = get_time_point();
