@@ -46,7 +46,7 @@
 #endif
 
 namespace HeiProMap {
-    static std::string pad_cell(const std::string &text, int width) {
+    inline std::string pad_cell(const std::string &text, int width) {
         if (width <= 0) return "";
         if (static_cast<int>(text.size()) <= width) {
             return text + std::string(width - static_cast<int>(text.size()), ' ');
@@ -57,7 +57,7 @@ namespace HeiProMap {
         return text.substr(0, width - 1) + "…";
     }
 
-    static bool stream_is_tty(std::ostream &stream) {
+    inline bool stream_is_tty(std::ostream &stream) {
 #if defined(_WIN32)
         DWORD mode;
         HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -78,7 +78,7 @@ namespace HeiProMap {
         const char *reset = "\x1b[0m";
     };
 
-    static ZebraTheme basic_theme() {
+    inline ZebraTheme basic_theme() {
         return ZebraTheme{
             "\x1b[47m",
             "\x1b[107m",

@@ -182,8 +182,6 @@ namespace HeiProMap {
 
         u64 threads = 1;
 
-        u64 n_v_cycle = 0;
-        u64 v_cycle_max_depth = 100;
         u64 initial_c = 8;
 
         // coarsening algorithm
@@ -411,8 +409,6 @@ namespace HeiProMap {
             initial_c = 8;
 
             n_refinement_iterations = 1;
-            n_v_cycle = 0;
-            v_cycle_max_depth = 10;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
@@ -460,8 +456,6 @@ namespace HeiProMap {
             initial_c = 16;
 
             n_refinement_iterations = 1;
-            n_v_cycle = 0;
-            v_cycle_max_depth = 100;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
