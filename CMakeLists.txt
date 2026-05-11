@@ -18,7 +18,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter")
@@ -33,7 +33,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO TRUE)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL TRUE)
 
 set(ENABLE_PROFILER OFF CACHE BOOL "Enable profiler")
-set(ENABLE_ASSERTS OFF CACHE BOOL "Enable assertions")
+set(ENABLE_ASSERTS ON CACHE BOOL "Enable assertions")
 
 # ---------------------------
 # OpenMP

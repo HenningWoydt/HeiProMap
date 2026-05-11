@@ -548,13 +548,14 @@ namespace HeiProMap {
         CSRGraph(CSRGraph &&other) noexcept {
             n = other.n;
             m = other.m;
-
             g_weight = other.g_weight;
+            uniform_v_weights = other.uniform_v_weights;
+            uniform_e_weights = other.uniform_e_weights;
 
-            std::swap(v_weights, other.v_weights);
-            std::swap(neighborhoods, other.neighborhoods);
-            std::swap(edges_v, other.edges_v);
-            std::swap(edges_w, other.edges_w);
+            v_weights = std::move(other.v_weights);
+            neighborhoods = std::move(other.neighborhoods);
+            edges_v = std::move(other.edges_v);
+            edges_w = std::move(other.edges_w);
         }
 
         // Optionally disable copying.

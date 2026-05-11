@@ -127,6 +127,7 @@ namespace HeiProMap {
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
+            {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
 
             /** Coarsening */
             {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp}.", "global-paths", "", false},
@@ -181,6 +182,8 @@ namespace HeiProMap {
         u64 seed = 0;
 
         u64 threads = 1;
+
+        u64 hm_level = 0;
 
         u64 initial_c = 8;
 
@@ -238,6 +241,12 @@ namespace HeiProMap {
                 threads = std::stoi(get("--threads"));
             } else {
                 threads = 1;
+            }
+        }
+
+        void set_hm_level() {
+            if (is_set("--hm-level")) {
+                hm_level = std::stoi(get("--hm-level"));
             }
         }
 
@@ -346,6 +355,7 @@ namespace HeiProMap {
             set_imbalance();
             set_seed();
             set_threads();
+            set_hm_level();
 
             set_coarsening_algorithm(true);
             set_partitioning_algorithm(true);
@@ -526,7 +536,7 @@ namespace HeiProMap {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (large_key == var || small_key == var) {
                     if (input.empty() && default_val.empty()) {
-                        std::cout << "Command Line \"" << var << "\" not set!" << std::endl;
+                        std::cout << "Command Line "" << var << "" not set!" << std::endl;
                         exit(EXIT_FAILURE);
                     } else if (input.empty()) {
                         return default_val;
@@ -534,7 +544,7 @@ namespace HeiProMap {
                     return input;
                 }
             }
-            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
+            std::cout << "Command Line "" << var << "" is not an allowed name!" << std::endl;
             exit(EXIT_FAILURE);
         }
 
@@ -550,7 +560,7 @@ namespace HeiProMap {
                     return is_set;
                 }
             }
-            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
+            std::cout << "Command Line "" << var << "" is not an allowed name!" << std::endl;
             exit(EXIT_FAILURE);
         }
 

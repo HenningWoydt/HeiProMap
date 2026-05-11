@@ -1,38 +1,4 @@
-/*******************************************************************************
- * MIT License
- *
- * This file is part of HeiProMap.
- *
- * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- ******************************************************************************/
-
-#include <cstring>
-#include <filesystem>
-#include <iostream>
-
-#include "src/definitions.h"
-#include "src/utility/utils.h"
-#include "src/datastructures/solver.h"
-#include "src/utility/algorithm_configuration.h"
-#include "src/utility/profiler.h"
+#include "src/datastructures/adaptive_solver.h"
 
 using namespace HeiProMap;
 
@@ -54,9 +20,10 @@ int main(const int argc, char *argv[]) {
                 {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
-                {"--config", "strong"},
+                {"--config", "fast"},
                 {"--seed", "0"},
                 {"--threads", "1"},
+                {"--hm-level", "1"},
             };
 
             std::vector<std::string> args = {"HeiProMap"};
@@ -84,8 +51,13 @@ int main(const int argc, char *argv[]) {
             AlgorithmConfiguration ac(temp_argc, temp_argv);
             _t.stop();
 
-            Solver solver(ac);
-            solver.solve();
+            if (ac.hm_level > 0) {
+                AdaptiveSolver solver(ac);
+                solver.solve();
+            } else {
+                Solver solver(ac);
+                solver.solve();
+            }
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
@@ -97,8 +69,13 @@ int main(const int argc, char *argv[]) {
 
         std::cout << "Seed " << ac.seed << std::endl;
 
-        Solver solver(ac);
-        solver.solve();
+        if (ac.hm_level > 0) {
+            AdaptiveSolver solver(ac);
+            solver.solve();
+        } else {
+            Solver solver(ac);
+            solver.solve();
+        }
     }
 
     auto ep = get_time_point();

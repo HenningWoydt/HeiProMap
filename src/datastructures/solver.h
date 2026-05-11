@@ -197,6 +197,47 @@ namespace HeiProMap {
             init_time += get_seconds(sp, ep);
         }
 
+        explicit Solver(graph_t&& g, const AlgorithmConfiguration &t_ac) {
+            graphs.reserve(100);
+            graphs.emplace_back(std::move(g));
+
+            ac = t_ac;
+            random_engine = RandomEngine(ac.seed);
+
+            // manager
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+            bv_manager.initialize(graphs[0].n, ac.k);
+            q_graph.initialize(ac.k);
+            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
+
+            // distance
+            d_oracle.initialize(ac.hierarchy, ac.distance);
+
+            // matching
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
+
+            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
+
+            // refinement
+            refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
+            refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
+            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
+
+            for (auto &[refiner, config]: refinements) {
+                if (config->enabled) {
+                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), *config);
+                }
+            }
+            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
+        }
+
+        const PartitionManager& solve_subproblem() {
+            internal_solve();
+            return p_manager;
+        }
+
         std::vector<vertex_t> solve() {
             const auto sp = std::chrono::high_resolution_clock::now();
             internal_solve();
