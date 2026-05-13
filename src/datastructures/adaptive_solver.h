@@ -86,13 +86,16 @@ namespace HeiProMap {
 
             AlignedArray<partition_t> partition;
             partition.initialize(g.n, 0);
-
-            if (m_ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
-                kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
-            } else if (m_ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
-                kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
-            } else {
-                kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+            //
+            {
+                ScopedTimer _t("adaptive_solver", "adaptive_solver", "partition");
+                if (m_ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
+                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+                } else if (m_ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
+                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+                } else {
+                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+                }
             }
 
             std::vector<vertex_t> new_ns(k, 0);
@@ -112,6 +115,7 @@ namespace HeiProMap {
             partition_t k_per_subgraph = prod<partition_t>(hierarchy);
 
             for (partition_t i = 0; i < k; ++i) {
+                ScopedTimer _t("adaptive_solver", "adaptive_solver", "extrcact_graph");
                 graph_t sub_g(new_ns[i], new_ms[i], new_ws[i]);
                 TranslationTable<vertex_t> sub_tt;
                 sub_tt.reserve(new_ns[i], g.n);
@@ -160,6 +164,7 @@ namespace HeiProMap {
                         }
                     }
                 }
+                _t.stop();
                 recursive_solve(sub_g, p_manager, hierarchy, distance, current_level + 1, offset + i * k_per_subgraph, sub_tt, total_weight);
             }
         }
