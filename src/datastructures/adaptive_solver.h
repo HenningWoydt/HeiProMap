@@ -29,10 +29,12 @@
 
 #include <iostream>
 #include "solver.h"
+#include "distance_oracle.h"
 #include "../utility/algorithm_configuration.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../partitioning/kway_partitioner/kway_core.h"
 #include "../utility/utils.h"
+#include "../utility/qap.h"
 
 namespace HeiProMap {
 
@@ -42,12 +44,18 @@ namespace HeiProMap {
         PartitionManager m_p_manager;
 
         void recursive_solve(graph_t& g, PartitionManager& p_manager, std::vector<partition_t> hierarchy,
-                             std::vector<weight_t> distance, u64 current_level, u64 offset, const TranslationTable<vertex_t>& tt) {
+                             std::vector<weight_t> distance, u64 current_level, u64 offset, const TranslationTable<vertex_t>& tt,
+                             const weight_t total_weight) {
+            partition_t k_of_subgraph = prod<partition_t>(hierarchy);
+            f64 total_remaining_slack = ((1.0 + m_ac.imbalance) * (f64) k_of_subgraph * (f64) total_weight) / ((f64) m_ac.k * (f64) g.g_weight) - 1.0;
+            total_remaining_slack = std::max(0.0, total_remaining_slack);
+
             if (current_level >= m_ac.hm_level) {
                 AlgorithmConfiguration sub_ac = m_ac;
                 sub_ac.hierarchy = hierarchy;
                 sub_ac.distance = distance;
-                sub_ac.k = prod<partition_t>(hierarchy);
+                sub_ac.k = k_of_subgraph;
+                sub_ac.imbalance = total_remaining_slack;
 
                 if (m_ac.get("--config") == "fast") {
                     sub_ac.set_fast();
@@ -73,15 +81,18 @@ namespace HeiProMap {
             hierarchy.pop_back();
             distance.pop_back();
 
+            f64 per_level_epsilon = std::pow(1.0 + total_remaining_slack, 1.0 / (f64) (hierarchy.size() + 1)) - 1.0;
+            per_level_epsilon = std::max(0.0, per_level_epsilon);
+
             AlignedArray<partition_t> partition;
-            partition.initialize(g.n);
+            partition.initialize(g.n, 0);
 
             if (m_ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
-                kaffpa_partition(g, k, m_ac.imbalance, KAFFPA_PARTITION_STRONG, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+                kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
             } else if (m_ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
-                kaffpa_partition(g, k, m_ac.imbalance, KAFFPA_PARTITION_ECO, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+                kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
             } else {
-                kaffpa_partition(g, k, m_ac.imbalance, KAFFPA_PARTITION_FAST, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
+                kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, m_ac.seed, partition, m_ac.global_multisection_config.kappa);
             }
 
             std::vector<vertex_t> new_ns(k, 0);
@@ -149,7 +160,7 @@ namespace HeiProMap {
                         }
                     }
                 }
-                recursive_solve(sub_g, p_manager, hierarchy, distance, current_level + 1, offset + i * k_per_subgraph, sub_tt);
+                recursive_solve(sub_g, p_manager, hierarchy, distance, current_level + 1, offset + i * k_per_subgraph, sub_tt, total_weight);
             }
         }
 
@@ -157,19 +168,42 @@ namespace HeiProMap {
         explicit AdaptiveSolver(const AlgorithmConfiguration& ac) : m_ac(ac) {}
 
         void solve() {
+            const auto sp = std::chrono::high_resolution_clock::now();
             graph_t g(m_ac.graph_in);
+            const weight_t total_weight = g.g_weight;
             m_p_manager.initialize(g.n, m_ac.k, g.g_weight);
+            m_p_manager.reset_weights();
             TranslationTable<vertex_t> tt;
             tt.reserve(g.n, g.n);
             for(vertex_t u = 0; u < g.n; ++u) {
                 tt.add(u, u);
             }
 
-            recursive_solve(g, m_p_manager, m_ac.hierarchy, m_ac.distance, 0, 0, tt);
+            recursive_solve(g, m_p_manager, m_ac.hierarchy, m_ac.distance, 0, 0, tt, total_weight);
 
             std::vector<partition_t> p(g.n);
             for (vertex_t u = 0; u < g.n; ++u) { p[u] = m_p_manager[u]; }
             write_partition(p, m_ac.mapping_out);
+
+            const auto ep = std::chrono::high_resolution_clock::now();
+            f64 duration = get_seconds(sp, ep);
+
+            DistanceOracle d_oracle;
+            d_oracle.initialize(m_ac.hierarchy, m_ac.distance);
+            weight_t qap = get_qap(g, m_p_manager, d_oracle);
+
+            weight_t lmax = std::ceil((1.0 + m_ac.imbalance) * ((f64) g.g_weight / (f64) m_ac.k));
+
+            std::cout << "Total time        : " << duration << std::endl;
+            std::cout << "#Nodes            : " << g.n << std::endl;
+            std::cout << "#Edges            : " << g.m << std::endl;
+            std::cout << "k                 : " << m_ac.k << std::endl;
+            std::cout << "Lmax              : " << lmax << std::endl;
+            std::cout << "Final QAP         : " << qap << std::endl;
+            std::cout << "max block w       : " << m_p_manager.max_weight() << std::endl;
+            std::cout << "#empty partitions : " << (u32) m_p_manager.n_empty_blocks() << std::endl;
+            std::cout << "#oload partitions : " << (u32) m_p_manager.n_oload_blocks(lmax) << std::endl;
+            std::cout << "Sum oload weights : " << m_p_manager.sum_oload_weight(lmax) << std::endl;
         }
     };
 

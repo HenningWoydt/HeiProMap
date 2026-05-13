@@ -197,7 +197,7 @@ namespace HeiProMap {
             init_time += get_seconds(sp, ep);
         }
 
-        explicit Solver(graph_t&& g, const AlgorithmConfiguration &t_ac) {
+        explicit Solver(graph_t &&g, const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(std::move(g));
 
@@ -233,7 +233,7 @@ namespace HeiProMap {
             lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
         }
 
-        const PartitionManager& solve_subproblem() {
+        const PartitionManager &solve_subproblem() {
             internal_solve();
             return p_manager;
         }
@@ -314,8 +314,6 @@ namespace HeiProMap {
                 coarsening(level, level_imbalance);
                 contraction(level);
 
-                std::cout << graphs.back().n << " " << graphs.back().m << std::endl;
-
                 level += 1;
             }
 
@@ -351,8 +349,6 @@ namespace HeiProMap {
                 rebalancing(level, level_imbalance);
 
                 refinement(level, level_imbalance);
-
-                std::cout << level << " B " << graphs.back().n << " " << graphs.back().m << " " << get_qap(graphs.back(), p_manager, d_oracle) << " " << p_manager.sum_oload_weight(level_lmax) << std::endl;
 
                 #if ENABLE_PROFILER
                 level_infos[level].max_b_weight = p_manager.max_weight();
@@ -399,9 +395,6 @@ namespace HeiProMap {
                                 best_idx = thread_id;
                             }
                         }
-
-                        print(local_qaps);
-                        std::cout << "best qap: " << local_qaps[best_idx] << " best idx: " << best_idx << std::endl;
 
                         p_manager.copy_from(local_p_managers[best_idx]);
                     } else {
@@ -598,15 +591,11 @@ namespace HeiProMap {
         void rebalancing(const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
 
-            std::cout << "Before: " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
-
             if (level == 0) {
                 rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, level_imbalance);
             } else {
                 rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, level_imbalance);
             }
-
-            std::cout << "After: " << get_qap(graphs.back(), p_manager, d_oracle) << std::endl;
 
             auto ep = get_time_point();
 
