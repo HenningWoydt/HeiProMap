@@ -35,6 +35,7 @@
 #include "../partitioning/kway_partitioner/kway_core.h"
 #include "../utility/utils.h"
 #include "../utility/qap.h"
+#include "../refinement/flow_based_refinement.h"
 
 namespace HeiProMap {
 
@@ -63,6 +64,8 @@ namespace HeiProMap {
                     sub_ac.set_eco();
                 } else if (m_ac.get("--config") == "strong") {
                     sub_ac.set_strong();
+                } else if (m_ac.get("--config") == "super-strong") {
+                    sub_ac.set_super_strong();
                 }
                 
                 std::vector<weight_t> v_weights(g.n);
@@ -185,6 +188,45 @@ namespace HeiProMap {
             }
 
             recursive_solve(g, m_p_manager, m_ac.hierarchy, m_ac.distance, 0, 0, tt, total_weight);
+
+            std::cout << m_ac.get("--config") << " " << m_ac.hm_level << std::endl;
+
+            if (m_ac.hm_level > 0 && m_ac.get("--config") == "super-strong") {
+                ScopedTimer _t_final_refine("final_refinement", "AdaptiveSolver", "refine");
+                
+                BoundaryVertexManager bv_manager;
+                bv_manager.initialize(g.n, m_ac.k);
+                QuotientGraph q_graph;
+                q_graph.initialize(m_ac.k);
+                BlockConn block_conn;
+                block_conn.initialize(g.n, g.m, m_ac.k);
+                DistanceOracle d_oracle;
+                d_oracle.initialize(m_ac.hierarchy, m_ac.distance);
+
+                // build data structures from scratch
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    partition_t u_id = m_p_manager[u];
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        vertex_t v = g.edges_v[i];
+                        partition_t v_id = m_p_manager[v];
+                        if (u_id != v_id) {
+                            bv_manager.add(u, u_id);
+                            if (u < v) {
+                                q_graph.add_edge(u_id, v_id, g.edges_w[i]);
+                            }
+                        }
+                    }
+                }
+                block_conn.compute_from_scratch(g, m_p_manager);
+
+                std::cout << "Before " << get_qap(g,  m_p_manager, d_oracle) << std::endl;
+
+                FlowBasedRefinement final_refiner;
+                final_refiner.initialize(g.n, g.m, m_ac.k, m_ac.threads, m_ac.seed, m_ac.flow_based_refinement_config);
+                final_refiner.refine(g, d_oracle, bv_manager, m_p_manager, q_graph, block_conn, m_ac.imbalance, g.uniform_v_weights, g.uniform_e_weights);
+
+                std::cout << "After " << get_qap(g,  m_p_manager, d_oracle) << std::endl;
+            }
 
             std::vector<partition_t> p(g.n);
             for (vertex_t u = 0; u < g.n; ++u) { p[u] = m_p_manager[u]; }
