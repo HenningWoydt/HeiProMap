@@ -118,6 +118,7 @@ namespace HeiProMap {
             const f64 global_imbalance = imbalance;
             const weight_t global_g_weight = g.g_weight;
             const partition_t global_k = prod<partition_t>(hierarchy);
+            const vertex_t global_n = g.n;
 
             // create the first graph
             Item first_graph;
@@ -125,7 +126,7 @@ namespace HeiProMap {
             first_graph.g = &g;
             first_graph.identifier = new std::vector<partition_t>();
             first_graph.tt = new TranslationTable<vertex_t>();
-            first_graph.tt->reserve(g.n, g.n);
+            first_graph.tt->reserve(g.n, global_n);
 
             // initialize the translation table of the first graph
             vertex_t temp_new_u = 0;
@@ -232,7 +233,7 @@ namespace HeiProMap {
                         new_item.identifier = new std::vector<partition_t>(*item.identifier);
                         new_item.identifier->push_back(i);
                         new_item.tt = new TranslationTable<vertex_t>();
-                        new_item.tt->reserve(new_ns[i], g.n);
+                        new_item.tt->reserve(new_ns[i], global_n);
                     }
 
                     // fill the translation tables

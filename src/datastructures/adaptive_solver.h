@@ -121,7 +121,7 @@ namespace HeiProMap {
                 ScopedTimer _t("adaptive_solver", "adaptive_solver", "extrcact_graph");
                 graph_t sub_g(new_ns[i], new_ms[i], new_ws[i]);
                 TranslationTable<vertex_t> sub_tt;
-                sub_tt.reserve(new_ns[i], g.n);
+                sub_tt.reserve(new_ns[i], p_manager.n);
 
                 std::vector<vertex_t> new_us(k, 0);
                 for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
