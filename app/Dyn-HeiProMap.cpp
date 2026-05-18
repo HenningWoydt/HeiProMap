@@ -29,7 +29,7 @@
 #include "src/dyn/datastructures/solver.h"
 #include "src/dyn/utility/configuration.h"
 
-using namespace HeiProMap;
+using namespace Dyn_HeiProMap;
 
 int main(int argc, char *argv[]) {
     std::ios::sync_with_stdio(false);
@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
             {"--hierarchy", "4:8:6"},
             {"--distance", "1:10:100"},
             {"--imbalance", "0.03"},
-            {"--threads", "16"},
+            {"--threads", "1"},
             {"--seed", "1"}
         };
 
@@ -75,11 +75,11 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < argc_temp; ++i) { delete[] argv_temp[i]; }
         delete[] argv_temp;
 
-        Solver solver(config);
+        Dyn_HeiProMap::Solver solver(config);
 
         std::vector<std::string> commands;
         commands.emplace_back("exec ../../Dyn-HeiProMap-Experiments/data/batches_100/2cubes_sphere.mtx/batch_0.my_seq");
-        commands.emplace_back("partition strong");
+        commands.emplace_back("partition fast");
         commands.emplace_back("save_partition mapping_0.txt");
         for (size_t i = 1; i < 20; ++i) {
             commands.emplace_back("exec ../../Dyn-HeiProMap-Experiments/data/batches_100/2cubes_sphere.mtx/batch_" + std::to_string(i) + ".my_seq");
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    Solver solver(config);
+    Dyn_HeiProMap::Solver solver(config);
 
     interactive_mode(solver);
 

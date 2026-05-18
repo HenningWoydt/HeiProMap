@@ -10,7 +10,8 @@
 #include "../../utility/profiler.h"
 #include "../../utility/utils.h"
 
-namespace HeiProMap {
+namespace Dyn_HeiProMap {
+    using namespace HeiProMap;
     struct Neighbor {
         vertex_t u;
         weight_t w;

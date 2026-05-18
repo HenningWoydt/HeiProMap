@@ -5,7 +5,8 @@
 #include <map>
 #include "dyn_graph.h"
 
-namespace HeiProMap {
+namespace Dyn_HeiProMap {
+    using namespace HeiProMap;
     class QuotientGraph {
     public:
         u64 n = 0;

@@ -35,7 +35,8 @@
 
 #include "../../definitions.h"
 
-namespace HeiProMap {
+namespace Dyn_HeiProMap {
+    using namespace HeiProMap;
     class Configuration {
         std::vector<CommandLineOption> options = {
             {"--help", "", "Produces the help message", "", "", false},
@@ -48,7 +49,7 @@ namespace HeiProMap {
 
     public:
         std::vector<partition_t> hierarchy;
-        std::vector<vertex_t> distance;
+        std::vector<weight_t> distance;
         f64 imbalance = 0.03;
         u64 n_threads = 1;
         u64 seed = 0;

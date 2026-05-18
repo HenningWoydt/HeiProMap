@@ -153,6 +153,7 @@ file(GLOB_RECURSE DYN_HEADERS CONFIGURE_DEPENDS "src/dyn/*.h")
 add_executable(Dyn-HeiProMap
         app/Dyn-HeiProMap.cpp
         ${DYN_HEADERS}
+        ${SOURCES}
 )
 
 target_include_directories(Dyn-HeiProMap PRIVATE
