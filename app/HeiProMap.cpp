@@ -79,7 +79,7 @@ int main(const int argc, char *argv[]) {
     }
 
     auto ep = get_time_point();
-    std::cout << "Total Time in main.cpp: " << get_seconds(sp, ep) << std::endl;
+    std::cout << "Total Time in HeiProMap.cpp: " << get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

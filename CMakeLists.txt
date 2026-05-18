@@ -110,12 +110,15 @@ set(HEIPROMAP_PRIVATE_INCLUDES
 # Executable
 # ---------------------------
 add_executable(HeiProMap
-        main.cpp
+        app/HeiProMap.cpp
         ${HEADERS}
         ${SOURCES}
 )
 
-target_include_directories(HeiProMap PRIVATE ${HEIPROMAP_PRIVATE_INCLUDES})
+target_include_directories(HeiProMap PRIVATE 
+        ${PROJECT_SOURCE_DIR}
+        ${HEIPROMAP_PRIVATE_INCLUDES}
+)
 
 target_link_libraries(HeiProMap PUBLIC
         ${KAHIP_LIBRARY}
@@ -141,3 +144,33 @@ endif()
 if(ENABLE_ASSERTS)
     target_compile_definitions(HeiProMap PRIVATE ASSERT_ENABLED=true)
 endif()
+
+# ---------------------------
+# Dyn-HeiProMap
+# ---------------------------
+file(GLOB_RECURSE DYN_HEADERS CONFIGURE_DEPENDS "src/dyn/*.h")
+
+add_executable(Dyn-HeiProMap
+        app/Dyn-HeiProMap.cpp
+        ${DYN_HEADERS}
+)
+
+target_include_directories(Dyn-HeiProMap PRIVATE
+        ${PROJECT_SOURCE_DIR}
+        ${HEIPROMAP_PRIVATE_INCLUDES}
+)
+
+target_link_libraries(Dyn-HeiProMap PRIVATE
+        ${KAHIP_LIBRARY}
+        OpenMP::OpenMP_CXX
+        TBB::tbb
+        m
+)
+
+set_target_properties(Dyn-HeiProMap PROPERTIES
+        BUILD_RPATH "${KAHIP_ROOT}/lib"
+)
+
+target_link_options(Dyn-HeiProMap PRIVATE
+        "-Wl,--disable-new-dtags"
+)

@@ -132,16 +132,18 @@ else
       -DTBB_TEST=OFF
     cmake --build oneTBB/build --target install --parallel "$JOBS"
   )
-fi
+  fi
 
-# -----------------------------
-# Build HeiProMap
-# -----------------------------
-echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER})..."
-rm -rf "${ROOT}/build"
-mkdir "${ROOT}/build"
+  # -----------------------------
+  # Build HeiProMap
+  # -----------------------------
+  echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER})..."
+  rm -rf "${ROOT}/build"
+  mkdir "${ROOT}/build"
 
-CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER}"
+  CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER}"
 
-cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
-cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
+  cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
+  cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
+  cmake --build "${ROOT}/build" --parallel "$JOBS" --target Dyn-HeiProMap
+
