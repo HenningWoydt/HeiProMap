@@ -138,11 +138,11 @@ namespace HeiProMap {
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
-        void match(const size_t level,
-                   const graph_t &g,
-                   const p_manager_t &p_manager,
-                   Mapping &mapping,
-                   f64 imbalance) {
+        void match_templated(const size_t level,
+                             const graph_t &g,
+                             const p_manager_t &p_manager,
+                             Mapping &mapping,
+                             f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             Matching matching;
@@ -433,6 +433,40 @@ namespace HeiProMap {
             }
 
             finalize_matching(g, matching, mapping);
+        }
+
+        void match(const size_t level,
+                   const graph_t &g,
+                   const p_manager_t &p_manager,
+                   Mapping &mapping,
+                   f64 imbalance) {
+            auto dispatch_with_rating = [&](auto rating_func_const) {
+                constexpr EdgeRatingFunction rating_func = rating_func_const;
+                if (g.uniform_v_weights && g.uniform_e_weights) {
+                    match_templated<true, true, rating_func>(level, g, p_manager, mapping, imbalance);
+                } else if (g.uniform_v_weights) {
+                    match_templated<true, false, rating_func>(level, g, p_manager, mapping, imbalance);
+                } else if (g.uniform_e_weights) {
+                    match_templated<false, true, rating_func>(level, g, p_manager, mapping, imbalance);
+                } else {
+                    match_templated<false, false, rating_func>(level, g, p_manager, mapping, imbalance);
+                }
+            };
+
+            switch (config->rating_function) {
+                case EdgeRatingFunction::WEIGHT:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::WEIGHT>{});
+                    break;
+                case EdgeRatingFunction::EXPANSION:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSION>{});
+                    break;
+                case EdgeRatingFunction::HEAVY_EDGE:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::HEAVY_EDGE>{});
+                    break;
+                case EdgeRatingFunction::GREEDY:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::GREEDY>{});
+                    break;
+            }
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>

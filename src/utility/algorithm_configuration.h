@@ -265,6 +265,32 @@ namespace HeiProMap {
             }
         }
 
+        static std::string rating_function_to_string(const EdgeRatingFunction rating_function) {
+            switch (rating_function) {
+                case EdgeRatingFunction::WEIGHT:
+                    return "weight";
+                case EdgeRatingFunction::EXPANSION:
+                    return "expansion";
+                case EdgeRatingFunction::HEAVY_EDGE:
+                    return "heavy-edge";
+                case EdgeRatingFunction::GREEDY:
+                    return "greedy";
+                default:
+                    return "UNKNOWN";
+            }
+        }
+
+        void set_rating_function(const EdgeRatingFunction rating_function) {
+            global_path_algorithm_config.rating_function = rating_function;
+            for (auto &opt: options) {
+                if (opt.large_key == "--coarsening-algorithm-global-paths-rating-function") {
+                    opt.input = rating_function_to_string(rating_function);
+                    opt.is_set = true;
+                    break;
+                }
+            }
+        }
+
         void set_coarsening_algorithm(const bool use_default = false) {
             // initialize global-paths config
             if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
@@ -387,12 +413,13 @@ namespace HeiProMap {
             initial_c = 8;
 
             // set GPA matching algorithm
-            coarsening_algorithm_string = "size-constrained-lp";
-            // coarsening_algorithm_string = "global-paths";
+            // coarsening_algorithm_string = "size-constrained-lp";
+            coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
+            global_path_algorithm_config.random_level = 0;
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
@@ -402,18 +429,19 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "metis-kway";
+            // global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 3;
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 25;
+            label_propagation_config.max_iteration = 10;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
-            quotient_graph_refinement_config.alpha = 1000.0;
-            quotient_graph_refinement_config.min_n_steps = 4;
+            quotient_graph_refinement_config.max_iteration = 2;
+            quotient_graph_refinement_config.alpha = 5.0;
+            quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;
         }
 
@@ -428,6 +456,7 @@ namespace HeiProMap {
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
             global_path_algorithm_config.random_level = 0;
 
             size_constrained_lp_config.max_rounds = 1;
@@ -471,6 +500,7 @@ namespace HeiProMap {
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm

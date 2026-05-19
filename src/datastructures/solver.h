@@ -457,34 +457,7 @@ namespace HeiProMap {
             mappings.back().initialize(graphs.back().n);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                const auto &cg = graphs.back();
-                auto dispatch_match = [&](auto rating_func_const) {
-                    constexpr EdgeRatingFunction rating_func = rating_func_const;
-                    if (cg.uniform_v_weights && cg.uniform_e_weights) {
-                        gpa_matcher.match<true, true, rating_func>(level, cg, p_manager, mappings.back(), level_imbalance);
-                    } else if (cg.uniform_v_weights) {
-                        gpa_matcher.match<true, false, rating_func>(level, cg, p_manager, mappings.back(), level_imbalance);
-                    } else if (cg.uniform_e_weights) {
-                        gpa_matcher.match<false, true, rating_func>(level, cg, p_manager, mappings.back(), level_imbalance);
-                    } else {
-                        gpa_matcher.match<false, false, rating_func>(level, cg, p_manager, mappings.back(), level_imbalance);
-                    }
-                };
-
-                switch (ac.global_path_algorithm_config.rating_function) {
-                    case EdgeRatingFunction::WEIGHT:
-                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::WEIGHT>{});
-                        break;
-                    case EdgeRatingFunction::EXPANSION:
-                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSION>{});
-                        break;
-                    case EdgeRatingFunction::HEAVY_EDGE:
-                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::HEAVY_EDGE>{});
-                        break;
-                    case EdgeRatingFunction::GREEDY:
-                        dispatch_match(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::GREEDY>{});
-                        break;
-                }
+                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
                 const auto &cg = graphs.back();
                 if (cg.uniform_v_weights && cg.uniform_e_weights) {
