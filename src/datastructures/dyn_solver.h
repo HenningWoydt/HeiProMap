@@ -1,7 +1,7 @@
 /*******************************************************************************
  * MIT License
  *
- * This file is part of Dyn-HeiProMap.
+ * This file is part of HeiProMap.
  *
  * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
  *
@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef DYN_HEIPROMAP_SOLVER_H
-#define DYN_HEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_DYN_SOLVER_H
+#define HEIPROMAP_DYN_SOLVER_H
 
 #include <iostream>
 #include <string>
@@ -35,14 +35,14 @@
 #include <map>
 #include <algorithm>
 
-#include "../datastructures/dyn_graph.h"
-#include "../../datastructures/csr_graph.h"
-#include "../datastructures/quotient_graph.h"
+#include "dyn_graph.h"
+#include "csr_graph.h"
+#include "quotient_graph.h"
 #include "../partitioning/heipromap_partition.h"
-#include "../../refinement/label_propagation_refinement.h"
-#include "../utility/configuration.h"
-#include "../../utility/profiler.h"
-#include "../../datastructures/distance_oracle.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../utility/dyn_configuration.h"
+#include "../utility/profiler.h"
+#include "distance_oracle.h"
 #include "../utility/hungarian.h"
 
 namespace Dyn_HeiProMap {
@@ -289,9 +289,7 @@ namespace Dyn_HeiProMap {
         explicit Solver(Configuration &t_config) : config(t_config) {
             oracle.initialize(t_config.hierarchy, t_config.distance);
             g.dirty_callback = [this](vertex_t v) {
-                if (v < partition.size()) {
-                    q.mark_dirty(partition[v]);
-                }
+                // QuotientGraph doesn't need explicit dirty tracking now
             };
         }
 
@@ -381,6 +379,24 @@ namespace Dyn_HeiProMap {
         }
 
     private:
+        void rebuild_q(QuotientGraph &target_q) {
+            u64 num_blocks = 1;
+            for (auto h: config.hierarchy) num_blocks *= h;
+            target_q.initialize(num_blocks);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                if (!g.vertex_exists(u)) continue;
+                partition_t u_id = partition[u];
+                for (const auto &edge: g.neighbors[u]) {
+                    if (u < edge.u) {
+                        partition_t v_id = partition[edge.u];
+                        if (u_id != v_id) {
+                            target_q.add_edge(u_id, v_id, edge.w);
+                        }
+                    }
+                }
+            }
+        }
+
         void run_alignment_recursive(int level, partition_t p_old, partition_t p_new,
                                      std::vector<partition_t> &new_partition,
                                      const std::vector<partition_t> &D,
@@ -445,8 +461,8 @@ namespace Dyn_HeiProMap {
                 initial_partition = new_partition;
                 previous_partition = new_partition;
 
-                q = QuotientGraph(g, partition, num_blocks);
-                initial_q = QuotientGraph(g, partition, num_blocks);
+                rebuild_q(q);
+                rebuild_q(initial_q);
 
                 std::cout << "Comm Cost: " << calculate_communication_cost() << "\n";
                 std::cout << "Migration Cost: Initialized baselines.\n";
@@ -464,8 +480,7 @@ namespace Dyn_HeiProMap {
                 total_migration_cost_from_start += migration_after;
 
                 // Rebuild quotient graph
-                q.n = num_blocks;
-                q.rebuild(g, partition);
+                rebuild_q(q);
 
                 std::cout << "Comm Cost: " << calculate_communication_cost() << "\n";
                 std::cout << "Migration Cost: Before=" << migration_before << " After=" << migration_after <<
@@ -525,7 +540,7 @@ namespace Dyn_HeiProMap {
 
                 // Initialize core data structures
                 ::HeiProMap::PartitionManager p_manager;
-                p_manager.initialize(csr_g.n, csr_g.m, csr_g.g_weight);
+                p_manager.initialize(csr_g.n, num_blocks, csr_g.g_weight);
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], partition[u]);
                 }
@@ -573,7 +588,7 @@ namespace Dyn_HeiProMap {
             }
 
             total_migration_cost_from_start += calculate_migration_cost(partition_before, partition);
-            q.rebuild(g, partition);
+            rebuild_q(q);
 
             g.clear_dirty_status();
             g.clear_new_vertices();
@@ -629,7 +644,8 @@ namespace Dyn_HeiProMap {
 
                 if (best_block != current_block) {
                     migration_cost += v_weight * oracle.get(current_block, best_block);
-                    q.move_vertex(v, current_block, best_block, g, partition);
+                    // QuotientGraph::move doesn't support DynGraph directly here, 
+                    // and rebuild_q is called after this block anyway.
                     block_weights[current_block] -= v_weight;
                     block_weights[best_block] += v_weight;
                     partition[v] = best_block;
@@ -654,4 +670,4 @@ namespace Dyn_HeiProMap {
     }
 }
 
-#endif // DYN_HEIPROMAP_SOLVER_H
+#endif // HEIPROMAP_DYN_SOLVER_H

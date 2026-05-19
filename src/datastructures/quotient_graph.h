@@ -255,8 +255,9 @@ namespace HeiProMap {
          * @param old_id
          * @param new_id
          */
-        void move(const graph_t &g,
-                  const p_manager_t &p_manager,
+        template<typename GraphT, typename PartitionManagerT>
+        void move(const GraphT &g,
+                  const PartitionManagerT &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {

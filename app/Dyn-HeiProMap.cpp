@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
- *
- * This file is part of Dyn-HeiProMap.
+ * This file is part of HeiProMap.
  *
  * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
  *
@@ -24,14 +23,17 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include <iostream>
+ #include <iostream>
+ #include <string>
+ #include <vector>
 
-#include "src/dyn/datastructures/solver.h"
-#include "src/dyn/utility/configuration.h"
+ #include "src/datastructures/dyn_solver.h"
+ #include "src/utility/dyn_configuration.h"
 
-using namespace Dyn_HeiProMap;
+ using namespace HeiProMap;
+ using namespace Dyn_HeiProMap;
 
-int main(int argc, char *argv[]) {
+int main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);
     std::cout.tie(nullptr);
 

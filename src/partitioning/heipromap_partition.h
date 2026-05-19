@@ -29,10 +29,10 @@
 
 #include <omp.h>
 #include "../datastructures/dyn_graph.h"
-#include "../../datastructures/csr_graph.h"
-#include "../../datastructures/partition_manager.h"
-#include "../../utility/random_engine.h"
-#include "../../datastructures/solver.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/partition_manager.h"
+#include "../utility/random_engine.h"
+#include "../datastructures/solver.h"
 
 namespace Dyn_HeiProMap {
     using namespace HeiProMap;

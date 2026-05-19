@@ -1,7 +1,7 @@
 /*******************************************************************************
  * MIT License
  *
- * This file is part of Dyn-HeiProMap.
+ * This file is part of HeiProMap.
  *
  * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
  *
@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef DYN_HEIPROMAP_CONFIGURATION_H
-#define DYN_HEIPROMAP_CONFIGURATION_H
+#ifndef HEIPROMAP_DYN_CONFIGURATION_H
+#define HEIPROMAP_DYN_CONFIGURATION_H
 
 #include <iostream>
 #include <random>
@@ -33,7 +33,7 @@
 #include <vector>
 #include <sstream>
 
-#include "../../definitions.h"
+#include "../definitions.h"
 
 namespace Dyn_HeiProMap {
     using namespace HeiProMap;
@@ -176,4 +176,4 @@ namespace Dyn_HeiProMap {
     };
 }
 
-#endif //DYN_HEIPROMAP_CONFIGURATION_H
+#endif //HEIPROMAP_DYN_CONFIGURATION_H
