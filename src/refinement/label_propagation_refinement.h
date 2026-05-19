@@ -64,10 +64,8 @@ namespace HeiProMap {
             weight_t best_qap_delta;
             weight_t u_weight;
         };
-        std::vector<ProposedMove> proposed_moves;
 
-    public:
-        weight_t min_improvement = 0;
+        std::vector<ProposedMove> proposed_moves;
 
     public:
         LabelPropagationRefinement() = default;
@@ -111,20 +109,20 @@ namespace HeiProMap {
                     f64 imbalance,
                     bool uniform_v_weights,
                     bool uniform_e_weights) override {
-            if (uniform_v_weights && uniform_e_weights)      refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_v_weights)                      refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_e_weights)                      refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else                                             refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_impl(graph_t &g,
-                    d_oracle_t &d_oracle,
-                    bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    q_graph_t &q_graph,
-                    block_conn_t &block_conn,
-                    f64 imbalance) {
+                         d_oracle_t &d_oracle,
+                         bv_manager_t &bv_manager,
+                         p_manager_t &p_manager,
+                         q_graph_t &q_graph,
+                         block_conn_t &block_conn,
+                         f64 imbalance) {
             ScopedTimer _t("refinement", "LabelPropagationRefinement", "refine");
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
@@ -133,12 +131,12 @@ namespace HeiProMap {
             bool positive_move_occurred = true;
             for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
-
+                //
                 {
                     curr_boundary_size = 0;
                     for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                        for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
-                            {
+                        for (size_t i = 0; i < bv_manager.size(id); ++i) {
+                            const vertex_t u = bv_manager.get(id, i); {
                                 curr_boundary[curr_boundary_size++] = u;
                             }
                         }
@@ -159,14 +157,14 @@ namespace HeiProMap {
                         partition_t u_id = p_manager[u];
 
                         partition_t best_id = NO_ID;
-                        weight_t best_qap_delta = min_improvement;
+                        weight_t best_qap_delta = -std::numeric_limits<weight_t>::max();
                         f32 counter = 0;
 
                         u64 tid = omp_get_thread_num();
                         RandomEngine &rng = rnd_engines[tid];
 
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
-                            {
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                            const partition_t id = block_conn.get_id(i); {
                                 if (id == u_id) { continue; }
                                 weight_t v_id_weight = p_manager.get_bweight(id);
                                 if (v_id_weight + u_weight <= lmax) {
@@ -197,7 +195,7 @@ namespace HeiProMap {
                         if (u_id == best_id) { continue; }
                         if (p_manager.get_bweight(best_id) + u_weight > lmax) { continue; }
 
-                        if (best_qap_delta >= min_improvement || random_engine.get_f32() < 0.5) {
+                        if (best_qap_delta > -std::numeric_limits<weight_t>::max() || random_engine.get_f32() < 0.5) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             block_conn.move(g, u, u_id, best_id);
@@ -216,10 +214,13 @@ namespace HeiProMap {
                         partition_t u_id = p_manager[u];
 
                         partition_t best_id = NO_ID;
-                        weight_t best_qap_delta = min_improvement;
+                        weight_t best_qap_delta = -std::numeric_limits<weight_t>::max();
                         f32 counter = 0;
 
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                            //
+                            const partition_t id = block_conn.get_id(i);
+                            //
                             {
                                 if (id == u_id) { continue; }
                                 weight_t v_id_weight = p_manager.get_bweight(id);
@@ -237,7 +238,7 @@ namespace HeiProMap {
                             }
                         }
 
-                        if (best_id != NO_ID && (best_qap_delta >= min_improvement || random_engine.get_f32() < 0.5)) {
+                        if (best_qap_delta > 0 || (best_qap_delta == 0 && random_engine.get_f32() < 0.5)) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             block_conn.move(g, u, u_id, best_id);

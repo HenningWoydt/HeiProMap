@@ -144,22 +144,22 @@ namespace HeiProMap {
                     f64 imbalance,
                     bool uniform_v_weights,
                     bool uniform_e_weights) override {
-            if (uniform_v_weights && uniform_e_weights)      refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_v_weights)                      refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_e_weights)                      refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else                                             refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_impl(graph_t &g,
-                    d_oracle_t &d_oracle,
-                    bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    q_graph_t &q_graph,
-                    block_conn_t &block_conn,
-                    f64 imbalance) {
+                         d_oracle_t &d_oracle,
+                         bv_manager_t &bv_manager,
+                         p_manager_t &p_manager,
+                         q_graph_t &q_graph,
+                         block_conn_t &block_conn,
+                         f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-
+            //
             {
                 ScopedTimer _t("refinement", "QuotientGraphRefinement", "init_block_scheduling");
 
@@ -168,16 +168,16 @@ namespace HeiProMap {
             }
 
             if (m_threads > 1) {
-                std::vector<std::pair<partition_t, partition_t>> matching;
+                std::vector<std::pair<partition_t, partition_t> > matching;
 
                 for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+                    //
                     {
                         ScopedTimer _t("refinement", "QuotientGraphRefinement", "reset_used_edges");
                         std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
                     }
 
-                    bool found_matching = false;
-                    {
+                    bool found_matching = false; {
                         ScopedTimer _t("refinement", "QuotientGraphRefinement", "matching");
                         found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                     }
@@ -200,15 +200,11 @@ namespace HeiProMap {
                             } else {
                                 refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                             }
-                        }
-
-                        {
+                        } {
                             ScopedTimer _t("refinement", "QuotientGraphRefinement", "matching");
                             found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                         }
-                    }
-
-                    {
+                    } {
                         ScopedTimer _t("refinement", "QuotientGraphRefinement", "swap");
                         std::swap(active_this_round, active_next_round);
                         active_next_round.initialize(m_k, 0);
@@ -218,6 +214,7 @@ namespace HeiProMap {
                 RandomEngine &random_engine = rnd_engines[0];
 
                 for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+                    //
                     {
                         ScopedTimer _t("refinement", "QuotientGraphRefinement", "get_pairs");
 
@@ -230,9 +227,7 @@ namespace HeiProMap {
                             }
                         }
                         if (pairs_size == 0) { return; }
-                    }
-
-                    {
+                    } {
                         ScopedTimer _t("refinement", "QuotientGraphRefinement", "shuffle");
                         fast_shuffle_unchecked(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
                     }
@@ -247,9 +242,7 @@ namespace HeiProMap {
                         } else {
                             refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
                         }
-                    }
-
-                    {
+                    } {
                         ScopedTimer _t("refinement", "QuotientGraphRefinement", "swap");
                         std::swap(active_this_round, active_next_round);
                         active_next_round.initialize(m_k, 0);
@@ -272,8 +265,8 @@ namespace HeiProMap {
                            IndexedMaxHeap<weight_t> &boundary_vertices_v,
                            vertex_t vertex_mark,
                            RandomEngine &random_engine) {
-            f64 alpha = config->alpha;
-            f64 beta = std::log(g.n);
+            f64 alpha = config->alpha * (f64) d_oracle.get(u_id, v_id);
+            f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             size_t max_n_swaps = 0;
             //
@@ -283,10 +276,10 @@ namespace HeiProMap {
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
                 boundary_vertices_v.clear();
-                for (size_t j = 0; j < bv_manager.size(u_id); ++j) { const vertex_t u = bv_manager.get(u_id, j);
-                    {
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
-                            {
+                for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
+                    const vertex_t u = bv_manager.get(u_id, j); {
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                            const partition_t id = block_conn.get_id(i); {
                                 if (id == v_id) {
                                     weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                                     boundary_vertices_u.push(u, qap_delta_u);
@@ -297,10 +290,10 @@ namespace HeiProMap {
                     }
                 }
 
-                for (size_t j = 0; j < bv_manager.size(v_id); ++j) { const vertex_t v = bv_manager.get(v_id, j);
-                    {
-                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) { const partition_t id = block_conn.get_id(i);
-                            {
+                for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
+                    const vertex_t v = bv_manager.get(v_id, j); {
+                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
+                            const partition_t id = block_conn.get_id(i); {
                                 if (id == u_id) {
                                     weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
                                     boundary_vertices_v.push(v, qap_delta_v);
@@ -393,8 +386,8 @@ namespace HeiProMap {
                     }
 
                     // we have to push or update the neighbors that were not moved already
-                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) { const vertex_t neighbor = g.edges_v[i];
-                        {
+                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) {
+                        const vertex_t neighbor = g.edges_v[i]; {
                             if (vertex_used[neighbor] == vertex_mark) { continue; }
 
                             partition_t neighbor_id = p_manager[neighbor];
@@ -473,8 +466,8 @@ namespace HeiProMap {
                                     IndexedMaxHeap<weight_t> &boundary_vertices_v,
                                     vertex_t vertex_mark,
                                     RandomEngine &random_engine) {
-            f64 alpha = config->alpha;
-            f64 beta = std::log(g.n);
+            f64 alpha = config->alpha * (f64) d_oracle.get(u_id, v_id);
+            f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             size_t max_n_swaps = 0;
             //
@@ -484,10 +477,10 @@ namespace HeiProMap {
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
                 boundary_vertices_v.clear();
-                for (size_t j = 0; j < bv_manager.size(u_id); ++j) { const vertex_t u = bv_manager.get(u_id, j);
-                    {
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i);
-                            {
+                for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
+                    const vertex_t u = bv_manager.get(u_id, j); {
+                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                            const partition_t id = block_conn.get_id(i); {
                                 if (id == v_id) {
                                     weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
                                     boundary_vertices_u.push(u, qap_delta_u);
@@ -498,10 +491,10 @@ namespace HeiProMap {
                     }
                 }
 
-                for (size_t j = 0; j < bv_manager.size(v_id); ++j) { const vertex_t v = bv_manager.get(v_id, j);
-                    {
-                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) { const partition_t id = block_conn.get_id(i);
-                            {
+                for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
+                    const vertex_t v = bv_manager.get(v_id, j); {
+                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
+                            const partition_t id = block_conn.get_id(i); {
                                 if (id == u_id) {
                                     weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
                                     boundary_vertices_v.push(v, qap_delta_v);
@@ -592,8 +585,8 @@ namespace HeiProMap {
                     }
 
                     // we have to push or update the neighbors that were not moved already
-                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) { const vertex_t neighbor = g.edges_v[i];
-                        {
+                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) {
+                        const vertex_t neighbor = g.edges_v[i]; {
                             if (vertex_used[neighbor] == vertex_mark) { continue; }
 
                             partition_t neighbor_id = p_manager[neighbor];
