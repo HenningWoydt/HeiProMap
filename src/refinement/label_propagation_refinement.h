@@ -123,7 +123,6 @@ namespace HeiProMap {
                          q_graph_t &q_graph,
                          block_conn_t &block_conn,
                          f64 imbalance) {
-            ScopedTimer _t("refinement", "LabelPropagationRefinement", "refine");
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             RandomEngine &random_engine = rnd_engines[0];
@@ -133,6 +132,8 @@ namespace HeiProMap {
                 positive_move_occurred = false;
                 //
                 {
+                    ScopedTimer _t("refinement", "LabelPropagationRefinement", "get_boundary");
+
                     curr_boundary_size = 0;
                     for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
                         for (size_t i = 0; i < bv_manager.size(id); ++i) {
@@ -205,6 +206,7 @@ namespace HeiProMap {
                     }
                 } else {
                     // Serial path
+                    ScopedTimer _t("refinement", "LabelPropagationRefinement", "process_vertices");
                     for (size_t j = 0; j < curr_boundary_size; ++j) {
                         vertex_t u = curr_boundary[j];
 
@@ -219,22 +221,20 @@ namespace HeiProMap {
 
                         for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
                             //
-                            const partition_t id = block_conn.get_id(i);
-                            //
-                            {
-                                if (id == u_id) { continue; }
-                                weight_t v_id_weight = p_manager.get_bweight(id);
-                                if (v_id_weight + u_weight <= lmax) {
-                                    weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
-                                    if (qap_delta > best_qap_delta) {
-                                        best_id = id;
-                                        best_qap_delta = qap_delta;
-                                        counter = 1.0;
-                                    } else if (qap_delta == best_qap_delta) {
-                                        counter += 1.0;
-                                        if (random_engine.get_f32() < 1.0f / counter) { best_id = id; }
-                                    }
-                                }
+                            partition_t id = block_conn.get_id(i);
+                            weight_t v_id_weight = p_manager.get_bweight(id);
+
+                            if (id == u_id) { continue; }
+                            if (v_id_weight + u_weight > lmax) { continue; }
+
+                            weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
+                            if (qap_delta > best_qap_delta) {
+                                best_id = id;
+                                best_qap_delta = qap_delta;
+                                counter = 1.0;
+                            } else if (qap_delta == best_qap_delta) {
+                                counter += 1.0;
+                                if (random_engine.get_f32() < 1.0f / counter) { best_id = id; }
                             }
                         }
 
@@ -242,7 +242,7 @@ namespace HeiProMap {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             block_conn.move(g, u, u_id, best_id);
-                            p_manager.move(u, u_weight, u_id, best_id);
+                            p_manager.move_serial(u, u_weight, u_id, best_id);
                             positive_move_occurred |= best_qap_delta > 0;
                         }
                     }
