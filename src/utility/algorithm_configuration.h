@@ -419,7 +419,7 @@ namespace HeiProMap {
 
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
-            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.random_level = 4;
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
@@ -435,7 +435,7 @@ namespace HeiProMap {
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 10;
+            label_propagation_config.max_iteration = 5;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
