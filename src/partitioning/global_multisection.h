@@ -163,45 +163,6 @@ namespace HeiProMap {
                     abort();
                 }
 
-                {
-                    // refine
-                    PartitionManager local_p_manager;
-                    BoundaryVertexManager local_boundary_manager;
-                    QuotientGraph local_quotient_graph;
-                    BlockConn local_block_conn;
-                    DistanceOracle local_distance_oracle;
-
-                    local_p_manager.initialize(item.g->n, item.k, item.g->g_weight);
-                    local_p_manager.n_vertices[0] = 0;
-                    local_p_manager.bweights[0] = 0;
-                    local_boundary_manager.initialize(item.g->n, item.k);
-                    local_quotient_graph.initialize(item.k);
-                    local_block_conn.initialize(item.g->n, item.g->m, item.k);
-                    local_distance_oracle.initialize({item.k}, {1});
-
-                    for (vertex_t u = 0; u < (*item.g).n; ++u) {
-                        {
-                            const partition_t u_id = partition[u];
-                            const weight_t u_w = item.g->v_weights[u];
-                            local_p_manager.set(u, u_w, u_id);
-
-                            for (size_t i = (*item.g).neighborhoods[u]; i < (*item.g).neighborhoods[u + 1]; ++i) { const vertex_t v = (*item.g).edges_v[i]; const weight_t w = (*item.g).edges_w[i];
-                                {
-                                    const partition_t v_id = partition[v];
-
-                                    if (u_id != v_id) {
-                                        local_boundary_manager.add(u, u_id); // boundary vertex
-                                        if (u < v) {
-                                            local_quotient_graph.add_edge(u_id, v_id, w); // quotient graph
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    local_block_conn.compute_from_scratch((*item.g), local_p_manager);
-                }
-
                 if (item.identifier->size() == l - 1) {
                     // insert solution
                     u64 offset = 0;
