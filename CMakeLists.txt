@@ -135,24 +135,12 @@ target_link_options(HeiProMap PRIVATE
         "-Wl,--disable-new-dtags"
 )
 
-if(ENABLE_PROFILER)
-    target_compile_definitions(HeiProMap PRIVATE ENABLE_PROFILER=1)
-else()
-    target_compile_definitions(HeiProMap PRIVATE ENABLE_PROFILER=0)
-endif()
-
-if(ENABLE_ASSERTS)
-    target_compile_definitions(HeiProMap PRIVATE ASSERT_ENABLED=true)
-endif()
-
 # ---------------------------
 # Dyn-HeiProMap
 # ---------------------------
-file(GLOB_RECURSE DYN_HEADERS CONFIGURE_DEPENDS "src/dyn/*.h")
 
 add_executable(Dyn-HeiProMap
         app/Dyn-HeiProMap.cpp
-        ${DYN_HEADERS}
         ${SOURCES}
 )
 
