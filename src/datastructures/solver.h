@@ -298,7 +298,7 @@ namespace HeiProMap {
 
             f64 level_imbalance = 0.0;
             f64 per_level_imb_add = 1.0 / 400.0;
-            weight_t level_lmax = 0;
+            [[maybe_unused]] weight_t level_lmax = 0;
 
             while (graphs.back().n > ac.k * mult) {
                 #if ENABLE_PROFILER
