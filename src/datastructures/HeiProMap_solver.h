@@ -45,6 +45,9 @@
 #include "../utility/HeiProMap_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
+#include "distance_oracle.h"
+#include "../partitioning/kaffpa_partitioner.h"
+#include "../utility/translation_table.h"
 
 namespace HeiProMap {
     class Solver {
@@ -240,12 +243,53 @@ namespace HeiProMap {
 
         std::vector<vertex_t> solve() {
             const auto sp = std::chrono::high_resolution_clock::now();
-            internal_solve();
 
-            weight_t qap = get_qap(graphs.back(), p_manager, d_oracle);
+            if (ac.hm_level > 0) {
+                const weight_t total_weight = graphs[0].g_weight;
+                TranslationTable<vertex_t> tt;
+                tt.reserve(graphs[0].n, graphs[0].n);
+                for (vertex_t u = 0; u < graphs[0].n; ++u) {
+                    tt.add(u, u);
+                }
 
-            std::vector<partition_t> p(graphs.back().n);
-            for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_manager[u]; }
+                recursive_solve(graphs[0], p_manager, ac.hierarchy, ac.distance, 0, 0, tt, total_weight);
+
+                std::cout << ac.get("--config") << " " << ac.hm_level << std::endl;
+
+                if (ac.get("--config") == "super-strong") {
+                    ScopedTimer _t_final_refine("final_refinement", "Solver", "refine");
+
+                    bv_manager.reset();
+                    q_graph.initialize(ac.k);
+                    block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+
+                    for (vertex_t u = 0; u < graphs[0].n; ++u) {
+                        partition_t u_id = p_manager[u];
+                        for (size_t i = graphs[0].neighborhoods[u]; i < graphs[0].neighborhoods[u + 1]; ++i) {
+                            vertex_t v = graphs[0].edges_v[i];
+                            partition_t v_id = p_manager[v];
+                            if (u_id != v_id) {
+                                bv_manager.add(u, u_id);
+                                if (u < v) {
+                                    q_graph.add_edge(u_id, v_id, graphs[0].edges_w[i]);
+                                }
+                            }
+                        }
+                    }
+                    block_conn.compute_from_scratch(graphs[0], p_manager);
+
+                    std::cout << "Before " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, ac.imbalance, graphs[0].uniform_v_weights, graphs[0].uniform_e_weights);
+                    std::cout << "After " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                }
+            } else {
+                internal_solve();
+            }
+
+            weight_t qap = get_qap(graphs[0], p_manager, d_oracle);
+
+            std::vector<partition_t> p(graphs[0].n);
+            for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
             write_partition(p, ac.mapping_out);
 
             const auto ep = std::chrono::high_resolution_clock::now();
@@ -254,8 +298,8 @@ namespace HeiProMap {
             weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             std::cout << "Total time        : " << duration + init_time << std::endl;
-            std::cout << "#Nodes            : " << graphs.back().n << std::endl;
-            std::cout << "#Edges            : " << graphs.back().m << std::endl;
+            std::cout << "#Nodes            : " << graphs[0].n << std::endl;
+            std::cout << "#Edges            : " << graphs[0].m << std::endl;
             std::cout << "k                 : " << ac.k << std::endl;
             std::cout << "Lmax              : " << lmax << std::endl;
             std::cout << "Init. QAP         : " << initial_qap << std::endl;
@@ -274,19 +318,22 @@ namespace HeiProMap {
             std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
             std::cout << "#oload partitions : " << n_overloaded_partitions << std::endl;
             std::cout << "Sum oload weights : " << sum_too_much << std::endl;
-            std::cout << "IO                : " << io_ms << std::endl;
-            std::cout << "Misc              : " << misc_ms << std::endl;
-            std::cout << "Coarsening        : " << coarsening_ms << std::endl;
-            std::cout << "Contraction       : " << contraction_ms << std::endl;
-            std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
-            std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
-            std::cout << "Rebalance         : " << rebalance_ms << std::endl;
-            std::cout << "Refinement        : " << refinement_ms << std::endl;
-            std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
-            #if ENABLE_PROFILER
-            print_all_levels();
-            #endif
+            if (ac.hm_level == 0) {
+                std::cout << "IO                : " << io_ms << std::endl;
+                std::cout << "Misc              : " << misc_ms << std::endl;
+                std::cout << "Coarsening        : " << coarsening_ms << std::endl;
+                std::cout << "Contraction       : " << contraction_ms << std::endl;
+                std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
+                std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
+                std::cout << "Rebalance         : " << rebalance_ms << std::endl;
+                std::cout << "Refinement        : " << refinement_ms << std::endl;
+                std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
+
+                #if ENABLE_PROFILER
+                print_all_levels();
+                #endif
+            }
 
             return p;
         }
@@ -600,6 +647,134 @@ namespace HeiProMap {
             #endif
 
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+        }
+
+        void recursive_solve(graph_t& g, PartitionManager& p_manager, std::vector<partition_t> hierarchy,
+                             std::vector<weight_t> distance, u64 current_level, u64 offset, const TranslationTable<vertex_t>& tt,
+                             const weight_t total_weight) {
+            partition_t k_of_subgraph = prod<partition_t>(hierarchy);
+            f64 total_remaining_slack = ((1.0 + ac.imbalance) * (f64) k_of_subgraph * (f64) total_weight) / ((f64) ac.k * (f64) g.g_weight) - 1.0;
+            total_remaining_slack = std::max(0.0, total_remaining_slack);
+
+            if (current_level >= ac.hm_level) {
+                AlgorithmConfiguration sub_ac = ac;
+                sub_ac.hierarchy = hierarchy;
+                sub_ac.distance = distance;
+                sub_ac.k = k_of_subgraph;
+                sub_ac.imbalance = total_remaining_slack;
+
+                if (ac.get("--config") == "fast") {
+                    sub_ac.set_fast();
+                } else if (ac.get("--config") == "eco") {
+                    sub_ac.set_eco();
+                } else if (ac.get("--config") == "strong") {
+                    sub_ac.set_strong();
+                } else if (ac.get("--config") == "super-strong") {
+                    sub_ac.set_super_strong();
+                }
+                
+                std::vector<weight_t> v_weights(g.n);
+                const weight_t* v_weights_ptr = g.v_weights.get_ptr();
+                std::copy(v_weights_ptr, v_weights_ptr + g.n, v_weights.begin());
+                Solver sub_solver(std::move(g), sub_ac);
+                const PartitionManager& sub_p_manager = sub_solver.solve_subproblem();
+
+                for (vertex_t u = 0; u < sub_p_manager.n; ++u) {
+                    p_manager.set(tt.get_o(u), v_weights[u], offset + sub_p_manager[u]);
+                }
+                return;
+            }
+
+            partition_t k = hierarchy.back();
+            hierarchy.pop_back();
+            distance.pop_back();
+
+            f64 per_level_epsilon = std::pow(1.0 + total_remaining_slack, 1.0 / (f64) (hierarchy.size() + 1)) - 1.0;
+            per_level_epsilon = std::max(0.0, per_level_epsilon);
+
+            AlignedArray<partition_t> partition;
+            partition.initialize(g.n, 0);
+            //
+            {
+                ScopedTimer _t("adaptive_solver", "adaptive_solver", "partition");
+                if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
+                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, ac.seed, partition, ac.global_multisection_config.kappa);
+                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
+                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, ac.seed, partition, ac.global_multisection_config.kappa);
+                } else {
+                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, ac.seed, partition, ac.global_multisection_config.kappa);
+                }
+            }
+
+            std::vector<vertex_t> new_ns(k, 0);
+            std::vector<vertex_t> new_ms(k, 0);
+            std::vector<weight_t> new_ws(k, 0);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                partition_t u_id = partition[u];
+                new_ns[u_id] += 1;
+                new_ws[u_id] += g.v_weights[u];
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    vertex_t v = g.edges_v[i];
+                    partition_t v_id = partition[v];
+                    if (v_id == u_id) { new_ms[u_id] += 1; }
+                }
+            }
+
+            partition_t k_per_subgraph = prod<partition_t>(hierarchy);
+
+            for (partition_t i = 0; i < k; ++i) {
+                ScopedTimer _t("adaptive_solver", "adaptive_solver", "extrcact_graph");
+                graph_t sub_g(new_ns[i], new_ms[i], new_ws[i]);
+                TranslationTable<vertex_t> sub_tt;
+                sub_tt.reserve(new_ns[i], p_manager.n);
+
+                std::vector<vertex_t> new_us(k, 0);
+                for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
+                    if (partition[old_u] == i) {
+                        sub_tt.add(tt.get_o(old_u), new_us[i]);
+                        new_us[i] += 1;
+                    }
+                }
+
+                std::vector<vertex_t> degrees(sub_g.n, 0);
+                for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
+                    if (partition[old_u] == i) {
+                        vertex_t new_u = sub_tt.get_n(tt.get_o(old_u));
+                        for (size_t j = g.neighborhoods[old_u]; j < g.neighborhoods[old_u + 1]; ++j) {
+                            vertex_t old_v = g.edges_v[j];
+                            if (partition[old_v] == i) {
+                                degrees[new_u]++;
+                            }
+                        }
+                    }
+                }
+                
+                sub_g.neighborhoods[0] = 0;
+                for(vertex_t j = 0; j < sub_g.n; ++j) {
+                    sub_g.neighborhoods[j+1] = sub_g.neighborhoods[j] + degrees[j];
+                }
+
+                std::vector<vertex_t> cursor(sub_g.n, 0);
+                for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
+                    if (partition[old_u] == i) {
+                        vertex_t new_u = sub_tt.get_n(tt.get_o(old_u));
+                        sub_g.v_weights[new_u] = g.v_weights[old_u];
+
+                        for (size_t j = g.neighborhoods[old_u]; j < g.neighborhoods[old_u + 1]; ++j) {
+                            vertex_t old_v = g.edges_v[j];
+                            if (partition[old_v] == i) {
+                                vertex_t new_v = sub_tt.get_n(tt.get_o(old_v));
+                                size_t pos = sub_g.neighborhoods[new_u] + cursor[new_u];
+                                sub_g.edges_v[pos] = new_v;
+                                sub_g.edges_w[pos] = g.edges_w[j];
+                                cursor[new_u]++;
+                            }
+                        }
+                    }
+                }
+                _t.stop();
+                recursive_solve(sub_g, p_manager, hierarchy, distance, current_level + 1, offset + i * k_per_subgraph, sub_tt, total_weight);
+            }
         }
     };
 }

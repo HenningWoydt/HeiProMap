@@ -24,7 +24,7 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include "src/datastructures/adaptive_solver.h"
+#include "src/datastructures/HeiProMap_solver.h"
 
 using namespace HeiProMap;
 
@@ -77,13 +77,8 @@ int main(const int argc, char *argv[]) {
             AlgorithmConfiguration ac(temp_argc, temp_argv);
             _t.stop();
 
-            if (ac.hm_level > 0) {
-                AdaptiveSolver solver(ac);
-                solver.solve();
-            } else {
-                Solver solver(ac);
-                solver.solve();
-            }
+            Solver solver(ac);
+            solver.solve();
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
@@ -95,13 +90,8 @@ int main(const int argc, char *argv[]) {
 
         std::cout << "Seed " << ac.seed << std::endl;
 
-        if (ac.hm_level > 0) {
-            AdaptiveSolver solver(ac);
-            solver.solve();
-        } else {
-            Solver solver(ac);
-            solver.solve();
-        }
+        Solver solver(ac);
+        solver.solve();
     }
 
     auto ep = get_time_point();
