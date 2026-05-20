@@ -163,3 +163,33 @@ set_target_properties(Dyn-HeiProMap PROPERTIES
 target_link_options(Dyn-HeiProMap PRIVATE
         "-Wl,--disable-new-dtags"
 )
+
+# ---------------------------
+# HeiPa
+# ---------------------------
+
+add_executable(HeiPa
+        app/HeiPa.cpp
+        ${HEADERS}
+        ${SOURCES}
+)
+
+target_include_directories(HeiPa PRIVATE
+        ${PROJECT_SOURCE_DIR}
+        ${HEIPROMAP_PRIVATE_INCLUDES}
+)
+
+target_link_libraries(HeiPa PUBLIC
+        ${KAHIP_LIBRARY}
+        OpenMP::OpenMP_CXX
+        TBB::tbb
+        m
+)
+
+set_target_properties(HeiPa PROPERTIES
+        BUILD_RPATH "${KAHIP_ROOT}/lib"
+)
+
+target_link_options(HeiPa PRIVATE
+        "-Wl,--disable-new-dtags"
+)

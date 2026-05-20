@@ -146,4 +146,5 @@ else
   cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
   cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
   cmake --build "${ROOT}/build" --parallel "$JOBS" --target Dyn-HeiProMap
+  cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiPa
 

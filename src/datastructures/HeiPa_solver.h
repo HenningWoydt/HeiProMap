@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_SOLVER_H
-#define HEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_HEIPA_SOLVER_H
+#define HEIPROMAP_HEIPA_SOLVER_H
 
 #include <cmath>
 
@@ -42,13 +42,13 @@
 #include "../rebalance/rebalancer.h"
 #include "../partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../utility/algorithm_configuration.h"
+#include "../utility/HeiPa_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 
 namespace HeiProMap {
-    class Solver {
-        AlgorithmConfiguration ac;
+    class HeiPaSolver {
+        HeiPaConfiguration ac;
         RandomEngine random_engine;
         f64 init_time = 0.0;
 
@@ -92,7 +92,7 @@ namespace HeiProMap {
             vertex_t n = -1;
             vertex_t m = -1;
 
-            weight_t comm_cost = -1;
+            weight_t edge_cut = -1;
             weight_t max_b_weight = -1;
             weight_t lmax = -1;
             f64 imb = -1.0;
@@ -114,7 +114,7 @@ namespace HeiProMap {
                     << std::setw(3) << L.level << " | "
                     << std::setw(8) << L.n << " | "
                     << std::setw(11) << L.m << " | "
-                    << std::setw(10) << L.comm_cost << " | "
+                    << std::setw(10) << L.edge_cut << " | "
                     << std::setw(7) << L.lmax << " | "
                     << std::setw(7) << L.max_b_weight << " | "
                     << std::setw(8) << L.imb << " | "
@@ -134,7 +134,7 @@ namespace HeiProMap {
                     << std::setw(3) << "Lvl" << " | "
                     << std::setw(8) << "n" << " | "
                     << std::setw(11) << "m" << " | "
-                    << std::setw(10) << "comm cost" << " | "
+                    << std::setw(10) << "edge cut" << " | "
                     << std::setw(7) << "lmax" << " | "
                     << std::setw(7) << "maxW" << " | "
                     << std::setw(8) << "imb" << " | "
@@ -155,7 +155,7 @@ namespace HeiProMap {
         }
 
     public:
-        explicit Solver(const AlgorithmConfiguration &t_ac) {
+        explicit HeiPaSolver(const HeiPaConfiguration &t_ac) {
             graphs.reserve(100);
             auto sp_io = get_time_point();
             graphs.emplace_back(t_ac.graph_in);
@@ -197,7 +197,7 @@ namespace HeiProMap {
             init_time += get_seconds(sp, ep);
         }
 
-        explicit Solver(graph_t &&g, const AlgorithmConfiguration &t_ac) {
+        explicit HeiPaSolver(graph_t &&g, const HeiPaConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(std::move(g));
 
@@ -258,9 +258,9 @@ namespace HeiProMap {
             std::cout << "#Edges            : " << graphs.back().m << std::endl;
             std::cout << "k                 : " << ac.k << std::endl;
             std::cout << "Lmax              : " << lmax << std::endl;
-            std::cout << "Init. QAP         : " << initial_qap << std::endl;
+            std::cout << "Init. Edge Cut    : " << initial_qap / 2 << std::endl;
             std::cout << "Init. max block w : " << initial_max_block_weight << std::endl;
-            std::cout << "Final QAP         : " << qap << std::endl;
+            std::cout << "Final Edge Cut    : " << qap / 2 << std::endl;
             std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
 
             size_t n_empty_partitions = 0;
@@ -333,7 +333,7 @@ namespace HeiProMap {
             level_infos[level].max_b_weight = p_manager.max_weight();
             level_infos[level].lmax = level_lmax;
             level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
-            level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
+            level_infos[level].edge_cut = get_qap(graphs.back(), p_manager, d_oracle) / 2;
             level_infos[level].empty_partitions = p_manager.n_empty_blocks();
             level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
             level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
@@ -354,7 +354,7 @@ namespace HeiProMap {
                 level_infos[level].max_b_weight = p_manager.max_weight();
                 level_infos[level].lmax = level_lmax;
                 level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
-                level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
+                level_infos[level].edge_cut = get_qap(graphs.back(), p_manager, d_oracle) / 2;
                 level_infos[level].empty_partitions = p_manager.n_empty_blocks();
                 level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
                 level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
@@ -604,4 +604,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_SOLVER_H
+#endif //HEIPROMAP_HEIPA_SOLVER_H

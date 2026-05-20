@@ -27,10 +27,10 @@
  #include <string>
  #include <vector>
 
- #include "src/datastructures/dyn_solver.h"
- #include "src/utility/dyn_configuration.h"
+ #include "src/datastructures/DynHeiProMap_solver.h"
+#include "src/utility/DynHeiProMap_configuration.h"
 
- using namespace HeiProMap;
+using namespace HeiProMap;
  using namespace Dyn_HeiProMap;
 
 int main(int argc, char** argv) {

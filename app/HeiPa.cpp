@@ -24,7 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include "src/datastructures/adaptive_solver.h"
+#include "src/datastructures/HeiPa_solver.h"
+#include "src/utility/HeiPa_configuration.h"
 
 using namespace HeiProMap;
 
@@ -35,24 +36,16 @@ int main(const int argc, char *argv[]) {
         {
             ScopedTimer _t("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
-                // {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"}, // fast 0.753s 8,704,035 comm cost // eco 2.559s 7,469,493 // strong 22.498s 7,223,358
-                // {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
-                {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.72s, 4,285,098.0 comm cost, // eco 17.53s ,3,889,700.0 comm cost, // strong 63.94s 3,838,630.0 comm cost
+                {"--graph", "../../ProMapRepo/data/mapping/del23.graph"},
                 {"--mapping", "../data/out/partition/del23.txt"},
-                // {"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
-                // {"--mapping", "../data/out/partition/afshell9.txt"},
-                // {"--graph", "../../ProMapRepo/data/mapping/nlr.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
-                // {"--mapping", "../data/out/partition/nlr.txt"},
-                {"--hierarchy", "4:8:6"},
-                {"--distance", "1:10:100"},
+                {"--k", "16"},
                 {"--imbalance", "0.03"},
                 {"--config", "strong"},
                 {"--seed", "0"},
                 {"--threads", "1"},
-                {"--hm-level", "0"},
             };
 
-            std::vector<std::string> args = {"HeiProMap"};
+            std::vector<std::string> args = {"HeiPa"};
             for (const auto &[key, val]: input) {
                 args.push_back(key);
                 args.push_back(val);
@@ -74,16 +67,11 @@ int main(const int argc, char *argv[]) {
                 std::strcpy(temp_argv[i], args[i].c_str());
             }
 
-            AlgorithmConfiguration ac(temp_argc, temp_argv);
+            HeiPaConfiguration ac(temp_argc, temp_argv);
             _t.stop();
 
-            if (ac.hm_level > 0) {
-                AdaptiveSolver solver(ac);
-                solver.solve();
-            } else {
-                Solver solver(ac);
-                solver.solve();
-            }
+            HeiPaSolver solver(ac);
+            solver.solve();
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
@@ -91,21 +79,16 @@ int main(const int argc, char *argv[]) {
             Profiler::instance().print_table_ascii_colored(std::cout);
         }
     } else {
-        AlgorithmConfiguration ac(argc, argv);
+        HeiPaConfiguration ac(argc, argv);
 
         std::cout << "Seed " << ac.seed << std::endl;
 
-        if (ac.hm_level > 0) {
-            AdaptiveSolver solver(ac);
-            solver.solve();
-        } else {
-            Solver solver(ac);
-            solver.solve();
-        }
+        HeiPaSolver solver(ac);
+        solver.solve();
     }
 
     auto ep = get_time_point();
-    std::cout << "Total Time in HeiProMap.cpp: " << get_seconds(sp, ep) << std::endl;
+    std::cout << "Total Time in HeiPa.cpp: " << get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

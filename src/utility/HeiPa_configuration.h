@@ -22,10 +22,11 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
+ *
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ALGORITHMCONFIGURATION_H
-#define HEIPROMAP_ALGORITHMCONFIGURATION_H
+#ifndef HEIPROMAP_HEIPA_CONFIGURATION_H
+#define HEIPROMAP_HEIPA_CONFIGURATION_H
 
 #include <string>
 #include <vector>
@@ -38,96 +39,21 @@
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../partitioning/kaffpa_partitioner.h"
-
+#include "HeiProMap_configuration.h"
 
 namespace HeiProMap {
-    enum COARSENING_ALGS {
-        COARSENING_ALG_UNDEFINED,
-        COARSENING_ALG_GLOBAL_PATHS,
-        COARSENING_ALG_SIZE_CONSTRAINED_LP
-    };
 
-    inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
-        if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
-        if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
-        if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
-        return COARSENING_ALG_UNDEFINED;
-    }
-
-    inline std::string coarsening_algorithm_to_string(COARSENING_ALGS alg) {
-        switch (alg) {
-            case COARSENING_ALG_UNDEFINED:
-                return "UNDEFINED";
-            case COARSENING_ALG_GLOBAL_PATHS:
-                return "global-paths";
-            case COARSENING_ALG_SIZE_CONSTRAINED_LP:
-                return "size-constrained-lp";
-            default:
-                return "UNDEFINED";
-        }
-    }
-
-    enum PARTITIONING_ALGS {
-        PARTITIONING_ALG_UNDEFINED,
-        PARTITIONING_ALG_KAFFPA,
-        PARTITIONING_ALG_MULTISECTION,
-    };
-
-    inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
-        if (str == "UNDEFINED") return PARTITIONING_ALG_UNDEFINED;
-        if (str == "kaffpa") return PARTITIONING_ALG_KAFFPA;
-        if (str == "multisection") return PARTITIONING_ALG_MULTISECTION;
-        return PARTITIONING_ALG_UNDEFINED;
-    }
-
-    inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
-        switch (alg) {
-            case PARTITIONING_ALG_UNDEFINED:
-                return "UNDEFINED";
-            case PARTITIONING_ALG_KAFFPA:
-                return "kaffpa";
-            case PARTITIONING_ALG_MULTISECTION:
-                return "multisection";
-            default:
-                return "UNDEFINED";
-        }
-    }
-
-    enum REBALANCING_ALGS {
-        REBALANCING_ALG_UNDEFINED,
-        REBALANCING_ALG_SIMPLE
-    };
-
-    inline REBALANCING_ALGS string_to_rebalancing_algorithm(const std::string &str) {
-        if (str == "UNDEFINED") return REBALANCING_ALG_UNDEFINED;
-        if (str == "simple") return REBALANCING_ALG_SIMPLE;
-        return REBALANCING_ALG_UNDEFINED;
-    }
-
-    inline std::string rebalancing_algorithm_to_string(REBALANCING_ALGS alg) {
-        switch (alg) {
-            case REBALANCING_ALG_UNDEFINED:
-                return "UNDEFINED";
-            case REBALANCING_ALG_SIMPLE:
-                return "simple";
-            default:
-                return "UNDEFINED";
-        }
-    }
-
-    class AlgorithmConfiguration {
+    class HeiPaConfiguration {
     private:
         std::vector<CommandLineOption> options = {
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
-            {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
-            {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
-            {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
+            {"--k", "-k", "Number of partitions.", "0", "", false},
 
             /** Coarsening */
             {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp}.", "global-paths", "", false},
@@ -167,12 +93,10 @@ namespace HeiProMap {
         std::string mapping_out;
 
         // hierarchy information
-        std::string hierarchy_string;
         std::vector<partition_t> hierarchy;
         partition_t k = 0;
 
         // distance information
-        std::string distance_string;
         std::vector<weight_t> distance;
 
         // balancing information
@@ -182,8 +106,6 @@ namespace HeiProMap {
         u64 seed = 0;
 
         u64 threads = 1;
-
-        u64 hm_level = 0;
 
         u64 initial_c = 8;
 
@@ -209,17 +131,15 @@ namespace HeiProMap {
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
 
-        AlgorithmConfiguration() = default;
+        HeiPaConfiguration() = default;
 
         void set_hierarchy() {
-            hierarchy_string = get("--hierarchy");
-            hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
-            k = prod<partition_t>(hierarchy);
+            k = std::stoull(get("--k"));
+            hierarchy = {k};
         }
 
         void set_distance() {
-            distance_string = get("--distance");
-            distance = convert<weight_t>(split(distance_string, ':'));
+            distance = {1};
         }
 
         void set_imbalance() {
@@ -242,47 +162,11 @@ namespace HeiProMap {
             }
         }
 
-        void set_hm_level() {
-            if (is_set("--hm-level")) {
-                hm_level = std::stoi(get("--hm-level"));
-            }
-        }
-
-        static EdgeRatingFunction string_to_rating_function(const std::string &rating_function) {
-            if (rating_function == "weight") {
-                return EdgeRatingFunction::WEIGHT;
-            } else if (rating_function == "expansion") {
-                return EdgeRatingFunction::EXPANSION;
-            } else if (rating_function == "heavy-edge") {
-                return EdgeRatingFunction::HEAVY_EDGE;
-            } else if (rating_function == "greedy") {
-                return EdgeRatingFunction::GREEDY;
-            } else {
-                std::cerr << "Unknown rating function: " << rating_function << std::endl;
-                exit(1);
-            }
-        }
-
-        static std::string rating_function_to_string(const EdgeRatingFunction rating_function) {
-            switch (rating_function) {
-                case EdgeRatingFunction::WEIGHT:
-                    return "weight";
-                case EdgeRatingFunction::EXPANSION:
-                    return "expansion";
-                case EdgeRatingFunction::HEAVY_EDGE:
-                    return "heavy-edge";
-                case EdgeRatingFunction::GREEDY:
-                    return "greedy";
-                default:
-                    return "UNKNOWN";
-            }
-        }
-
         void set_rating_function(const EdgeRatingFunction rating_function) {
             global_path_algorithm_config.rating_function = rating_function;
             for (auto &opt: options) {
                 if (opt.large_key == "--coarsening-algorithm-global-paths-rating-function") {
-                    opt.input = rating_function_to_string(rating_function);
+                    opt.input = AlgorithmConfiguration::rating_function_to_string(rating_function);
                     opt.is_set = true;
                     break;
                 }
@@ -296,7 +180,7 @@ namespace HeiProMap {
             }
 
             if (use_default || is_set("--coarsening-algorithm-global-paths-rating-function")) {
-                global_path_algorithm_config.rating_function = string_to_rating_function(get("--coarsening-algorithm-global-paths-rating-function"));
+                global_path_algorithm_config.rating_function = AlgorithmConfiguration::string_to_rating_function(get("--coarsening-algorithm-global-paths-rating-function"));
             }
 
             // actually set which algorithm to use
@@ -347,7 +231,7 @@ namespace HeiProMap {
             }
         }
 
-        AlgorithmConfiguration(int argc, char *argv[]) {
+        HeiPaConfiguration(int argc, char *argv[]) {
             // read command lines into vector
             std::vector<std::string> args(argv, argv + argc);
 
@@ -379,7 +263,6 @@ namespace HeiProMap {
             set_imbalance();
             set_seed();
             set_threads();
-            set_hm_level();
 
             set_coarsening_algorithm(true);
             set_partitioning_algorithm(true);
@@ -410,12 +293,9 @@ namespace HeiProMap {
         void set_fast() {
             initial_c = 8;
 
-            // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
             global_path_algorithm_config.random_level = 4;
 
@@ -423,19 +303,15 @@ namespace HeiProMap {
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 16;
 
-            // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "metis-kway";
-            // global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 3;
 
-            // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
 
-            // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
@@ -446,12 +322,9 @@ namespace HeiProMap {
         void set_eco() {
             initial_c = 8;
 
-            // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
             global_path_algorithm_config.random_level = 4;
 
@@ -459,26 +332,21 @@ namespace HeiProMap {
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 4;
 
-            // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-eco";
-            // global_multisection_config.mode_string = "metis-kway";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 3;
 
-            // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
 
-            // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
-            // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 1;
@@ -492,37 +360,31 @@ namespace HeiProMap {
         void set_strong() {
             initial_c = 16;
 
-            // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 2;
 
-            // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 
-            // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
 
-            // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
-            // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
             flow_based_refinement_config.max_global_iteration = 3;
@@ -537,35 +399,29 @@ namespace HeiProMap {
         void set_super_strong() {
             initial_c = 16;
 
-            // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 2;
 
-            // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 
-            // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 25;
 
-            // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 1000.0;
             quotient_graph_refinement_config.min_n_steps = 10;
 
-            // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
             flow_based_refinement_config.max_global_iteration = 5;
@@ -578,14 +434,11 @@ namespace HeiProMap {
         }
 
         void set_experimental() {
-            // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            // configurate global-paths algorithm
             global_path_algorithm_config.random_level = 0;
 
-            // enable flow based refinement
             flow_based_refinement_config.enabled = false;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 5;
@@ -596,17 +449,11 @@ namespace HeiProMap {
             flow_based_refinement_config.closed_vertex_sets_repeats = 100;
         }
 
-        /**
-         * Gets the entered input as a string.
-         *
-         * @param var The option in interest.
-         * @return The input.
-         */
         std::string get(const std::string &var) {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (large_key == var || small_key == var) {
                     if (input.empty() && default_val.empty()) {
-                        std::cout << "Command Line "" << var << "" not set!" << std::endl;
+                        std::cout << "Command Line \"" << var << "\" not set!" << std::endl;
                         exit(EXIT_FAILURE);
                     } else if (input.empty()) {
                         return default_val;
@@ -614,29 +461,20 @@ namespace HeiProMap {
                     return input;
                 }
             }
-            std::cout << "Command Line "" << var << "" is not an allowed name!" << std::endl;
+            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
             exit(EXIT_FAILURE);
         }
 
-        /**
-         * Returns whether the option was entered.
-         *
-         * @param var The option in interest.
-         * @return True if the option was entered, false else.
-         */
         bool is_set(const std::string &var) {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (large_key == var || small_key == var) {
                     return is_set;
                 }
             }
-            std::cout << "Command Line "" << var << "" is not an allowed name!" << std::endl;
+            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
             exit(EXIT_FAILURE);
         }
 
-        /**
-         * Prints the help message.
-         */
         void print_help_message() {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (small_key.empty()) {
@@ -649,4 +487,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_ALGORITHMCONFIGURATION_H
+#endif //HEIPROMAP_HEIPA_CONFIGURATION_H

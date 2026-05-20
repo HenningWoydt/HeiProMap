@@ -28,9 +28,9 @@
 #define HEIPROMAP_ADAPTIVE_SOLVER_H
 
 #include <iostream>
-#include "solver.h"
+#include "HeiProMap_solver.h"
 #include "distance_oracle.h"
-#include "../utility/algorithm_configuration.h"
+#include "../utility/HeiProMap_configuration.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../partitioning/kway_partitioner/kway_core.h"
 #include "../utility/utils.h"
