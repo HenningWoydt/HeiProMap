@@ -32,21 +32,13 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <iomanip>
 
 #include "../definitions.h"
+#include "HeiProMap_configuration.h"
 
-namespace Dyn_HeiProMap {
-    using namespace HeiProMap;
-    class Configuration {
-        std::vector<CommandLineOption> options = {
-            {"--help", "", "Produces the help message", "", "", false},
-            {"--hierarchy", "-h", "Hierarchy (e.g., 2:2:2).", "", "", false},
-            {"--distance", "-d", "Distance (e.g., 1:10:100).", "", "", false},
-            {"--imbalance", "-e", "Allowed imbalance (e.g., 0.03).", "0.03", "", false},
-            {"--threads", "-t", "Number of threads.", "1", "", false},
-            {"--seed", "-s", "Seed for randomness.", "0", "", false},
-        };
-
+namespace HeiProMap {
+    class DynConfiguration {
     public:
         std::vector<partition_t> hierarchy;
         std::vector<weight_t> distance;
@@ -54,9 +46,11 @@ namespace Dyn_HeiProMap {
         u64 n_threads = 1;
         u64 seed = 0;
 
-        Configuration() = default;
+        AlgorithmConfiguration ac;
 
-        Configuration(int argc, char *argv[]) {
+        DynConfiguration() = default;
+
+        DynConfiguration(int argc, char *argv[]) : ac(argc, argv) {
             std::vector<std::string> args(argv, argv + argc);
 
             for (size_t i = 1; i < (size_t) argc; ++i) {
@@ -66,52 +60,69 @@ namespace Dyn_HeiProMap {
                 }
             }
 
-            for (size_t i = 1; i < (size_t) argc; ++i) {
-                for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                    if (large_key == args[i] || small_key == args[i]) {
-                        input = args[i + 1];
-                        is_set = true;
-                        i += 1;
-                        break;
-                    }
-                }
-            }
+            set_hierarchy();
+            set_distance();
+            set_imbalance();
+            set_threads();
+            set_seed();
+        }
 
+        void set_hierarchy() {
             if (is_set("--hierarchy")) {
-                std::string h_str = get("--hierarchy");
-                std::istringstream h_iss(h_str);
-                std::string token;
-                while (std::getline(h_iss, token, ':')) {
-                    hierarchy.push_back(std::stoull(token));
+                hierarchy.clear();
+                std::vector<std::string> tokens = split(get("--hierarchy"), ':');
+                for (auto &t: tokens) {
+                    hierarchy.push_back(std::stoull(t));
                 }
+            } else {
+                hierarchy = {2, 2, 2};
             }
+            ac.hierarchy = hierarchy;
+            ac.k = 1;
+            for (auto h : hierarchy) ac.k *= h;
+        }
 
+        void set_distance() {
             if (is_set("--distance")) {
-                std::string d_str = get("--distance");
-                std::istringstream d_iss(d_str);
-                std::string token;
-                while (std::getline(d_iss, token, ':')) {
-                    distance.push_back(std::stoull(token));
+                distance.clear();
+                std::vector<std::string> tokens = split(get("--distance"), ':');
+                for (auto &t: tokens) {
+                    distance.push_back(std::stoull(t));
                 }
+            } else {
+                distance = {1, 10, 100};
             }
+            ac.distance = distance;
+        }
 
-            imbalance = std::stod(get("--imbalance"));
-            n_threads = std::stoull(get("--threads"));
+        void set_imbalance() {
+            if (is_set("--imbalance")) {
+                imbalance = std::stod(get("--imbalance"));
+            }
+            ac.imbalance = imbalance;
+        }
 
+        void set_threads() {
+            if (is_set("--threads")) {
+                n_threads = std::stoull(get("--threads"));
+            }
+            ac.threads = (u32)n_threads;
+        }
+
+        void set_seed() {
             if (is_set("--seed")) {
                 seed = std::stoull(get("--seed"));
-            } else {
-                seed = std::random_device{}();
             }
+            ac.seed = (u32)seed;
         }
 
         /**
          * Returns whether the option was entered.
          */
         bool is_set(const std::string &var) {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (large_key == var || small_key == var) {
-                    return is_set;
+            for (const auto &o : ac.options) {
+                if (o.large_key == var || o.small_key == var) {
+                    return o.is_set;
                 }
             }
             return false;
@@ -121,19 +132,13 @@ namespace Dyn_HeiProMap {
          * Gets the entered input as a string.
          */
         std::string get(const std::string &var) {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (large_key == var || small_key == var) {
-                    if (input.empty() && default_val.empty()) {
-                        std::cout << "Command Line \"" << var << "\" not set!" << std::endl;
-                        exit(EXIT_FAILURE);
-                    } else if (input.empty()) {
-                        return default_val;
-                    }
-                    return input;
+            for (const auto &o : ac.options) {
+                if (o.large_key == var || o.small_key == var) {
+                    if (o.input.empty()) return o.default_val;
+                    return o.input;
                 }
             }
-            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
-            exit(EXIT_FAILURE);
+            return "";
         }
 
         /**
@@ -143,14 +148,14 @@ namespace Dyn_HeiProMap {
             std::cout << "Dyn-HeiProMap - Dynamic Graph Partitioning Tool\n\n";
             std::cout << "Usage: Dyn-HeiProMap [options]\n\n";
             std::cout << "Options:\n";
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (small_key.empty()) {
-                    std::cout << "  " << large_key << " - " << description;
+            for (const auto &o : ac.options) {
+                if (o.small_key.empty()) {
+                    std::cout << "  " << std::left << std::setw(30) << o.large_key << " - " << o.description;
                 } else {
-                    std::cout << "  " << large_key << ", " << small_key << " - " << description;
+                    std::cout << "  " << std::left << std::setw(30) << (o.large_key + ", " + o.small_key) << " - " << o.description;
                 }
-                if (!default_val.empty()) {
-                    std::cout << " (default: " << default_val << ")";
+                if (!o.default_val.empty()) {
+                    std::cout << " (default: " << o.default_val << ")";
                 }
                 std::cout << "\n";
             }

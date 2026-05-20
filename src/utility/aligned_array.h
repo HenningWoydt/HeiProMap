@@ -27,6 +27,9 @@
 #ifndef HEIPROMAP_ALIGNED_ARRAY_H
 #define HEIPROMAP_ALIGNED_ARRAY_H
 
+#include <algorithm>
+#include <cstring>
+#include <vector>
 #include "macros.h"
 #include "utils.h"
 
@@ -97,9 +100,6 @@ namespace HeiProMap {
 
 
         AlignedArray(AlignedArray &&other) noexcept {
-            free(m_ptr);
-            m_n = 0;
-
             m_ptr = other.m_ptr;
             m_n = other.m_n;
 
@@ -110,8 +110,6 @@ namespace HeiProMap {
         AlignedArray &operator=(AlignedArray &&other) noexcept {
             if (this != &other) {
                 free(m_ptr);
-                m_n = 0;
-
                 m_ptr = other.m_ptr;
                 m_n = other.m_n;
 
@@ -138,6 +136,16 @@ namespace HeiProMap {
         const T * get_ptr() const {
             return HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
         }
+
+        std::vector<T> get_vector() const {
+            std::vector<T> vec(m_n);
+            if (m_n > 0) {
+                std::memcpy(vec.data(), m_ptr, m_n * sizeof(T));
+            }
+            return vec;
+        }
+
+        size_t size() const { return m_n; }
     };
 
     template<typename T>

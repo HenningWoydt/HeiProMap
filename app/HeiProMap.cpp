@@ -26,14 +26,12 @@
 
 #include "src/datastructures/HeiProMap_solver.h"
 
-using namespace HeiProMap;
-
 int main(const int argc, char *argv[]) {
-    auto sp = get_time_point();
+    auto sp = HeiProMap::get_time_point();
 
     if (argc == 1) {
         {
-            ScopedTimer _t("io", "main", "read_args");
+            HeiProMap::ScopedTimer _t("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
                 // {"--graph", "../../ProMapRepo/data/mapping/2cubes_sphere.mtx.graph"}, // fast 0.753s 8,704,035 comm cost // eco 2.559s 7,469,493 // strong 22.498s 7,223,358
                 // {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
@@ -74,28 +72,28 @@ int main(const int argc, char *argv[]) {
                 std::strcpy(temp_argv[i], args[i].c_str());
             }
 
-            AlgorithmConfiguration ac(temp_argc, temp_argv);
+            HeiProMap::AlgorithmConfiguration ac(temp_argc, temp_argv);
             _t.stop();
 
-            Solver solver(ac);
+            HeiProMap::Solver solver(ac);
             solver.solve();
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
 
-            Profiler::instance().print_table_ascii_colored(std::cout);
+            HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
         }
     } else {
-        AlgorithmConfiguration ac(argc, argv);
+        HeiProMap::AlgorithmConfiguration ac(argc, argv);
 
         std::cout << "Seed " << ac.seed << std::endl;
 
-        Solver solver(ac);
+        HeiProMap::Solver solver(ac);
         solver.solve();
     }
 
-    auto ep = get_time_point();
-    std::cout << "Total Time in HeiProMap.cpp: " << get_seconds(sp, ep) << std::endl;
+    auto ep = HeiProMap::get_time_point();
+    std::cout << "Total Time in HeiProMap.cpp: " << HeiProMap::get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

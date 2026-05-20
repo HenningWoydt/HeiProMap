@@ -32,8 +32,7 @@
 #include <algorithm>
 #include "../definitions.h"
 
-namespace Dyn_HeiProMap {
-    using namespace HeiProMap;
+namespace HeiProMap {
     /**
      * Simple implementation of the Hungarian algorithm for min-weight perfect matching.
      * cost_matrix: n x n cost matrix. 

@@ -115,7 +115,7 @@ namespace HeiProMap {
     }
 
     class AlgorithmConfiguration {
-    private:
+    public:
         std::vector<CommandLineOption> options = {
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},

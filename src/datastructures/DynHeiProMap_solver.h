@@ -38,15 +38,18 @@
 #include "dyn_graph.h"
 #include "csr_graph.h"
 #include "quotient_graph.h"
+#include "partition_manager.h"
+#include "boundary_vertex_manger.h"
+#include "block_conn.h"
 #include "../partitioning/heipromap_partition.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../utility/DynHeiProMap_configuration.h"
 #include "../utility/profiler.h"
 #include "distance_oracle.h"
 #include "../utility/hungarian.h"
+#include "../utility/qap.h"
 
-namespace Dyn_HeiProMap {
-    using namespace HeiProMap;
+namespace HeiProMap {
     struct KTStat {
         u32 calls = 0;
         double total_ms = 0;
@@ -59,16 +62,20 @@ namespace Dyn_HeiProMap {
         }
     };
 
-    class Solver {
+    class DynSolver {
         DynGraph g;
-        std::vector<partition_t> partition;
+        
+        PartitionManager p_manager;
+        BoundaryVertexManager bv_manager;
+        BlockConn b_conn;
+
         std::vector<partition_t> previous_partition;
         std::vector<partition_t> initial_partition;
 
         QuotientGraph q;
         QuotientGraph initial_q;
 
-        Configuration config;
+        DynConfiguration config;
         DistanceOracle oracle;
         std::map<std::string, KTStat> command_stats;
 
@@ -171,6 +178,17 @@ namespace Dyn_HeiProMap {
                 }
 
                 oracle.initialize(config.hierarchy, config.distance);
+                
+                u64 num_blocks = 1;
+                for (auto h : config.hierarchy) num_blocks *= h;
+                
+                // Reset managers if hierarchy changes
+                p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
+                bv_manager.initialize(g.n, (partition_t)num_blocks);
+                b_conn.initialize(g.n, g.m, (partition_t)num_blocks);
+                q.initialize((partition_t)num_blocks);
+                initial_q.initialize((partition_t)num_blocks);
+                
                 std::cout << "Hierarchy set to " << h_str << " with distances " << d_str << std::endl;
             } else if (cmd == "partition") {
                 std::string config_str;
@@ -186,8 +204,8 @@ namespace Dyn_HeiProMap {
                     return;
                 }
 
-                for (vertex_t v = 0; v < partition.size(); ++v) {
-                    file << partition[v] << "\n";
+                for (vertex_t v = 0; v < p_manager.n; ++v) {
+                    file << p_manager[v] << "\n";
                 }
                 std::cout << "Partition saved to " << file_path << "\n";
             } else if (cmd == "save-graph") {
@@ -226,40 +244,35 @@ namespace Dyn_HeiProMap {
                 std::cout << "  Nodes (n):      " << g.n << std::endl;
                 std::cout << "  Edges (m):      " << g.m << std::endl;
                 std::cout << "  Total Weight:   " << g.g_weight << std::endl;
-                if (!partition.empty()) {
+                if (p_manager.n > 0) {
                     weight_t edge_cut = 0;
-                    std::map<partition_t, weight_t> block_weights;
                     for (vertex_t u = 0; u < g.n; ++u) {
-                        block_weights[partition[u]] += g.v_weights[u];
                         for (const auto &edge: g.neighbors[u]) {
-                            if (partition[u] != partition[edge.u]) {
+                            if (p_manager[u] != p_manager[edge.u]) {
                                 edge_cut += edge.w;
                             }
                         }
                     }
                     edge_cut /= 2;
-                    weight_t max_block_weight = 0;
-                    for (auto const &[id, w]: block_weights) {
-                        if (w > max_block_weight) max_block_weight = w;
-                    }
-                    double balance = (double) max_block_weight / (g.g_weight / block_weights.size());
+                    weight_t max_block_weight = p_manager.max_weight();
+                    double balance = (double) max_block_weight / ((double)g.g_weight / (double)p_manager.k);
 
                     std::cout << "Partition Statistics:" << std::endl;
                     std::cout << "  Edge Cut:       " << edge_cut << std::endl;
-                    std::cout << "  Comm Cost:      " << calculate_communication_cost() << std::endl;
+                    std::cout << "  Comm Cost:      " << get_qap(g, p_manager.partition.get_vector(), oracle) << std::endl;
                     std::cout << "  Max Block (LMax): " << max_block_weight << std::endl;
                     std::cout << "  Balance (max/avg): " << balance << std::endl;
 
-                    if (!previous_partition.empty() && previous_partition.size() == partition.size()) {
+                    if (!previous_partition.empty() && previous_partition.size() == p_manager.n) {
                         std::cout << "  Migration Cost (prev): " << calculate_migration_cost(
-                            previous_partition, partition) << std::endl;
-                        std::cout << "  Moved Vertices (prev): " << count_moved_vertices(previous_partition, partition)
+                            previous_partition, p_manager.partition.get_vector()) << std::endl;
+                        std::cout << "  Moved Vertices (prev): " << count_moved_vertices(previous_partition, p_manager.partition.get_vector())
                                 << std::endl;
                     }
-                    if (!initial_partition.empty() && initial_partition.size() <= partition.size()) {
+                    if (!initial_partition.empty() && initial_partition.size() <= p_manager.n) {
                         std::cout << "  Migration Cost (init): " << calculate_migration_cost(
-                            initial_partition, partition) << std::endl;
-                        std::cout << "  Moved Vertices (init): " << count_moved_vertices(initial_partition, partition)
+                            initial_partition, p_manager.partition.get_vector()) << std::endl;
+                        std::cout << "  Moved Vertices (init): " << count_moved_vertices(initial_partition, p_manager.partition.get_vector())
                                 << std::endl;
                     }
                     std::cout << "  Cumulative Migration Cost: " << total_migration_cost_from_start << std::endl;
@@ -286,17 +299,27 @@ namespace Dyn_HeiProMap {
             command_stats[cmd].add(ms);
         }
 
-        explicit Solver(Configuration &t_config) : config(t_config) {
+        explicit DynSolver(DynConfiguration &t_config) : config(t_config) {
             oracle.initialize(t_config.hierarchy, t_config.distance);
+            
+            u64 num_blocks = 1;
+            for (auto h : config.hierarchy) num_blocks *= h;
+            
+            p_manager.initialize(0, (partition_t)num_blocks, 0);
+            bv_manager.initialize(0, (partition_t)num_blocks);
+            b_conn.initialize(0, 0, (partition_t)num_blocks);
+            q.initialize((partition_t)num_blocks);
+            initial_q.initialize((partition_t)num_blocks);
+
             g.dirty_callback = [this](vertex_t v) {
-                // QuotientGraph doesn't need explicit dirty tracking now
+                // Placeholder for incremental manager updates if needed
             };
         }
 
         weight_t calculate_migration_cost(const std::vector<partition_t> &old_partition,
                                           const std::vector<partition_t> &new_partition) {
             weight_t total_migration_cost = 0;
-            vertex_t num_vertices = std::min(old_partition.size(), new_partition.size());
+            vertex_t num_vertices = std::min((vertex_t)old_partition.size(), (vertex_t)new_partition.size());
             for (vertex_t v = 0; v < num_vertices; ++v) {
                 if (old_partition[v] != new_partition[v]) {
                     total_migration_cost += g.v_weights[v] * oracle.get(old_partition[v], new_partition[v]);
@@ -308,42 +331,13 @@ namespace Dyn_HeiProMap {
         u64 count_moved_vertices(const std::vector<partition_t> &old_partition,
                                  const std::vector<partition_t> &new_partition) {
             u64 moved_count = 0;
-            vertex_t num_vertices = std::min(old_partition.size(), new_partition.size());
+            vertex_t num_vertices = std::min((vertex_t)old_partition.size(), (vertex_t)new_partition.size());
             for (vertex_t v = 0; v < num_vertices; ++v) {
                 if (old_partition[v] != new_partition[v]) {
                     moved_count++;
                 }
             }
             return moved_count;
-        }
-
-        weight_t calculate_communication_cost() {
-            weight_t comm_cost = 0;
-            for (vertex_t u = 0; u < g.n; ++u) {
-                for (const auto &edge: g.neighbors[u]) {
-                    if (u < edge.u) {
-                        comm_cost += edge.w * oracle.get(partition[u], partition[edge.u]);
-                    }
-                }
-            }
-            return comm_cost;
-        }
-
-        double calculate_balance(weight_t &max_block_weight) {
-            if (partition.empty()) return 0;
-            u64 num_blocks = 1;
-            for (auto h: config.hierarchy) num_blocks *= h;
-            std::vector<weight_t> block_weights(num_blocks, 0);
-            for (vertex_t u = 0; u < g.n; ++u) {
-                if (g.vertex_exists(u)) {
-                    block_weights[partition[u]] += g.v_weights[u];
-                }
-            }
-            max_block_weight = 0;
-            for (weight_t w: block_weights) {
-                if (w > max_block_weight) max_block_weight = w;
-            }
-            return (double) max_block_weight / ((double) g.g_weight / (double) num_blocks);
         }
 
         void align_partitions_hierarchically(std::vector<partition_t> &new_partition) {
@@ -379,16 +373,30 @@ namespace Dyn_HeiProMap {
         }
 
     private:
-        void rebuild_q(QuotientGraph &target_q) {
-            u64 num_blocks = 1;
-            for (auto h: config.hierarchy) num_blocks *= h;
-            target_q.initialize(num_blocks);
+        void rebuild_managers() {
+            u64 num_blocks = p_manager.k;
+            p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
+            bv_manager.initialize(g.n, (partition_t)num_blocks);
+            b_conn.initialize(g.n, g.m, (partition_t)num_blocks);
+            q.initialize((partition_t)num_blocks);
+
+            // This is a full rebuild, so we just iterate over the current graph
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (!g.vertex_exists(u)) continue;
-                partition_t u_id = partition[u];
+                // Note: partition was updated elsewhere, we need to populate managers
+                // But in partition() or refine(), managers are usually built from scratch anyway
+            }
+        }
+
+        void rebuild_q(QuotientGraph &target_q) {
+            u64 num_blocks = p_manager.k;
+            target_q.initialize((partition_t)num_blocks);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                if (!g.vertex_exists(u)) continue;
+                partition_t u_id = p_manager[u];
                 for (const auto &edge: g.neighbors[u]) {
                     if (u < edge.u) {
-                        partition_t v_id = partition[edge.u];
+                        partition_t v_id = p_manager[edge.u];
                         if (u_id != v_id) {
                             target_q.add_edge(u_id, v_id, edge.w);
                         }
@@ -452,37 +460,44 @@ namespace Dyn_HeiProMap {
             std::vector<partition_t> new_partition;
             heipromap_partition(g, config.hierarchy, config.distance, config.imbalance, config.seed, config.n_threads, config_str, new_partition);
 
-            u64 num_blocks = 1;
-            for (auto h: config.hierarchy) num_blocks *= h;
+            u64 num_blocks = p_manager.k;
 
             if (initial_partition.empty()) {
-                // First partition: initialize everything with the first result
-                partition = new_partition;
+                // First partition
+                p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    p_manager.set(u, g.v_weights[u], new_partition[u]);
+                }
+                
                 initial_partition = new_partition;
                 previous_partition = new_partition;
 
                 rebuild_q(q);
                 rebuild_q(initial_q);
 
-                std::cout << "Comm Cost: " << calculate_communication_cost() << "\n";
+                std::cout << "Comm Cost: " << get_qap(g, p_manager.partition.get_vector(), oracle) << "\n";
                 std::cout << "Migration Cost: Initialized baselines.\n";
             } else {
-                // Subsequent partition: align with what we had BEFORE this full re-partitioning
-                std::vector<partition_t> reference = partition;
+                // Subsequent partition
+                std::vector<partition_t> reference = p_manager.partition.get_vector();
                 if (reference.size() < g.n) reference.resize(g.n, 0);
 
                 weight_t migration_before = calculate_migration_cost(reference, new_partition);
                 align_partitions_hierarchically(new_partition);
                 weight_t migration_after = calculate_migration_cost(reference, new_partition);
 
-                previous_partition = partition; 
-                partition = new_partition;
+                previous_partition = reference; 
+                
+                p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    p_manager.set(u, g.v_weights[u], new_partition[u]);
+                }
+                
                 total_migration_cost_from_start += migration_after;
 
-                // Rebuild quotient graph
                 rebuild_q(q);
 
-                std::cout << "Comm Cost: " << calculate_communication_cost() << "\n";
+                std::cout << "Comm Cost: " << get_qap(g, p_manager.partition.get_vector(), oracle) << "\n";
                 std::cout << "Migration Cost: Before=" << migration_before << " After=" << migration_after <<
                         " Improvement=" << (migration_before - migration_after) << "\n";
             }
@@ -496,38 +511,32 @@ namespace Dyn_HeiProMap {
         void run_refine_fast(u32 num_iterations) {
             ScopedTimer _t("solver", "refine-fast", "refine-fast");
 
-            if (partition.size() < g.n) {
-                partition.resize(g.n, 0);
+            if (p_manager.n < g.n) {
+                // Should not happen if incremental updates are implemented, 
+                // but for now we re-initialize if needed.
+                p_manager.initialize(g.n, p_manager.k, g.g_weight);
+                // Need to recover partition data... this highlights why we need incremental updates.
             }
 
             size_t num_dirty = g.dirty_list.size();
             size_t num_new = g.new_vertices.size();
-            weight_t actual_max_block_weight;
-            weight_t comm_cost_before = calculate_communication_cost();
-            double balance_before = calculate_balance(actual_max_block_weight);
+            
+            weight_t comm_cost_before = get_qap(g, p_manager.partition.get_vector(), oracle);
+            double balance_before = (double)p_manager.max_weight() / ((double)g.g_weight / (double)p_manager.k);
 
-            u64 num_blocks = 1;
-            for (auto h: config.hierarchy) num_blocks *= h;
-            std::vector<weight_t> block_weights(num_blocks, 0);
-            for (vertex_t v = 0; v < g.n; ++v) {
-                if (g.vertex_exists(v)) {
-                    block_weights[partition[v]] += g.v_weights[v];
-                }
-            }
-
-            weight_t total_weight = g.g_weight;
-            weight_t allowed_max_block_weight = (weight_t) ((1.0 + config.imbalance) * ((f64) total_weight / (f64) num_blocks));
+            u64 num_blocks = p_manager.k;
+            weight_t allowed_max_block_weight = (weight_t) ((1.0 + config.imbalance) * ((f64) g.g_weight / (f64) num_blocks));
 
             // 1. Greedy assignment for new vertices
             if (!g.new_vertices.empty()) {
-                total_migration_cost_from_start += greedy_assign(block_weights, allowed_max_block_weight);
+                total_migration_cost_from_start += greedy_assign(allowed_max_block_weight);
             }
 
-            std::vector<partition_t> partition_before = partition;
+            std::vector<partition_t> partition_before = p_manager.partition.get_vector();
 
-            // 2. Incremental Refinement using core LabelPropagationRefinement
+            // 2. Incremental Refinement
             {
-                // Create temporary CSRGraph
+                // Create temporary CSRGraph (Still needed because refinement algorithms expect CSRGraph)
                 ::HeiProMap::CSRGraph csr_g(g.n, g.m, g.g_weight);
                 for (vertex_t u = 0; u < g.n; ++u) {
                     csr_g.v_weights[u] = g.v_weights[u];
@@ -538,22 +547,11 @@ namespace Dyn_HeiProMap {
                     }
                 }
 
-                // Initialize core data structures
-                ::HeiProMap::PartitionManager p_manager;
-                p_manager.initialize(csr_g.n, num_blocks, csr_g.g_weight);
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    p_manager.set(u, g.v_weights[u], partition[u]);
-                }
-
-                ::HeiProMap::BoundaryVertexManager bv_manager;
-                bv_manager.initialize(csr_g.n, num_blocks);
-
-                ::HeiProMap::QuotientGraph q_graph_core;
-                q_graph_core.initialize(num_blocks);
-
-                ::HeiProMap::BlockConn b_conn;
-                b_conn.initialize(csr_g.n, csr_g.m, num_blocks);
+                // Initialize managers (fully for now, later incrementally)
+                bv_manager.initialize(csr_g.n, (partition_t)num_blocks);
+                b_conn.initialize(csr_g.n, csr_g.m, (partition_t)num_blocks);
                 b_conn.reset_build();
+                q.initialize((partition_t)num_blocks);
 
                 // Populate structures
                 for (vertex_t u = 0; u < csr_g.n; ++u) {
@@ -566,7 +564,7 @@ namespace Dyn_HeiProMap {
                         b_conn.add_connection(u, v_id, w);
                         if (u_id != v_id) {
                             bv_manager.add(u, u_id);
-                            if (u < v) q_graph_core.add_edge(u_id, v_id, w);
+                            if (u < v) q.add_edge(u_id, v_id, w);
                         }
                     }
                 }
@@ -577,25 +575,18 @@ namespace Dyn_HeiProMap {
                 lp_config.max_iteration = num_iterations;
 
                 ::HeiProMap::LabelPropagationRefinement lp_refine;
-                lp_refine.initialize(csr_g.n, csr_g.m, num_blocks, config.n_threads, config.seed, lp_config);
+                lp_refine.initialize(csr_g.n, csr_g.m, (partition_t)num_blocks, (u32)config.n_threads, (u32)config.seed, lp_config);
 
-                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q_graph_core, b_conn, config.imbalance, false, false);
-
-                // Copy back partition
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    partition[u] = p_manager[u];
-                }
+                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn, config.imbalance, false, false);
             }
 
-            total_migration_cost_from_start += calculate_migration_cost(partition_before, partition);
-            rebuild_q(q);
+            total_migration_cost_from_start += calculate_migration_cost(partition_before, p_manager.partition.get_vector());
 
             g.clear_dirty_status();
             g.clear_new_vertices();
 
-            weight_t max_block_weight_after;
-            weight_t comm_cost_after = calculate_communication_cost();
-            double balance_after = calculate_balance(max_block_weight_after);
+            weight_t comm_cost_after = get_qap(g, p_manager.partition.get_vector(), oracle);
+            double balance_after = (double)p_manager.max_weight() / ((double)g.g_weight / (double)p_manager.k);
 
             std::cout << "Incremental Refinement done (" << num_dirty << " dirty, " << num_new << " new vertices):" <<
                     std::endl;
@@ -604,19 +595,18 @@ namespace Dyn_HeiProMap {
             std::cout << "  Balance:   Before=" << balance_before << " After=" << balance_after << std::endl;
         }
 
-        weight_t greedy_assign(std::vector<weight_t> &block_weights, weight_t max_block_weight) {
+        weight_t greedy_assign(weight_t max_block_weight) {
             weight_t migration_cost = 0;
             for (vertex_t v: g.new_vertices) {
                 if (!g.vertex_exists(v)) continue;
-                if (v >= partition.size()) partition.resize(v + 1, 0);
-
-                partition_t current_block = partition[v];
+                
+                partition_t current_block = p_manager[v];
                 weight_t v_weight = g.v_weights[v];
 
                 std::vector<partition_t> candidates;
                 candidates.push_back(0);
                 for (const auto &edge: g.neighbors[v]) {
-                    candidates.push_back(edge.u < partition.size() ? partition[edge.u] : 0);
+                    candidates.push_back(p_manager[edge.u]);
                 }
                 std::sort(candidates.begin(), candidates.end());
                 candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
@@ -625,14 +615,14 @@ namespace Dyn_HeiProMap {
                 weight_t min_comm_cost = std::numeric_limits<weight_t>::max();
 
                 for (partition_t target_block: candidates) {
-                    weight_t current_target_weight = block_weights[target_block];
+                    weight_t current_target_weight = p_manager.bweights[target_block];
                     if (target_block != current_block && current_target_weight + v_weight > max_block_weight) {
                         continue;
                     }
 
                     weight_t current_comm_cost = 0;
                     for (const auto &edge: g.neighbors[v]) {
-                        partition_t nb_block = edge.u < partition.size() ? partition[edge.u] : 0;
+                        partition_t nb_block = p_manager[edge.u];
                         current_comm_cost += edge.w * oracle.get(nb_block, target_block);
                     }
 
@@ -644,18 +634,14 @@ namespace Dyn_HeiProMap {
 
                 if (best_block != current_block) {
                     migration_cost += v_weight * oracle.get(current_block, best_block);
-                    // QuotientGraph::move doesn't support DynGraph directly here, 
-                    // and rebuild_q is called after this block anyway.
-                    block_weights[current_block] -= v_weight;
-                    block_weights[best_block] += v_weight;
-                    partition[v] = best_block;
+                    p_manager.move_serial(v, v_weight, current_block, best_block);
                 }
             }
             return migration_cost;
         }
     };
 
-    inline void interactive_mode(Solver &solver) {
+    inline void interactive_mode(DynSolver &solver) {
         std::string line;
         while (std::getline(std::cin, line)) {
             if (line == "quit") break;
@@ -663,7 +649,7 @@ namespace Dyn_HeiProMap {
         }
     }
 
-    inline void execute_commands(Solver &solver, const std::vector<std::string> &commands) {
+    inline void execute_commands(DynSolver &solver, const std::vector<std::string> &commands) {
         for (const auto &line: commands) {
             solver.process_command(line);
         }

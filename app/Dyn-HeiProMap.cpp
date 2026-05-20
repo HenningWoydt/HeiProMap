@@ -30,18 +30,15 @@
  #include "src/datastructures/DynHeiProMap_solver.h"
 #include "src/utility/DynHeiProMap_configuration.h"
 
-using namespace HeiProMap;
- using namespace Dyn_HeiProMap;
-
 int main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);
     std::cout.tie(nullptr);
 
-    Configuration config;
+    HeiProMap::DynConfiguration config;
     if (argc > 1) {
-        config = Configuration(argc, argv);
+        config = HeiProMap::DynConfiguration(argc, argv);
     } else {
-        ScopedTimer _t("io", "main", "parse_args");
+        HeiProMap::ScopedTimer _t("io", "main", "parse_args");
         std::vector<std::pair<std::string, std::string> > input = {
             {"--hierarchy", "4:8:6"},
             {"--distance", "1:10:100"},
@@ -72,12 +69,12 @@ int main(int argc, char** argv) {
             std::strcpy(argv_temp[i], args[i].c_str());
         }
 
-        config = Configuration(argc_temp, argv_temp);
+        config = HeiProMap::DynConfiguration(argc_temp, argv_temp);
 
         for (int i = 0; i < argc_temp; ++i) { delete[] argv_temp[i]; }
         delete[] argv_temp;
 
-        Dyn_HeiProMap::Solver solver(config);
+        HeiProMap::DynSolver solver(config);
 
         std::vector<std::string> commands;
         commands.emplace_back("exec ../../Dyn-HeiProMap-Experiments/data/batches_100/2cubes_sphere.mtx/batch_0.my_seq");
@@ -95,17 +92,17 @@ int main(int argc, char** argv) {
             commands.emplace_back("save_partition mapping_" + std::to_string(i) + ".txt");
         }
 
-        // interactive_mode(solver);
-        execute_commands(solver, commands);
+        // HeiProMap::interactive_mode(solver);
+        HeiProMap::execute_commands(solver, commands);
 
-        Profiler::instance().print_table_ascii_colored(std::cout);
+        HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
 
         return 0;
     }
 
-    Dyn_HeiProMap::Solver solver(config);
+    HeiProMap::DynSolver solver(config);
 
-    interactive_mode(solver);
+    HeiProMap::interactive_mode(solver);
 
     return 0;
 }

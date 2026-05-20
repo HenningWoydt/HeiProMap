@@ -34,8 +34,7 @@
 #include "../utility/random_engine.h"
 #include "../datastructures/HeiProMap_solver.h"
 
-namespace Dyn_HeiProMap {
-    using namespace HeiProMap;
+namespace HeiProMap {
 
     inline void heipromap_partition(const DynGraph &g,
                                     const std::vector<partition_t> &hierarchy,

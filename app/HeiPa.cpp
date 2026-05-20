@@ -27,14 +27,12 @@
 #include "src/datastructures/HeiPa_solver.h"
 #include "src/utility/HeiPa_configuration.h"
 
-using namespace HeiProMap;
-
 int main(const int argc, char *argv[]) {
-    auto sp = get_time_point();
+    auto sp = HeiProMap::get_time_point();
 
     if (argc == 1) {
         {
-            ScopedTimer _t("io", "main", "read_args");
+            HeiProMap::ScopedTimer _t("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
                 {"--graph", "../../ProMapRepo/data/mapping/del23.graph"},
                 {"--mapping", "../data/out/partition/del23.txt"},
@@ -69,28 +67,28 @@ int main(const int argc, char *argv[]) {
                 std::strcpy(temp_argv[i], args[i].c_str());
             }
 
-            HeiPaConfiguration ac(temp_argc, temp_argv);
+            HeiProMap::HeiPaConfiguration ac(temp_argc, temp_argv);
             _t.stop();
 
-            HeiPaSolver solver(ac);
+            HeiProMap::HeiPaSolver solver(ac);
             solver.solve();
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
 
-            Profiler::instance().print_table_ascii_colored(std::cout);
+            HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
         }
     } else {
-        HeiPaConfiguration ac(argc, argv);
+        HeiProMap::HeiPaConfiguration ac(argc, argv);
 
         std::cout << "Seed " << ac.seed << std::endl;
 
-        HeiPaSolver solver(ac);
+        HeiProMap::HeiPaSolver solver(ac);
         solver.solve();
     }
 
-    auto ep = get_time_point();
-    std::cout << "Total Time in HeiPa.cpp: " << get_seconds(sp, ep) << std::endl;
+    auto ep = HeiProMap::get_time_point();
+    std::cout << "Total Time in HeiPa.cpp: " << HeiProMap::get_seconds(sp, ep) << std::endl;
 
     return 0;
 }

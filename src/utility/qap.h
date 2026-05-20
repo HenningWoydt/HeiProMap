@@ -30,8 +30,33 @@
 #include "../definitions.h"
 #include "macros.h"
 #include "../datastructures/distance_oracle.h"
+#include "../datastructures/dyn_graph.h"
 
 namespace HeiProMap {
+    template<typename DistanceOracleT>
+    inline weight_t get_qap(const DynGraph &g,
+                            const std::vector<partition_t> &partition,
+                            const DistanceOracleT &d_oracle) {
+        ScopedTimer _t("misc", "misc", "get_qap");
+
+        weight_t qap = 0;
+
+        for (vertex_t u = 0; u < g.n; ++u) {
+            if (!g.vertex_exists(u)) continue;
+            partition_t u_id = partition[u];
+
+            for (const auto &edge: g.neighbors[u]) {
+                const vertex_t v = edge.u;
+                const weight_t w = edge.w;
+                partition_t v_id = partition[v];
+                weight_t d = d_oracle.get(u_id, v_id);
+                qap += (d * w);
+            }
+        }
+
+        return qap;
+    }
+
     template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
     inline weight_t get_qap(const GraphT &g,
                             const PartitionManagerT &p_manager,
