@@ -40,9 +40,11 @@ int main(const int argc, char *argv[]) {
                 {"--mapping", "../data/out/partition/del23.txt"},
                 {"--k", "16"},
                 {"--imbalance", "0.03"},
-                {"--config", "strong"},
+                {"--config", "fast"},
                 {"--seed", "0"},
                 {"--threads", "1"},
+                {"--partitioning-algorithm", "recursive-bisection"},
+                {"--partitioning-algorithm-recursive-bisection-kappa", "5"},
             };
 
             std::vector<std::string> args = {"HeiPa"};

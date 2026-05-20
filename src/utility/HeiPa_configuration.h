@@ -63,7 +63,7 @@ namespace HeiProMap {
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
 
             /** Partitioning */
-            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.", "multisection", "", false},
+            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, recursive-bisection}.", "multisection", "", false},
 
             // Partitioning kaffpa
             {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -71,6 +71,9 @@ namespace HeiProMap {
 
             // Partitioning multisection
             {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
+
+            // Partitioning recursive-bisection
+            {"--partitioning-algorithm-recursive-bisection-kappa", "", "Number of independent trials for recursive bisection (best edge-cut is kept).", "1", "", false},
 
             /** Rebalancing */
             {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
@@ -92,12 +95,7 @@ namespace HeiProMap {
         std::string graph_in;
         std::string mapping_out;
 
-        // hierarchy information
-        std::vector<partition_t> hierarchy;
         partition_t k = 0;
-
-        // distance information
-        std::vector<weight_t> distance;
 
         // balancing information
         f64 imbalance = -1.0;
@@ -118,9 +116,11 @@ namespace HeiProMap {
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;
-        PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
+        PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_RECURSIVE_BISECTION;
 
         GlobalMultisectionConfiguration global_multisection_config;
+        KaffpaPartitionMode kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
+        u64 rb_kappa = 1; // number of trials for recursive bisection
 
         // rebalance algorithm
         std::string rebalancing_algorithm_string;
@@ -132,15 +132,6 @@ namespace HeiProMap {
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
 
         HeiPaConfiguration() = default;
-
-        void set_hierarchy() {
-            k = std::stoull(get("--k"));
-            hierarchy = {k};
-        }
-
-        void set_distance() {
-            distance = {1};
-        }
 
         void set_imbalance() {
             imbalance = std::stod(get("--imbalance"));
@@ -195,6 +186,23 @@ namespace HeiProMap {
             if (use_default || is_set("--partitioning-algorithm-multisection-mode")) {
                 global_multisection_config.mode_string = get("--partitioning-algorithm-multisection-mode");
                 global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            }
+
+            // initialize kaffpa config
+            if (use_default || is_set("--partitioning-algorithm-kaffpa-partitioning-mode")) {
+                const std::string kaffpa_mode_str = get("--partitioning-algorithm-kaffpa-partitioning-mode");
+                if (kaffpa_mode_str == "strong")      { kaffpa_partition_mode = KAFFPA_PARTITION_STRONG; }
+                else if (kaffpa_mode_str == "eco")    { kaffpa_partition_mode = KAFFPA_PARTITION_ECO;    }
+                else if (kaffpa_mode_str == "fast")   { kaffpa_partition_mode = KAFFPA_PARTITION_FAST;   }
+                else {
+                    std::cerr << "Unknown kaffpa partitioning mode: " << kaffpa_mode_str << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            // initialize recursive-bisection config
+            if (use_default || is_set("--partitioning-algorithm-recursive-bisection-kappa")) {
+                rb_kappa = std::stoull(get("--partitioning-algorithm-recursive-bisection-kappa"));
             }
 
             // actually set which algorithm to use
@@ -258,8 +266,8 @@ namespace HeiProMap {
             graph_in = get("--graph");
             mapping_out = get("--mapping");
 
-            set_hierarchy();
-            set_distance();
+            k = std::stoull(get("--k"));
+
             set_imbalance();
             set_seed();
             set_threads();

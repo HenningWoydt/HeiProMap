@@ -71,25 +71,24 @@ namespace HeiProMap {
         PARTITIONING_ALG_UNDEFINED,
         PARTITIONING_ALG_KAFFPA,
         PARTITIONING_ALG_MULTISECTION,
+        PARTITIONING_ALG_RECURSIVE_BISECTION,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
-        if (str == "UNDEFINED") return PARTITIONING_ALG_UNDEFINED;
-        if (str == "kaffpa") return PARTITIONING_ALG_KAFFPA;
-        if (str == "multisection") return PARTITIONING_ALG_MULTISECTION;
+        if (str == "UNDEFINED")           return PARTITIONING_ALG_UNDEFINED;
+        if (str == "kaffpa")              return PARTITIONING_ALG_KAFFPA;
+        if (str == "multisection")        return PARTITIONING_ALG_MULTISECTION;
+        if (str == "recursive-bisection") return PARTITIONING_ALG_RECURSIVE_BISECTION;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
     inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
         switch (alg) {
-            case PARTITIONING_ALG_UNDEFINED:
-                return "UNDEFINED";
-            case PARTITIONING_ALG_KAFFPA:
-                return "kaffpa";
-            case PARTITIONING_ALG_MULTISECTION:
-                return "multisection";
-            default:
-                return "UNDEFINED";
+            case PARTITIONING_ALG_UNDEFINED:            return "UNDEFINED";
+            case PARTITIONING_ALG_KAFFPA:               return "kaffpa";
+            case PARTITIONING_ALG_MULTISECTION:         return "multisection";
+            case PARTITIONING_ALG_RECURSIVE_BISECTION:  return "recursive-bisection";
+            default:                                    return "UNDEFINED";
         }
     }
 
