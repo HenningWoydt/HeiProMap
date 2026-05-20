@@ -462,27 +462,24 @@ namespace HeiProMap {
                 block_conn.reset_build();
 
                 for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                    {
-                        block_conn.begin_vertex(graphs.back(), u);
+                    block_conn.begin_vertex(graphs.back(), u);
 
-                        const partition_t u_id = p_manager[u];
-                        const weight_t u_w = graphs.back().v_weights[u];
-                        p_manager.set(u, u_w, u_id);
+                    const partition_t u_id = p_manager[u];
+                    const weight_t u_w = graphs.back().v_weights[u];
+                    p_manager.set(u, u_w, u_id);
 
-                        for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
-                            const vertex_t v = graphs.back().edges_v[i];
-                            const weight_t w = graphs.back().edges_w[i]; {
-                                const partition_t v_id = p_manager[v];
+                    for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = graphs.back().edges_v[i];
+                        const weight_t w = graphs.back().edges_w[i];
+                        const partition_t v_id = p_manager[v];
 
-                                // build block_conns directly here
-                                block_conn.add_connection(u, v_id, w);
+                        // build block_conns directly here
+                        block_conn.add_connection(u, v_id, w);
 
-                                if (u_id != v_id) {
-                                    bv_manager.add(u, u_id); // boundary vertex
-                                    if (u < v) {
-                                        q_graph.add_edge(u_id, v_id, w); // quotient graph
-                                    }
-                                }
+                        if (u_id != v_id) {
+                            bv_manager.add(u, u_id); // boundary vertex
+                            if (u < v) {
+                                q_graph.add_edge(u_id, v_id, w); // quotient graph
                             }
                         }
                     }
@@ -567,27 +564,31 @@ namespace HeiProMap {
                 block_conn.reset_build();
 
                 for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
-                    {
-                        const partition_t u_id = p_manager[u];
-                        size_t n_different = 0;
+                    const partition_t u_id = p_manager[u];
+                    size_t n_different = 0;
 
-                        block_conn.begin_vertex(g_uncontracted, u);
+                    block_conn.begin_vertex(g_uncontracted, u);
+                    weight_t own_weight = 0;
 
-                        for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
-                            const vertex_t v = g_uncontracted.edges_v[i];
-                            const weight_t w = g_uncontracted.edges_w[i]; {
-                                const partition_t v_id = p_manager[v];
+                    for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g_uncontracted.edges_v[i];
+                        const weight_t w = g_uncontracted.edges_w[i];
+                        const partition_t v_id = p_manager[v];
 
-                                // rebuild block connections
-                                block_conn.add_connection(u, v_id, w);
-
-                                // rebuild boundary information
-                                n_different += (u_id != v_id);
-                            }
+                        // rebuild block connections
+                        if (u_id == v_id) {
+                            own_weight += w;
+                        } else {
+                            block_conn.add_connection(u, v_id, w);
                         }
 
-                        bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+                        // rebuild boundary information
+                        n_different += (u_id != v_id);
                     }
+                    if (own_weight > 0) {
+                        block_conn.add_connection(u, u_id, own_weight);
+                    }
+                    bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
                 }
             }
             //
@@ -649,8 +650,8 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
-        void recursive_solve(graph_t& g, PartitionManager& p_manager, std::vector<partition_t> hierarchy,
-                             std::vector<weight_t> distance, u64 current_level, u64 offset, const TranslationTable<vertex_t>& tt,
+        void recursive_solve(graph_t &g, PartitionManager &p_manager, std::vector<partition_t> hierarchy,
+                             std::vector<weight_t> distance, u64 current_level, u64 offset, const TranslationTable<vertex_t> &tt,
                              const weight_t total_weight) {
             partition_t k_of_subgraph = prod<partition_t>(hierarchy);
             f64 total_remaining_slack = ((1.0 + ac.imbalance) * (f64) k_of_subgraph * (f64) total_weight) / ((f64) ac.k * (f64) g.g_weight) - 1.0;
@@ -672,12 +673,12 @@ namespace HeiProMap {
                 } else if (ac.get("--config") == "super-strong") {
                     sub_ac.set_super_strong();
                 }
-                
+
                 std::vector<weight_t> v_weights(g.n);
-                const weight_t* v_weights_ptr = g.v_weights.get_ptr();
+                const weight_t *v_weights_ptr = g.v_weights.get_ptr();
                 std::copy(v_weights_ptr, v_weights_ptr + g.n, v_weights.begin());
                 Solver sub_solver(std::move(g), sub_ac);
-                const PartitionManager& sub_p_manager = sub_solver.solve_subproblem();
+                const PartitionManager &sub_p_manager = sub_solver.solve_subproblem();
 
                 for (vertex_t u = 0; u < sub_p_manager.n; ++u) {
                     p_manager.set(tt.get_o(u), v_weights[u], offset + sub_p_manager[u]);
@@ -748,10 +749,10 @@ namespace HeiProMap {
                         }
                     }
                 }
-                
+
                 sub_g.neighborhoods[0] = 0;
-                for(vertex_t j = 0; j < sub_g.n; ++j) {
-                    sub_g.neighborhoods[j+1] = sub_g.neighborhoods[j] + degrees[j];
+                for (vertex_t j = 0; j < sub_g.n; ++j) {
+                    sub_g.neighborhoods[j + 1] = sub_g.neighborhoods[j] + degrees[j];
                 }
 
                 std::vector<vertex_t> cursor(sub_g.n, 0);

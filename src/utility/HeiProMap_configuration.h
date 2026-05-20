@@ -439,7 +439,7 @@ namespace HeiProMap {
             global_multisection_config.mode_string = "metis-kway";
             // global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 3;
+            global_multisection_config.kappa = 1;
 
             // enable label propagation
             label_propagation_config.enabled = true;

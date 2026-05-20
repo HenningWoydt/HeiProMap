@@ -181,8 +181,11 @@ namespace HeiProMap {
             AlignedArray<vertex_t> cursor;
             AlignedArray<vertex_t> mapped_vertices;
 
-            AlignedArray<u32> seen;
-            AlignedArray<size_t> idx;
+            struct SeenEntry {
+                u32 epoch;
+                size_t idx;
+            };
+            AlignedArray<SeenEntry> seen_idx; // one cache miss instead of two
             u32 epoch = 0;
             // allocate
             {
@@ -204,8 +207,7 @@ namespace HeiProMap {
                 cursor.initialize(n + 1);
                 mapped_vertices.initialize(g.n);
 
-                seen.initialize(n, 0);
-                idx.initialize(n);
+                seen_idx.initialize(n, {0, 0});
             }
             // count how many vertices are mapped to each new vertex
             {
@@ -258,6 +260,10 @@ namespace HeiProMap {
                     for (u64 i = n_mapped_prefix[map_u]; i < n_mapped_prefix[map_u + 1]; ++i) {
                         vertex_t u = mapped_vertices[i];
 
+                        if (i + 1 < n_mapped_prefix[map_u + 1])
+                            __builtin_prefetch(&g.neighborhoods[mapped_vertices[i + 1]], 0, 1);
+
+
                         for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                             const vertex_t v = g.edges_v[j];
 
@@ -265,12 +271,12 @@ namespace HeiProMap {
                             if (map_u == map_v) { continue; }
                             weight_t w = t_uniform_e_weights ? 1 : g.edges_w[j];
 
-                            if (seen[map_v] == epoch) {
-                                size_t k = idx[map_v];
+                            if (seen_idx[map_v].epoch == epoch) {
+                                size_t k = seen_idx[map_v].idx;
                                 edges_w[k] += w;
                             } else {
-                                seen[map_v] = epoch;
-                                idx[map_v] = m;
+                                seen_idx[map_v].epoch = epoch;
+                                seen_idx[map_v].idx = m;
                                 edges_v[m] = map_v;
                                 edges_w[m] = w;
                                 m += 1;
