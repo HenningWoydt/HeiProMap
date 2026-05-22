@@ -29,20 +29,22 @@
 
 #include <omp.h>
 
-#include "ISerialRefiner.h"
 #include "../definitions.h"
 #include "../utility/random_engine.h"
 
 namespace HeiProMap {
-    class LabelPropagationConfiguration final : public ISerialRefinerConfiguration {
+    class LabelPropagationConfiguration final {
     public:
-        explicit LabelPropagationConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {
+        explicit LabelPropagationConfiguration(const std::string &t_name) {
+            name = t_name;
         }
 
+        std::string name;
+        bool enabled = false;
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
     };
 
-    class LabelPropagationRefinement final : public ISerialRefiner {
+    class LabelPropagationRefinement final {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
@@ -70,20 +72,20 @@ namespace HeiProMap {
     public:
         LabelPropagationRefinement() = default;
 
-        ~LabelPropagationRefinement() override = default;
+        ~LabelPropagationRefinement() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 seed,
-                        const ISerialRefinerConfiguration &i_config) override {
+                        const LabelPropagationConfiguration &i_config) {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
             m_threads = t_threads;
 
-            config = dynamic_cast<const LabelPropagationConfiguration *>(&i_config);
+            config = &i_config;
 
             curr_boundary.initialize(m_n);
             curr_boundary_size = 0;
@@ -108,7 +110,7 @@ namespace HeiProMap {
                     block_conn_t &block_conn,
                     f64 imbalance,
                     bool uniform_v_weights,
-                    bool uniform_e_weights) override {
+                    bool uniform_e_weights) {
             if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
             else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
             else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);

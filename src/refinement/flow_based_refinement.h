@@ -34,7 +34,6 @@
 #include <omp.h>
 
 
-#include "ISerialRefiner.h"
 #include "quotient_graph_refinement.h"
 #include "../utility/flow.h"
 #include "../utility/push_relabel.h"
@@ -44,11 +43,14 @@
 #include "../utility/qap.h"
 
 namespace HeiProMap {
-    class FlowBasedRefinementConfiguration final : public ISerialRefinerConfiguration {
+    class FlowBasedRefinementConfiguration final {
     public:
-        explicit FlowBasedRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {
+        explicit FlowBasedRefinementConfiguration(const std::string &t_name) {
+            name = t_name;
         }
 
+        std::string name;
+        bool enabled = false;
         bool use_active_block_scheduling = true;
         u64 max_global_iteration = 1;
         u64 max_local_iteration = 3;
@@ -59,7 +61,7 @@ namespace HeiProMap {
         u64 closed_vertex_sets_repeats = 10;
     };
 
-    class FlowBasedRefinement final : public ISerialRefiner {
+    class FlowBasedRefinement final {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
@@ -92,14 +94,14 @@ namespace HeiProMap {
     public:
         FlowBasedRefinement() = default;
 
-        ~FlowBasedRefinement() override = default;
+        ~FlowBasedRefinement() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 seed,
-                        const ISerialRefinerConfiguration &i_config) override {
+                        const FlowBasedRefinementConfiguration &i_config) {
             ScopedTimer _t("refinement", "FlowBasedRefinement", "initialize");
 
             m_n = t_n;
@@ -118,7 +120,7 @@ namespace HeiProMap {
             seen_marker_vecs.resize(m_threads, 1);
             region_marker_vecs.resize(m_threads, 1);
 
-            config = dynamic_cast<const FlowBasedRefinementConfiguration *>(&i_config);
+            config = &i_config;
 
             rnd_engines.resize(m_threads);
             for (u64 t = 0; t < m_threads; ++t) {
@@ -148,7 +150,7 @@ namespace HeiProMap {
                     block_conn_t &block_conn,
                     f64 imbalance,
                     bool uniform_v_weights,
-                    bool uniform_e_weights) override {
+                    bool uniform_e_weights) {
             if (uniform_v_weights && uniform_e_weights)      refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
             else if (uniform_v_weights)                      refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
             else if (uniform_e_weights)                      refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);

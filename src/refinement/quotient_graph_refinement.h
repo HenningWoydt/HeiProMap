@@ -30,7 +30,6 @@
 #include <omp.h>
 
 #include "../utility/utils.h"
-#include "ISerialRefiner.h"
 #include "../utility/qap.h"
 #include "../utility/indexed_max_heap.h"
 #include "../utility/functions.h"
@@ -50,11 +49,14 @@ namespace HeiProMap {
         }
     };
 
-    class QuotientGraphRefinementConfiguration final : public ISerialRefinerConfiguration {
+    class QuotientGraphRefinementConfiguration final {
     public:
-        explicit QuotientGraphRefinementConfiguration(const std::string &t_name) : ISerialRefinerConfiguration(t_name) {
+        explicit QuotientGraphRefinementConfiguration(const std::string &t_name) {
+            name = t_name;
         }
 
+        std::string name;
+        bool enabled = false;
         u64 max_iteration = 1;
         u64 min_n_steps = 4;
         f64 alpha = 100.0;
@@ -63,7 +65,7 @@ namespace HeiProMap {
         bool use_preemptive_exit = true;
     };
 
-    class QuotientGraphRefinement final : public ISerialRefiner {
+    class QuotientGraphRefinement final {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
@@ -90,14 +92,14 @@ namespace HeiProMap {
     public:
         QuotientGraphRefinement() = default;
 
-        ~QuotientGraphRefinement() override = default;
+        ~QuotientGraphRefinement() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 seed,
-                        const ISerialRefinerConfiguration &i_config) override {
+                        const QuotientGraphRefinementConfiguration &i_config) {
             ScopedTimer _t("misc", "QuotientGraphRefinement", "initialize");
 
             m_n = t_n;
@@ -105,7 +107,7 @@ namespace HeiProMap {
             m_k = t_k;
             m_threads = t_threads;
 
-            config = dynamic_cast<const QuotientGraphRefinementConfiguration *>(&i_config);
+            config = &i_config;
 
             global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
@@ -143,7 +145,7 @@ namespace HeiProMap {
                     block_conn_t &block_conn,
                     f64 imbalance,
                     bool uniform_v_weights,
-                    bool uniform_e_weights) override {
+                    bool uniform_e_weights) {
             if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
             else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
             else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);

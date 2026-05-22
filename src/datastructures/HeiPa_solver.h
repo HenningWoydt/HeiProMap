@@ -78,8 +78,6 @@ namespace HeiProMap {
         QuotientGraphRefinement qg_refine;
         FlowBasedRefinement flow_based_refinement;
 
-        std::vector<std::pair<ISerialRefiner *, ISerialRefinerConfiguration *> > refinements;
-
         f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
@@ -184,16 +182,15 @@ namespace HeiProMap {
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
             // refinement
-            refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
-            refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
-
-            for (auto &[refiner, config]: refinements) {
-                if (config->enabled) {
-                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), *config);
-                }
+            if (ac.label_propagation_config.enabled) {
+                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
             }
-            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
+            if (ac.quotient_graph_refinement_config.enabled) {
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+            }
+            if (ac.flow_based_refinement_config.enabled) {
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+            }
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -223,16 +220,15 @@ namespace HeiProMap {
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
             // refinement
-            refinements.emplace_back(&lp_refine, &ac.label_propagation_config);
-            refinements.emplace_back(&qg_refine, &ac.quotient_graph_refinement_config);
-            refinements.emplace_back(&flow_based_refinement, &ac.flow_based_refinement_config);
-
-            for (auto &[refiner, config]: refinements) {
-                if (config->enabled) {
-                    refiner->initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), *config);
-                }
+            if (ac.label_propagation_config.enabled) {
+                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
             }
-            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
+            if (ac.quotient_graph_refinement_config.enabled) {
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+            }
+            if (ac.flow_based_refinement_config.enabled) {
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+            }
         }
 
         const PartitionManager &solve_subproblem() {
@@ -668,11 +664,19 @@ namespace HeiProMap {
         void refinement(const u64 level, const f64 level_imbalance) {
             auto sp = get_time_point();
 
-            for (auto [refiner, config]: refinements) {
-                if (config->enabled) {
-                    refiner->refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
-                    HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
-                }
+            if (ac.label_propagation_config.enabled) {
+                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            }
+
+            if (ac.quotient_graph_refinement_config.enabled) {
+                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            }
+
+            if (ac.flow_based_refinement_config.enabled) {
+                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             auto ep = get_time_point();
