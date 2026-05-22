@@ -150,12 +150,10 @@ namespace HeiProMap {
             singletons.initialize(g.n);
 
             for (vertex_t u = 0; u < g.n; ++u) {
-                {
-                    vertex_t id = mapping.get(u);
-                    if (cluster_count[id] == 1) {
-                        singletons[singletons_size] = u;
-                        singletons_size += 1;
-                    }
+                vertex_t id = mapping.get(u);
+                if (cluster_count[id] == 1) {
+                    singletons[singletons_size] = u;
+                    singletons_size += 1;
                 }
             }
 
@@ -181,17 +179,15 @@ namespace HeiProMap {
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                     const vertex_t v = g.edges_v[j];
                     const weight_t w = g.edges_w[j];
-                    {
-                        partition_t v_id = p_manager[v];
-                        if (u_id != v_id) { continue; }
+                    partition_t v_id = p_manager[v];
+                    if (u_id != v_id) { continue; }
 
-                        vertex_t id = mapping.get(v);
-                        if (id == current_id) {
-                            current_id_w += w;
-                        } else {
-                            if (u_w + cluster_weights[id] > max_w) { continue; }
-                            flat_map.add(id, w);
-                        }
+                    vertex_t id = mapping.get(v);
+                    if (id == current_id) {
+                        current_id_w += w;
+                    } else {
+                        if (u_w + cluster_weights[id] > max_w) { continue; }
+                        flat_map.add(id, w);
                     }
                 }
 
@@ -235,10 +231,8 @@ namespace HeiProMap {
 
                 // determine the maximum allowed cluster weight
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        max_w = std::max(max_w, g.v_weights[u]);
-                        max_deg = std::max(max_deg, g.deg(u));
-                    }
+                    max_w = std::max(max_w, g.v_weights[u]);
+                    max_deg = std::max(max_deg, g.deg(u));
                 }
                 max_w *= config->multiplier;
                 max_w = std::min(max_w, lmax);
@@ -253,23 +247,19 @@ namespace HeiProMap {
                 bucket_offsets.initialize(B);
 
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        size_t d = g.deg(u);
-                        size_t b = (d == 0) ? 0 : floor_log2(d);
-                        bucket_sizes[b]++;
-                    }
+                    size_t d = g.deg(u);
+                    size_t b = (d == 0) ? 0 : floor_log2(d);
+                    bucket_sizes[b]++;
                 }
 
                 bucket_offsets[0] = 0;
                 for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
 
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        size_t d = g.deg(u);
-                        size_t b = (d == 0) ? 0 : floor_log2(d);
-                        flat_vertices[bucket_offsets[b]] = u;
-                        bucket_offsets[b] += 1;
-                    }
+                    size_t d = g.deg(u);
+                    size_t b = (d == 0) ? 0 : floor_log2(d);
+                    flat_vertices[bucket_offsets[b]] = u;
+                    bucket_offsets[b] += 1;
                 }
             }
             // setup cluster weights
@@ -280,11 +270,9 @@ namespace HeiProMap {
                 cluster_weights.initialize(g.n);
                 cluster_count.initialize(g.n);
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        mapping.set(u, u);
-                        cluster_weights[u] = g.v_weights[u];
-                        cluster_count[u] = 1;
-                    }
+                    mapping.set(u, u);
+                    cluster_weights[u] = g.v_weights[u];
+                    cluster_count[u] = 1;
                 }
             }
             // setup active
@@ -332,17 +320,15 @@ namespace HeiProMap {
                             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                                 const vertex_t v = g.edges_v[j];
                                 const weight_t w = g.edges_w[j];
-                                {
-                                    partition_t v_id = p_manager[v];
-                                    if (u_id != v_id) { continue; }
+                                partition_t v_id = p_manager[v];
+                                if (u_id != v_id) { continue; }
 
-                                    vertex_t id = mapping.get(v);
-                                    if (id == current_id) {
-                                        current_id_w += w;
-                                    } else {
-                                        if (u_w + cluster_weights[id] > max_w) { continue; }
-                                        flat_map.add(id, w);
-                                    }
+                                vertex_t id = mapping.get(v);
+                                if (id == current_id) {
+                                    current_id_w += w;
+                                } else {
+                                    if (u_w + cluster_weights[id] > max_w) { continue; }
+                                    flat_map.add(id, w);
                                 }
                             }
 
@@ -369,8 +355,7 @@ namespace HeiProMap {
                                 n_moved += 1;
                                 if (round > 0) {
                                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                                        const vertex_t v = g.edges_v[j];
-                                        {
+                                        const vertex_t v = g.edges_v[j]; {
                                             #pragma omp atomic write
                                             active_next[v] = 1;
                                         }
@@ -401,21 +386,19 @@ namespace HeiProMap {
                         if constexpr (t_uniform_e_weights) {
                             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                                 const vertex_t v = g.edges_v[j];
-                                {
-                                    partition_t v_id = p_manager[v];
-                                    if (u_id != v_id) { continue; }
+                                partition_t v_id = p_manager[v];
+                                if (u_id != v_id) { continue; }
 
-                                    vertex_t id = mapping.get(v);
-                                    if (id == current_id) {
-                                        current_id_w += 1;
-                                    } else {
-                                        if (u_w + cluster_weights[id] > max_w) { continue; }
+                                vertex_t id = mapping.get(v);
+                                if (id == current_id) {
+                                    current_id_w += 1;
+                                } else {
+                                    if (u_w + cluster_weights[id] > max_w) { continue; }
 
-                                        weight_t new_w = flat_map.add_and_ret(id, 1);
-                                        if (new_w > best_weight) {
-                                            best_weight = new_w;
-                                            best_id = id;
-                                        }
+                                    weight_t new_w = flat_map.add_and_ret(id, 1);
+                                    if (new_w > best_weight) {
+                                        best_weight = new_w;
+                                        best_id = id;
                                     }
                                 }
                             }
@@ -423,21 +406,19 @@ namespace HeiProMap {
                             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                                 const vertex_t v = g.edges_v[j];
                                 const weight_t w = g.edges_w[j];
-                                {
-                                    partition_t v_id = p_manager[v];
-                                    if (u_id != v_id) { continue; }
+                                partition_t v_id = p_manager[v];
+                                if (u_id != v_id) { continue; }
 
-                                    vertex_t id = mapping.get(v);
-                                    if (id == current_id) {
-                                        current_id_w += w;
-                                    } else {
-                                        if (u_w + cluster_weights[id] > max_w) { continue; }
+                                vertex_t id = mapping.get(v);
+                                if (id == current_id) {
+                                    current_id_w += w;
+                                } else {
+                                    if (u_w + cluster_weights[id] > max_w) { continue; }
 
-                                        weight_t new_w = flat_map.add_and_ret(id, w);
-                                        if (new_w > best_weight) {
-                                            best_weight = new_w;
-                                            best_id = id;
-                                        }
+                                    weight_t new_w = flat_map.add_and_ret(id, w);
+                                    if (new_w > best_weight) {
+                                        best_weight = new_w;
+                                        best_id = id;
                                     }
                                 }
                             }
@@ -459,9 +440,7 @@ namespace HeiProMap {
                             if (round > 0) {
                                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                                     const vertex_t v = g.edges_v[j];
-                                    {
-                                        active_next[v] = 1;
-                                    }
+                                    active_next[v] = 1;
                                 }
                             }
                         }
@@ -488,9 +467,7 @@ namespace HeiProMap {
                 ScopedTimer _t("coarsening", "SizeConstrainedLP", "is_identity_mapping");
 
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        ident_mapping &= u == mapping.get(u);
-                    }
+                    ident_mapping &= u == mapping.get(u);
                 }
             }
             if (ident_mapping) {
@@ -505,23 +482,19 @@ namespace HeiProMap {
                 remap.initialize(g.n, m_n);
                 vertex_t new_id = 0;
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        const vertex_t id = mapping.get(u);
-                        if (remap[id] == m_n) {
-                            remap[id] = new_id;
-                            new_id += 1;
-                        }
+                    const vertex_t id = mapping.get(u);
+                    if (remap[id] == m_n) {
+                        remap[id] = new_id;
+                        new_id += 1;
                     }
                 }
                 mapping.set_coarse_n(new_id);
 
                 // remap
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    {
-                        const vertex_t id = mapping.get(u);
-                        const vertex_t map_id = remap[id];
-                        mapping.set(u, map_id);
-                    }
+                    const vertex_t id = mapping.get(u);
+                    const vertex_t map_id = remap[id];
+                    mapping.set(u, map_id);
                 }
             }
         }
