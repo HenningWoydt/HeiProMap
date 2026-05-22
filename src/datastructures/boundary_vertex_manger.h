@@ -38,9 +38,9 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         partition_t m_k = 0;
 
-        AlignedArray<vertex_t> m_n_boundary_edges; // number of boundary edges for each vertex
+        AlignedArray<vertex_t> m_n_boundary_edges;        // number of boundary edges for each vertex
         std::vector<std::vector<vertex_t> > m_boundaries; // boundary vertices per partition
-        AlignedArray<size_t> m_vertex_idx; // index of vertex inside its partition boundary vector
+        AlignedArray<size_t> m_vertex_idx;                // index of vertex inside its partition boundary vector
 
     public:
         void initialize(const vertex_t t_n,
@@ -95,13 +95,13 @@ namespace HeiProMap {
                      const vertex_t u,
                      const partition_t id) {
             u64 n_neighbors = 0;
-            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-                {
-                    partition_t v_id = p_manager[v];
-                    if (v_id != id) {
-                        n_neighbors += 1;
-                        add(v, v_id);
-                    }
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+
+                partition_t v_id = p_manager[v];
+                if (v_id != id) {
+                    n_neighbors += 1;
+                    add(v, v_id);
                 }
             }
 
@@ -132,24 +132,23 @@ namespace HeiProMap {
                 remove(u, old_id);
             }
 
-            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-                {
-                    partition_t v_id = p_manager[v];
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                partition_t v_id = p_manager[v];
 
-                    if (v_id == new_id) {
-                        ASSERT(m_n_boundary_edges[u] > 0);
-                        ASSERT(m_n_boundary_edges[v] > 0);
-                        m_n_boundary_edges[u] -= 1;
-                        m_n_boundary_edges[v] -= 1;
-                        if (m_n_boundary_edges[v] == 0) {
-                            remove(v, v_id);
-                        }
-                    } else if (v_id == old_id) {
-                        m_n_boundary_edges[u] += 1;
-                        m_n_boundary_edges[v] += 1;
-                        if (m_n_boundary_edges[v] == 1) {
-                            emplace(v, v_id);
-                        }
+                if (v_id == new_id) {
+                    ASSERT(m_n_boundary_edges[u] > 0);
+                    ASSERT(m_n_boundary_edges[v] > 0);
+                    m_n_boundary_edges[u] -= 1;
+                    m_n_boundary_edges[v] -= 1;
+                    if (m_n_boundary_edges[v] == 0) {
+                        remove(v, v_id);
+                    }
+                } else if (v_id == old_id) {
+                    m_n_boundary_edges[u] += 1;
+                    m_n_boundary_edges[v] += 1;
+                    if (m_n_boundary_edges[v] == 1) {
+                        emplace(v, v_id);
                     }
                 }
             }
@@ -170,21 +169,18 @@ namespace HeiProMap {
             }
 
             for (vertex_t u = 0; u < g.n; ++u) {
-                {
-                    size_t n_different = 0;
-                    partition_t u_id = p_manager[u];
+                size_t n_different = 0;
+                partition_t u_id = p_manager[u];
 
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-                        {
-                            n_different += (u_id != p_manager[v]);
-                        }
-                    }
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    const vertex_t v = g.edges_v[i];
+                    n_different += (u_id != p_manager[v]);
+                }
 
-                    if (n_different > 0) {
-                        m_n_boundary_edges[u] = n_different;
-                        m_vertex_idx[u] = m_boundaries[u_id].size();
-                        m_boundaries[u_id].push_back(u);
-                    }
+                if (n_different > 0) {
+                    m_n_boundary_edges[u] = n_different;
+                    m_vertex_idx[u] = m_boundaries[u_id].size();
+                    m_boundaries[u_id].push_back(u);
                 }
             }
         }

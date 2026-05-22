@@ -83,10 +83,11 @@ namespace HeiProMap {
                   const partition_t new_id) {
             if (old_id == new_id) return;
 
-            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
-                {
-                    update(v, old_id, new_id, w);
-                }
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const weight_t w = g.edges_w[i];
+
+                update(v, old_id, new_id, w);
             }
         }
 
@@ -101,15 +102,13 @@ namespace HeiProMap {
 
             total_size = 0;
             for (vertex_t u = 0; u < g.n; ++u) {
-                {
-                    m_start[u] = total_size;
-                    total_size += std::min(m_k, g.deg(u));
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
-                        {
-                            partition_t v_id = p_manager[v];
-                            add(u, v_id, w);
-                        }
-                    }
+                m_start[u] = total_size;
+                total_size += std::min(m_k, g.deg(u));
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    const vertex_t v = g.edges_v[i];
+                    const weight_t w = g.edges_w[i];
+                    partition_t v_id = p_manager[v];
+                    add(u, v_id, w);
                 }
             }
         }
