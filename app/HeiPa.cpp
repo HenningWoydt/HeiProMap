@@ -41,8 +41,11 @@ int main(const int argc, char *argv[]) {
                 {"--config", "fast"},
                 {"--seed", "0"},
                 {"--threads", "1"},
-                {"--partitioning-algorithm", "recursive-bisection"},
+                // {"--partitioning-algorithm", "recursive-bisection"},
                 {"--partitioning-algorithm-recursive-bisection-kappa", "5"},
+                {"--partitioning-algorithm", "kaffpa"},
+                {"--partitioning-algorithm-kaffpa-partitioning-mode", "strong"},
+                {"--partitioning-algorithm-kaffpa-partitioning-method", "bisection"},
             };
 
             std::vector<std::string> args = {"HeiPa"};
@@ -80,8 +83,6 @@ int main(const int argc, char *argv[]) {
         }
     } else {
         HeiProMap::HeiPaConfiguration ac(argc, argv);
-
-        std::cout << "Seed " << ac.seed << std::endl;
 
         HeiProMap::HeiPaSolver solver(ac);
         solver.solve();

@@ -32,6 +32,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <string_view>
 #include <algorithm>
 #include <chrono>
 #include <sstream>
@@ -115,6 +116,32 @@ namespace HeiProMap {
         TimingStats aggregate;
     };
 
+    struct ProfileKey {
+        std::string_view group;
+        std::string_view function;
+        std::string_view kernel;
+
+        bool operator==(const ProfileKey &other) const {
+            return group == other.group && function == other.function && kernel == other.kernel;
+        }
+    };
+
+    struct ProfileKeyHash {
+        std::size_t operator()(const ProfileKey &key) const {
+            auto h1 = std::hash<std::string_view>{}(key.group);
+            auto h2 = std::hash<std::string_view>{}(key.function);
+            auto h3 = std::hash<std::string_view>{}(key.kernel);
+            std::size_t seed = 0;
+            auto hash_combine = [](std::size_t &s, std::size_t v) {
+                s ^= v + 0x9e3779b9 + (s << 6) + (s >> 2);
+            };
+            hash_combine(seed, h1);
+            hash_combine(seed, h2);
+            hash_combine(seed, h3);
+            return seed;
+        }
+    };
+
     class Profiler {
     public:
         static Profiler &instance() {
@@ -128,13 +155,7 @@ namespace HeiProMap {
                  double milliseconds) {
 #if ENABLE_PROFILER
             std::unique_lock<std::shared_mutex> lock(mutex_);
-
-            GroupProfile &group_profile = groups_[group_name];
-            FunctionProfile &function_profile = group_profile.functions[function_name];
-
-            function_profile.kernels[kernel_name].add(milliseconds);
-            function_profile.aggregate.add(milliseconds);
-            group_profile.aggregate.add(milliseconds);
+            stats_[{group_name, function_name, kernel_name}].add(milliseconds);
             total_.add(milliseconds);
 #else
             (void) group_name;
@@ -149,6 +170,7 @@ namespace HeiProMap {
             return "{}";
 #else
             std::shared_lock<std::shared_mutex> lock(mutex_);
+            auto groups = get_hierarchy();
 
             auto escape_json = [](const std::string &text) {
                 std::ostringstream escaped;
@@ -189,8 +211,8 @@ namespace HeiProMap {
             ++indent_level;
 
             std::vector<std::pair<std::string, const GroupProfile *> > sorted_groups;
-            sorted_groups.reserve(groups_.size());
-            for (const auto &group_entry: groups_) {
+            sorted_groups.reserve(groups.size());
+            for (const auto &group_entry: groups) {
                 sorted_groups.emplace_back(group_entry.first, &group_entry.second);
             }
 
@@ -342,6 +364,7 @@ namespace HeiProMap {
             return;
 #else
             std::shared_lock<std::shared_mutex> lock(mutex_);
+            auto groups = get_hierarchy();
 
             if (total_.total_ms <= 0.0) {
                 output_stream << "Profiler: no samples recorded.\n";
@@ -401,8 +424,8 @@ namespace HeiProMap {
             };
 
             std::vector<std::pair<std::string, const GroupProfile *> > sorted_groups;
-            sorted_groups.reserve(groups_.size());
-            for (const auto &group_entry: groups_) {
+            sorted_groups.reserve(groups.size());
+            for (const auto &group_entry: groups) {
                 sorted_groups.emplace_back(group_entry.first, &group_entry.second);
             }
 
@@ -561,10 +584,31 @@ namespace HeiProMap {
     private:
         Profiler() = default;
 
+        std::unordered_map<std::string, GroupProfile> get_hierarchy() const {
+            std::unordered_map<std::string, GroupProfile> groups;
+            for (const auto &entry: stats_) {
+                const ProfileKey &key = entry.first;
+                const TimingStats &stats = entry.second;
+
+                GroupProfile &gp = groups[std::string(key.group)];
+                FunctionProfile &fp = gp.functions[std::string(key.function)];
+                fp.kernels[std::string(key.kernel)] = stats;
+
+                fp.aggregate.total_ms += stats.total_ms;
+                fp.aggregate.calls += stats.calls;
+                gp.aggregate.total_ms += stats.total_ms;
+                gp.aggregate.calls += stats.calls;
+            }
+            return groups;
+        }
+
         mutable std::shared_mutex mutex_;
-        std::unordered_map<std::string, GroupProfile> groups_;
+        std::unordered_map<ProfileKey, TimingStats, ProfileKeyHash> stats_;
         TimingStats total_;
     };
+
+    struct ScopedTimer;
+    inline thread_local ScopedTimer *current_active_timer = nullptr;
 
     struct ScopedTimer {
 #if ENABLE_PROFILER
@@ -573,6 +617,8 @@ namespace HeiProMap {
         const char *kernel = nullptr;
         std::chrono::time_point<std::chrono::system_clock> start_time;
         bool stopped = false;
+        double child_ms = 0.0;
+        ScopedTimer *parent = nullptr;
 #endif
 
         ScopedTimer(const char *group_name, const char *function_name, const char *kernel_name) {
@@ -582,6 +628,9 @@ namespace HeiProMap {
             kernel = kernel_name;
             start_time = get_time_point();
             stopped = false;
+            child_ms = 0.0;
+            parent = current_active_timer;
+            current_active_timer = this;
 #else
             (void) group_name;
             (void) function_name;
@@ -593,7 +642,13 @@ namespace HeiProMap {
 #if ENABLE_PROFILER
             if (!stopped) {
                 double elapsed_ms = get_milli_seconds(start_time, get_time_point());
-                Profiler::instance().add(group, function, kernel, elapsed_ms);
+                double exclusive_ms = elapsed_ms - child_ms;
+                Profiler::instance().add(group, function, kernel, exclusive_ms);
+
+                if (parent) {
+                    parent->child_ms += elapsed_ms;
+                }
+                current_active_timer = parent;
                 stopped = true;
             }
 #endif
