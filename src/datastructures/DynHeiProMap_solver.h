@@ -62,7 +62,7 @@ namespace HeiProMap {
         }
     };
 
-    class DynSolver {
+    class DynHeiProMapSolver {
         DynGraph g;
         
         PartitionManager p_manager;
@@ -299,7 +299,7 @@ namespace HeiProMap {
             command_stats[cmd].add(ms);
         }
 
-        explicit DynSolver(DynConfiguration &t_config) : config(t_config) {
+        explicit DynHeiProMapSolver(DynConfiguration &t_config) : config(t_config) {
             oracle.initialize(t_config.hierarchy, t_config.distance);
             
             u64 num_blocks = 1;
@@ -641,7 +641,7 @@ namespace HeiProMap {
         }
     };
 
-    inline void interactive_mode(DynSolver &solver) {
+    inline void interactive_mode(DynHeiProMapSolver &solver) {
         std::string line;
         while (std::getline(std::cin, line)) {
             if (line == "quit") break;
@@ -649,7 +649,7 @@ namespace HeiProMap {
         }
     }
 
-    inline void execute_commands(DynSolver &solver, const std::vector<std::string> &commands) {
+    inline void execute_commands(DynHeiProMapSolver &solver, const std::vector<std::string> &commands) {
         for (const auto &line: commands) {
             solver.process_command(line);
         }

@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < argc_temp; ++i) { delete[] argv_temp[i]; }
         delete[] argv_temp;
 
-        HeiProMap::DynSolver solver(config);
+        HeiProMap::DynHeiProMapSolver solver(config);
 
         std::vector<std::string> commands;
         commands.emplace_back("exec ../../Dyn-HeiProMap-Experiments/data/batches_100/2cubes_sphere.mtx/batch_0.my_seq");
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    HeiProMap::DynSolver solver(config);
+    HeiProMap::DynHeiProMapSolver solver(config);
 
     HeiProMap::interactive_mode(solver);
 

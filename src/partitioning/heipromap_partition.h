@@ -44,7 +44,7 @@ namespace HeiProMap {
                                     u64 n_threads,
                                     const std::string &mode_str,
                                     std::vector<partition_t> &partition) {
-        ::HeiProMap::CSRGraph csr_g(g.n, g.m, g.g_weight);
+        CSRGraph csr_g(g.n, g.m, g.g_weight);
         for (vertex_t u = 0; u < g.n; ++u) {
             csr_g.v_weights[u] = g.v_weights[u];
             csr_g.neighborhoods[u + 1] = csr_g.neighborhoods[u] + g.neighbors[u].size();
@@ -54,7 +54,7 @@ namespace HeiProMap {
             }
         }
 
-        ::HeiProMap::AlgorithmConfiguration ac;
+        AlgorithmConfiguration ac;
         ac.hierarchy = hierarchy;
         ac.distance = distance;
         ac.imbalance = imbalance;
@@ -71,12 +71,12 @@ namespace HeiProMap {
 
         ac.mapping_out = ""; // Avoid writing to file unless explicitly requested
 
-        ::HeiProMap::Solver solver(std::move(csr_g), ac);
+        HeiProMapSolver solver(std::move(csr_g), ac);
         std::vector<vertex_t> result = solver.solve();
 
         partition.resize(g.n);
         for (vertex_t u = 0; u < g.n; ++u) {
-            partition[u] = (partition_t)result[u];
+            partition[u] = result[u];
         }
     }
 }

@@ -51,7 +51,7 @@
 #include "HeiPa_solver.h"
 
 namespace HeiProMap {
-    class Solver {
+    class HeiProMapSolver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
         f64 init_time = 0.0;
@@ -157,7 +157,7 @@ namespace HeiProMap {
         }
 
     public:
-        explicit Solver(const AlgorithmConfiguration &t_ac) {
+        explicit HeiProMapSolver(const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             auto sp_io = get_time_point();
             graphs.emplace_back(t_ac.graph_in);
@@ -198,7 +198,7 @@ namespace HeiProMap {
             init_time += get_seconds(sp, ep);
         }
 
-        explicit Solver(graph_t &&g, const AlgorithmConfiguration &t_ac) {
+        explicit HeiProMapSolver(graph_t &&g, const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(std::move(g));
 
@@ -702,7 +702,7 @@ namespace HeiProMap {
                 std::vector<weight_t> v_weights(g.n);
                 const weight_t *v_weights_ptr = g.v_weights.get_ptr();
                 std::copy(v_weights_ptr, v_weights_ptr + g.n, v_weights.begin());
-                Solver sub_solver(std::move(g), sub_ac);
+                HeiProMapSolver sub_solver(std::move(g), sub_ac);
                 const PartitionManager &sub_p_manager = sub_solver.solve_subproblem();
 
                 for (vertex_t u = 0; u < sub_p_manager.n; ++u) {

@@ -78,7 +78,7 @@ int main(const int argc, char *argv[]) {
 
             HeiProMap::AlgorithmConfiguration ac(temp_argc, temp_argv);
 
-            HeiProMap::Solver solver(ac);
+            HeiProMap::HeiProMapSolver solver(ac);
             solver.solve();
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
@@ -91,7 +91,7 @@ int main(const int argc, char *argv[]) {
 
         std::cout << "Seed " << ac.seed << std::endl;
 
-        HeiProMap::Solver solver(ac);
+        HeiProMap::HeiProMapSolver solver(ac);
         solver.solve();
     }
 
