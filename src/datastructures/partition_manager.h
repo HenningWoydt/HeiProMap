@@ -196,6 +196,15 @@ namespace HeiProMap {
             n_vertices.initialize(k, 0);
         }
 
+        void recalculate_weights(const graph_t &g) {
+            reset_weights();
+            for (vertex_t u = 0; u < g.n; ++u) {
+                const partition_t id = partition[u];
+                n_vertices[id] += 1;
+                bweights[id] += g.v_weights[u];
+            }
+        }
+
         void copy_from(const PartitionManager &p_manager) {
             for (vertex_t u = 0; u < p_manager.n; ++u) {
                 partition[u] = p_manager.partition[u];
