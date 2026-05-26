@@ -40,29 +40,29 @@ namespace HeiProMap {
 
 #define to_JSON_MACRO(x) (std::string("\"") + (#x) + "\" : " + to_JSON_value(x) + ",\n")
 
-    std::string to_JSON_value(u8 x);
+    inline std::string to_JSON_value(u8 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(u16 x);
+    inline std::string to_JSON_value(u16 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(u32 x);
+    inline std::string to_JSON_value(u32 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(u64 x);
+    inline std::string to_JSON_value(u64 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(s8 x);
+    inline std::string to_JSON_value(s8 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(s16 x);
+    inline std::string to_JSON_value(s16 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(s32 x);
+    inline std::string to_JSON_value(s32 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(s64 x);
+    inline std::string to_JSON_value(s64 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(f32 x);
+    inline std::string to_JSON_value(f32 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(f64 x);
+    inline std::string to_JSON_value(f64 x) { return std::to_string(x); }
 
-    std::string to_JSON_value(const std::string &s);
+    inline std::string to_JSON_value(const std::string &s) { return "\"" + s + "\""; }
 
-    std::string to_JSON_value(const JSONString &s);
+    inline std::string to_JSON_value(const JSONString &s) { return s.s; }
 
     template<typename T1, typename T2>
     std::string to_JSON_value(const std::map<T1, T2> &m) {
