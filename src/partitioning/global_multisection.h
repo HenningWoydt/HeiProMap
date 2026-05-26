@@ -35,6 +35,7 @@
 #include "../utility/aligned_array.h"
 #include "../utility/utils.h"
 #include "kaffpa_partitioner.h"
+#include "greedy_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../utility/qap.h"
 #include "kway_partitioner/kway_core.h"
@@ -51,6 +52,7 @@ namespace HeiProMap {
         GLOBAL_MULTISECTION_HEIPA_ECO,
         GLOBAL_MULTISECTION_HEIPA_STRONG,
         GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG,
+        GLOBAL_MULTISECTION_GREEDY,
     };
 
     inline GlobalMultisectionMode string_to_global_multisection_mode(const std::string &str) {
@@ -63,6 +65,7 @@ namespace HeiProMap {
         if (str == "heipa-eco") return GLOBAL_MULTISECTION_HEIPA_ECO;
         if (str == "heipa-strong") return GLOBAL_MULTISECTION_HEIPA_STRONG;
         if (str == "heipa-super-strong") return GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG;
+        if (str == "greedy") return GLOBAL_MULTISECTION_GREEDY;
         return GLOBAL_MULTISECTION_UNDEFINED;
     }
 
@@ -86,6 +89,8 @@ namespace HeiProMap {
                 return "heipa-strong";
             case GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG:
                 return "heipa-super-strong";
+            case GLOBAL_MULTISECTION_GREEDY:
+                return "greedy";
             default:
                 return "UNDEFINED";
         }
@@ -183,6 +188,9 @@ namespace HeiProMap {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
+                } else if (config.mode == GLOBAL_MULTISECTION_GREEDY) {
+                    UniformDistanceOracle u_oracle(item.k);
+                    greedy_partition(*item.g, u_oracle, item.imb, item.seed, partition);
                 } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
                     heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode);
                 } else {

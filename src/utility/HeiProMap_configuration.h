@@ -65,6 +65,7 @@ namespace HeiProMap {
         PARTITIONING_ALG_MULTISECTION,
         PARTITIONING_ALG_RECURSIVE_BISECTION,
         PARTITIONING_ALG_HEIPA,
+        PARTITIONING_ALG_GREEDY,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
@@ -73,6 +74,7 @@ namespace HeiProMap {
         if (str == "multisection")        return PARTITIONING_ALG_MULTISECTION;
         if (str == "recursive-bisection") return PARTITIONING_ALG_RECURSIVE_BISECTION;
         if (str == "heipa")               return PARTITIONING_ALG_HEIPA;
+        if (str == "greedy")              return PARTITIONING_ALG_GREEDY;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
@@ -83,6 +85,7 @@ namespace HeiProMap {
             case PARTITIONING_ALG_MULTISECTION:         return "multisection";
             case PARTITIONING_ALG_RECURSIVE_BISECTION:  return "recursive-bisection";
             case PARTITIONING_ALG_HEIPA:                return "heipa";
+            case PARTITIONING_ALG_GREEDY:               return "greedy";
             default:                                    return "UNDEFINED";
         }
     }
@@ -143,7 +146,7 @@ namespace HeiProMap {
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
 
             /** Partitioning */
-            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, heipa}.", "multisection", "", false},
+            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, heipa, greedy}.", "multisection", "", false},
 
             // Partitioning kaffpa
             {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -153,7 +156,7 @@ namespace HeiProMap {
             {"--partitioning-algorithm-heipa-config", "", "Which config {fast, eco, strong, super-strong} to use for HeiPa.", "strong", "", false},
 
             // Partitioning multisection
-            {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
+            {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast, metis-kway, greedy, heipa-fast, heipa-eco, heipa-strong, heipa-super-strong} to use.", "strong", "", false},
 
             /** Rebalancing */
             {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
@@ -531,7 +534,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 5;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -539,7 +542,7 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 2;
+            quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;
@@ -548,7 +551,7 @@ namespace HeiProMap {
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
             flow_based_refinement_config.max_global_iteration = 3;
-            flow_based_refinement_config.max_local_iteration = 3;
+            flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;

@@ -468,6 +468,46 @@ const PartitionManager &get_p_manager() const { return p_manager; }
                     const PartitionManager &heipa_pm = heipa.solve_subproblem();
 
                     p_manager.copy_from(heipa_pm);
+                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY) {
+                    if (ac.threads > 1) {
+                        std::vector<PartitionManager> local_p_managers;
+                        std::vector<weight_t> local_qaps;
+
+                        local_p_managers.reserve(ac.threads);
+                        local_qaps.reserve(ac.threads);
+
+                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                            local_p_managers.emplace_back();
+                            local_p_managers.back().initialize(graphs.back().n, ac.k, graphs.back().g_weight);
+                            local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
+                        }
+
+                        #pragma omp parallel for schedule(static) num_threads(ac.threads)
+                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                            std::vector<partition_t> part(graphs.back().n);
+                            greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, part);
+                            for (vertex_t u = 0; u < graphs.back().n; ++u) {
+                                local_p_managers[thread_id].set(u, graphs.back().v_weights[u], part[u]);
+                            }
+                            local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
+                        }
+
+                        size_t best_idx = 0;
+                        for (u64 thread_id = 1; thread_id < ac.threads; ++thread_id) {
+                            if (local_qaps[thread_id] < local_qaps[best_idx]) {
+                                best_idx = thread_id;
+                            }
+                        }
+
+                        p_manager.copy_from(local_p_managers[best_idx]);
+                    } else {
+                        std::vector<partition_t> part(graphs.back().n);
+                        greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, part);
+                        p_manager.reset_weights();
+                        for (vertex_t u = 0; u < graphs.back().n; ++u) {
+                            p_manager.set(u, graphs.back().v_weights[u], part[u]);
+                        }
+                    }
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);

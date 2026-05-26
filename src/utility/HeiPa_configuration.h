@@ -388,7 +388,7 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            rb_kappa = 5;
+            rb_kappa = 10;
             kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
 
             label_propagation_config.enabled = true;
@@ -402,8 +402,8 @@ namespace HeiProMap {
 
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
-            flow_based_refinement_config.max_global_iteration = 3;
-            flow_based_refinement_config.max_local_iteration = 3;
+            flow_based_refinement_config.max_global_iteration = 10;
+            flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;

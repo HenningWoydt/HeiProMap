@@ -89,6 +89,8 @@ namespace HeiProMap {
             return m_h_mtx[u_id * m_k + v_id];
         }
 
+        partition_t get_k() const { return m_k; }
+
         bool last_level_pair(partition_t u_id, partition_t v_id) const {
             return (u_id / m_hierarchy[0]) == (v_id / m_hierarchy[0]);
         }
