@@ -273,9 +273,7 @@ namespace HeiProMap {
                     }
                     block_conn.compute_from_scratch(graphs[0], p_manager);
 
-                    std::cout << "Before " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
                     flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, ac.imbalance, graphs[0].uniform_v_weights, graphs[0].uniform_e_weights);
-                    std::cout << "After " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
                 }
             } else {
                 internal_solve();
