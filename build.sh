@@ -3,12 +3,14 @@ set -euo pipefail
 
 ROOT="$(pwd)"
 ENABLE_PROFILER="OFF"
+ENABLE_ASSERTS="OFF"
 BUILD_TYPE="Release"
 
 show_help() {
   echo "Usage: $0 [options]"
   echo "Options:"
   echo "  -p, --profiler    Enable the profiler (ENABLE_PROFILER=ON)"
+  echo "  -a, --asserts     Enable assertions (ENABLE_ASSERTS=ON)"
   echo "  -d, --debug       Build in Debug mode"
   echo "  -h, --help        Show this help message"
   exit 0
@@ -18,6 +20,10 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     -p|--profiler)
       ENABLE_PROFILER="ON"
+      shift
+      ;;
+    -a|--asserts)
+      ENABLE_ASSERTS="ON"
       shift
       ;;
     -d|--debug)
@@ -137,11 +143,11 @@ else
   # -----------------------------
   # Build HeiProMap
   # -----------------------------
-  echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER})..."
+  echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER}, Asserts=${ENABLE_ASSERTS})..."
   rm -rf "${ROOT}/build"
   mkdir "${ROOT}/build"
 
-  CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER}"
+  CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER} -DENABLE_ASSERTS=${ENABLE_ASSERTS}"
 
   cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
   cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
