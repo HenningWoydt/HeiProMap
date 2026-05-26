@@ -251,8 +251,6 @@ namespace HeiProMap {
 
                 recursive_solve(graphs[0], p_manager, ac.hierarchy, ac.distance, 0, 0, tt, total_weight);
 
-                std::cout << ac.get("--config") << " " << ac.hm_level << std::endl;
-
                 if (ac.get("--config") == "super-strong") {
                     HEIPROMAP_PROFILE_SCOPE("final_refinement", "Solver", "refine");
 
