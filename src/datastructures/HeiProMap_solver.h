@@ -232,17 +232,21 @@ namespace HeiProMap {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
             }
         }
+const PartitionManager &solve_subproblem() {
+    internal_solve();
+    return p_manager;
+}
 
-        const PartitionManager &solve_subproblem() {
-            internal_solve();
-            return p_manager;
-        }
+const graph_t &get_graph(u64 level) const { return graphs[level]; }
+
+const PartitionManager &get_p_manager() const { return p_manager; }
 
         std::vector<vertex_t> solve() {
             const auto sp = std::chrono::high_resolution_clock::now();
 
             if (ac.hm_level > 0) {
                 const weight_t total_weight = graphs[0].g_weight;
+                HEAVYASSERT(assert_graph(graphs[0]));
                 TranslationTable<vertex_t> tt;
                 tt.reserve(graphs[0].n, graphs[0].n);
                 for (vertex_t u = 0; u < graphs[0].n; ++u) {
@@ -251,6 +255,7 @@ namespace HeiProMap {
 
                 recursive_solve(graphs[0], p_manager, ac.hierarchy, ac.distance, 0, 0, tt, total_weight);
                 p_manager.recalculate_weights(graphs[0]);
+                HEAVYASSERT(assert_state_after_partitioning(graphs[0], p_manager, ac.k));
 
                 if (ac.get("--config") == "super-strong") {
                     HEIPROMAP_PROFILE_SCOPE("final_refinement", "Solver", "refine");
@@ -701,10 +706,12 @@ namespace HeiProMap {
                 std::copy(v_weights_ptr, v_weights_ptr + g.n, v_weights.begin());
                 HeiProMapSolver sub_solver(std::move(g), sub_ac);
                 const PartitionManager &sub_p_manager = sub_solver.solve_subproblem();
+                HEAVYASSERT(assert_state_after_partitioning(sub_solver.get_graph(0), sub_p_manager, sub_p_manager.k));
 
                 for (vertex_t u = 0; u < sub_p_manager.n; ++u) {
                     p_manager.set(tt.get_o(u), v_weights[u], offset + sub_p_manager[u]);
                 }
+                HEAVYASSERT(assert_state_partial(sub_solver.get_graph(0), p_manager, tt, offset, k_of_subgraph));
                 return;
             }
 
@@ -802,8 +809,11 @@ namespace HeiProMap {
                         }
                     }
                 }
+                HEAVYASSERT(assert_graph(sub_g));
                 recursive_solve(sub_g, p_manager, hierarchy, distance, current_level + 1, offset + i * k_per_subgraph, sub_tt, total_weight);
             }
+
+            HEAVYASSERT(assert_state_partial(g, p_manager, tt, offset, k_of_subgraph));
         }
     };
 }

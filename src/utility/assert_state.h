@@ -123,6 +123,46 @@ namespace HeiProMap {
         return true;
     }
 
+    inline bool assert_bweights(const graph_t &g,
+                                const p_manager_t &p_manager,
+                                const TranslationTable<vertex_t> &tt,
+                                const u64 offset,
+                                const partition_t k) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_bweights_partial");
+
+        std::vector<weight_t> weights(k, 0);
+        for (vertex_t u = 0; u < g.n; ++u) {
+            partition_t u_id = p_manager[tt.get_o(u)];
+            ASSERT(u_id >= offset && u_id < offset + k);
+            weights[u_id - offset] += g.v_weights[u];
+        }
+
+        // We can only check if the weights are consistent if we knew the partial weights in p_manager.
+        // But p_manager stores global weights.
+        // So we just check if all vertices of g are mapped to the correct range.
+        return true;
+    }
+
+    inline bool assert_state_partial(const graph_t &g,
+                                     const p_manager_t &p_manager,
+                                     const TranslationTable<vertex_t> &tt,
+                                     const u64 offset,
+                                     const partition_t k) {
+        // assert csr structure
+        ASSERT(assert_csr_structure(g));
+
+        // check no self-loops
+        ASSERT(assert_no_self_loops(g));
+
+        // check no duplicate edges
+        ASSERT(assert_no_double_edges(g));
+
+        // check the correct block weights (range check)
+        ASSERT(assert_bweights(g, p_manager, tt, offset, k));
+
+        return true;
+    }
+
     inline bool assert_correct_vertices_boundary(const graph_t &g,
                                                  const p_manager_t &p_manager,
                                                  const bv_manager_t &bv_manager) {
