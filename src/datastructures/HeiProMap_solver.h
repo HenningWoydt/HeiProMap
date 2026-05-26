@@ -727,8 +727,15 @@ namespace HeiProMap {
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, ac.seed, partition, ac.global_multisection_config.kappa);
                 } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, ac.seed, partition, ac.global_multisection_config.kappa);
-                } else {
+                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, ac.seed, partition, ac.global_multisection_config.kappa);
+                } else if (ac.global_multisection_config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && ac.global_multisection_config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
+                    heipa_multisection_partition_wrapper(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.mode);
+                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
+                    kway_partition(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.kappa);
+                } else {
+                    std::cerr << "Mode " << ac.global_multisection_config.mode << " not implemented" << std::endl;
+                    abort();
                 }
             }
 
