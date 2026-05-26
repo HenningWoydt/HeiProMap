@@ -73,7 +73,7 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 seed) {
-            ScopedTimer _t("rebalance", "Rebalancer", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "initialize");
 
             m_n = t_n;
             m_m = t_m;
@@ -159,7 +159,7 @@ namespace HeiProMap {
                        f64 imbalance) {
             fill_empty_blocks(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
 
-            ScopedTimer _t_allocate("rebalance", "Rebalancer", "allocate");
+            HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "allocate");
 
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
@@ -179,13 +179,11 @@ namespace HeiProMap {
             AlignedArray<u64> state_ids;
             state_ids.initialize(g.n, 0);
 
-            _t_allocate.stop();
-
             bool move_made = true;
             u64 iter = 0;
             while (move_made && iter < 100) {
                 iter++;
-                ScopedTimer _t_get_boundary("rebalance", "Rebalancer", "get_boundary");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "get_boundary");
                 move_made = false;
 
                 offsets_size = 1;
@@ -215,8 +213,7 @@ namespace HeiProMap {
                     }
                 }
 
-                _t_get_boundary.stop();
-                ScopedTimer _t_fill_heaps("rebalance", "Rebalancer", "fill_heaps");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "fill_heaps");
 
                 moves.initialize(boundary_size);
                 for (u64 i = 0; i < boundary_size; ++i) {
@@ -226,8 +223,7 @@ namespace HeiProMap {
                     moves[i] = move;
                 }
 
-                _t_fill_heaps.stop();
-                ScopedTimer _t_global_heap("rebalance", "Rebalancer", "global_heap");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "global_heap");
 
                 for (u64 i = 0; i < boundary_size; ++i) {
                     if (moves[i].best_id != m_k) {
@@ -235,8 +231,7 @@ namespace HeiProMap {
                     }
                 }
 
-                _t_global_heap.stop();
-                ScopedTimer _t_process_heap("rebalance", "Rebalancer", "process_heap");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "process_heap");
 
                 u64 inner_iter = 0;
                 while (!global_queue.empty() && inner_iter < (u64) g.n * 10) {
@@ -283,7 +278,6 @@ namespace HeiProMap {
                         }
                     }
                 }
-                _t_process_heap.stop();
             }
         }
 
@@ -297,7 +291,7 @@ namespace HeiProMap {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             rebalance(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
-            ScopedTimer _t_allocate("rebalance", "LL-Rebalancer", "allocate");
+            HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "allocate");
 
             AlignedArray<vertex_t> boundary;
             boundary.initialize(g.n);
@@ -316,13 +310,11 @@ namespace HeiProMap {
             AlignedArray<u64> state_ids;
             state_ids.initialize(g.n, 0);
 
-            _t_allocate.stop();
-
             bool move_made = true;
             u64 iter = 0;
             while (move_made && iter < 100) {
                 iter++;
-                ScopedTimer _t_get_boundary("rebalance", "LL-Rebalancer", "get_boundary");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "get_boundary");
                 move_made = false;
 
                 offsets_size = 1;
@@ -353,8 +345,7 @@ namespace HeiProMap {
                     }
                 }
 
-                _t_get_boundary.stop();
-                ScopedTimer _t_fill_heaps("rebalance", "LL-Rebalancer", "fill_heaps");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "fill_heaps");
 
                 moves.initialize(boundary_size);
                 for (u64 i = 0; i < boundary_size; ++i) {
@@ -364,8 +355,7 @@ namespace HeiProMap {
                     moves[i] = move;
                 }
 
-                _t_fill_heaps.stop();
-                ScopedTimer _t_global_heap("rebalance", "LL-Rebalancer", "global_heap");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "global_heap");
 
                 global_queue = std::priority_queue<RebalancerMove>();
                 for (u64 i = 0; i < boundary_size; ++i) {
@@ -374,8 +364,7 @@ namespace HeiProMap {
                     }
                 }
 
-                _t_global_heap.stop();
-                ScopedTimer _t_process_heap("rebalance", "LL-Rebalancer", "process_heap");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "process_heap");
 
                 u64 inner_iter = 0;
                 while (!global_queue.empty() && inner_iter < (u64) g.n * 10) {
@@ -422,8 +411,6 @@ namespace HeiProMap {
                         }
                     }
                 }
-
-                _t_process_heap.stop();
             }
         }
 
@@ -435,7 +422,7 @@ namespace HeiProMap {
                                block_conn_t &block_conn,
                                f64 imbalance) {
             // return;
-            ScopedTimer _t_allocate("rebalance", "Rebalancer", "fill_empty_blocks");
+            HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "fill_empty_blocks");
 
             std::vector<bool> blocks_to_fill_lookup(m_k, false);
             std::vector<partition_t> blocks_to_fill;

@@ -362,7 +362,7 @@ namespace HeiProMap {
 
         void partition(u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
-            ScopedTimer _t("partition", "GlobalMultisectionPartitioner", "partition");
+            HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
 
             std::cout << "ABC " << ac.partitioning_algorithm_id << std::endl;
 
@@ -487,40 +487,42 @@ namespace HeiProMap {
                 }
 
                 // initialize boundary vertices and quotient graph
-                ScopedTimer _t_allocate("partition", "misc", "initialize_datastructures");
-                p_manager.reset_weights();
-                bv_manager.reset();
-                q_graph.initialize(ac.k);
-                block_conn.initialize(graphs.back().n, graphs.back().m, ac.k);
-                block_conn.reset_build();
+                {
+                    HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
+                    p_manager.reset_weights();
+                    bv_manager.reset();
+                    q_graph.initialize(ac.k);
+                    block_conn.initialize(graphs.back().n, graphs.back().m, ac.k);
+                    block_conn.reset_build();
 
-                for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                    {
-                        block_conn.begin_vertex(graphs.back(), u);
+                    for (vertex_t u = 0; u < graphs.back().n; ++u) {
+                        {
+                            block_conn.begin_vertex(graphs.back(), u);
 
-                        const partition_t u_id = p_manager[u];
-                        const weight_t u_w = graphs.back().v_weights[u];
-                        p_manager.set(u, u_w, u_id);
+                            const partition_t u_id = p_manager[u];
+                            const weight_t u_w = graphs.back().v_weights[u];
+                            p_manager.set(u, u_w, u_id);
 
-                        for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
-                            const vertex_t v = graphs.back().edges_v[i];
-                            const weight_t w = graphs.back().edges_w[i]; {
-                                const partition_t v_id = p_manager[v];
+                            for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
+                                const vertex_t v = graphs.back().edges_v[i];
+                                const weight_t w = graphs.back().edges_w[i];
+                                {
+                                    const partition_t v_id = p_manager[v];
 
-                                // build block_conns directly here
-                                block_conn.add_connection(u, v_id, w);
+                                    // build block_conns directly here
+                                    block_conn.add_connection(u, v_id, w);
 
-                                if (u_id != v_id) {
-                                    bv_manager.add(u, u_id); // boundary vertex
-                                    if (u < v) {
-                                        q_graph.add_edge(u_id, v_id, w); // quotient graph
+                                    if (u_id != v_id) {
+                                        bv_manager.add(u, u_id); // boundary vertex
+                                        if (u < v) {
+                                            q_graph.add_edge(u_id, v_id, w); // quotient graph
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                _t_allocate.stop();
 
                 initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
                 initial_max_block_weight = max(p_manager.get_bweights());
@@ -592,7 +594,7 @@ namespace HeiProMap {
             p_manager.uncontract(mappings.back());
             //
             {
-                ScopedTimer _tt("uncontraction", "misc", "compute_from_scratch");
+                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
                 const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
                 bv_manager.reset();
@@ -625,7 +627,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("uncontraction", "misc", "free_graph");
+                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
                 graphs.pop_back(); // this is doing uncontraction
                 mappings.pop_back();
             }

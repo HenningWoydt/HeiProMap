@@ -37,7 +37,7 @@ namespace HeiProMap {
     inline weight_t get_qap(const DynGraph &g,
                             const std::vector<partition_t> &partition,
                             const DistanceOracleT &d_oracle) {
-        ScopedTimer _t("misc", "misc", "get_qap");
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap");
 
         weight_t qap = 0;
 
@@ -61,7 +61,7 @@ namespace HeiProMap {
     inline weight_t get_qap(const GraphT &g,
                             const PartitionManagerT &p_manager,
                             const DistanceOracleT &d_oracle) {
-        ScopedTimer _t("misc", "misc", "get_qap");
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap");
 
         weight_t qap = 0;
 
@@ -84,7 +84,7 @@ namespace HeiProMap {
     inline weight_t get_qap(const GraphT &g,
                             const AlignedArray<partition_t> &partition,
                             const DistanceOracleT &d_oracle) {
-        ScopedTimer _t("misc", "misc", "get_qap");
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap");
 
         weight_t qap = 0;
 
@@ -106,7 +106,7 @@ namespace HeiProMap {
     template<typename GraphT, typename PartitionManagerT>
     inline weight_t get_edge_cut(GraphT &g,
                                  PartitionManagerT &p_manager) {
-        ScopedTimer _t("misc", "misc", "get_qap");
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap");
 
         weight_t edge_cut = 0;
 
@@ -149,7 +149,7 @@ namespace HeiProMap {
                             PartitionManagerT &p_manager,
                             DistanceOracleT &d_oracle,
                             BlockConnT &block_conn) {
-        ScopedTimer _t("misc", "misc", "get_qap");
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap");
 
         weight_t qap = 0;
         weight_t local_qap = 0;
@@ -174,7 +174,7 @@ namespace HeiProMap {
                                                    const PartitionManagerT &p_manager,
                                                    DistanceOracleT &d_oracle,
                                                    const partition_t l) {
-        ScopedTimer _t("misc", "misc", "get_qap_per_layer");
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap_per_layer");
 
         std::vector<weight_t> final_qap(l, 0);
         for (vertex_t u = 0; u < g.n; ++u) {

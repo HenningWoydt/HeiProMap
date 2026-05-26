@@ -112,7 +112,7 @@ namespace HeiProMap {
                         const u64 t_threads,
                         RandomEngine &t_random_engine,
                         const GlobalPathAlgorithmConfiguration &i_config) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "initialize");
 
             m_n = t_n;
             m_m = t_m;
@@ -148,13 +148,13 @@ namespace HeiProMap {
             Matching matching;
             //
             {
-                ScopedTimer _t_init("coarsening", "GlobalPathAlgorithmMatcher", "allocate_matching");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "allocate_matching");
                 matching.initialize(g.n);
             }
 
             if (m_threads == 1) {
                 if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
-                    ScopedTimer _t_simple("coarsening", "GlobalPathAlgorithmMatcher", "simple_loop");
+                    HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "simple_loop");
                     for (vertex_t u = 0; u < g.n; ++u) {
                         if (matching.is_matched(u)) { continue; }
                         partition_t u_id = p_manager[u];
@@ -187,7 +187,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t_sort("coarsening", "GlobalPathAlgorithmMatcher", "sort_ratings");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "sort_ratings");
                 #pragma omp parallel for num_threads(m_threads) schedule(static, 1)
                 for (u64 i = 0; i < m_threads; ++i) {
                     if (m_thread_infos[i].min_rating != m_thread_infos[i].max_rating) {
@@ -198,7 +198,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t_init("coarsening", "GlobalPathAlgorithmMatcher", "init_paths");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "init_paths");
                 #pragma omp parallel for num_threads(m_threads)
                 for (vertex_t u = 0; u < g.n; ++u) {
                     m_neighbors[u].n1 = u;
@@ -211,7 +211,7 @@ namespace HeiProMap {
             cycles.clear();
             //
             {
-                ScopedTimer _t_extract("coarsening", "GlobalPathAlgorithmMatcher", "extract_paths");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "extract_paths");
 
                 if (global_min_rating == global_max_rating) {
                     // Fast path: Process edges in arbitrary order since all ratings are equal
@@ -395,7 +395,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t_paths("coarsening", "GlobalPathAlgorithmMatcher", "solve_paths");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "solve_paths");
                 #pragma omp parallel for num_threads(m_threads) schedule(static, 32768)
                 for (vertex_t u = 0; u < g.n; ++u) {
                     u64 thread_id = omp_get_thread_num();
@@ -415,7 +415,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t_cycles("coarsening", "GlobalPathAlgorithmMatcher", "solve_cycles");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "solve_cycles");
                 #pragma omp parallel for num_threads(m_threads) schedule(static)
                 for (size_t i = 0; i < cycles.size(); ++i) {
                     u64 thread_id = omp_get_thread_num();
@@ -475,7 +475,7 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void compute_ratings(const graph_t &g, const p_manager_t &p_manager, weight_t lmax) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "compute_ratings");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "compute_ratings");
             for (u64 i = 0; i < m_threads; ++i) {
                 m_thread_infos[i].local_edges.clear();
                 m_thread_infos[i].min_rating = std::numeric_limits<f32>::max();
@@ -718,7 +718,7 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights>
         void random_matching(const size_t, const graph_t &g, Matching &matching, weight_t lmax) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "random_matching");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "random_matching");
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) { continue; }
                 weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
@@ -734,7 +734,7 @@ namespace HeiProMap {
         }
 
         void finalize_matching(const graph_t &g, Matching &matching, Mapping &mapping) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "get_mapping");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "get_mapping");
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {
@@ -758,7 +758,7 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void two_hop_degree_one(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_degree_one");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_degree_one");
             std::vector<vertex_t> preferred(g.n);
             std::iota(preferred.begin(), preferred.end(), 0);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
@@ -835,7 +835,7 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void two_hop_twins(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_twins");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_twins");
             struct Candidate {
                 uint64_t hash;
                 vertex_t u;
@@ -909,7 +909,7 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void two_hop_matchmaker(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
-            ScopedTimer _t("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_matchmaker");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_matchmaker");
             std::vector<vertex_t> preferred(g.n);
             std::iota(preferred.begin(), preferred.end(), 0);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));

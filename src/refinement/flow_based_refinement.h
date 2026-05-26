@@ -102,7 +102,7 @@ namespace HeiProMap {
                         const u64 t_threads,
                         const u64 seed,
                         const FlowBasedRefinementConfiguration &i_config) {
-            ScopedTimer _t("refinement", "FlowBasedRefinement", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "initialize");
 
             m_n = t_n;
             m_m = t_m;
@@ -174,7 +174,7 @@ namespace HeiProMap {
 
             //
             {
-                ScopedTimer _t("refinement", "FlowBasedRefinement", "allocate");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "allocate");
 
                 active_this_round.initialize(m_k, 1);
                 active_next_round.initialize(m_k, 0);
@@ -187,7 +187,7 @@ namespace HeiProMap {
                 for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                     //
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "reset_used_edges");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reset_used_edges");
 
                         std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
                     }
@@ -195,7 +195,7 @@ namespace HeiProMap {
                     bool found_matching = false;
                     //
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "matching");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
 
                         found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                     }
@@ -212,7 +212,7 @@ namespace HeiProMap {
 
                         //
                         {
-                            ScopedTimer _t("refinement", "FlowBasedRefinement", "matching");
+                            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
 
                             found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                         }
@@ -220,7 +220,7 @@ namespace HeiProMap {
 
                     // swap active
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "swap_active");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
 
                         if (config->use_active_block_scheduling) {
                             std::swap(active_this_round, active_next_round);
@@ -234,7 +234,7 @@ namespace HeiProMap {
                 for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                     //
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "get_pairs");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_pairs");
 
                         for (partition_t u_id = 0; u_id < m_k; ++u_id) {
                             for (partition_t v_id = 0; v_id < m_k; ++v_id) {
@@ -253,7 +253,7 @@ namespace HeiProMap {
 
                     //
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "shuffle");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "shuffle");
 
                         fast_shuffle_unchecked(pairs.data(), pairs.data() + pairs.size(), random_engine.generator);
                     }
@@ -269,7 +269,7 @@ namespace HeiProMap {
 
                     // swap active
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "swap_active");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
 
                         std::swap(active_this_round, active_next_round);
                         active_next_round.initialize(m_k, 0);
@@ -374,13 +374,13 @@ namespace HeiProMap {
 
                 // solve the flow network
                 {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "solve_maxflow");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "solve_maxflow");
                     pr.maxflow();
                 }
 
                 // get the cut
                 {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "get_cut");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_cut");
                     size_t flow_n = left_region.size() + right_region.size();
                     is_left.resize(flow_n);
                     for (size_t i = 0; i < flow_n; ++i) {
@@ -391,7 +391,7 @@ namespace HeiProMap {
                 bool is_valid;
                 // check if cut is valid
                 {
-                    ScopedTimer _t("refinement", "FlowBasedRefinement", "cut_is_valid");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
                     is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
                 }
 
@@ -404,24 +404,24 @@ namespace HeiProMap {
                 if (config->use_closed_vertex_set) {
                     // build residual network from cut labels
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "build_residual_network");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_residual_network");
                         build_residual_from_cut(g, pr, left_region, right_region, translation_table, region_marker, region_mark, s_connected, t_connected, residual_flow_network);
                         residual_flow_network.finalize();
                     }
                     // build scc graph
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "build_scc");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_scc");
                         scc_graph.initialize(residual_flow_network, g, translation_table);
                     }
                     // reduce the scc graph
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "reduce_scc");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reduce_scc");
                         scc_graph.reduce();
                     }
                     bool closure_found;
                     // determine best balanced min cut
                     {
-                        ScopedTimer _t("refinement", "FlowBasedRefinement", "scc_find");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_find");
                         weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
                         weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
                         f64 avg_weight = (f64) g.g_weight / (f64) m_k;
@@ -465,7 +465,7 @@ namespace HeiProMap {
                                          weight_t &left_boundary_weight,
                                          weight_t &right_boundary_weight,
                                          RandomEngine &random_engine) {
-            ScopedTimer _t("refinement", "FlowBasedRefinement", "determine_boundary_vertices");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "determine_boundary_vertices");
 
             left_boundary_weight = 0;
             for (size_t i = 0; i < bv_manager.size(left_id); ++i) {
@@ -518,7 +518,7 @@ namespace HeiProMap {
                                   AlignedArray<u32> &region_marker,
                                   u32 &region_mark,
                                   std::vector<vertex_t> &queue) {
-            ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "determine_regions");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "determine_regions");
 
             seen_mark += 2;
             // seen[u] == seen_mark     means u is processed
@@ -577,7 +577,7 @@ namespace HeiProMap {
                                                u32 &region_mark,
                                                std::vector<u8> &s_connected,
                                                std::vector<u8> &t_connected) {
-            ScopedTimer _t("refinement", "FlowBasedRefinement", "build_flow_network_with_penalties");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_flow_network_with_penalties");
 
             u32 left_mark = region_mark - 1;
             u32 right_mark = region_mark;
@@ -694,7 +694,7 @@ namespace HeiProMap {
                                              u32 &region_mark,
                                              std::vector<u8> &s_connected,
                                              std::vector<u8> &t_connected) {
-            ScopedTimer _t("refinement", "FlowBasedRefinement", "build_flow_network_no_penalties");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_flow_network_no_penalties");
 
             u32 left_mark = region_mark - 1;
             u32 right_mark = region_mark;
@@ -854,7 +854,7 @@ namespace HeiProMap {
                           std::vector<vertex_t> &left_region,
                           std::vector<vertex_t> &right_region,
                           TranslationTable<vertex_t> &translation_table) {
-            ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "cut_is_valid");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
 
             weight_t left_weight = p_manager.get_bweight(left_id);
             weight_t right_weight = p_manager.get_bweight(right_id);
@@ -885,7 +885,7 @@ namespace HeiProMap {
                                    std::vector<vertex_t> &left_region,
                                    std::vector<vertex_t> &right_region,
                                    TranslationTable<vertex_t> &translation_table) {
-            ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "cut_changes_partition");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_changes_partition");
 
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
@@ -919,7 +919,7 @@ namespace HeiProMap {
                                         TranslationTable<vertex_t> &translation_table,
                                         AlignedArray<u32> &region_marker,
                                         u32 &region_mark) {
-            ScopedTimer _t("refinement", "FlowBasedRefinement", "change_boundary");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "change_boundary");
 
             [[maybe_unused]] u32 left_mark = region_mark - 1;
             [[maybe_unused]] u32 right_mark = region_mark;
@@ -981,7 +981,7 @@ namespace HeiProMap {
                              std::vector<vertex_t> &left_region,
                              std::vector<vertex_t> &right_region,
                              TranslationTable<vertex_t> &translation_table) {
-            ScopedTimer _t_sort_pairs("refinement", "FlowBasedRefinement", "revert_boundary");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "revert_boundary");
 
             for (vertex_t new_u = 0; new_u < left_region.size() + right_region.size(); ++new_u) {
                 if (changed[new_u] == 0) { continue; }

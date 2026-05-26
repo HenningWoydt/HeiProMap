@@ -253,7 +253,7 @@ namespace HeiProMap {
                 std::cout << ac.get("--config") << " " << ac.hm_level << std::endl;
 
                 if (ac.get("--config") == "super-strong") {
-                    ScopedTimer _t_final_refine("final_refinement", "Solver", "refine");
+                    HEIPROMAP_PROFILE_SCOPE("final_refinement", "Solver", "refine");
 
                     bv_manager.reset();
                     q_graph.initialize(ac.k);
@@ -407,7 +407,7 @@ namespace HeiProMap {
 
         void partition(u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
-            ScopedTimer _t("partition", "GlobalMultisectionPartitioner", "partition");
+            HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
@@ -450,7 +450,7 @@ namespace HeiProMap {
                 }
 
                 // initialize boundary vertices and quotient graph
-                ScopedTimer _t_allocate("partition", "misc", "initialize_datastructures");
+                HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
                 p_manager.reset_weights();
                 bv_manager.reset();
                 q_graph.initialize(ac.k);
@@ -480,7 +480,6 @@ namespace HeiProMap {
                         }
                     }
                 }
-                _t_allocate.stop();
 
                 initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
                 initial_max_block_weight = max(p_manager.get_bweights());
@@ -552,7 +551,7 @@ namespace HeiProMap {
             p_manager.uncontract(mappings.back());
             //
             {
-                ScopedTimer _tt("uncontraction", "misc", "compute_from_scratch");
+                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
                 const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
                 bv_manager.reset();
@@ -589,7 +588,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("uncontraction", "misc", "free_graph");
+                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
                 graphs.pop_back(); // this is doing uncontraction
                 mappings.pop_back();
             }
@@ -701,7 +700,7 @@ namespace HeiProMap {
             partition.initialize(g.n, 0);
             //
             {
-                ScopedTimer _t("adaptive_solver", "adaptive_solver", "partition");
+                HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "partition");
                 if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, ac.seed, partition, ac.global_multisection_config.kappa);
                 } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
@@ -728,7 +727,7 @@ namespace HeiProMap {
             partition_t k_per_subgraph = prod<partition_t>(hierarchy);
 
             for (partition_t i = 0; i < k; ++i) {
-                ScopedTimer _t("adaptive_solver", "adaptive_solver", "extrcact_graph");
+                HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "extrcact_graph");
                 graph_t sub_g(new_ns[i], new_ms[i], new_ws[i]);
                 TranslationTable<vertex_t> sub_tt;
                 sub_tt.reserve(new_ns[i], p_manager.n);
@@ -777,7 +776,6 @@ namespace HeiProMap {
                         }
                     }
                 }
-                _t.stop();
                 recursive_solve(sub_g, p_manager, hierarchy, distance, current_level + 1, offset + i * k_per_subgraph, sub_tt, total_weight);
             }
         }

@@ -49,7 +49,7 @@ namespace HeiProMap {
         RandomEngine() = default;
 
         explicit RandomEngine(const u64 t_seed) {
-            ScopedTimer _t("misc", "RandomEngine", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("misc", "RandomEngine", "initialize");
             generator.seed(t_seed);
             dis_f32 = std::uniform_real_distribution<f32>(0.0f, 1.0f);
             dis_f64 = std::uniform_real_distribution<f64>(0.0, 1.0);

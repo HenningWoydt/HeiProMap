@@ -70,7 +70,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const u64 seed,
                         const SizeConstrainedLPConfiguration &i_config) {
-            ScopedTimer _t("coarsening", "SizeConstrainedLP", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "initialize");
 
             m_n = t_n;
             m_m = t_m;
@@ -86,7 +86,7 @@ namespace HeiProMap {
                                  [[maybe_unused]] const p_manager_t &p_manager,
                                  Mapping &mapping,
                                  weight_t max_w) {
-            ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_when_identity");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "merge_when_identity");
 
             // 2) collect active cluster ids
             std::vector<vertex_t> ids;
@@ -143,7 +143,7 @@ namespace HeiProMap {
                               [[maybe_unused]] const p_manager_t &p_manager,
                               Mapping &mapping,
                               weight_t max_w) {
-            ScopedTimer _t("coarsening", "SizeConstrainedLP", "merge_singletons");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "merge_singletons");
 
             // 2) collect singleton vertices
             vertex_t singletons_size = 0;
@@ -227,7 +227,7 @@ namespace HeiProMap {
             vertex_t max_deg = 0;
             // get max w and max deg
             {
-                ScopedTimer _t("coarsening", "SizeConstrainedLP", "max");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "max");
 
                 // determine the maximum allowed cluster weight
                 for (vertex_t u = 0; u < g.n; ++u) {
@@ -240,7 +240,7 @@ namespace HeiProMap {
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
             // get all vertices
             {
-                ScopedTimer _t("coarsening", "SizeConstrainedLP", "flat_vertices");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "flat_vertices");
 
                 flat_vertices.initialize(g.n);
                 bucket_sizes.initialize(B, 0);
@@ -264,7 +264,7 @@ namespace HeiProMap {
             }
             // setup cluster weights
             {
-                ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster_weights");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_weights");
 
                 // set each vertex to its own id
                 cluster_weights.initialize(g.n);
@@ -277,7 +277,7 @@ namespace HeiProMap {
             }
             // setup active
             {
-                ScopedTimer _t_active("coarsening", "SizeConstrainedLP", "active");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "active");
 
                 active.initialize(g.n, 1);
                 active_next.initialize(g.n, 1);
@@ -289,7 +289,7 @@ namespace HeiProMap {
                 n_moved = 0;
                 //
                 {
-                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "shuffle_buckets");
+                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
 
                     for (size_t i = 0; i < B - 1; ++i) {
                         [[maybe_unused]] size_t beg = bucket_offsets[i];
@@ -300,7 +300,7 @@ namespace HeiProMap {
                 }
                 // run clustering
                 if (threads > 1) {
-                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster_threaded");
+                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_threaded");
                     #pragma omp parallel num_threads(threads)
                     {
                         FlatMap<vertex_t, weight_t> flat_map;
@@ -365,7 +365,7 @@ namespace HeiProMap {
                         }
                     }
                 } else {
-                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "cluster_serial");
+                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_serial");
                     FlatMap<vertex_t, weight_t> flat_map;
                     flat_map.reserve(128);
 
@@ -448,7 +448,7 @@ namespace HeiProMap {
                 }
                 // swap active
                 {
-                    ScopedTimer _t("coarsening", "SizeConstrainedLP", "swap_active");
+                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "swap_active");
 
                     std::swap(active, active_next);
                     active_next.initialize(g.n, 0);
@@ -464,7 +464,7 @@ namespace HeiProMap {
             bool ident_mapping = true;
             // is identity mapping
             {
-                ScopedTimer _t("coarsening", "SizeConstrainedLP", "is_identity_mapping");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "is_identity_mapping");
 
                 for (vertex_t u = 0; u < g.n; ++u) {
                     ident_mapping &= u == mapping.get(u);
@@ -476,7 +476,7 @@ namespace HeiProMap {
 
             // map to a continuous range
             {
-                ScopedTimer _t("coarsening", "SizeConstrainedLP", "calc_map");
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "calc_map");
 
                 // mapping starts at 0 and increments
                 remap.initialize(g.n, m_n);

@@ -141,7 +141,7 @@ namespace HeiProMap {
                 positive_move_occurred = false;
                 //
                 {
-                    ScopedTimer _t("refinement", "LabelPropagationRefinement", "get_boundary");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "get_boundary");
 
                     curr_boundary_size = 0;
                     for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
@@ -216,7 +216,7 @@ namespace HeiProMap {
                     }
                 } else {
                     // Serial path
-                    ScopedTimer _t("refinement", "LabelPropagationRefinement", "process_vertices");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices");
                     for (size_t j = 0; j < list.size(); ++j) {
                         vertex_t u = list[j]; // curr_boundary[j];
 

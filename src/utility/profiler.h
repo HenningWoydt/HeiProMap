@@ -59,13 +59,13 @@ namespace HeiProMap {
     }
 
     inline bool stream_is_tty(std::ostream &stream) {
-#if defined(_WIN32)
+        #if defined(_WIN32)
         DWORD mode;
         HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
         return handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode);
-#else
+        #else
         return &stream == &std::cout || &stream == &std::cerr;
-#endif
+        #endif
     }
 
     struct ZebraTheme {
@@ -153,22 +153,22 @@ namespace HeiProMap {
                  const char *function_name,
                  const char *kernel_name,
                  double milliseconds) {
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             std::unique_lock<std::shared_mutex> lock(mutex_);
             stats_[{group_name, function_name, kernel_name}].add(milliseconds);
             total_.add(milliseconds);
-#else
+            #else
             (void) group_name;
             (void) function_name;
             (void) kernel_name;
             (void) milliseconds;
-#endif
+            #endif
         }
 
         std::string to_JSON() const {
-#if !ENABLE_PROFILER
+            #if !ENABLE_PROFILER
             return "{}";
-#else
+            #else
             std::shared_lock<std::shared_mutex> lock(mutex_);
             auto groups = get_hierarchy();
 
@@ -351,7 +351,7 @@ namespace HeiProMap {
             output << "}";
 
             return output.str();
-#endif
+            #endif
         }
 
         void print_table_ascii_colored(std::ostream &output_stream = std::cout,
@@ -360,9 +360,9 @@ namespace HeiProMap {
                                        int name_column_width = 48,
                                        bool force_color = false,
                                        bool use_basic_colors = false) const {
-#if !ENABLE_PROFILER
+            #if !ENABLE_PROFILER
             return;
-#else
+            #else
             std::shared_lock<std::shared_mutex> lock(mutex_);
             auto groups = get_hierarchy();
 
@@ -374,11 +374,11 @@ namespace HeiProMap {
             const bool no_color_requested = std::getenv("NO_COLOR") != nullptr;
             bool use_colors = !no_color_requested && (force_color || stream_is_tty(output_stream));
 
-#ifdef _WIN32
+            #ifdef _WIN32
             if (use_colors) {
                 enable_ansi_on_windows();
             }
-#endif
+            #endif
 
             ZebraTheme theme = use_basic_colors ? basic_theme() : ZebraTheme{};
 
@@ -578,7 +578,7 @@ namespace HeiProMap {
             }
 
             output_stream << colorize_rule(make_rule_line());
-#endif
+            #endif
         }
 
     private:
@@ -611,7 +611,7 @@ namespace HeiProMap {
     inline thread_local ScopedTimer *current_active_timer = nullptr;
 
     struct ScopedTimer {
-#if ENABLE_PROFILER
+        #if ENABLE_PROFILER
         const char *group = nullptr;
         const char *function = nullptr;
         const char *kernel = nullptr;
@@ -619,10 +619,10 @@ namespace HeiProMap {
         bool stopped = false;
         double child_ms = 0.0;
         ScopedTimer *parent = nullptr;
-#endif
+        #endif
 
         ScopedTimer(const char *group_name, const char *function_name, const char *kernel_name) {
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             group = group_name;
             function = function_name;
             kernel = kernel_name;
@@ -631,15 +631,16 @@ namespace HeiProMap {
             child_ms = 0.0;
             parent = current_active_timer;
             current_active_timer = this;
-#else
+            #else
             (void) group_name;
             (void) function_name;
             (void) kernel_name;
-#endif
+            #endif
         }
 
+
         void stop() noexcept {
-#if ENABLE_PROFILER
+            #if ENABLE_PROFILER
             if (!stopped) {
                 double elapsed_ms = get_milli_seconds(start_time, get_time_point());
                 double exclusive_ms = elapsed_ms - child_ms;
@@ -651,13 +652,24 @@ namespace HeiProMap {
                 current_active_timer = parent;
                 stopped = true;
             }
-#endif
+            #endif
         }
+
 
         ~ScopedTimer() {
             stop();
         }
     };
 } // namespace HeiProMap
+
+#define HEIPROMAP_CONCAT_IMPL(a, b) a##b
+#define HEIPROMAP_CONCAT(a, b) HEIPROMAP_CONCAT_IMPL(a, b)
+
+#if ENABLE_PROFILER
+#define HEIPROMAP_PROFILE_SCOPE(group, function, kernel) \
+    HeiProMap::ScopedTimer HEIPROMAP_CONCAT(_timer_, __LINE__)(group, function, kernel)
+#else
+#define HEIPROMAP_PROFILE_SCOPE(group, function, kernel)
+#endif
 
 #endif // HEIPROMAP_PROFILER_H

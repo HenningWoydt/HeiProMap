@@ -40,7 +40,7 @@
 
 namespace HeiProMap {
     inline bool assert_csr_structure(const graph_t &g) {
-        ScopedTimer _t("assert", "misc", "assert_csr_structure");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_csr_structure");
 
         ASSERT(g.neighborhoods[0] == 0);
         ASSERT(g.neighborhoods[g.n] == g.m);
@@ -51,7 +51,7 @@ namespace HeiProMap {
     }
 
     inline bool assert_no_self_loops(const graph_t &g) {
-        ScopedTimer _t("assert", "misc", "assert_no_self_loops");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_no_self_loops");
 
         for (vertex_t u = 0; u < g.n; ++u) {
             {
@@ -66,7 +66,7 @@ namespace HeiProMap {
     }
 
     inline bool assert_no_double_edges(const graph_t &g) {
-        ScopedTimer _t("assert", "misc", "assert_no_double_edges");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_no_double_edges");
 
         std::vector<vertex_t> manual;
         for (vertex_t u = 0; u < g.n; ++u) {
@@ -85,7 +85,7 @@ namespace HeiProMap {
     inline bool assert_correct_partition_size(const graph_t &g,
                                               const p_manager_t &p_manager,
                                               const partition_t k) {
-        ScopedTimer _t("assert", "misc", "assert_correct_partition_size");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_partition_size");
 
         std::vector<size_t> sizes(k, 0);
 
@@ -105,7 +105,7 @@ namespace HeiProMap {
     inline bool assert_bweights(const graph_t &g,
                                 const p_manager_t &p_manager,
                                 const partition_t k) {
-        ScopedTimer _t("assert", "misc", "assert_bweights");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_bweights");
 
         std::vector<weight_t> weights(k, 0);
         for (vertex_t u = 0; u < g.n; ++u) {
@@ -126,7 +126,7 @@ namespace HeiProMap {
     inline bool assert_correct_vertices_boundary(const graph_t &g,
                                                  const p_manager_t &p_manager,
                                                  const bv_manager_t &bv_manager) {
-        ScopedTimer _t("assert", "misc", "assert_correct_vertices_boundary");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_vertices_boundary");
 
         std::vector<vertex_t> manual;
         for (vertex_t u = 0; u < g.n; ++u) {
@@ -165,7 +165,7 @@ namespace HeiProMap {
                                                            const p_manager_t &p_manager,
                                                            bv_manager_t &bv_manager,
                                                            const partition_t k) {
-        ScopedTimer _t("assert", "misc", "assert_correct_vertices_boundary_per_block");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_vertices_boundary_per_block");
 
         std::vector<std::vector<vertex_t> > manual(k);
 
@@ -216,7 +216,7 @@ namespace HeiProMap {
                                               const p_manager_t &p_manager,
                                               const q_graph_t &q_graph,
                                               [[maybe_unused]] const partition_t k) {
-        ScopedTimer _t("assert", "misc", "assert_correct_quotient_graph");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_quotient_graph");
 
         std::map<std::pair<partition_t, partition_t>, weight_t> manual;
 
@@ -251,7 +251,7 @@ namespace HeiProMap {
                                           const p_manager_t &p_manager,
                                           const block_conn_t &block_conn,
                                           [[maybe_unused]] const partition_t k) {
-        ScopedTimer _t("assert", "misc", "assert_correct_block_conn");
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_block_conn");
 
         for (vertex_t u = 0; u < g.n; ++u) {
             {

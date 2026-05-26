@@ -63,7 +63,7 @@ namespace HeiProMap {
         CSRGraph() = default;
 
         explicit CSRGraph(const std::string &file_path) {
-            ScopedTimer _t_allocate("io", "CSRGraph", "allocate");
+            HEIPROMAP_PROFILE_SCOPE("io", "CSRGraph", "allocate");
             if (!file_exists(file_path)) {
                 std::cerr << "File " << file_path << " does not exist!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -74,8 +74,7 @@ namespace HeiProMap {
             char *p = mm.data;
             const char *end = mm.data + mm.size; // (tiny fix: don't do -1)
 
-            _t_allocate.stop();
-            ScopedTimer _t_read_header("io", "CSRGraph", "read_header");
+            HEIPROMAP_PROFILE_SCOPE("io", "CSRGraph", "read_header");
 
             // skip comment lines
             while (*p == '%') {
@@ -140,8 +139,7 @@ namespace HeiProMap {
             uniform_v_weights = !has_v_weights;
             uniform_e_weights = !has_e_weights;
 
-            _t_read_header.stop();
-            ScopedTimer _t_read_edges("io", "CSRGraph", "read_edges");
+            HEIPROMAP_PROFILE_SCOPE("io", "CSRGraph", "read_edges");
 
             ++p;
             if (has_v_weights && has_e_weights) {
@@ -154,7 +152,6 @@ namespace HeiProMap {
                 read_edges<false, false>(p, end);
             }
 
-            _t_read_edges.stop();
             // done with the file
             munmap_file(mm);
         }
@@ -189,7 +186,7 @@ namespace HeiProMap {
             u32 epoch = 0;
             // allocate
             {
-                ScopedTimer _t("contraction", "CSRGraph", "allocate");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate");
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
@@ -211,7 +208,7 @@ namespace HeiProMap {
             }
             // count how many vertices are mapped to each new vertex
             {
-                ScopedTimer _t("contraction", "CSRGraph", "n_mapped");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "n_mapped");
 
                 // count and collect weights
                 for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
@@ -226,7 +223,7 @@ namespace HeiProMap {
             }
             // prefix sum on n_mapped
             {
-                ScopedTimer _t("contraction", "CSRGraph", "prefix_sum");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "prefix_sum");
 
                 for (vertex_t map_u = 0; map_u < n; ++map_u) {
                     n_mapped_prefix[map_u + 1] = n_mapped_prefix[map_u] + n_mapped[map_u];
@@ -234,7 +231,7 @@ namespace HeiProMap {
             }
             // copy so we have a cursor
             {
-                ScopedTimer _t("contraction", "CSRGraph", "copy_cursor");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "copy_cursor");
 
                 for (vertex_t map_u = 0; map_u <= n; ++map_u) {
                     cursor[map_u] = n_mapped_prefix[map_u];
@@ -242,7 +239,7 @@ namespace HeiProMap {
             }
             // insert mapped vertices
             {
-                ScopedTimer _t("contraction", "CSRGraph", "mapped_vertices");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "mapped_vertices");
 
                 for (vertex_t u = 0; u < g.n; ++u) {
                     vertex_t map_u = mapping.get(u);
@@ -252,7 +249,7 @@ namespace HeiProMap {
             }
             // insert edges in real array
             {
-                ScopedTimer _t("contraction", "CSRGraph", "real_neighborhood");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "real_neighborhood");
 
                 m = 0;
                 for (vertex_t map_u = 0; map_u < n; ++map_u) {
@@ -300,7 +297,7 @@ namespace HeiProMap {
             AlignedArray<vertex_t> sizes;
             //
             {
-                ScopedTimer _t("contraction", "CSRGraph", "allocate");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate");
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
@@ -312,7 +309,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("contraction", "CSRGraph", "overest_sizes");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "overest_sizes");
 
                 // overestimate neighborhood sizes and collect weights
                 for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
@@ -323,7 +320,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("contraction", "CSRGraph", "prefix_sum");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "prefix_sum");
                 overest_neighborhood[0] = 0;
                 for (vertex_t map_u = 0; map_u < n; ++map_u) {
                     overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
@@ -331,7 +328,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t_insert_edges("contraction", "CSRGraph", "allocate_insert_edges");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate_insert_edges");
 
                 m_per_thread.initialize(threads, 0);
                 temp_edges_v.initialize(overest_neighborhood[n], g.n);
@@ -340,7 +337,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t_insert_edges("contraction", "CSRGraph", "insert_edges");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "insert_edges");
 
                 // insert edges in overestimated array
                 m = 0;
@@ -398,7 +395,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("contraction", "CSRGraph", "real_neighborhood");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "real_neighborhood");
 
                 // insert edges in real array
                 neighborhoods.initialize(n + 1);
@@ -409,7 +406,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("contraction", "CSRGraph", "copy_edges");
+                HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "copy_edges");
 
                 edges_v.initialize(m);
                 edges_w.initialize(m);

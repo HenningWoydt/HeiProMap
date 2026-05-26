@@ -45,7 +45,7 @@ namespace HeiProMap {
     public:
         void initialize(const vertex_t t_n,
                         const partition_t t_k) {
-            ScopedTimer _t("misc", "BoundaryVertexManager", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "initialize");
 
             m_n = t_n;
             m_k = t_k;
@@ -160,7 +160,7 @@ namespace HeiProMap {
 
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager) {
-            ScopedTimer _t("uncontraction", "BoundaryVertexManager", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BoundaryVertexManager", "compute_from_scratch");
 
             m_n_boundary_edges.initialize(m_n, 0);
 
@@ -196,7 +196,7 @@ namespace HeiProMap {
         }
 
         void reset() {
-            ScopedTimer _t("misc", "BoundaryVertexManager", "reset");
+            HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "reset");
 
             m_n_boundary_edges.initialize(m_n, 0);
             for (partition_t id = 0; id < m_k; ++id) {

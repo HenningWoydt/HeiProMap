@@ -96,7 +96,7 @@ namespace HeiProMap {
          * so no global reset is needed between calls.
          */
         vertex_t bfs_furthest(const CSRGraph &g, vertex_t start) {
-            ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "bfs_furthest");
+            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bfs_furthest");
 
             std::vector<vertex_t> visited;
             visited.reserve(64);
@@ -161,13 +161,13 @@ namespace HeiProMap {
             // ---- Furthest-point seed selection ----
             vertex_t seed_0;
             {
-                ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "bisect_overhead");
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_overhead");
                 seed_0 = vertices[rng->get_u64() % vertices.size()];
             }
 
             vertex_t seed_1 = bfs_furthest(g, seed_0);
 
-            ScopedTimer _t_grow("partition", "RecursiveBisectionPartitioner", "bisect_grow");
+            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_grow");
             // Fallback: if the graph is a single isolated vertex or all vertices
             // are in one connected component of size 1, seed_1 == seed_0.
             // Pick the last vertex in the list as an alternative.
@@ -273,7 +273,7 @@ namespace HeiProMap {
                      weight_t total_weight) {
             // Base case: assign all vertices in this subset to block_start
             if (k == 1) {
-                ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "recurse_base_case");
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_base_case");
                 for (vertex_t v : vertices) {
                     pm.set(v, g.v_weights[v], block_start);
                 }
@@ -283,7 +283,7 @@ namespace HeiProMap {
             partition_t k_left, k_right;
             weight_t target_left;
             {
-                ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
                 // Split k into two halves; left gets the larger slice when k is odd
                 k_left  = k / 2;
                 k_right = k - k_left;
@@ -298,7 +298,7 @@ namespace HeiProMap {
 
             weight_t w_left = 0, w_right = 0;
             {
-                ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
                 // Compute actual weights of each half for the recursive calls
                 for (vertex_t v : left_v)  { w_left  += g.v_weights[v]; }
                 for (vertex_t v : right_v) { w_right += g.v_weights[v]; }
@@ -312,7 +312,7 @@ namespace HeiProMap {
             recurse(g, pm, left_v, block_start, k_left, w_left);
 
             {
-                ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
                 // ---- Recurse right ----
                 // Hide the (now processed) left subset from the right recursion
                 for (vertex_t v : left_v)  { side[v] = 3; }
@@ -331,7 +331,7 @@ namespace HeiProMap {
          * O(n + m).
          */
         static weight_t compute_edge_cut(const CSRGraph &g, const PartitionManager &pm) {
-            ScopedTimer _t("partition", "RecursiveBisectionPartitioner", "compute_edge_cut");
+            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "compute_edge_cut");
 
             weight_t cut = 0;
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -370,36 +370,37 @@ namespace HeiProMap {
                        partition_t k,
                        u64 seed,
                        u64 kappa = 1) {
-            ScopedTimer _t_alloc("partition", "RecursiveBisectionPartitioner", "allocate");
-            // Allocate/resize working arrays
-            side.assign(g.n, u8(2));
-            dist.assign(g.n, s32(-1));
-
             RandomEngine rand_engine(seed);
             rng = &rand_engine;
 
             std::vector<vertex_t> all_vertices(g.n);
-            std::iota(all_vertices.begin(), all_vertices.end(), vertex_t(0));
-
             weight_t best_cut = std::numeric_limits<weight_t>::max();
 
             // Reusable PartitionManager for each trial
             PartitionManager trial_pm;
-            trial_pm.initialize(g.n, k, 0); // start with all block weights at 0
-            _t_alloc.stop();
+
+            {
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "allocate");
+                // Allocate/resize working arrays
+                side.assign(g.n, u8(2));
+                dist.assign(g.n, s32(-1));
+                std::iota(all_vertices.begin(), all_vertices.end(), vertex_t(0));
+                trial_pm.initialize(g.n, k, 0); // start with all block weights at 0
+            }
 
             for (u64 trial = 0; trial < kappa; ++trial) {
-                ScopedTimer _t_reset("partition", "RecursiveBisectionPartitioner", "trial_reset");
-                // Reset side array and block weights for this trial
-                std::fill(side.begin(), side.end(), u8(2));
-                trial_pm.reset_weights(); // zeroes bweights and n_vertices
-                _t_reset.stop();
+                {
+                    HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "trial_reset");
+                    // Reset side array and block weights for this trial
+                    std::fill(side.begin(), side.end(), u8(2));
+                    trial_pm.reset_weights(); // zeroes bweights and n_vertices
+                }
 
                 recurse(g, trial_pm, all_vertices, 0, k, g.g_weight);
 
                 const weight_t cut = compute_edge_cut(g, trial_pm);
 
-                ScopedTimer _t_copy("partition", "RecursiveBisectionPartitioner", "copy_best");
+                HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "copy_best");
                 if (cut < best_cut) {
                     best_cut = cut;
                     out_pm.copy_from(trial_pm);

@@ -44,7 +44,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t g_weight) {
-            ScopedTimer _t("misc", "PartitionManager", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("misc", "PartitionManager", "initialize");
 
             n = t_n;
             k = t_k;
@@ -156,7 +156,7 @@ namespace HeiProMap {
         }
 
         void contract(const Mapping &mapping) {
-            ScopedTimer _t("contraction", "PartitionManager", "contract");
+            HEIPROMAP_PROFILE_SCOPE("contraction", "PartitionManager", "contract");
 
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                 vertex_t map_u = mapping.get(u);
@@ -171,7 +171,7 @@ namespace HeiProMap {
         }
 
         void uncontract(const Mapping &mapping) {
-            ScopedTimer _t("uncontraction", "PartitionManager", "uncontract");
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "PartitionManager", "uncontract");
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                 vertex_t map_u = mapping.get(u);
                 partition_temp[u] = partition[map_u];

@@ -49,7 +49,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k) {
-            ScopedTimer _t("misc", "BlockConn", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("misc", "BlockConn", "initialize");
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
@@ -92,7 +92,7 @@ namespace HeiProMap {
         }
 
         void compute_from_scratch(const graph_t &g, const p_manager_t &p_manager) {
-            ScopedTimer _t("uncontraction", "BlockConn", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BlockConn", "compute_from_scratch");
 
             m_sizes.initialize(g.n);
             m_start.initialize(g.n);

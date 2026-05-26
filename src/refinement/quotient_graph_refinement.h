@@ -100,7 +100,7 @@ namespace HeiProMap {
                         const u64 t_threads,
                         const u64 seed,
                         const QuotientGraphRefinementConfiguration &i_config) {
-            ScopedTimer _t("misc", "QuotientGraphRefinement", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraphRefinement", "initialize");
 
             m_n = t_n;
             m_m = t_m;
@@ -163,7 +163,7 @@ namespace HeiProMap {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "init_block_scheduling");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "init_block_scheduling");
 
                 active_this_round.initialize(m_k, 1);
                 active_next_round.initialize(m_k, 0);
@@ -175,12 +175,12 @@ namespace HeiProMap {
                 for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
                     //
                     {
-                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "reset_used_edges");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
                         std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
                     }
 
                     bool found_matching = false; {
-                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "matching");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
                         found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                     }
 
@@ -203,11 +203,11 @@ namespace HeiProMap {
                                 refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                             }
                         } {
-                            ScopedTimer _t("refinement", "QuotientGraphRefinement", "matching");
+                            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
                             found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                         }
                     } {
-                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "swap");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
                         std::swap(active_this_round, active_next_round);
                         active_next_round.initialize(m_k, 0);
                     }
@@ -218,7 +218,7 @@ namespace HeiProMap {
                 for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
                     //
                     {
-                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "get_pairs");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "get_pairs");
 
                         pairs_size = 0;
                         for (partition_t u_id = 0; u_id < m_k; ++u_id) {
@@ -230,7 +230,7 @@ namespace HeiProMap {
                         }
                         if (pairs_size == 0) { return; }
                     } {
-                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "shuffle");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "shuffle");
                         fast_shuffle_unchecked(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
                     }
 
@@ -245,7 +245,7 @@ namespace HeiProMap {
                             refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
                         }
                     } {
-                        ScopedTimer _t("refinement", "QuotientGraphRefinement", "swap");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
                         std::swap(active_this_round, active_next_round);
                         active_next_round.initialize(m_k, 0);
                     }
@@ -273,7 +273,7 @@ namespace HeiProMap {
             size_t max_n_swaps = 0;
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "initial_qap");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_qap");
 
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
@@ -323,7 +323,7 @@ namespace HeiProMap {
             std::vector<vertex_t> moves;
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "process_queue");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue");
 
                 while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
                     // determine from which block to choose
@@ -420,7 +420,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "make_moves");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "make_moves");
 
                 // revert all moves in partitioning manager
                 for (size_t i = 0; i < moves.size(); i++) {
@@ -474,7 +474,7 @@ namespace HeiProMap {
             size_t max_n_swaps = 0;
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "initial_edge_cut");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_edge_cut");
 
                 // add all boundary vertices with gain
                 boundary_vertices_u.clear();
@@ -522,7 +522,7 @@ namespace HeiProMap {
             std::vector<vertex_t> moves;
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
 
                 while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
                     // determine from which block to choose
@@ -619,7 +619,7 @@ namespace HeiProMap {
             }
             //
             {
-                ScopedTimer _t("refinement", "QuotientGraphRefinement", "make_moves_edge_cut");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "make_moves_edge_cut");
 
                 // revert all moves in partitioning manager
                 for (size_t i = 0; i < moves.size(); i++) {

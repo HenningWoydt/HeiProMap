@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
     if (argc > 1) {
         config = HeiProMap::DynConfiguration(argc, argv);
     } else {
-        HeiProMap::ScopedTimer _t("io", "main", "parse_args");
+        HEIPROMAP_PROFILE_SCOPE("io", "main", "parse_args");
         std::vector<std::pair<std::string, std::string> > input = {
             {"--hierarchy", "4:8:6"},
             {"--distance", "1:10:100"},

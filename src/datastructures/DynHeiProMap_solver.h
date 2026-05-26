@@ -82,7 +82,7 @@ namespace HeiProMap {
         weight_t total_migration_cost_from_start = 0;
 
         void exec_file(const std::string &file_path) {
-            ScopedTimer _t("solver", "exec_file", "exec_file");
+            HEIPROMAP_PROFILE_SCOPE("solver", "exec_file", "exec_file");
             std::ifstream file(file_path);
             if (!file.is_open()) {
                 std::cerr << "Cannot open file: " << file_path << std::endl;
@@ -453,7 +453,7 @@ namespace HeiProMap {
         }
 
         void run_partition(const std::string &config_str) {
-            ScopedTimer _t("solver", "run_partition", "run_partition");
+            HEIPROMAP_PROFILE_SCOPE("solver", "run_partition", "run_partition");
 
             std::cout << "Partitioning with config: " << config_str << " (HeiProMap multisection)" << std::endl;
             
@@ -509,7 +509,7 @@ namespace HeiProMap {
         }
 
         void run_refine_fast(u32 num_iterations) {
-            ScopedTimer _t("solver", "refine-fast", "refine-fast");
+            HEIPROMAP_PROFILE_SCOPE("solver", "refine-fast", "refine-fast");
 
             if (p_manager.n < g.n) {
                 // Should not happen if incremental updates are implemented, 

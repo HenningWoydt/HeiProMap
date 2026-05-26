@@ -32,7 +32,7 @@ int main(const int argc, char *argv[]) {
 
     if (argc == 1) {
         {
-            HeiProMap::ScopedTimer _t("io", "main", "read_args");
+            HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
                 {"--graph", "../../ProMapRepo/data/mapping/del23.graph"},
                 {"--mapping", "../data/out/partition/del23.txt"},
