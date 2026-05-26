@@ -130,6 +130,7 @@ namespace HeiProMap {
         void initialize(const ResidualFlowNetwork &residual_flow_network,
                         const GraphT &g,
                         const TranslationTable<vertex_t> &tt) {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc");
             temp_g = &residual_flow_network;
 
             n = residual_flow_network.get_n() + 2;
@@ -150,6 +151,7 @@ namespace HeiProMap {
             vertex_per_scc.clear();
 
             // === Gabow's Algorithm ===
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_gabow");
             for (vertex_t v = 0; v < n; ++v) {
                 // if (index[v] == UNVISITED) { dfs(v, residual_flow_network); }
                 if (index[v] == UNVISITED) { dfs_non_recursive(v, residual_flow_network); }
@@ -163,6 +165,7 @@ namespace HeiProMap {
             rev_edges.resize(n_scc);
 
             // build the graph and the reversed graph
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_build");
             for (vertex_t u = 0; u < n; ++u) {
                 vertex_t scc_u = scc_id[u];
                 for (size_t j = 0; j < residual_flow_network.neighbor_count(u); ++j) {
@@ -174,6 +177,7 @@ namespace HeiProMap {
             }
 
             // make each edge list unique
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_unique");
             for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
                 std::sort(edges[scc_u].begin(), edges[scc_u].end());
                 edges[scc_u].erase(unique(edges[scc_u].begin(), edges[scc_u].end()), edges[scc_u].end());
@@ -189,6 +193,7 @@ namespace HeiProMap {
             scc_target = scc_id[target];
 
             // determine the weight of each scc in the graph
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_weights");
             scc_weights.clear();
             scc_weights.resize(n_scc, 0);
             for (vertex_t u = 0; u < n; ++u) {
@@ -667,7 +672,7 @@ namespace HeiProMap {
         void dfs_non_recursive(vertex_t start, const ResidualFlowNetwork &residual_flow_network) {
             std::stack<std::pair<vertex_t, size_t> > dfs_stack; // (node, next neighbor index)
 
-            dfs_stack.push({start, 0});
+            dfs_stack.emplace(start, 0);
             index[start] = idx++;
             S.push_back(start);
             P.push_back(start);
@@ -681,7 +686,7 @@ namespace HeiProMap {
                         index[u] = idx++;
                         S.push_back(u);
                         P.push_back(u);
-                        dfs_stack.push({u, 0}); // dive deeper
+                        dfs_stack.emplace(u, 0); // dive deeper
                     } else if (scc_id[u] == UNVISITED) {
                         while (!P.empty() && index[P.back()] > index[u]) {
                             P.pop_back();

@@ -27,12 +27,18 @@
 #ifndef HEIPROMAP_GLOBAL_MULTISECTION_H
 #define HEIPROMAP_GLOBAL_MULTISECTION_H
 
+#include <vector>
+#include <iostream>
+#include <cmath>
+
 #include "../definitions.h"
+#include "../utility/aligned_array.h"
 #include "../utility/utils.h"
 #include "kaffpa_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../utility/qap.h"
 #include "kway_partitioner/kway_core.h"
+#include "../utility/translation_table.h"
 
 namespace HeiProMap {
     enum GlobalMultisectionMode {
@@ -41,6 +47,10 @@ namespace HeiProMap {
         GLOBAL_MULTISECTION_KAFFPA_ECO,
         GLOBAL_MULTISECTION_KAFFPA_FAST,
         GLOBAL_MULTISECTION_METIS_KWAY,
+        GLOBAL_MULTISECTION_HEIPA_FAST,
+        GLOBAL_MULTISECTION_HEIPA_ECO,
+        GLOBAL_MULTISECTION_HEIPA_STRONG,
+        GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG,
     };
 
     inline GlobalMultisectionMode string_to_global_multisection_mode(const std::string &str) {
@@ -49,6 +59,10 @@ namespace HeiProMap {
         if (str == "kaffpa-eco") return GLOBAL_MULTISECTION_KAFFPA_ECO;
         if (str == "kaffpa-fast") return GLOBAL_MULTISECTION_KAFFPA_FAST;
         if (str == "metis-kway") return GLOBAL_MULTISECTION_METIS_KWAY;
+        if (str == "heipa-fast") return GLOBAL_MULTISECTION_HEIPA_FAST;
+        if (str == "heipa-eco") return GLOBAL_MULTISECTION_HEIPA_ECO;
+        if (str == "heipa-strong") return GLOBAL_MULTISECTION_HEIPA_STRONG;
+        if (str == "heipa-super-strong") return GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG;
         return GLOBAL_MULTISECTION_UNDEFINED;
     }
 
@@ -64,6 +78,14 @@ namespace HeiProMap {
                 return "kaffpa-fast";
             case GLOBAL_MULTISECTION_METIS_KWAY:
                 return "metis-kway";
+            case GLOBAL_MULTISECTION_HEIPA_FAST:
+                return "heipa-fast";
+            case GLOBAL_MULTISECTION_HEIPA_ECO:
+                return "heipa-eco";
+            case GLOBAL_MULTISECTION_HEIPA_STRONG:
+                return "heipa-strong";
+            case GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG:
+                return "heipa-super-strong";
             default:
                 return "UNDEFINED";
         }
@@ -75,6 +97,9 @@ namespace HeiProMap {
         GlobalMultisectionMode mode; // Which mode to use STRONG, ECO, FAST
         u64 kappa = 1;
     };
+
+    // Forward declaration of the HeiPa wrapper to resolve circular dependency
+    void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode);
 
     struct Item {
         graph_t *g = nullptr;
@@ -95,7 +120,7 @@ namespace HeiProMap {
                               const f64 imbalance,
                               const GlobalMultisectionConfiguration &i_config,
                               u64 seed) {
-            GlobalMultisectionConfiguration config = *dynamic_cast<const GlobalMultisectionConfiguration *>(&i_config);
+            GlobalMultisectionConfiguration config = i_config;
 
             RandomEngine rnd_engine(seed);
 
@@ -158,6 +183,8 @@ namespace HeiProMap {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
+                } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
+                    heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode);
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();
@@ -169,102 +196,99 @@ namespace HeiProMap {
                     for (partition_t i = 0; i < l - 1; ++i) { offset += item.identifier->operator[](i) * index_vec[index_vec.size() - 1 - i]; }
                     for (vertex_t u = 0; u < item.g->n; ++u) { p_manager.set(item.tt->get_o(u), item.g->v_weights[u], offset + partition[u]); }
                 } else {
-                    // create the subgraphs and place them in the next stack
-
-                    // collect the number of vertices and edges for each new subgraph
+                    // split problem
                     std::vector<vertex_t> new_ns(item.k, 0);
                     std::vector<vertex_t> new_ms(item.k, 0);
                     std::vector<weight_t> new_ws(item.k, 0);
+
                     for (vertex_t u = 0; u < item.g->n; ++u) {
-                        partition_t u_id = partition[u];
-                        new_ns[u_id] += 1;
-                        new_ws[u_id] += item.g->v_weights[u];
+                        partition_t id = partition[u];
+                        new_ns[id] += 1;
+                        new_ws[id] += item.g->v_weights[u];
                         for (size_t i = item.g->neighborhoods[u]; i < item.g->neighborhoods[u + 1]; ++i) {
                             vertex_t v = item.g->edges_v[i];
-                            partition_t v_id = partition[v];
-                            if (v_id == u_id) { new_ms[u_id] += 1; }
+                            if (partition[v] == id) { new_ms[id] += 1; }
                         }
                     }
 
-                    // create the new subgraphs on the stack
                     for (partition_t i = 0; i < item.k; ++i) {
-                        stack.emplace_back();
-                        Item &new_item = stack.back();
-                        new_item.g = new CSRGraph(new_ns[i], new_ms[i], new_ws[i]);
-                        new_item.identifier = new std::vector<partition_t>(*item.identifier);
-                        new_item.identifier->push_back(i);
-                        new_item.tt = new TranslationTable<vertex_t>();
-                        new_item.tt->reserve(new_ns[i], global_n);
-                    }
+                        Item next_item;
+                        next_item.free = true;
+                        next_item.g = new graph_t(new_ns[i], new_ms[i], new_ws[i]);
+                        next_item.tt = new TranslationTable<vertex_t>();
+                        next_item.tt->reserve(new_ns[i], global_n);
 
-                    // fill the translation tables
-                    std::vector<vertex_t> new_us(item.k, 0);
-                    for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
-                        partition_t u_id = partition[old_u];
-                        size_t idx = stack.size() - (item.k - u_id);
-
-                        stack[idx].tt->add(item.tt->get_o(old_u), new_us[u_id]);
-                        new_us[u_id] += 1;
-                    }
-
-                    // create the graphs
-                    for (partition_t i = 0; i < item.k; ++i) {
-                        size_t idx = stack.size() - (item.k - i);
-                        stack[idx].g->neighborhoods[0] = 0;
-                    }
-
-                    for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
-                        partition_t u_id = partition[old_u];
-                        size_t idx = stack.size() - (item.k - u_id);
-
-                        graph_t &sub_g = *stack[idx].g;
-                        TranslationTable<vertex_t> &sub_tt = *stack[idx].tt;
-
-                        vertex_t new_u = sub_tt.get_n(item.tt->get_o(old_u)); // vertex in new graph
-
-                        // set the weight
-                        sub_g.v_weights[new_u] = item.g->v_weights[old_u];
-
-                        // set the edges
-                        vertex_t edge_count = 0;
-                        for (size_t i = item.g->neighborhoods[old_u]; i < item.g->neighborhoods[old_u + 1]; ++i) {
-                            vertex_t old_v = item.g->edges_v[i];
-
-                            if (partition[old_v] == u_id) {
-                                // add the edge
-                                vertex_t new_v = sub_tt.get_n(item.tt->get_o(old_v)); // vertex in new graph
-
-                                sub_g.edges_v[sub_g.neighborhoods[new_u] + edge_count] = new_v;
-                                sub_g.edges_w[sub_g.neighborhoods[new_u] + edge_count] = item.g->edges_w[i];
-                                edge_count += 1;
+                        std::vector<vertex_t> new_us(item.k, 0);
+                        for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
+                            if (partition[old_u] == i) {
+                                next_item.tt->add(item.tt->get_o(old_u), new_us[i]);
+                                new_us[i] += 1;
                             }
                         }
-                        sub_g.neighborhoods[new_u + 1] = sub_g.neighborhoods[new_u] + edge_count;
-                    }
 
-                    // fill in other information
-                    for (partition_t i = 0; i < item.k; ++i) {
-                        size_t idx = stack.size() - 1 - i;
-                        stack[idx].k = hierarchy[l - 1 - stack[idx].identifier->size()];
-                        stack[idx].imb = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, stack[idx].g->g_weight, k_rem_vec[l - 1 - stack[idx].identifier->size()], l - stack[idx].identifier->size());
-                        stack[idx].seed = rnd_engine.get_s32();
+                        std::vector<vertex_t> degrees(next_item.g->n, 0);
+                        for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
+                            if (partition[old_u] == i) {
+                                vertex_t new_u = next_item.tt->get_n(item.tt->get_o(old_u));
+                                for (size_t j = item.g->neighborhoods[old_u]; j < item.g->neighborhoods[old_u + 1]; ++j) {
+                                    vertex_t old_v = item.g->edges_v[j];
+                                    if (partition[old_v] == i) {
+                                        degrees[new_u]++;
+                                    }
+                                }
+                            }
+                        }
+
+                        next_item.g->neighborhoods[0] = 0;
+                        for (vertex_t j = 0; j < next_item.g->n; ++j) {
+                            next_item.g->neighborhoods[j + 1] = next_item.g->neighborhoods[j] + degrees[j];
+                        }
+
+                        std::vector<vertex_t> cursor(next_item.g->n, 0);
+                        for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
+                            if (partition[old_u] == i) {
+                                vertex_t new_u = next_item.tt->get_n(item.tt->get_o(old_u));
+                                next_item.g->v_weights[new_u] = item.g->v_weights[old_u];
+
+                                for (size_t j = item.g->neighborhoods[old_u]; j < item.g->neighborhoods[old_u + 1]; ++j) {
+                                    vertex_t old_v = item.g->edges_v[j];
+                                    if (partition[old_v] == i) {
+                                        vertex_t new_v = next_item.tt->get_n(item.tt->get_o(old_v));
+                                        size_t pos = next_item.g->neighborhoods[new_u] + cursor[new_u];
+                                        next_item.g->edges_v[pos] = new_v;
+                                        next_item.g->edges_w[pos] = item.g->edges_w[j];
+                                        cursor[new_u]++;
+                                    }
+                                }
+                            }
+                        }
+
+                        next_item.identifier = new std::vector<partition_t>(*item.identifier);
+                        next_item.identifier->push_back(i);
+                        next_item.k = hierarchy[hierarchy.size() - 1 - next_item.identifier->size()];
+                        next_item.imb = determine_adaptive_imbalance(global_imbalance, global_g_weight, global_k, next_item.g->g_weight, k_rem_vec[l - 1 - next_item.identifier->size()], l - (partition_t) next_item.identifier->size());
+                        next_item.seed = rnd_engine.get_s32();
+
+                        stack.push_back(next_item);
                     }
                 }
+
+                // free
+                delete item.identifier;
+                delete item.tt;
                 if (item.free) {
                     delete item.g;
                 }
-                delete item.identifier;
-                delete item.tt;
             }
         }
 
         static f64 determine_adaptive_imbalance(const f64 global_imbalance,
-                                                const u64 global_g_weight,
-                                                const u64 global_k,
-                                                const u64 local_g_weight,
-                                                const u64 local_k_rem,
-                                                const u64 depth) {
-            f64 local_imbalance = (1.0 + global_imbalance) * ((f64) (local_k_rem * global_g_weight) / (f64) (global_k * local_g_weight));
+                                                const weight_t global_g_weight,
+                                                const partition_t global_k,
+                                                const weight_t local_g_weight,
+                                                const partition_t local_k,
+                                                const partition_t depth) {
+            f64 local_imbalance = (((1.0 + global_imbalance) * (f64) local_k * (f64) global_g_weight) / (f64) (global_k * local_g_weight));
             local_imbalance = std::pow(local_imbalance, (f64) 1 / (f64) depth) - 1.0;
             return local_imbalance;
         }

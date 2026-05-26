@@ -40,6 +40,13 @@ namespace HeiProMap {
         KAFFPA_PARTITION_FAST
     };
 
+    inline KaffpaPartitionMode string_to_kaffpa_partition_mode(const std::string &str) {
+        if (str == "strong") return KAFFPA_PARTITION_STRONG;
+        if (str == "eco") return KAFFPA_PARTITION_ECO;
+        if (str == "fast") return KAFFPA_PARTITION_FAST;
+        return KAFFPA_PARTITION_FAST;
+    }
+
     inline void kaffpa_partition(graph_t &g,
                                  partition_t k,
                                  f64 imb,

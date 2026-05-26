@@ -196,7 +196,7 @@ namespace HeiProMap {
             n_vertices.initialize(k, 0);
         }
 
-        void copy_from(PartitionManager &p_manager) {
+        void copy_from(const PartitionManager &p_manager) {
             for (vertex_t u = 0; u < p_manager.n; ++u) {
                 partition[u] = p_manager.partition[u];
             }

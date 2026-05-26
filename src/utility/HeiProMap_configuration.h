@@ -31,14 +31,6 @@
 #include <vector>
 
 #include "../definitions.h"
-#include "utils.h"
-#include "../partitioning/global_multisection.h"
-#include "../refinement/label_propagation_refinement.h"
-#include "../refinement/quotient_graph_refinement.h"
-#include "../coarsening/global_path_algorithm.h"
-#include "../coarsening/size_constrained_lp.h"
-#include "../partitioning/kaffpa_partitioner.h"
-
 
 namespace HeiProMap {
     enum COARSENING_ALGS {
@@ -72,6 +64,7 @@ namespace HeiProMap {
         PARTITIONING_ALG_KAFFPA,
         PARTITIONING_ALG_MULTISECTION,
         PARTITIONING_ALG_RECURSIVE_BISECTION,
+        PARTITIONING_ALG_HEIPA,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
@@ -79,6 +72,7 @@ namespace HeiProMap {
         if (str == "kaffpa")              return PARTITIONING_ALG_KAFFPA;
         if (str == "multisection")        return PARTITIONING_ALG_MULTISECTION;
         if (str == "recursive-bisection") return PARTITIONING_ALG_RECURSIVE_BISECTION;
+        if (str == "heipa")               return PARTITIONING_ALG_HEIPA;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
@@ -88,6 +82,7 @@ namespace HeiProMap {
             case PARTITIONING_ALG_KAFFPA:               return "kaffpa";
             case PARTITIONING_ALG_MULTISECTION:         return "multisection";
             case PARTITIONING_ALG_RECURSIVE_BISECTION:  return "recursive-bisection";
+            case PARTITIONING_ALG_HEIPA:                return "heipa";
             default:                                    return "UNDEFINED";
         }
     }
@@ -113,7 +108,18 @@ namespace HeiProMap {
                 return "UNDEFINED";
         }
     }
+}
 
+#include "utils.h"
+#include "../partitioning/global_multisection.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
+#include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/size_constrained_lp.h"
+#include "../partitioning/kaffpa_partitioner.h"
+
+
+namespace HeiProMap {
     class AlgorithmConfiguration {
     public:
         std::vector<CommandLineOption> options = {
@@ -137,11 +143,14 @@ namespace HeiProMap {
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
 
             /** Partitioning */
-            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection}.", "multisection", "", false},
+            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, heipa}.", "multisection", "", false},
 
             // Partitioning kaffpa
             {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
             {"--partitioning-algorithm-kaffpa-partitioning-method", "", "Which mode {bisection, multisection} to use.", "multisection", "", false},
+
+            // Partitioning heipa
+            {"--partitioning-algorithm-heipa-config", "", "Which config {fast, eco, strong, super-strong} to use for HeiPa.", "strong", "", false},
 
             // Partitioning multisection
             {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -199,6 +208,7 @@ namespace HeiProMap {
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
         GlobalMultisectionConfiguration global_multisection_config;
+        std::string heipa_config_string = "strong";
 
         // rebalance algorithm
         std::string rebalancing_algorithm_string;
@@ -322,6 +332,11 @@ namespace HeiProMap {
                 global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             }
 
+            // initialize heipa config
+            if (use_default || is_set("--partitioning-algorithm-heipa-config")) {
+                heipa_config_string = get("--partitioning-algorithm-heipa-config");
+            }
+
             // actually set which algorithm to use
             if (use_default || is_set("--partitioning-algorithm")) {
                 partitioning_algorithm_string = get("--partitioning-algorithm");
@@ -435,8 +450,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "metis-kway";
-            // global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 
@@ -471,8 +485,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-eco";
-            // global_multisection_config.mode_string = "metis-kway";
+            global_multisection_config.mode_string = "heipa-eco";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 3;
 
@@ -507,7 +520,7 @@ namespace HeiProMap {
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.random_level = 4;
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
@@ -516,7 +529,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-strong";
+            global_multisection_config.mode_string = "heipa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 
@@ -560,7 +573,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-strong";
+            global_multisection_config.mode_string = "heipa-super-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
 

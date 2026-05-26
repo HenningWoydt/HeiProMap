@@ -71,7 +71,6 @@ int main(const int argc, char *argv[]) {
             }
 
             HeiProMap::HeiPaConfiguration ac(temp_argc, temp_argv);
-            _t.stop();
 
             HeiProMap::HeiPaSolver solver(ac);
             solver.solve();

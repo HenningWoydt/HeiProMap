@@ -77,16 +77,16 @@ namespace HeiProMap {
         std::vector<RandomEngine> rnd_engines;
 
         // per-thread persistent storage to avoid repeated allocations
-        std::vector<std::vector<vertex_t>> left_boundaries;
-        std::vector<std::vector<vertex_t>> right_boundaries;
-        std::vector<std::vector<vertex_t>> left_regions;
-        std::vector<std::vector<vertex_t>> right_regions;
-        std::vector<std::vector<vertex_t>> queues;
-        std::vector<std::vector<u8>> is_left_vecs;
-        std::vector<std::vector<u8>> is_left_2_vecs;
-        std::vector<std::vector<u8>> s_connected_vecs;
-        std::vector<std::vector<u8>> t_connected_vecs;
-        std::vector<PushRelabel<int>> prs;
+        std::vector<std::vector<vertex_t> > left_boundaries;
+        std::vector<std::vector<vertex_t> > right_boundaries;
+        std::vector<std::vector<vertex_t> > left_regions;
+        std::vector<std::vector<vertex_t> > right_regions;
+        std::vector<std::vector<vertex_t> > queues;
+        std::vector<std::vector<u8> > is_left_vecs;
+        std::vector<std::vector<u8> > is_left_2_vecs;
+        std::vector<std::vector<u8> > s_connected_vecs;
+        std::vector<std::vector<u8> > t_connected_vecs;
+        std::vector<PushRelabel<int> > prs;
         std::vector<MemoryStack> pr_mems;
         std::vector<ResidualFlowNetwork> residual_flow_networks;
         std::vector<SCCGraph> scc_graphs;
@@ -151,20 +151,20 @@ namespace HeiProMap {
                     f64 imbalance,
                     bool uniform_v_weights,
                     bool uniform_e_weights) {
-            if (uniform_v_weights && uniform_e_weights)      refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_v_weights)                      refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_e_weights)                      refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else                                             refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_impl(graph_t &g,
-                    d_oracle_t &d_oracle,
-                    bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    q_graph_t &q_graph,
-                    block_conn_t &block_conn,
-                    f64 imbalance) {
+                         d_oracle_t &d_oracle,
+                         bv_manager_t &bv_manager,
+                         p_manager_t &p_manager,
+                         q_graph_t &q_graph,
+                         block_conn_t &block_conn,
+                         f64 imbalance) {
             RandomEngine &random_engine = rnd_engines[0];
 
             // active block scheduling
@@ -172,33 +172,21 @@ namespace HeiProMap {
             AlignedArray<u8> active_next_round;
             AlignedArray<u8> used_this_round;
 
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "allocate");
+            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "allocate");
+            active_this_round.initialize(m_k, 1);
+            active_next_round.initialize(m_k, 0);
+            used_this_round.initialize(m_k * m_k);
 
-                active_this_round.initialize(m_k, 1);
-                active_next_round.initialize(m_k, 0);
-                used_this_round.initialize(m_k * m_k);
-            }
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
             if (m_threads > 1) {
                 for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                    //
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reset_used_edges");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reset_used_edges");
+                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                        std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
-                    }
-
-                    bool found_matching = false;
-                    //
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-
-                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
+                    bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
 
                     while (found_matching) {
                         #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
@@ -210,53 +198,38 @@ namespace HeiProMap {
                             refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                         }
 
-                        //
-                        {
-                            HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-
-                            found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                        }
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
+                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                     }
 
                     // swap active
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
-
-                        if (config->use_active_block_scheduling) {
-                            std::swap(active_this_round, active_next_round);
-                            active_next_round.initialize(m_k, 0);
-                        }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
+                    if (config->use_active_block_scheduling) {
+                        std::swap(active_this_round, active_next_round);
+                        active_next_round.initialize(m_k, 0);
                     }
                 }
             } else {
                 std::vector<std::pair<partition_t, partition_t> > pairs;
 
                 for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                    //
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_pairs");
-
-                        for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                            for (partition_t v_id = 0; v_id < m_k; ++v_id) {
-                                if (q_graph.has_edge(u_id, v_id)) {
-                                    if (config->use_closed_vertex_set) {
-                                        if (active_this_round[u_id] || active_this_round[v_id]) {
-                                            pairs.emplace_back(u_id, v_id);
-                                        }
-                                    } else {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_pairs");
+                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                        for (partition_t v_id = 0; v_id < m_k; ++v_id) {
+                            if (q_graph.has_edge(u_id, v_id)) {
+                                if (config->use_closed_vertex_set) {
+                                    if (active_this_round[u_id] || active_this_round[v_id]) {
                                         pairs.emplace_back(u_id, v_id);
                                     }
+                                } else {
+                                    pairs.emplace_back(u_id, v_id);
                                 }
                             }
                         }
                     }
 
-                    //
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "shuffle");
-
-                        fast_shuffle_unchecked(pairs.data(), pairs.data() + pairs.size(), random_engine.generator);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "shuffle");
+                    fast_shuffle_unchecked(pairs.data(), pairs.data() + pairs.size(), random_engine.generator);
 
                     for (size_t i = 0; i < pairs.size(); ++i) {
                         partition_t u_id = pairs[i].first;
@@ -266,14 +239,10 @@ namespace HeiProMap {
                         refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                     }
 
-
                     // swap active
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
-
-                        std::swap(active_this_round, active_next_round);
-                        active_next_round.initialize(m_k, 0);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
+                    std::swap(active_this_round, active_next_round);
+                    active_next_round.initialize(m_k, 0);
                 }
             }
         }
@@ -373,27 +342,20 @@ namespace HeiProMap {
                 }
 
                 // solve the flow network
-                {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "solve_maxflow");
-                    pr.maxflow();
-                }
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "solve_maxflow");
+                pr.maxflow();
 
                 // get the cut
-                {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_cut");
-                    size_t flow_n = left_region.size() + right_region.size();
-                    is_left.resize(flow_n);
-                    for (size_t i = 0; i < flow_n; ++i) {
-                        is_left[i] = (pr.what_label(static_cast<int>(i)) == SOURCE) ? 1 : 0;
-                    }
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_cut");
+                size_t flow_n = left_region.size() + right_region.size();
+                is_left.resize(flow_n);
+                for (size_t i = 0; i < flow_n; ++i) {
+                    is_left[i] = (pr.what_label(static_cast<int>(i)) == SOURCE) ? 1 : 0;
                 }
 
-                bool is_valid;
                 // check if cut is valid
-                {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
-                    is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
-                }
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
+                bool is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
 
                 if (!is_valid && !config->use_closed_vertex_set) {
                     if (alpha <= 1.0) { return; }
@@ -403,30 +365,25 @@ namespace HeiProMap {
 
                 if (config->use_closed_vertex_set) {
                     // build residual network from cut labels
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_residual_network");
-                        build_residual_from_cut(g, pr, left_region, right_region, translation_table, region_marker, region_mark, s_connected, t_connected, residual_flow_network);
-                        residual_flow_network.finalize();
-                    }
+
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_residual_network");
+                    build_residual_from_cut(g, pr, left_region, right_region, translation_table, region_marker, region_mark, s_connected, t_connected, residual_flow_network);
+                    residual_flow_network.finalize();
+
                     // build scc graph
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_scc");
-                        scc_graph.initialize(residual_flow_network, g, translation_table);
-                    }
+                    scc_graph.initialize(residual_flow_network, g, translation_table);
+
                     // reduce the scc graph
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reduce_scc");
-                        scc_graph.reduce();
-                    }
-                    bool closure_found;
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reduce_scc");
+                    scc_graph.reduce();
+
                     // determine best balanced min cut
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_find");
-                        weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
-                        weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
-                        f64 avg_weight = (f64) g.g_weight / (f64) m_k;
-                        closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_find");
+                    weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
+                    weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
+                    f64 avg_weight = (f64) g.g_weight / (f64) m_k;
+                    bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
+
                     //
                     if (!closure_found) {
                         if (alpha <= 1.0) { return; }
@@ -637,8 +594,14 @@ namespace HeiProMap {
                     }
                 }
 
-                if (left_penalty > 0) { pr.add_edge(new_u, snk, left_penalty); t_connected[new_u] = 1; }
-                if (right_penalty > 0) { pr.add_edge(src, new_u, right_penalty); s_connected[new_u] = 1; }
+                if (left_penalty > 0) {
+                    pr.add_edge(new_u, snk, left_penalty);
+                    t_connected[new_u] = 1;
+                }
+                if (right_penalty > 0) {
+                    pr.add_edge(src, new_u, right_penalty);
+                    s_connected[new_u] = 1;
+                }
             }
 
             // build right region: only right-right and penalties
@@ -675,8 +638,14 @@ namespace HeiProMap {
                     }
                 }
 
-                if (left_penalty > 0) { pr.add_edge(new_u, snk, left_penalty); t_connected[new_u] = 1; }
-                if (right_penalty > 0) { pr.add_edge(src, new_u, right_penalty); s_connected[new_u] = 1; }
+                if (left_penalty > 0) {
+                    pr.add_edge(new_u, snk, left_penalty);
+                    t_connected[new_u] = 1;
+                }
+                if (right_penalty > 0) {
+                    pr.add_edge(src, new_u, right_penalty);
+                    s_connected[new_u] = 1;
+                }
             }
         }
 
@@ -735,13 +704,18 @@ namespace HeiProMap {
                         }
 
                         partition_t v_id = p_manager[v];
-                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); }
-                        else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
+                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                     }
                 }
 
-                if (w_left > 0) { pr.add_edge(src, new_u, w_left); s_connected[new_u] = 1; }
-                if (w_right > 0) { pr.add_edge(new_u, snk, w_right); t_connected[new_u] = 1; }
+                if (w_left > 0) {
+                    pr.add_edge(src, new_u, w_left);
+                    s_connected[new_u] = 1;
+                }
+                if (w_right > 0) {
+                    pr.add_edge(new_u, snk, w_right);
+                    t_connected[new_u] = 1;
+                }
             }
 
             // build right region
@@ -764,13 +738,18 @@ namespace HeiProMap {
                         }
 
                         partition_t v_id = p_manager[v];
-                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); }
-                        else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
+                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
                     }
                 }
 
-                if (w_left > 0) { pr.add_edge(src, new_u, w_left); s_connected[new_u] = 1; }
-                if (w_right > 0) { pr.add_edge(new_u, snk, w_right); t_connected[new_u] = 1; }
+                if (w_left > 0) {
+                    pr.add_edge(src, new_u, w_left);
+                    s_connected[new_u] = 1;
+                }
+                if (w_right > 0) {
+                    pr.add_edge(new_u, snk, w_right);
+                    t_connected[new_u] = 1;
+                }
             }
         }
 

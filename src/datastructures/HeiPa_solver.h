@@ -49,6 +49,7 @@
 #include "../utility/qap.h"
 
 namespace HeiProMap {
+
     class HeiPaSolver {
         HeiPaConfiguration ac;
         RandomEngine random_engine;
@@ -363,8 +364,6 @@ namespace HeiProMap {
         void partition(u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
             HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
-
-            std::cout << "ABC " << ac.partitioning_algorithm_id << std::endl;
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (ac.partitioning_algorithm_id == PARTITIONING_ALG_RECURSIVE_BISECTION) {
@@ -692,6 +691,28 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
     };
+
+    inline void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode) {
+        HeiPaConfiguration h_ac;
+        h_ac.k = k;
+        h_ac.imbalance = imb;
+        h_ac.seed = seed;
+
+        if (mode == GLOBAL_MULTISECTION_HEIPA_FAST) h_ac.set_fast();
+        else if (mode == GLOBAL_MULTISECTION_HEIPA_ECO) h_ac.set_eco();
+        else if (mode == GLOBAL_MULTISECTION_HEIPA_STRONG) h_ac.set_strong();
+        else if (mode == GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) h_ac.set_super_strong();
+
+        h_ac.k = k;
+        h_ac.imbalance = imb;
+
+        graph_t g_copy = g;
+        HeiPaSolver solver(std::move(g_copy), h_ac);
+        const PartitionManager &p_man = solver.solve_subproblem();
+        for (vertex_t u = 0; u < g.n; ++u) {
+            partition[u] = p_man[u];
+        }
+    }
 }
 
 #endif //HEIPROMAP_HEIPA_SOLVER_H

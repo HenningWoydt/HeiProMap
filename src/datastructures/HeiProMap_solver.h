@@ -48,6 +48,7 @@
 #include "distance_oracle.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../utility/translation_table.h"
+#include "HeiPa_solver.h"
 
 namespace HeiProMap {
     class Solver {
@@ -340,7 +341,6 @@ namespace HeiProMap {
             u64 mult = ac.initial_c;
 
             f64 level_imbalance = 0.0;
-            f64 per_level_imb_add = 1.0 / 400.0;
             [[maybe_unused]] weight_t level_lmax = 0;
 
             while (graphs.back().n > ac.k * mult) {
@@ -351,7 +351,7 @@ namespace HeiProMap {
                 level_infos[level].m = graphs.back().m;
                 #endif
 
-                level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
+                level_imbalance = ac.imbalance;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
                 coarsening(level, level_imbalance);
@@ -367,7 +367,7 @@ namespace HeiProMap {
             level_infos[level].m = graphs.back().m;
             #endif
 
-            level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
+            level_imbalance = ac.imbalance;
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             partition(level, level_imbalance);
@@ -385,7 +385,7 @@ namespace HeiProMap {
             while (!mappings.empty()) {
                 level -= 1;
 
-                level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
+                level_imbalance = ac.imbalance;
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                 uncontraction(level);
 
@@ -444,6 +444,28 @@ namespace HeiProMap {
                         GlobalMultisectionPartitioner partitioner;
                         partitioner.partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
                     }
+                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_HEIPA) {
+                    HeiPaConfiguration h_ac;
+                    h_ac.k = ac.k;
+                    h_ac.imbalance = level_imbalance;
+                    h_ac.seed = ac.seed;
+                    h_ac.threads = ac.threads;
+
+                    if (ac.heipa_config_string == "fast") h_ac.set_fast();
+                    else if (ac.heipa_config_string == "eco") h_ac.set_eco();
+                    else if (ac.heipa_config_string == "strong") h_ac.set_strong();
+                    else if (ac.heipa_config_string == "super-strong") h_ac.set_super_strong();
+                    else if (ac.heipa_config_string == "experimental") h_ac.set_experimental();
+
+                    // override k and imbalance again just in case set_* changed them (they shouldn't, but safety first)
+                    h_ac.k = ac.k;
+                    h_ac.imbalance = level_imbalance;
+
+                    graph_t g_copy = graphs.back();
+                    HeiPaSolver heipa(std::move(g_copy), h_ac);
+                    const PartitionManager &heipa_pm = heipa.solve_subproblem();
+
+                    p_manager.copy_from(heipa_pm);
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);

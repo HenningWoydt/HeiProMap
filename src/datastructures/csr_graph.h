@@ -442,10 +442,34 @@ namespace HeiProMap {
             edges_w = std::move(other.edges_w);
         }
 
-        // Optionally disable copying.
-        CSRGraph(const CSRGraph &) = delete;
+        CSRGraph(const CSRGraph &other) {
+            n = other.n;
+            m = other.m;
+            g_weight = other.g_weight;
+            uniform_v_weights = other.uniform_v_weights;
+            uniform_e_weights = other.uniform_e_weights;
 
-        CSRGraph &operator=(const CSRGraph &) = delete;
+            v_weights = other.v_weights;
+            neighborhoods = other.neighborhoods;
+            edges_v = other.edges_v;
+            edges_w = other.edges_w;
+        }
+
+        CSRGraph &operator=(const CSRGraph &other) {
+            if (this != &other) {
+                n = other.n;
+                m = other.m;
+                g_weight = other.g_weight;
+                uniform_v_weights = other.uniform_v_weights;
+                uniform_e_weights = other.uniform_e_weights;
+
+                v_weights = other.v_weights;
+                neighborhoods = other.neighborhoods;
+                edges_v = other.edges_v;
+                edges_w = other.edges_w;
+            }
+            return *this;
+        }
 
         size_t deg(const vertex_t u) const { return neighborhoods[u + 1] - neighborhoods[u]; }
 
