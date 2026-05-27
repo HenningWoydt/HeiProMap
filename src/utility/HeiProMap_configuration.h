@@ -66,27 +66,33 @@ namespace HeiProMap {
         PARTITIONING_ALG_RECURSIVE_BISECTION,
         PARTITIONING_ALG_HEIPA,
         PARTITIONING_ALG_GREEDY,
+        PARTITIONING_ALG_GREEDY_GRAPH_GROWING,
+        PARTITIONING_ALG_HYBRID,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
-        if (str == "UNDEFINED")           return PARTITIONING_ALG_UNDEFINED;
-        if (str == "kaffpa")              return PARTITIONING_ALG_KAFFPA;
-        if (str == "multisection")        return PARTITIONING_ALG_MULTISECTION;
-        if (str == "recursive-bisection") return PARTITIONING_ALG_RECURSIVE_BISECTION;
-        if (str == "heipa")               return PARTITIONING_ALG_HEIPA;
-        if (str == "greedy")              return PARTITIONING_ALG_GREEDY;
+        if (str == "UNDEFINED")              return PARTITIONING_ALG_UNDEFINED;
+        if (str == "kaffpa")                 return PARTITIONING_ALG_KAFFPA;
+        if (str == "multisection")           return PARTITIONING_ALG_MULTISECTION;
+        if (str == "recursive-bisection")    return PARTITIONING_ALG_RECURSIVE_BISECTION;
+        if (str == "heipa")                  return PARTITIONING_ALG_HEIPA;
+        if (str == "greedy")                 return PARTITIONING_ALG_GREEDY;
+        if (str == "greedy-graph-growing")   return PARTITIONING_ALG_GREEDY_GRAPH_GROWING;
+        if (str == "hybrid")                 return PARTITIONING_ALG_HYBRID;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
     inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
         switch (alg) {
-            case PARTITIONING_ALG_UNDEFINED:            return "UNDEFINED";
-            case PARTITIONING_ALG_KAFFPA:               return "kaffpa";
-            case PARTITIONING_ALG_MULTISECTION:         return "multisection";
-            case PARTITIONING_ALG_RECURSIVE_BISECTION:  return "recursive-bisection";
-            case PARTITIONING_ALG_HEIPA:                return "heipa";
-            case PARTITIONING_ALG_GREEDY:               return "greedy";
-            default:                                    return "UNDEFINED";
+            case PARTITIONING_ALG_UNDEFINED:             return "UNDEFINED";
+            case PARTITIONING_ALG_KAFFPA:                return "kaffpa";
+            case PARTITIONING_ALG_MULTISECTION:          return "multisection";
+            case PARTITIONING_ALG_RECURSIVE_BISECTION:   return "recursive-bisection";
+            case PARTITIONING_ALG_HEIPA:                 return "heipa";
+            case PARTITIONING_ALG_GREEDY:                return "greedy";
+            case PARTITIONING_ALG_GREEDY_GRAPH_GROWING:  return "greedy-graph-growing";
+            case PARTITIONING_ALG_HYBRID:                return "hybrid";
+            default:                                     return "UNDEFINED";
         }
     }
 
@@ -146,7 +152,7 @@ namespace HeiProMap {
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
 
             /** Partitioning */
-            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, heipa, greedy}.", "multisection", "", false},
+            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, heipa, greedy, greedy-graph-growing, hybrid}.", "multisection", "", false},
 
             // Partitioning kaffpa
             {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -435,7 +441,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 8;
+            initial_c = 64;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -455,7 +461,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -470,7 +476,7 @@ namespace HeiProMap {
         }
 
         void set_eco() {
-            initial_c = 8;
+            initial_c = 64;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
@@ -490,7 +496,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-eco";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 3;
+            global_multisection_config.kappa = 5;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -515,7 +521,7 @@ namespace HeiProMap {
         }
 
         void set_strong() {
-            initial_c = 16;
+            initial_c = 64;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
@@ -534,7 +540,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 5;
+            global_multisection_config.kappa = 7;
 
             // enable label propagation
             label_propagation_config.enabled = true;

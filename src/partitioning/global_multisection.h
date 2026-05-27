@@ -36,6 +36,7 @@
 #include "../utility/utils.h"
 #include "kaffpa_partitioner.h"
 #include "greedy_partitioner.h"
+#include "recursive_bisection.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../utility/qap.h"
 #include "kway_partitioner/kway_core.h"
@@ -53,6 +54,9 @@ namespace HeiProMap {
         GLOBAL_MULTISECTION_HEIPA_STRONG,
         GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG,
         GLOBAL_MULTISECTION_GREEDY,
+        GLOBAL_MULTISECTION_RECURSIVE_BISECTION,
+        GLOBAL_MULTISECTION_GGG,
+        GLOBAL_MULTISECTION_HYBRID,
     };
 
     inline GlobalMultisectionMode string_to_global_multisection_mode(const std::string &str) {
@@ -66,6 +70,9 @@ namespace HeiProMap {
         if (str == "heipa-strong") return GLOBAL_MULTISECTION_HEIPA_STRONG;
         if (str == "heipa-super-strong") return GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG;
         if (str == "greedy") return GLOBAL_MULTISECTION_GREEDY;
+        if (str == "recursive-bisection") return GLOBAL_MULTISECTION_RECURSIVE_BISECTION;
+        if (str == "ggg") return GLOBAL_MULTISECTION_GGG;
+        if (str == "hybrid") return GLOBAL_MULTISECTION_HYBRID;
         return GLOBAL_MULTISECTION_UNDEFINED;
     }
 
@@ -91,6 +98,12 @@ namespace HeiProMap {
                 return "heipa-super-strong";
             case GLOBAL_MULTISECTION_GREEDY:
                 return "greedy";
+            case GLOBAL_MULTISECTION_RECURSIVE_BISECTION:
+                return "recursive-bisection";
+            case GLOBAL_MULTISECTION_GGG:
+                return "ggg";
+            case GLOBAL_MULTISECTION_HYBRID:
+                return "hybrid";
             default:
                 return "UNDEFINED";
         }
@@ -191,6 +204,20 @@ namespace HeiProMap {
                 } else if (config.mode == GLOBAL_MULTISECTION_GREEDY) {
                     UniformDistanceOracle u_oracle(item.k);
                     greedy_partition(*item.g, u_oracle, item.imb, item.seed, partition);
+                } else if (config.mode == GLOBAL_MULTISECTION_RECURSIVE_BISECTION || config.mode == GLOBAL_MULTISECTION_GGG || config.mode == GLOBAL_MULTISECTION_HYBRID) {
+                    RecursiveBisectionPartitioner rb_partitioner;
+                    BisectionMethod method = BisectionMethod::BFS;
+                    if (config.mode == GLOBAL_MULTISECTION_GGG) {
+                        method = BisectionMethod::GGG;
+                    } else if (config.mode == GLOBAL_MULTISECTION_HYBRID) {
+                        method = BisectionMethod::HYBRID;
+                    }
+                    PartitionManager local_pm;
+                    local_pm.initialize(item.g->n, item.k, 0);
+                    rb_partitioner.partition(*item.g, local_pm, item.k, item.seed, config.kappa, item.imb, method);
+                    for (vertex_t u = 0; u < item.g->n; ++u) {
+                        partition[u] = local_pm[u];
+                    }
                 } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
                     heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode);
                 } else {

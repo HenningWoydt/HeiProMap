@@ -47,6 +47,7 @@
 #include "../utility/qap.h"
 #include "distance_oracle.h"
 #include "../partitioning/kaffpa_partitioner.h"
+#include "../partitioning/recursive_bisection.h"
 #include "../utility/translation_table.h"
 #include "HeiPa_solver.h"
 
@@ -373,6 +374,7 @@ const PartitionManager &get_p_manager() const { return p_manager; }
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             partition(level, level_imbalance);
+            refinement(level, level_imbalance);
 
             #if ENABLE_PROFILER
             level_infos[level].max_b_weight = p_manager.max_weight();
@@ -508,6 +510,23 @@ const PartitionManager &get_p_manager() const { return p_manager; }
                             p_manager.set(u, graphs.back().v_weights[u], part[u]);
                         }
                     }
+                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_RECURSIVE_BISECTION ||
+                           ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING ||
+                           ac.partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
+                    PartitionManager local_pm;
+                    local_pm.initialize(graphs.back().n, ac.k, 0);
+
+                    RecursiveBisectionPartitioner rb_partitioner;
+                    BisectionMethod method = BisectionMethod::BFS;
+                    if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
+                        method = BisectionMethod::GGG;
+                    } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
+                        method = BisectionMethod::HYBRID;
+                    }
+                    rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, 1, level_imbalance, method);
+
+                    p_manager.copy_from(local_pm);
+
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
@@ -773,10 +792,31 @@ const PartitionManager &get_p_manager() const { return p_manager; }
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, ac.seed, partition, ac.global_multisection_config.kappa);
                 } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, ac.seed, partition, ac.global_multisection_config.kappa);
+                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_RECURSIVE_BISECTION ||
+                           ac.global_multisection_config.mode == GLOBAL_MULTISECTION_GGG ||
+                           ac.global_multisection_config.mode == GLOBAL_MULTISECTION_HYBRID) {
+                    RecursiveBisectionPartitioner rb_partitioner;
+                    BisectionMethod method = BisectionMethod::BFS;
+                    if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_GGG) {
+                        method = BisectionMethod::GGG;
+                    } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_HYBRID) {
+                        method = BisectionMethod::HYBRID;
+                    }
+                    PartitionManager local_pm;
+                    local_pm.initialize(g.n, k, 0);
+                    rb_partitioner.partition(g, local_pm, k, ac.seed, ac.global_multisection_config.kappa, per_level_epsilon, method);
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        partition[u] = local_pm[u];
+                    }
                 } else if (ac.global_multisection_config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && ac.global_multisection_config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
                     heipa_multisection_partition_wrapper(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.mode);
                 } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.kappa);
+                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_GREEDY) {
+                    UniformDistanceOracle u_oracle(k);
+                    std::vector<partition_t> part(g.n);
+                    greedy_partition(g, u_oracle, per_level_epsilon, ac.seed, part);
+                    for (vertex_t u = 0; u < g.n; ++u) { partition[u] = part[u]; }
                 } else {
                     std::cerr << "Mode " << ac.global_multisection_config.mode << " not implemented" << std::endl;
                     abort();

@@ -43,12 +43,14 @@ int main(const int argc, char *argv[]) {
                 // {"--mapping", "../data/out/partition/nlr.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/Spielman_k500.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
                 // {"--mapping", "../data/out/partition/Spielman_k500.txt"},
-                {"--graph", "../../ProMapRepo/data/mapping/cont-300.mtx.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
-                {"--mapping", "../data/out/partition/cont-300.mtx.graph.txt"},
-                {"--hierarchy", "4:8:4"},
+                // {"--graph", "../../ProMapRepo/data/mapping/cont-300.mtx.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                // {"--mapping", "../data/out/partition/cont-300.mtx.graph.txt"},
+                {"--graph", "../../ProMapRepo/data/mapping/G2_circuit.mtx.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                {"--mapping", "../data/out/partition/G2_circuit.mtx.graph.txt"},
+                {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
-                {"--config", "strong"},
+                {"--config", "fast"},
                 {"--seed", "0"},
                 {"--threads", "1"},
                 {"--hm-level", "0"},

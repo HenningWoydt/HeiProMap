@@ -63,7 +63,7 @@ namespace HeiProMap {
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
 
             /** Partitioning */
-            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, recursive-bisection}.", "recursive-bisection", "", false},
+            {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, recursive-bisection, greedy-graph-growing, hybrid}.", "recursive-bisection", "", false},
 
             // Partitioning kaffpa
             {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -321,16 +321,16 @@ namespace HeiProMap {
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 16;
 
-            partitioning_algorithm_string = "recursive-bisection";
+            partitioning_algorithm_string = "hybrid";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            rb_kappa = 1;
+            rb_kappa = 10;
             kaffpa_partition_mode = KAFFPA_PARTITION_FAST;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
 
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 2;
+            quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;

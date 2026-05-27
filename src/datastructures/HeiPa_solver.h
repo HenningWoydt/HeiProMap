@@ -366,15 +366,23 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
-                if (ac.partitioning_algorithm_id == PARTITIONING_ALG_RECURSIVE_BISECTION) {
+                if (ac.partitioning_algorithm_id == PARTITIONING_ALG_RECURSIVE_BISECTION ||
+                    ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING ||
+                    ac.partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
                     // -------------------------------------------------------
-                    // Recursive bisection with greedy BFS region growing
+                    // Recursive bisection with greedy BFS, GGG or Hybrid region growing
                     // -------------------------------------------------------
                     PartitionManager local_pm;
                     local_pm.initialize(graphs.back().n, ac.k, 0);
 
                     RecursiveBisectionPartitioner rb_partitioner;
-                    rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, ac.rb_kappa);
+                    BisectionMethod method = BisectionMethod::BFS;
+                    if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
+                        method = BisectionMethod::GGG;
+                    } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
+                        method = BisectionMethod::HYBRID;
+                    }
+                    rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, ac.rb_kappa, ac.imbalance, method);
 
                     p_manager.copy_from(local_pm);
 
