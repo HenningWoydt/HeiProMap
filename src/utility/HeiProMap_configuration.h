@@ -36,13 +36,15 @@ namespace HeiProMap {
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GLOBAL_PATHS,
-        COARSENING_ALG_SIZE_CONSTRAINED_LP
+        COARSENING_ALG_SIZE_CONSTRAINED_LP,
+        COARSENING_ALG_HEAVY_EDGE
     };
 
     inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
         if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
+        if (str == "heavy-edge") return COARSENING_ALG_HEAVY_EDGE;
         return COARSENING_ALG_UNDEFINED;
     }
 
@@ -54,6 +56,8 @@ namespace HeiProMap {
                 return "global-paths";
             case COARSENING_ALG_SIZE_CONSTRAINED_LP:
                 return "size-constrained-lp";
+            case COARSENING_ALG_HEAVY_EDGE:
+                return "heavy-edge";
             default:
                 return "UNDEFINED";
         }
@@ -125,6 +129,7 @@ namespace HeiProMap {
 #include "../refinement/quotient_graph_refinement.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
+#include "../coarsening/heavy_edge_matching.h"
 #include "../partitioning/kaffpa_partitioner.h"
 
 
@@ -145,11 +150,14 @@ namespace HeiProMap {
             {"--k", "-k", "Number of partitions.", "0", "", false},
 
             /** Coarsening */
-            {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp}.", "global-paths", "", false},
+            {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp, heavy-edge}.", "global-paths", "", false},
 
             // Coarsening global-path
             {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
+
+            // Coarsening heavy-edge
+            {"--coarsening-algorithm-heavy-edge-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "heavy-edge", "", false},
 
             /** Partitioning */
             {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, heipa, greedy, greedy-graph-growing, hybrid}.", "multisection", "", false},
@@ -162,7 +170,11 @@ namespace HeiProMap {
             {"--partitioning-algorithm-heipa-config", "", "Which config {fast, eco, strong, super-strong} to use for HeiPa.", "strong", "", false},
 
             // Partitioning multisection
-            {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast, metis-kway, greedy, heipa-fast, heipa-eco, heipa-strong, heipa-super-strong} to use.", "strong", "", false},
+            {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast, metis-kway, greedy, heipa-fast, heipa-eco, heipa-strong, heipa-super-strong, recursive-bisection, ggg, hybrid} to use.", "strong", "", false},
+
+            // Partitioning recursive-bisection
+            {"--partitioning-algorithm-recursive-bisection-kappa", "", "Number of independent trials for recursive bisection (best edge-cut is kept).", "1", "", false},
+            {"--partitioning-algorithm-recursive-bisection-use-full-refine", "", "If true, uses HeiPa's full refinement suite (LP, Quotient, Flow) after each bisection trial.", "0", "", false},
 
             /** Rebalancing */
             {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
@@ -211,10 +223,14 @@ namespace HeiProMap {
 
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
         SizeConstrainedLPConfiguration size_constrained_lp_config;
+        HeavyEdgeMatchingConfiguration heavy_edge_matching_config;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
+
+        u64 rb_kappa = 1;
+        bool rb_use_full_refine = false;
 
         GlobalMultisectionConfiguration global_multisection_config;
         std::string heipa_config_string = "strong";
@@ -341,6 +357,14 @@ namespace HeiProMap {
                 global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             }
 
+            if (use_default || is_set("--partitioning-algorithm-recursive-bisection-kappa")) {
+                rb_kappa = std::stoull(get("--partitioning-algorithm-recursive-bisection-kappa"));
+            }
+
+            if (use_default || is_set("--partitioning-algorithm-recursive-bisection-use-full-refine")) {
+                rb_use_full_refine = (get("--partitioning-algorithm-recursive-bisection-use-full-refine") == "1");
+            }
+
             // initialize heipa config
             if (use_default || is_set("--partitioning-algorithm-heipa-config")) {
                 heipa_config_string = get("--partitioning-algorithm-heipa-config");
@@ -445,12 +469,15 @@ namespace HeiProMap {
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
+            // coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "heavy-edge";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSION;
+            global_path_algorithm_config.random_level = 0;
+
+            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
@@ -473,6 +500,16 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;
+
+            // enable flow based refinement
+            flow_based_refinement_config.enabled = false;
+            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.max_local_iteration = 1;
+            flow_based_refinement_config.alpha = 1.0;
+            flow_based_refinement_config.alpha_upper_bound = 64.0;
+            flow_based_refinement_config.alpha_modifier = 2.0;
+            flow_based_refinement_config.use_closed_vertex_set = true;
+            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
         void set_eco() {
@@ -484,8 +521,8 @@ namespace HeiProMap {
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSION;
+            global_path_algorithm_config.random_level = 0;
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
@@ -511,7 +548,7 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.max_global_iteration = 3;
             flow_based_refinement_config.max_local_iteration = 1;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
@@ -524,12 +561,16 @@ namespace HeiProMap {
             initial_c = 64;
 
             // set GPA matching algorithm
+            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_string = "global-paths";
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
+            // coarsening_algorithm_string = "heavy-edge";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 4;
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
+            global_path_algorithm_config.random_level = 0;
+
+            heavy_edge_matching_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
@@ -540,7 +581,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 7;
+            global_multisection_config.kappa = 3;
 
             // enable label propagation
             label_propagation_config.enabled = true;

@@ -191,7 +191,7 @@ namespace HeiProMap {
             // process the stack
             while (!stack.empty()) {
                 Item item = stack.back(); // process first item
-                stack.pop_back(); // remove top item
+                stack.pop_back();         // remove top item
 
                 if (config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa);
@@ -201,23 +201,6 @@ namespace HeiProMap {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
-                } else if (config.mode == GLOBAL_MULTISECTION_GREEDY) {
-                    UniformDistanceOracle u_oracle(item.k);
-                    greedy_partition(*item.g, u_oracle, item.imb, item.seed, partition);
-                } else if (config.mode == GLOBAL_MULTISECTION_RECURSIVE_BISECTION || config.mode == GLOBAL_MULTISECTION_GGG || config.mode == GLOBAL_MULTISECTION_HYBRID) {
-                    RecursiveBisectionPartitioner rb_partitioner;
-                    BisectionMethod method = BisectionMethod::BFS;
-                    if (config.mode == GLOBAL_MULTISECTION_GGG) {
-                        method = BisectionMethod::GGG;
-                    } else if (config.mode == GLOBAL_MULTISECTION_HYBRID) {
-                        method = BisectionMethod::HYBRID;
-                    }
-                    PartitionManager local_pm;
-                    local_pm.initialize(item.g->n, item.k, 0);
-                    rb_partitioner.partition(*item.g, local_pm, item.k, item.seed, config.kappa, item.imb, method);
-                    for (vertex_t u = 0; u < item.g->n; ++u) {
-                        partition[u] = local_pm[u];
-                    }
                 } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
                     heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode);
                 } else {

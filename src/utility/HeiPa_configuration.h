@@ -74,6 +74,7 @@ namespace HeiProMap {
 
             // Partitioning recursive-bisection
             {"--partitioning-algorithm-recursive-bisection-kappa", "", "Number of independent trials for recursive bisection (best edge-cut is kept).", "1", "", false},
+            {"--partitioning-algorithm-recursive-bisection-use-full-refine", "", "If true, uses HeiPa's full refinement suite (LP, Quotient, Flow) after each bisection trial.", "0", "", false},
 
             /** Rebalancing */
             {"--rebalancing-algorithm", "", "Which rebalancing algorithm to use. Allowed values are {simple}.", "simple", "", false},
@@ -118,9 +119,11 @@ namespace HeiProMap {
         std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
+        u64 rb_kappa = 1;
+        bool rb_use_full_refine = false;
+
         GlobalMultisectionConfiguration global_multisection_config;
         KaffpaPartitionMode kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
-        u64 rb_kappa = 1;
 
         // rebalance algorithm
         std::string rebalancing_algorithm_string;
@@ -211,6 +214,10 @@ namespace HeiProMap {
 
             if (use_default || is_set("--partitioning-algorithm-recursive-bisection-kappa")) {
                 rb_kappa = std::stoull(get("--partitioning-algorithm-recursive-bisection-kappa"));
+            }
+
+            if (use_default || is_set("--partitioning-algorithm-recursive-bisection-use-full-refine")) {
+                rb_use_full_refine = (get("--partitioning-algorithm-recursive-bisection-use-full-refine") == "1");
             }
 
             // actually set which algorithm to use

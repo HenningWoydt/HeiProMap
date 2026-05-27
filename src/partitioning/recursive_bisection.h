@@ -37,8 +37,8 @@
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
 #include "../utility/random_engine.h"
-
 #include "../utility/indexed_max_heap.h"
+#include "../utility/translation_table.h"
 
 namespace HeiProMap {
 
@@ -274,8 +274,8 @@ namespace HeiProMap {
             // ---- Collect results ----
             left_out.clear();
             right_out.clear();
-            left_out.reserve(vertices.size() / 2 + 1);
-            right_out.reserve(vertices.size() / 2 + 1);
+            left_out.reserve(vertices.size());
+            right_out.reserve(vertices.size());
 
             for (vertex_t v : vertices) {
                 if (side[v] == 0) { left_out.push_back(v); }
@@ -347,8 +347,8 @@ namespace HeiProMap {
             // Collect results
             left_out.clear();
             right_out.clear();
-            left_out.reserve(vertices.size() / 2 + 1);
-            right_out.reserve(vertices.size() / 2 + 1);
+            left_out.reserve(vertices.size());
+            right_out.reserve(vertices.size());
 
             for (vertex_t v : vertices) {
                 if (side[v] == 0) { left_out.push_back(v); }
@@ -370,7 +370,7 @@ namespace HeiProMap {
                               f64 imbalance) {
             if (vertices.empty()) return;
 
-            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "refine_bisection");
+            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "refine_greedy_fm");
 
             weight_t total_weight = 0;
             weight_t w_left = 0;
@@ -445,8 +445,6 @@ namespace HeiProMap {
                         if (side[v] == 3 || locked[v]) continue;
 
                         // Correct gain update:
-                        // If v is on side 'from' (u's old side), u just moved to 'to' (external side for v).
-                        // So v's external degree increases, internal decreases -> Gain(v) increases.
                         if (side[v] == from) {
                             gains[v] += 2 * (s64)g.edges_w[i];
                         } else {
@@ -547,7 +545,7 @@ namespace HeiProMap {
                         bisect_ggg(g, vertices, target_left, left_v_trial, right_v_trial);
                     }
 
-                    // Perform greedy FM refinement with slack
+                    // Perform greedy FM refinement
                     refine_bisection(g, vertices, target_left, imbalance);
 
                     weight_t cut = compute_bisection_cut(g, vertices);
@@ -660,6 +658,8 @@ namespace HeiProMap {
                 // Allocate/resize working arrays
                 side.assign(g.n, u8(2));
                 dist.assign(g.n, s32(-1));
+                gains.assign(g.n, 0);
+                locked.assign(g.n, 0);
                 pq.initialize(g.n);
                 std::iota(all_vertices.begin(), all_vertices.end(), vertex_t(0));
                 out_pm.reset_weights(); // zeroes bweights and n_vertices

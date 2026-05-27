@@ -170,6 +170,35 @@ namespace HeiProMap {
             edges_w.initialize(m);
         }
 
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const weight_t *t_v_weights,
+                        const size_t *t_neighborhoods,
+                        const weight_t *t_edges_w,
+                        const vertex_t *t_edges_v) {
+            n = t_n;
+            m = t_m;
+            g_weight = 0;
+            v_weights.initialize(n);
+            neighborhoods.initialize(n + 1);
+            edges_v.initialize(m);
+            edges_w.initialize(m);
+
+            for (vertex_t u = 0; u < n; ++u) {
+                v_weights[u] = t_v_weights[u];
+                g_weight += t_v_weights[u];
+                neighborhoods[u] = t_neighborhoods[u];
+            }
+            neighborhoods[n] = t_neighborhoods[n];
+
+            for (vertex_t e = 0; e < m; ++e) {
+                edges_v[e] = t_edges_v[e];
+                edges_w[e] = t_edges_w[e];
+            }
+            uniform_v_weights = false;
+            uniform_e_weights = false;
+        }
+
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void initialize(const CSRGraph &g,
                         const Mapping &mapping) {
