@@ -567,10 +567,10 @@ namespace HeiProMap {
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSION;
             global_path_algorithm_config.random_level = 0;
 
-            heavy_edge_matching_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
+            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
