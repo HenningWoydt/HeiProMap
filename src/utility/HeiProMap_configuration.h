@@ -465,7 +465,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 4;
+            initial_c = 16;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -484,11 +484,11 @@ namespace HeiProMap {
             size_constrained_lp_config.multiplier = 16;
 
             // set multisection
-            partitioning_algorithm_string = "greedy";
+            partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 10;
+            global_multisection_config.kappa = 2;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -497,8 +497,8 @@ namespace HeiProMap {
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 4;
+            quotient_graph_refinement_config.alpha = 2.5;
+            quotient_graph_refinement_config.min_n_steps = 8;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
             // enable flow based refinement
@@ -563,7 +563,7 @@ namespace HeiProMap {
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "heavy-edge";
+            // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             // configurate global-paths algorithm
