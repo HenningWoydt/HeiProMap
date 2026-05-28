@@ -30,14 +30,23 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
+#include <numeric>
 
 #include "../definitions.h"
 #include "../utility/aligned_array.h"
 #include "../utility/utils.h"
+#include "../datastructures/partition_manager.h"
+#include "../datastructures/boundary_vertex_manger.h"
+#include "../datastructures/quotient_graph.h"
+#include "../datastructures/block_conn.h"
+#include "../datastructures/distance_oracle.h"
 #include "kaffpa_partitioner.h"
 #include "greedy_partitioner.h"
 #include "recursive_bisection.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
 #include "../utility/qap.h"
 #include "kway_partitioner/kway_core.h"
 #include "../utility/translation_table.h"
@@ -114,6 +123,10 @@ namespace HeiProMap {
         std::string mode_string;
         GlobalMultisectionMode mode; // Which mode to use STRONG, ECO, FAST
         u64 kappa = 1;
+        bool refine = false;
+        LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
+        QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
+        FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
     };
 
     // Forward declaration of the HeiPa wrapper to resolve circular dependency
@@ -206,6 +219,10 @@ namespace HeiProMap {
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();
+                }
+
+                if (config.refine) {
+                    refine_partition(*item.g, item.k, item.imb, item.seed, partition, config);
                 }
 
                 if (item.identifier->size() == l - 1) {
@@ -309,6 +326,73 @@ namespace HeiProMap {
             f64 local_imbalance = (((1.0 + global_imbalance) * (f64) local_k * (f64) global_g_weight) / (f64) (global_k * local_g_weight));
             local_imbalance = std::pow(local_imbalance, (f64) 1 / (f64) depth) - 1.0;
             return local_imbalance;
+        }
+
+    private:
+        static void refine_partition(graph_t &g,
+                                     partition_t k,
+                                     f64 imbalance,
+                                     u64 seed,
+                                     AlignedArray<partition_t> &partition,
+                                     const GlobalMultisectionConfiguration &config) {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "GlobalMultisectionPartitioner", "refine_partition");
+
+            // Setup temporary data structures for refinement
+            DistanceOracle d_oracle;
+            d_oracle.initialize({k}, {1}); // simple uniform distance for subproblems
+
+            PartitionManager pm;
+            pm.initialize(g.n, k, g.g_weight);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                pm.set(u, g.v_weights[u], partition[u]);
+            }
+
+            BoundaryVertexManager bv_manager;
+            bv_manager.initialize(g.n, k);
+
+            QuotientGraph q_graph;
+            q_graph.initialize(k);
+
+            BlockConn block_conn;
+            block_conn.initialize(g.n, g.m, k);
+            block_conn.reset_build();
+
+            for (vertex_t u = 0; u < g.n; ++u) {
+                block_conn.begin_vertex(g, u);
+                partition_t u_id = pm[u];
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    vertex_t v = g.edges_v[i];
+                    weight_t w = g.edges_w[i];
+                    partition_t v_id = pm[v];
+                    block_conn.add_connection(u, v_id, w);
+                    if (u_id != v_id) {
+                        bv_manager.add(u, u_id);
+                        if (u < v) q_graph.add_edge(u_id, v_id, w);
+                    }
+                }
+            }
+
+            if (config.label_propagation_config.enabled) {
+                LabelPropagationRefinement lp_refine;
+                lp_refine.initialize(g.n, g.m, k, 1, seed, config.label_propagation_config);
+                lp_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, imbalance, g.uniform_v_weights, g.uniform_e_weights);
+            }
+
+            if (config.quotient_graph_refinement_config.enabled) {
+                QuotientGraphRefinement qg_refine;
+                qg_refine.initialize(g.n, g.m, k, 1, seed, config.quotient_graph_refinement_config);
+                qg_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, imbalance, g.uniform_v_weights, g.uniform_e_weights);
+            }
+
+            if (config.flow_based_refinement_config.enabled) {
+                FlowBasedRefinement flow_refine;
+                flow_refine.initialize(g.n, g.m, k, 1, seed, config.flow_based_refinement_config);
+                flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, imbalance, g.uniform_v_weights, g.uniform_e_weights);
+            }
+
+            for (vertex_t u = 0; u < g.n; ++u) {
+                partition[u] = pm[u];
+            }
         }
     };
 }

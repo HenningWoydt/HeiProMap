@@ -60,6 +60,8 @@ namespace HeiProMap {
     public:
         size_t random_level = 4;
         EdgeRatingFunction rating_function = EdgeRatingFunction::HEAVY_EDGE;
+        bool use_adaptive_max_vertex_weight = false;
+        bool use_edge_rating_tiebreaking = true;
     };
 
     /**
@@ -150,6 +152,15 @@ namespace HeiProMap {
                              f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
+            if (config->use_adaptive_max_vertex_weight) {
+                // KaHIP's fast mode logic: 1.5 * W_total / num_stop
+                // num_stop = max(N / (2 * 60 * k), 60 * k)
+                f64 x = 60.0;
+                f64 num_stop = std::max((f64) g.n / (2.0 * x * (f64) p_manager.k), x * (f64) p_manager.k);
+                weight_t adaptive_lmax = (weight_t) (1.5 * (f64) g.g_weight / num_stop);
+                lmax = std::min(lmax, std::max((weight_t) 2, adaptive_lmax));
+            }
+
             Matching matching;
             //
             {
@@ -193,8 +204,15 @@ namespace HeiProMap {
             //
             {
                 HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "sort_ratings");
+                std::vector<u64> seeds(m_threads);
+                for (u64 i = 0; i < m_threads; ++i) { seeds[i] = random_engine->get_u64(); }
+
                 #pragma omp parallel for num_threads(m_threads) schedule(static, 1)
                 for (u64 i = 0; i < m_threads; ++i) {
+                    if (config->use_edge_rating_tiebreaking) {
+                        std::mt19937 g(seeds[i]);
+                        std::shuffle(m_thread_infos[i].local_edges.begin(), m_thread_infos[i].local_edges.end(), g);
+                    }
                     if (m_thread_infos[i].min_rating != m_thread_infos[i].max_rating) {
                         std::sort(m_thread_infos[i].local_edges.begin(), m_thread_infos[i].local_edges.end(), std::greater<>());
                     }

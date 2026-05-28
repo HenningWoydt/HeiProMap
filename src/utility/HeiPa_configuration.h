@@ -252,6 +252,10 @@ namespace HeiProMap {
             if (use_default || is_set("--refinement-flow-enable")) {
                 flow_based_refinement_config.enabled = get("--refinement-flow-enable") == "1";
             }
+
+            global_multisection_config.label_propagation_config = label_propagation_config;
+            global_multisection_config.quotient_graph_refinement_config = quotient_graph_refinement_config;
+            global_multisection_config.flow_based_refinement_config = flow_based_refinement_config;
         }
 
         HeiPaConfiguration(int argc, char *argv[]) {
