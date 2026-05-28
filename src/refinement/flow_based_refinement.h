@@ -28,12 +28,25 @@
 #define HEIPROMAP_FLOW_BASED_REFINEMENT_H
 
 #include <algorithm>
+#include <cmath>
 #include <stack>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 #include <omp.h>
 
-
+#include "../definitions.h"
+#include "../datastructures/block_conn.h"
+#include "../datastructures/boundary_vertex_manger.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/distance_oracle.h"
+#include "../datastructures/partition_manager.h"
+#include "../datastructures/quotient_graph.h"
+#include "../utility/aligned_array.h"
+#include "../utility/memory_stack.h"
+#include "../utility/profiler.h"
+#include "../utility/translation_table.h"
 #include "quotient_graph_refinement.h"
 #include "../utility/flow.h"
 #include "../utility/push_relabel.h"

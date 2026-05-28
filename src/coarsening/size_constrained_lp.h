@@ -27,15 +27,23 @@
 #ifndef HEIPROMAP_SIZE_CONSTRAINED_LP_H
 #define HEIPROMAP_SIZE_CONSTRAINED_LP_H
 
+#include <algorithm>
+#include <cmath>
 #include <map>
+#include <vector>
+
+#include <omp.h>
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
+#include "../utility/aligned_array.h"
+#include "../utility/mapping.h"
+#include "../utility/profiler.h"
 #include "../utility/random_engine.h"
 #include "../utility/small_map.h"
-#include "../utility/mapping.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
     class SizeConstrainedLPConfiguration {

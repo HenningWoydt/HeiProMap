@@ -203,14 +203,14 @@ namespace HeiProMap {
     }
 
     template<typename T>
-    T avg(const std::vector<T> &vec) {
+    f64 avg(const std::vector<T> &vec) {
         T m = 0;
 
         for (auto &x: vec) {
             m += x;
         }
 
-        return (f64) m / (f64) vec.size();
+        return static_cast<f64>(m) / static_cast<f64>(vec.size());
     }
 
     template<typename T>

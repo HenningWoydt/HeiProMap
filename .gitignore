@@ -6,6 +6,7 @@ cmake-build-release/
 cmake-build-relwithdebinfo/
 
 build/
+build_tests/
 .vscode/
 
 data/

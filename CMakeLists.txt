@@ -10,12 +10,36 @@ set(PROJECT_VERSION "1.0.0")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------
+# Options
+# ---------------------------
+option(BUILD_TESTING "Build tests" OFF)
+option(ENABLE_PROFILER "Enable profiler" OFF)
+option(ENABLE_ASSERTS "Enable assertions" OFF)
+
+if(ENABLE_PROFILER)
+    add_definitions(-DENABLE_PROFILER=1)
+endif()
+if(ENABLE_ASSERTS)
+    add_definitions(-DENABLE_ASSERTS=1)
+endif()
+
+# ---------------------------
 # Language / compiler setup
 # ---------------------------
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+option(ENABLE_EXCEPTIONS "Enable C++ exceptions" OFF)
+
+if(NOT ENABLE_EXCEPTIONS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
+endif()
+
+if(POLICY CMP0144)
+    cmake_policy(SET CMP0144 NEW)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
@@ -104,89 +128,57 @@ set(HEIPROMAP_PRIVATE_INCLUDES
         ${KAHIP_INCLUDE_DIR})
 
 # ---------------------------
-# Executable
+# Library
 # ---------------------------
-add_executable(HeiProMap
-        app/HeiProMap.cpp
-        ${HEADERS}
-        ${SOURCES}
-)
-
-target_include_directories(HeiProMap PRIVATE 
-        ${PROJECT_SOURCE_DIR}
-        ${HEIPROMAP_PRIVATE_INCLUDES}
-)
-
-target_link_libraries(HeiProMap PUBLIC
+add_library(HeiProMapLib INTERFACE)
+target_include_directories(HeiProMapLib INTERFACE ${PROJECT_SOURCE_DIR})
+target_include_directories(HeiProMapLib INTERFACE ${HEIPROMAP_PRIVATE_INCLUDES})
+target_link_libraries(HeiProMapLib INTERFACE
         ${KAHIP_LIBRARY}
         OpenMP::OpenMP_CXX
         TBB::tbb
         m
 )
 
-set_target_properties(HeiProMap PROPERTIES
-        BUILD_RPATH "${KAHIP_ROOT}/lib"
-)
+# ---------------------------
+# Executables
+# ---------------------------
+add_executable(HeiProMap app/HeiProMap.cpp)
+target_link_libraries(HeiProMap PRIVATE HeiProMapLib)
+set_target_properties(HeiProMap PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
+target_link_options(HeiProMap PRIVATE "-Wl,--disable-new-dtags")
 
-target_link_options(HeiProMap PRIVATE
-        "-Wl,--disable-new-dtags"
-)
+add_executable(Dyn-HeiProMap app/Dyn-HeiProMap.cpp)
+target_link_libraries(Dyn-HeiProMap PRIVATE HeiProMapLib)
+set_target_properties(Dyn-HeiProMap PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
+target_link_options(Dyn-HeiProMap PRIVATE "-Wl,--disable-new-dtags")
+
+add_executable(HeiPa app/HeiPa.cpp)
+target_link_libraries(HeiPa PRIVATE HeiProMapLib)
+set_target_properties(HeiPa PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
+target_link_options(HeiPa PRIVATE "-Wl,--disable-new-dtags")
 
 # ---------------------------
-# Dyn-HeiProMap
+# Testing
 # ---------------------------
+set(GTEST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/local/googletest")
+find_package(GTest PATHS ${GTEST_ROOT} NO_DEFAULT_PATH)
 
-add_executable(Dyn-HeiProMap
-        app/Dyn-HeiProMap.cpp
-        ${SOURCES}
-)
+if(NOT GTest_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
+    )
+    # For Windows: prevent overriding the parent project's compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+endif()
 
-target_include_directories(Dyn-HeiProMap PRIVATE
-        ${PROJECT_SOURCE_DIR}
-        ${HEIPROMAP_PRIVATE_INCLUDES}
-)
+if(BUILD_TESTING)
+    enable_testing()
+endif()
+add_subdirectory(tests)
 
-target_link_libraries(Dyn-HeiProMap PRIVATE
-        ${KAHIP_LIBRARY}
-        OpenMP::OpenMP_CXX
-        TBB::tbb
-        m
-)
-
-set_target_properties(Dyn-HeiProMap PROPERTIES
-        BUILD_RPATH "${KAHIP_ROOT}/lib"
-)
-
-target_link_options(Dyn-HeiProMap PRIVATE
-        "-Wl,--disable-new-dtags"
-)
-
-# ---------------------------
-# HeiPa
-# ---------------------------
-
-add_executable(HeiPa
-        app/HeiPa.cpp
-        ${HEADERS}
-        ${SOURCES}
-)
-
-target_include_directories(HeiPa PRIVATE
-        ${PROJECT_SOURCE_DIR}
-        ${HEIPROMAP_PRIVATE_INCLUDES}
-)
-
-target_link_libraries(HeiPa PUBLIC
-        ${KAHIP_LIBRARY}
-        OpenMP::OpenMP_CXX
-        TBB::tbb
-        m
-)
-
-set_target_properties(HeiPa PROPERTIES
-        BUILD_RPATH "${KAHIP_ROOT}/lib"
-)
-
-target_link_options(HeiPa PRIVATE
-        "-Wl,--disable-new-dtags"
-)
+# Extra target to build the test binary specifically
+add_custom_target(build_tests DEPENDS HeiProMapTests)

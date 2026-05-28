@@ -29,8 +29,11 @@
 
 #include "../definitions.h"
 #include "macros.h"
+#include "aligned_array.h"
+#include "../datastructures/csr_graph.h"
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/dyn_graph.h"
+#include "../datastructures/partition_manager.h"
 
 namespace HeiProMap {
     template<typename DistanceOracleT>

@@ -27,14 +27,16 @@
 #ifndef HEIPROMAP_GREEDY_PARTITIONER_H
 #define HEIPROMAP_GREEDY_PARTITIONER_H
 
-#include <vector>
-#include <numeric>
 #include <algorithm>
+#include <limits>
+#include <numeric>
+#include <vector>
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/distance_oracle.h"
+#include "../utility/profiler.h"
 #include "../utility/random_engine.h"
 
 namespace HeiProMap {

@@ -4,20 +4,33 @@ set -euo pipefail
 ROOT="$(pwd)"
 ENABLE_PROFILER="OFF"
 ENABLE_ASSERTS="OFF"
+ENABLE_EXCEPTIONS="OFF"
 BUILD_TYPE="Release"
+
+BUILD_TESTING="OFF"
+RUN_TESTS="OFF"
+VERBOSE="OFF"
 
 show_help() {
   echo "Usage: $0 [options]"
   echo "Options:"
+  echo "  -v, --verbose     Show detailed build output (default: silent)"
   echo "  -p, --profiler    Enable the profiler (ENABLE_PROFILER=ON)"
   echo "  -a, --asserts     Enable assertions (ENABLE_ASSERTS=ON)"
+  echo "  --exceptions      Enable C++ exceptions (default: disabled)"
   echo "  -d, --debug       Build in Debug mode"
+  echo "  -t, --test        Build tests (BUILD_TESTING=ON, ENABLE_ASSERTS=ON)"
+  echo "  --run-tests       Run tests using gtest-parallel (requires -t)"
   echo "  -h, --help        Show this help message"
   exit 0
 }
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    -v|--verbose)
+      VERBOSE="ON"
+      shift
+      ;;
     -p|--profiler)
       ENABLE_PROFILER="ON"
       shift
@@ -26,8 +39,21 @@ while [[ $# -gt 0 ]]; do
       ENABLE_ASSERTS="ON"
       shift
       ;;
+    --exceptions)
+      ENABLE_EXCEPTIONS="ON"
+      shift
+      ;;
     -d|--debug)
       BUILD_TYPE="Debug"
+      shift
+      ;;
+    -t|--test)
+      BUILD_TESTING="ON"
+      ENABLE_ASSERTS="ON"
+      shift
+      ;;
+    --run-tests)
+      RUN_TESTS="ON"
       shift
       ;;
     -h|--help)
@@ -48,6 +74,22 @@ calc_jobs() {
   echo "$j"
 }
 JOBS="${MAX_THREADS:-$(calc_jobs)}"
+
+execute() {
+  if [ "${VERBOSE}" == "ON" ]; then
+    "$@"
+  else
+    local log_file
+    log_file=$(mktemp)
+    if ! "$@" > "$log_file" 2>&1; then
+      echo "Error executing: $*" >&2
+      cat "$log_file"
+      rm -f "$log_file"
+      exit 1
+    fi
+    rm -f "$log_file"
+  fi
+}
 
 echo "Root: $ROOT"
 echo "Jobs: $JOBS"
@@ -84,14 +126,14 @@ else
 
   (
     cd "${ROOT}/extern/KaHIP/build-release"
-    cmake .. \
+    execute cmake .. \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="${ROOT}/extern/local/kahip-release" \
       -DNOMPI=ON \
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
       -DCMAKE_C_FLAGS_RELEASE="-Ofast -DNDEBUG -march=native" \
       -DCMAKE_CXX_FLAGS_RELEASE="-Ofast -DNDEBUG -march=native"
-    cmake --build . --target install --parallel "$JOBS"
+    execute cmake --build . --target install --parallel "$JOBS"
   )
 
   # -----------------------------
@@ -103,7 +145,7 @@ else
 
   (
     cd "${ROOT}/extern/KaHIP/build-debug"
-    cmake .. \
+    execute cmake .. \
       -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_INSTALL_PREFIX="${ROOT}/extern/local/kahip-debug" \
       -DNOMPI=ON \
@@ -112,7 +154,7 @@ else
       -DCMAKE_CXX_FLAGS="-O0 -g -march=x86-64 -mtune=generic -fno-omit-frame-pointer -mno-avx512f -mno-avx512vl -mno-avx512dq -mno-avx512bw -mno-avx512cd -mno-avx2 -mno-avx -mno-fma" \
       -DCMAKE_C_FLAGS_DEBUG="" \
       -DCMAKE_CXX_FLAGS_DEBUG=""
-    cmake --build . --target install --parallel 1 --verbose
+    execute cmake --build . --target install --parallel 1 --verbose
   )
 fi
 
@@ -132,25 +174,75 @@ else
     tar -xzf tbb.tar.gz
     rm -f tbb.tar.gz
     mv oneTBB-* oneTBB
-    cmake -S oneTBB -B oneTBB/build \
+    execute cmake -S oneTBB -B oneTBB/build \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="${TBB_LOCAL}" \
       -DTBB_TEST=OFF
-    cmake --build oneTBB/build --target install --parallel "$JOBS"
+    execute cmake --build oneTBB/build --target install --parallel "$JOBS"
   )
+fi
+
+# -----------------------------
+# GoogleTest
+# -----------------------------
+GTEST_LOCAL="${ROOT}/extern/local/googletest"
+if [ -d "${GTEST_LOCAL}" ]; then
+  echo "Local GoogleTest found; skipping build."
+else
+  echo "GoogleTest not found locally; building from source..."
+  GTEST_VERSION="v1.14.0"
+  (
+    cd "${ROOT}/extern"
+    wget -q -O googletest.tar.gz "https://github.com/google/googletest/archive/refs/tags/${GTEST_VERSION}.tar.gz"
+    tar -xzf googletest.tar.gz
+    rm -f googletest.tar.gz
+    mv googletest-* googletest-src
+    execute cmake -S googletest-src -B googletest-src/build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX="${GTEST_LOCAL}" \
+      -DBUILD_GMOCK=OFF \
+      -DINSTALL_GTEST=ON
+    execute cmake --build googletest-src/build --target install --parallel "$JOBS"
+  )
+fi
+
+# -----------------------------
+# gtest-parallel
+# -----------------------------
+GP_LOCAL="${ROOT}/extern/gtest-parallel"
+if [ -d "${GP_LOCAL}" ]; then
+  echo "gtest-parallel found; skipping download."
+else
+  echo "gtest-parallel not found locally; downloading..."
+  (
+    cd "${ROOT}/extern"
+    execute git clone -q https://github.com/google/gtest-parallel.git
+  )
+fi
+
+# -----------------------------
+# Build HeiProMap
+# -----------------------------
+echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER}, Asserts=${ENABLE_ASSERTS})..."
+rm -rf "${ROOT}/build"
+mkdir "${ROOT}/build"
+
+CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL}\;${GTEST_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER} -DENABLE_ASSERTS=${ENABLE_ASSERTS} -DENABLE_EXCEPTIONS=${ENABLE_EXCEPTIONS} -DBUILD_TESTING=${BUILD_TESTING}"
+  execute cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
+  execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
+  execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target Dyn-HeiProMap
+  execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiPa
+
+  if [ "${BUILD_TESTING}" == "ON" ]; then
+    execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMapTests
   fi
 
-  # -----------------------------
-  # Build HeiProMap
-  # -----------------------------
-  echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER}, Asserts=${ENABLE_ASSERTS})..."
-  rm -rf "${ROOT}/build"
-  mkdir "${ROOT}/build"
-
-  CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER} -DENABLE_ASSERTS=${ENABLE_ASSERTS}"
-
-  cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
-  cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
-  cmake --build "${ROOT}/build" --parallel "$JOBS" --target Dyn-HeiProMap
-  cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiPa
+  if [ "${RUN_TESTS}" == "ON" ]; then
+    if [ "${BUILD_TESTING}" == "OFF" ]; then
+      echo "Error: Cannot run tests without building them first. Use -t or --test." >&2
+      exit 1
+    fi
+    echo "Running tests with gtest-parallel..."
+    python3 "${GP_LOCAL}/gtest-parallel" "${ROOT}/build/tests/HeiProMapTests"
+  fi
 

@@ -465,7 +465,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 64;
+            initial_c = 4;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -484,7 +484,7 @@ namespace HeiProMap {
             size_constrained_lp_config.multiplier = 16;
 
             // set multisection
-            partitioning_algorithm_string = "multisection";
+            partitioning_algorithm_string = "greedy";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
@@ -498,7 +498,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 8;
+            quotient_graph_refinement_config.min_n_steps = 4;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
             // enable flow based refinement

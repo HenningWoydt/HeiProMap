@@ -38,6 +38,7 @@
 
 #include "../definitions.h"
 #include "../utility/aligned_array.h"
+#include "../utility/profiler.h"
 
 namespace HeiProMap {
     class QuotientGraph {
@@ -437,7 +438,8 @@ namespace HeiProMap {
         void write_as_metis(const std::string &file_name) {
             std::ofstream out(file_name);
             if (!out) {
-                throw std::runtime_error("Could not open file for writing: " + file_name);
+                std::cerr << "Could not open file for writing: " << file_name << std::endl;
+                exit(EXIT_FAILURE);
             }
 
             // Count undirected edges (ignore self-loops).

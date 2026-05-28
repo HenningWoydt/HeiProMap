@@ -29,6 +29,9 @@
 
 #include "../definitions.h"
 #include "../utility/aligned_array.h"
+#include "../utility/mapping.h"
+#include "../utility/profiler.h"
+#include "csr_graph.h"
 
 namespace HeiProMap {
     class PartitionManager {

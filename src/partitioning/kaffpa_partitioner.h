@@ -27,9 +27,16 @@
 #ifndef HEIPROMAP_KAFFPA_PARTITIONER_H
 #define HEIPROMAP_KAFFPA_PARTITIONER_H
 
+#include <algorithm>
+#include <cstdlib>
+#include <limits>
+#include <string>
+
 #include <kaHIP_interface.h>
 
 #include "../definitions.h"
+#include "../datastructures/csr_graph.h"
+#include "../utility/aligned_array.h"
 #include "../utility/assert_state.h"
 
 

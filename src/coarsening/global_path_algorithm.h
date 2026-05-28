@@ -35,8 +35,13 @@
 #include <omp.h>
 
 #include "../definitions.h"
+#include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
+#include "../utility/aligned_array.h"
 #include "../utility/JSON_utils.h"
+#include "../utility/mapping.h"
+#include "../utility/matching.h"
+#include "../utility/profiler.h"
 #include "../utility/random_engine.h"
 
 namespace HeiProMap {
