@@ -145,22 +145,21 @@ namespace HeiProMap {
             bool positive_move_occurred = true;
             for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
-                //
-                {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "get_boundary");
 
-                    curr_boundary_size = 0;
-                    for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                        for (size_t i = 0; i < bv_manager.size(id); ++i) {
-                            const vertex_t u = bv_manager.get(id, i); {
-                                curr_boundary[curr_boundary_size++] = u;
-                            }
+                HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "get_boundary");
+                curr_boundary_size = 0;
+                for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
+                    for (size_t i = 0; i < bv_manager.size(id); ++i) {
+                        const vertex_t u = bv_manager.get(id, i);
+                        {
+                            curr_boundary[curr_boundary_size++] = u;
                         }
                     }
-                    fast_shuffle_unchecked(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
                 }
+                fast_shuffle_unchecked(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
 
                 if (m_threads > 1) {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices_parallel");
                     // Phase 1: compute best moves in parallel (read-only on shared state)
                     #pragma omp parallel for num_threads(m_threads) schedule(dynamic, 64)
                     for (size_t j = 0; j < curr_boundary_size; ++j) {
@@ -180,19 +179,19 @@ namespace HeiProMap {
                         RandomEngine &rng = rnd_engines[tid];
 
                         for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                            const partition_t id = block_conn.get_id(i); {
-                                if (id == u_id) { continue; }
-                                weight_t v_id_weight = p_manager.get_bweight(id);
-                                if (v_id_weight + u_weight <= lmax) {
-                                    weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
-                                    if (qap_delta > best_qap_delta) {
-                                        best_id = id;
-                                        best_qap_delta = qap_delta;
-                                        counter = 1.0;
-                                    } else if (qap_delta == best_qap_delta) {
-                                        counter += 1.0;
-                                        if (rng.get_f32() < 1.0f / counter) { best_id = id; }
-                                    }
+                            const partition_t id = block_conn.get_id(i);
+                            if (id == u_id) { continue; }
+
+                            weight_t v_id_weight = p_manager.get_bweight(id);
+                            if (v_id_weight + u_weight <= lmax) {
+                                weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
+                                if (qap_delta > best_qap_delta) {
+                                    best_id = id;
+                                    best_qap_delta = qap_delta;
+                                    counter = 1.0;
+                                } else if (qap_delta == best_qap_delta) {
+                                    counter += 1.0;
+                                    if (rng.get_f32() < 1.0f / counter) { best_id = id; }
                                 }
                             }
                         }
@@ -235,7 +234,6 @@ namespace HeiProMap {
                         f32 counter = 0;
 
                         for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                            //
                             partition_t id = block_conn.get_id(i);
                             weight_t v_id_weight = p_manager.get_bweight(id);
 
