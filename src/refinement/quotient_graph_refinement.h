@@ -273,8 +273,6 @@ namespace HeiProMap {
             f64 alpha = config->alpha * (f64) d_oracle.get(u_id, v_id);
             f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
-            size_t max_n_swaps = 0;
-
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_qap");
             // add all boundary vertices with gain
             boundary_vertices_u.clear();
@@ -282,8 +280,7 @@ namespace HeiProMap {
             for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
                 const vertex_t u = bv_manager.get(u_id, j);
                 for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                    const partition_t id = block_conn.get_id(i);
-                    if (id == v_id) {
+                    if (block_conn.get_id(i) == v_id) {
                         weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                         boundary_vertices_u.push(u, qap_delta_u);
                         break;
@@ -294,17 +291,13 @@ namespace HeiProMap {
             for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
                 const vertex_t v = bv_manager.get(v_id, j);
                 for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
-                    const partition_t id = block_conn.get_id(i);
-                    if (id == u_id) {
+                    if (block_conn.get_id(i) == u_id) {
                         weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
                         boundary_vertices_v.push(v, qap_delta_v);
                         break;
                     }
                 }
             }
-
-
-            max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
 
             // store change
             weight_t curr_qap_gain = 0;
@@ -320,7 +313,7 @@ namespace HeiProMap {
             std::vector<vertex_t> moves;
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue");
-            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
+            while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
                 // determine from which block to choose
                 bool choose_u = true;
                 // 1. if one block is empty, then choose the other one
@@ -463,8 +456,6 @@ namespace HeiProMap {
             f64 alpha = config->alpha * (f64) d_oracle.get(u_id, v_id);
             f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
-            size_t max_n_swaps = 0;
-
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_edge_cut");
             // add all boundary vertices with gain
             boundary_vertices_u.clear();
@@ -472,8 +463,7 @@ namespace HeiProMap {
             for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
                 const vertex_t u = bv_manager.get(u_id, j);
                 for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                    const partition_t id = block_conn.get_id(i);
-                    if (id == v_id) {
+                    if (block_conn.get_id(i) == v_id) {
                         weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
                         boundary_vertices_u.push(u, qap_delta_u);
                         break;
@@ -484,17 +474,13 @@ namespace HeiProMap {
             for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
                 const vertex_t v = bv_manager.get(v_id, j);
                 for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
-                    const partition_t id = block_conn.get_id(i);
-                    if (id == u_id) {
+                    if (block_conn.get_id(i) == u_id) {
                         weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
                         boundary_vertices_v.push(v, qap_delta_v);
                         break;
                     }
                 }
             }
-
-
-            max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
 
             // store change
             weight_t curr_qap_gain = 0;
@@ -508,7 +494,7 @@ namespace HeiProMap {
             std::vector<vertex_t> moves;
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
-            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
+            while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
                 // determine from which block to choose
                 bool choose_u = true;
                 // 1. if one block is empty, then choose the other one
