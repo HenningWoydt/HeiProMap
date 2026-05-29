@@ -176,28 +176,20 @@ namespace HeiProMap {
                          block_conn_t &block_conn,
                          f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "init_block_scheduling");
 
-                active_this_round.initialize(m_k, 1);
-                active_next_round.initialize(m_k, 0);
-            }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "init_block_scheduling");
+            active_this_round.initialize(m_k, 1);
+            active_next_round.initialize(m_k, 0);
 
             if (m_threads > 1) {
                 std::vector<std::pair<partition_t, partition_t> > matching;
 
                 for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
-                    //
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
-                        std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
+                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                    bool found_matching = false; {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
+                    bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
 
                     while (found_matching) {
                         // Pre-assign unique marks for each thread
@@ -217,37 +209,33 @@ namespace HeiProMap {
                             } else {
                                 refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                             }
-                        } {
-                            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                            found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                         }
-                    } {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
-                        std::swap(active_this_round, active_next_round);
-                        active_next_round.initialize(m_k, 0);
+
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
+                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                     }
+
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
+                    std::swap(active_this_round, active_next_round);
+                    active_next_round.initialize(m_k, 0);
                 }
             } else {
                 RandomEngine &random_engine = rnd_engines[0];
 
                 for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
-                    //
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "get_pairs");
-
-                        pairs_size = 0;
-                        for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                            for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
-                                if (!q_graph.has_edge(u_id, v_id)) continue;
-                                if (config->use_active_scheduling && !(active_this_round[u_id] || active_this_round[v_id])) continue;
-                                pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
-                            }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "get_pairs");
+                    pairs_size = 0;
+                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                        for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
+                            if (!q_graph.has_edge(u_id, v_id)) continue;
+                            if (config->use_active_scheduling && !(active_this_round[u_id] || active_this_round[v_id])) continue;
+                            pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
                         }
-                        if (pairs_size == 0) { return; }
-                    } {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "shuffle");
-                        fast_shuffle_unchecked(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
                     }
+                    if (pairs_size == 0) { return; }
+
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "shuffle");
+                    fast_shuffle_unchecked(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
 
                     for (size_t j = 0; j < pairs_size; ++j) {
                         auto [u_id, v_id, distance] = pairs[j];
@@ -259,11 +247,11 @@ namespace HeiProMap {
                         } else {
                             refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
                         }
-                    } {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
-                        std::swap(active_this_round, active_next_round);
-                        active_next_round.initialize(m_k, 0);
                     }
+
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
+                    std::swap(active_this_round, active_next_round);
+                    active_next_round.initialize(m_k, 0);
                 }
             }
         }
@@ -286,41 +274,35 @@ namespace HeiProMap {
             f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             size_t max_n_swaps = 0;
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_qap");
 
-                // add all boundary vertices with gain
-                boundary_vertices_u.clear();
-                boundary_vertices_v.clear();
-                for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
-                    const vertex_t u = bv_manager.get(u_id, j); {
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                            const partition_t id = block_conn.get_id(i); {
-                                if (id == v_id) {
-                                    weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
-                                    boundary_vertices_u.push(u, qap_delta_u);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
-                    const vertex_t v = bv_manager.get(v_id, j); {
-                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
-                            const partition_t id = block_conn.get_id(i); {
-                                if (id == u_id) {
-                                    weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
-                                    boundary_vertices_v.push(v, qap_delta_v);
-                                    break;
-                                }
-                            }
-                        }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_qap");
+            // add all boundary vertices with gain
+            boundary_vertices_u.clear();
+            boundary_vertices_v.clear();
+            for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
+                const vertex_t u = bv_manager.get(u_id, j);
+                for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                    const partition_t id = block_conn.get_id(i);
+                    if (id == v_id) {
+                        weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
+                        boundary_vertices_u.push(u, qap_delta_u);
+                        break;
                     }
                 }
             }
+
+            for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
+                const vertex_t v = bv_manager.get(v_id, j);
+                for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
+                    const partition_t id = block_conn.get_id(i);
+                    if (id == u_id) {
+                        weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
+                        boundary_vertices_v.push(v, qap_delta_v);
+                        break;
+                    }
+                }
+            }
+
 
             max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
 
@@ -336,131 +318,126 @@ namespace HeiProMap {
             f64 qap_gain_var = 0.0;
 
             std::vector<vertex_t> moves;
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue");
 
-                while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
-                    // determine from which block to choose
-                    bool choose_u = true;
-                    // 1. if one block is empty, then choose the other one
-                    if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
-                        choose_u = boundary_vertices_v.empty();
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue");
+            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
+                // determine from which block to choose
+                bool choose_u = true;
+                // 1. if one block is empty, then choose the other one
+                if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
+                    choose_u = boundary_vertices_v.empty();
+                } else {
+                    // 2. choose the block with greater gain and randomly if even
+                    if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
+                        choose_u = false;
+                    } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
+                        choose_u = random_engine.get_f32() < 0.5;
+                    }
+
+                    // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
+                    weight_t u_id_weight = p_manager.get_bweight(u_id);
+                    weight_t v_id_weight = p_manager.get_bweight(v_id);
+
+                    if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
+                    if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
+                    if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
+                }
+
+                // choose the priority queue
+                IndexedMaxHeap<weight_t> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
+
+                vertex_t vertex = boundary_vertices.top_key();
+                weight_t qap_delta = boundary_vertices.top();
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                partition_t vertex_id = choose_u ? u_id : v_id;
+                partition_t move_id = choose_u ? v_id : u_id;
+                boundary_vertices.pop();
+
+                // move the vertex
+                moves.push_back(vertex);
+                curr_qap_gain += qap_delta;
+                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
+                    best_idx = moves.size();
+                    max_qap_gain = curr_qap_gain;
+
+                    steps_since_last_improvement = 0;
+                    qap_gain_mean = 0.0;
+                    qap_gain_var = 0.0;
+                }
+
+                // make move in structures
+                p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
+                vertex_used[vertex] = vertex_mark;
+
+                steps_since_last_improvement += 1;
+                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
+                f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
+
+                qap_gain_mean = new_qap_gain_mean;
+                qap_gain_var = new_qap_gain_var;
+
+                if (config->use_preemptive_exit) {
+                    if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
+                        break;
+                    }
+                }
+
+                // we have to push or update the neighbors that were not moved already
+                for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) {
+                    const vertex_t neighbor = g.edges_v[i];
+
+                    if (vertex_used[neighbor] == vertex_mark) { continue; }
+
+                    partition_t neighbor_id = p_manager[neighbor];
+
+                    if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
+
+                    partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
+
+                    bool is_connected_to_new_id;
+                    weight_t new_qap_delta = get_u_qap_delta_and_is_connected_to_t<t_uniform_e_weights>(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
+
+                    if (!is_connected_to_new_id) { continue; }
+
+                    if (neighbor_id == u_id) {
+                        boundary_vertices_u.push_update(neighbor, new_qap_delta);
                     } else {
-                        // 2. choose the block with greater gain and randomly if even
-                        if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
-                            choose_u = false;
-                        } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                            choose_u = random_engine.get_f32() < 0.5;
-                        }
-
-                        // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
-                        weight_t u_id_weight = p_manager.get_bweight(u_id);
-                        weight_t v_id_weight = p_manager.get_bweight(v_id);
-
-                        if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
-                        if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                        if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
+                        boundary_vertices_v.push_update(neighbor, new_qap_delta);
                     }
-
-                    // choose the priority queue
-                    IndexedMaxHeap<weight_t> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
-
-                    vertex_t vertex = boundary_vertices.top_key();
-                    weight_t qap_delta = boundary_vertices.top();
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
-                    partition_t vertex_id = choose_u ? u_id : v_id;
-                    partition_t move_id = choose_u ? v_id : u_id;
-                    boundary_vertices.pop();
-
-                    // move the vertex
-                    moves.push_back(vertex);
-                    curr_qap_gain += qap_delta;
-                    if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
-                        best_idx = moves.size();
-                        max_qap_gain = curr_qap_gain;
-
-                        steps_since_last_improvement = 0;
-                        qap_gain_mean = 0.0;
-                        qap_gain_var = 0.0;
-                    }
-
-                    // make move in structures
-                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
-                    vertex_used[vertex] = vertex_mark;
-
-                    steps_since_last_improvement += 1;
-                    f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
-                    f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
-
-                    qap_gain_mean = new_qap_gain_mean;
-                    qap_gain_var = new_qap_gain_var;
-
-                    if (config->use_preemptive_exit) {
-                        if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
-                            break;
-                        }
-                    }
-
-                    // we have to push or update the neighbors that were not moved already
-                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) {
-                        const vertex_t neighbor = g.edges_v[i]; {
-                            if (vertex_used[neighbor] == vertex_mark) { continue; }
-
-                            partition_t neighbor_id = p_manager[neighbor];
-
-                            if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
-
-                            partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
-
-                            bool is_connected_to_new_id;
-                            weight_t new_qap_delta = get_u_qap_delta_and_is_connected_to_t<t_uniform_e_weights>(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager, d_oracle);
-
-                            if (!is_connected_to_new_id) { continue; }
-
-                            if (neighbor_id == u_id) {
-                                boundary_vertices_u.push_update(neighbor, new_qap_delta);
-                            } else {
-                                boundary_vertices_v.push_update(neighbor, new_qap_delta);
-                            }
-                        }
-                    }
-
-                    // remove vertex from u if it is not boundary
-                    while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
-
-                    // remove vertex from v if it is not boundary
-                    while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
                 }
+
+                // remove vertex from u if it is not boundary
+                while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
+
+                // remove vertex from v if it is not boundary
+                while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
             }
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "make_moves");
 
-                // revert all moves in partitioning manager
-                for (size_t i = 0; i < moves.size(); i++) {
-                    vertex_t vertex = moves[moves.size() - 1 - i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
-                    partition_t vertex_id = p_manager[vertex];
-                    partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                    vertex_used[vertex] = vertex_mark - 1;
 
-                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
-                }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "make_moves");
+            // revert all moves in partitioning manager
+            for (size_t i = 0; i < moves.size(); i++) {
+                vertex_t vertex = moves[moves.size() - 1 - i];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                vertex_used[vertex] = vertex_mark - 1;
 
-                // make all moves to best index
-                for (size_t i = 0; i < best_idx; ++i) {
-                    vertex_t vertex = moves[i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
-                    partition_t vertex_id = p_manager[vertex];
-                    partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                    vertex_used[vertex] = vertex_mark;
+                p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
+            }
 
-                    bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
-                    q_graph.move(g, p_manager, vertex, vertex_id, move_id);
-                    block_conn.move(g, vertex, vertex_id, move_id);
-                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
-                }
+            // make all moves to best index
+            for (size_t i = 0; i < best_idx; ++i) {
+                vertex_t vertex = moves[i];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                vertex_used[vertex] = vertex_mark;
+
+                bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                block_conn.move(g, vertex, vertex_id, move_id);
+                p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
             }
 
             if (max_qap_gain > 0) {
@@ -487,41 +464,35 @@ namespace HeiProMap {
             f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             size_t max_n_swaps = 0;
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_edge_cut");
 
-                // add all boundary vertices with gain
-                boundary_vertices_u.clear();
-                boundary_vertices_v.clear();
-                for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
-                    const vertex_t u = bv_manager.get(u_id, j); {
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                            const partition_t id = block_conn.get_id(i); {
-                                if (id == v_id) {
-                                    weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
-                                    boundary_vertices_u.push(u, qap_delta_u);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
-                    const vertex_t v = bv_manager.get(v_id, j); {
-                        for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
-                            const partition_t id = block_conn.get_id(i); {
-                                if (id == u_id) {
-                                    weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
-                                    boundary_vertices_v.push(v, qap_delta_v);
-                                    break;
-                                }
-                            }
-                        }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_edge_cut");
+            // add all boundary vertices with gain
+            boundary_vertices_u.clear();
+            boundary_vertices_v.clear();
+            for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
+                const vertex_t u = bv_manager.get(u_id, j);
+                for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                    const partition_t id = block_conn.get_id(i);
+                    if (id == v_id) {
+                        weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
+                        boundary_vertices_u.push(u, qap_delta_u);
+                        break;
                     }
                 }
             }
+
+            for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
+                const vertex_t v = bv_manager.get(v_id, j);
+                for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
+                    const partition_t id = block_conn.get_id(i);
+                    if (id == u_id) {
+                        weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
+                        boundary_vertices_v.push(v, qap_delta_v);
+                        break;
+                    }
+                }
+            }
+
 
             max_n_swaps = boundary_vertices_u.size() + boundary_vertices_v.size();
 
@@ -535,131 +506,125 @@ namespace HeiProMap {
             f64 qap_gain_var = 0.0;
 
             std::vector<vertex_t> moves;
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
 
-                while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
-                    // determine from which block to choose
-                    bool choose_u = true;
-                    // 1. if one block is empty, then choose the other one
-                    if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
-                        choose_u = boundary_vertices_v.empty();
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
+            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < max_n_swaps) {
+                // determine from which block to choose
+                bool choose_u = true;
+                // 1. if one block is empty, then choose the other one
+                if (boundary_vertices_u.empty() || boundary_vertices_v.empty()) {
+                    choose_u = boundary_vertices_v.empty();
+                } else {
+                    // 2. choose the block with greater gain and randomly if even
+                    if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
+                        choose_u = false;
+                    } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
+                        choose_u = random_engine.get_f32() < 0.5;
+                    }
+
+                    // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
+                    weight_t u_id_weight = p_manager.get_bweight(u_id);
+                    weight_t v_id_weight = p_manager.get_bweight(v_id);
+
+                    if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
+                    if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
+                    if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
+                }
+
+                // choose the priority queue
+                IndexedMaxHeap<weight_t> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
+
+                vertex_t vertex = boundary_vertices.top_key();
+                weight_t qap_delta = boundary_vertices.top();
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                partition_t vertex_id = choose_u ? u_id : v_id;
+                partition_t move_id = choose_u ? v_id : u_id;
+                boundary_vertices.pop();
+
+                // move the vertex
+                moves.push_back(vertex);
+                curr_qap_gain += qap_delta;
+                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
+                    best_idx = moves.size();
+                    max_qap_gain = curr_qap_gain;
+
+                    steps_since_last_improvement = 0;
+                    qap_gain_mean = 0.0;
+                    qap_gain_var = 0.0;
+                }
+
+                // make move in structures
+                p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
+                vertex_used[vertex] = vertex_mark;
+
+                steps_since_last_improvement += 1;
+                f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
+                f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
+
+                qap_gain_mean = new_qap_gain_mean;
+                qap_gain_var = new_qap_gain_var;
+
+                if (config->use_preemptive_exit) {
+                    if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
+                        break;
+                    }
+                }
+
+                // we have to push or update the neighbors that were not moved already
+                for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) {
+                    const vertex_t neighbor = g.edges_v[i];
+
+                    if (vertex_used[neighbor] == vertex_mark) { continue; }
+
+                    partition_t neighbor_id = p_manager[neighbor];
+
+                    if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
+
+                    partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
+
+                    bool is_connected_to_new_id;
+                    weight_t new_qap_delta = get_u_edge_cut_delta_and_is_connected_to_t<t_uniform_e_weights>(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager);
+
+                    if (!is_connected_to_new_id) { continue; }
+
+                    if (neighbor_id == u_id) {
+                        boundary_vertices_u.push_update(neighbor, new_qap_delta);
                     } else {
-                        // 2. choose the block with greater gain and randomly if even
-                        if (boundary_vertices_v.top() > boundary_vertices_u.top()) {
-                            choose_u = false;
-                        } else if (boundary_vertices_v.top() == boundary_vertices_u.top()) {
-                            choose_u = random_engine.get_f32() < 0.5;
-                        }
-
-                        // 3. if one block is overloaded, choose the larger one, if both same sizes, then randomly
-                        weight_t u_id_weight = p_manager.get_bweight(u_id);
-                        weight_t v_id_weight = p_manager.get_bweight(v_id);
-
-                        if (u_id_weight > lmax && u_id_weight > v_id_weight) { choose_u = true; }
-                        if (v_id_weight > lmax && v_id_weight > u_id_weight) { choose_u = false; }
-                        if (u_id_weight > lmax && v_id_weight > lmax && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
+                        boundary_vertices_v.push_update(neighbor, new_qap_delta);
                     }
-
-                    // choose the priority queue
-                    IndexedMaxHeap<weight_t> &boundary_vertices = choose_u ? boundary_vertices_u : boundary_vertices_v;
-
-                    vertex_t vertex = boundary_vertices.top_key();
-                    weight_t qap_delta = boundary_vertices.top();
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
-                    partition_t vertex_id = choose_u ? u_id : v_id;
-                    partition_t move_id = choose_u ? v_id : u_id;
-                    boundary_vertices.pop();
-
-                    // move the vertex
-                    moves.push_back(vertex);
-                    curr_qap_gain += qap_delta;
-                    if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
-                        best_idx = moves.size();
-                        max_qap_gain = curr_qap_gain;
-
-                        steps_since_last_improvement = 0;
-                        qap_gain_mean = 0.0;
-                        qap_gain_var = 0.0;
-                    }
-
-                    // make move in structures
-                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
-                    vertex_used[vertex] = vertex_mark;
-
-                    steps_since_last_improvement += 1;
-                    f64 new_qap_gain_mean = qap_gain_mean + ((f64) qap_delta - qap_gain_mean) / (f64) steps_since_last_improvement;
-                    f64 new_qap_gain_var = (qap_gain_var + ((f64) qap_delta - qap_gain_mean) * ((f64) qap_delta - new_qap_gain_mean)) / (f64) steps_since_last_improvement;
-
-                    qap_gain_mean = new_qap_gain_mean;
-                    qap_gain_var = new_qap_gain_var;
-
-                    if (config->use_preemptive_exit) {
-                        if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
-                            break;
-                        }
-                    }
-
-                    // we have to push or update the neighbors that were not moved already
-                    for (size_t i = g.neighborhoods[vertex]; i < g.neighborhoods[vertex + 1]; ++i) {
-                        const vertex_t neighbor = g.edges_v[i]; {
-                            if (vertex_used[neighbor] == vertex_mark) { continue; }
-
-                            partition_t neighbor_id = p_manager[neighbor];
-
-                            if (neighbor_id != u_id && neighbor_id != v_id) { continue; }
-
-                            partition_t new_id = neighbor_id == vertex_id ? move_id : vertex_id;
-
-                            bool is_connected_to_new_id;
-                            weight_t new_qap_delta = get_u_edge_cut_delta_and_is_connected_to_t<t_uniform_e_weights>(g, neighbor, neighbor_id, new_id, is_connected_to_new_id, p_manager);
-
-                            if (!is_connected_to_new_id) { continue; }
-
-                            if (neighbor_id == u_id) {
-                                boundary_vertices_u.push_update(neighbor, new_qap_delta);
-                            } else {
-                                boundary_vertices_v.push_update(neighbor, new_qap_delta);
-                            }
-                        }
-                    }
-
-                    // remove vertex from u if it is not boundary
-                    while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
-
-                    // remove vertex from v if it is not boundary
-                    while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
                 }
+
+                // remove vertex from u if it is not boundary
+                while (!boundary_vertices_u.empty() && !is_connected_to(g, p_manager, boundary_vertices_u.top_key(), v_id)) { boundary_vertices_u.pop(); }
+
+                // remove vertex from v if it is not boundary
+                while (!boundary_vertices_v.empty() && !is_connected_to(g, p_manager, boundary_vertices_v.top_key(), u_id)) { boundary_vertices_v.pop(); }
             }
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "make_moves_edge_cut");
 
-                // revert all moves in partitioning manager
-                for (size_t i = 0; i < moves.size(); i++) {
-                    vertex_t vertex = moves[moves.size() - 1 - i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
-                    partition_t vertex_id = p_manager[vertex];
-                    partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                    vertex_used[vertex] = vertex_mark - 1;
+            HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "make_moves_edge_cut");
+            // revert all moves in partitioning manager
+            for (size_t i = 0; i < moves.size(); i++) {
+                vertex_t vertex = moves[moves.size() - 1 - i];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                vertex_used[vertex] = vertex_mark - 1;
 
-                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
-                }
+                p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
+            }
 
-                // make all moves to best index
-                for (size_t i = 0; i < best_idx; ++i) {
-                    vertex_t vertex = moves[i];
-                    weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
-                    partition_t vertex_id = p_manager[vertex];
-                    partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                    vertex_used[vertex] = vertex_mark;
+            // make all moves to best index
+            for (size_t i = 0; i < best_idx; ++i) {
+                vertex_t vertex = moves[i];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                partition_t vertex_id = p_manager[vertex];
+                partition_t move_id = u_id == vertex_id ? v_id : u_id;
+                vertex_used[vertex] = vertex_mark;
 
-                    bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
-                    q_graph.move(g, p_manager, vertex, vertex_id, move_id);
-                    block_conn.move(g, vertex, vertex_id, move_id);
-                    p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
-                }
+                bv_manager.move(g, p_manager, vertex, vertex_id, move_id);
+                q_graph.move(g, p_manager, vertex, vertex_id, move_id);
+                block_conn.move(g, vertex, vertex_id, move_id);
+                p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
             }
 
             if (max_qap_gain > 0) {
