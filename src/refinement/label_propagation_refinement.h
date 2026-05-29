@@ -142,13 +142,6 @@ namespace HeiProMap {
 
             RandomEngine &random_engine = rnd_engines[0];
 
-            std::vector<vertex_t> list;
-            std::vector<vertex_t> next_list;
-            list.reserve(g.n);
-            next_list.reserve(g.n);
-            std::vector<u32> in_next_list(g.n, 0);
-            u32 in_list_counter = 1;
-
             bool positive_move_occurred = true;
             for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
@@ -161,7 +154,6 @@ namespace HeiProMap {
                         for (size_t i = 0; i < bv_manager.size(id); ++i) {
                             const vertex_t u = bv_manager.get(id, i); {
                                 curr_boundary[curr_boundary_size++] = u;
-                                list.push_back(u);
                             }
                         }
                     }
@@ -230,8 +222,8 @@ namespace HeiProMap {
                 } else {
                     // Serial path
                     HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices");
-                    for (size_t j = 0; j < list.size(); ++j) {
-                        vertex_t u = list[j]; // curr_boundary[j];
+                    for (size_t j = 0; j < curr_boundary_size; ++j) {
+                        vertex_t u = curr_boundary[j];
 
                         if (!bv_manager.is_boundary(u)) { continue; }
 
@@ -267,20 +259,8 @@ namespace HeiProMap {
                             block_conn.move(g, u, u_id, best_id);
                             p_manager.move_serial(u, u_weight, u_id, best_id);
                             positive_move_occurred |= best_qap_delta > 0;
-
-                            for (size_t ii = g.neighborhoods[u]; ii < g.neighborhoods[u + 1]; ++ii) {
-                                vertex_t v = g.edges_v[ii];
-                                if (in_next_list[v] != in_list_counter) {
-                                    in_next_list[v] = in_list_counter;
-                                    next_list.push_back(v);
-                                }
-                            }
                         }
                     }
-
-                    std::swap(next_list, list);
-                    next_list.clear();
-                    in_list_counter += 1;
                 }
             }
         }
