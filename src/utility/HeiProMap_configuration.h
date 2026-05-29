@@ -535,7 +535,7 @@ namespace HeiProMap {
         }
 
         void set_eco() {
-            initial_c = 16;
+            initial_c = 32;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -561,7 +561,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "kaffpa-eco";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 2;
+            global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
 
             // enable label propagation
@@ -579,7 +579,7 @@ namespace HeiProMap {
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
             flow_based_refinement_config.max_local_iteration = 1;
-            flow_based_refinement_config.alpha = 1.0;
+            flow_based_refinement_config.alpha = 2.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
