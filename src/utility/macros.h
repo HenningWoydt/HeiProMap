@@ -42,30 +42,32 @@
 #endif
 
 namespace HeiProMap {
-#ifndef ASSERT_ENABLED
-#define ASSERT_ENABLED false
-#endif
+    #ifndef ENABLE_PROFILER
+    #define ENABLE_PROFILER false
+    #endif
 
-#ifndef HEAVYASSERT_ENABLED
-#define HEAVYASSERT_ENABLED false
-#endif
+    #ifndef ASSERT_ENABLED
+    #define ASSERT_ENABLED false
+    #endif
 
-#if (ASSERT_ENABLED)
+    #ifndef HEAVYASSERT_ENABLED
+    #define HEAVYASSERT_ENABLED false
+    #endif
+
+    #if (ASSERT_ENABLED)
     // Use ASSERT for quick operations like O(1) operations, for other Asserts use HEAVYASSERT
-#define ASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
-#else
-#define ASSERT(condition) ((void)0)
-#endif
+    #define ASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
+    #else
+    #define ASSERT(condition) ((void)0)
+    #endif
 
 
-#if (HEAVYASSERT_ENABLED)
+    #if (HEAVYASSERT_ENABLED)
     // Use HEAVYASSERT for expensive operations like O(n), O(n^2) operations, for faster Asserts use ASSERT
-#define HEAVYASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
-#else
-#define HEAVYASSERT(condition) ((void)0)
-#endif
-
-
+    #define HEAVYASSERT(condition) if(!(condition)) {std::cerr << "Error in file " << __FILE__ << " in function " << __FUNCTION__ << " at line " << __LINE__ << "!" << std::endl; abort(); } ((void)0)
+    #else
+    #define HEAVYASSERT(condition) ((void)0)
+    #endif
 }
 
 #endif //HEIPROMAP_MACROS_H

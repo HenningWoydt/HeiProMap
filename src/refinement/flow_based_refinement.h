@@ -99,7 +99,7 @@ namespace HeiProMap {
         std::vector<std::vector<u8> > is_left_2_vecs;
         std::vector<std::vector<u8> > s_connected_vecs;
         std::vector<std::vector<u8> > t_connected_vecs;
-        std::vector<PushRelabel<int> > prs;
+        std::vector<PushRelabel<weight_t> > prs;
         std::vector<MemoryStack> pr_mems;
         std::vector<ResidualFlowNetwork> residual_flow_networks;
         std::vector<SCCGraph> scc_graphs;
@@ -295,7 +295,7 @@ namespace HeiProMap {
             std::vector<vertex_t> &left_region = left_regions[thread_id];
             std::vector<vertex_t> &right_region = right_regions[thread_id];
 
-            PushRelabel<int> &pr = prs[thread_id];
+            PushRelabel<weight_t> &pr = prs[thread_id];
             MemoryStack &pr_mem = pr_mems[thread_id];
             ResidualFlowNetwork &residual_flow_network = residual_flow_networks[thread_id];
             SCCGraph &scc_graph = scc_graphs[thread_id];
@@ -334,8 +334,8 @@ namespace HeiProMap {
                 u32 right_mark = region_mark;
                 seen_mark += 2;
 
-                weight_t left_region_weight = determine_region<false>(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_region, left_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
-                weight_t right_region_weight = determine_region<false>(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
+                weight_t left_region_weight = determine_region<t_uniform_v_weights>(g, p_manager, left_id, left_mark, left_max_weight, left_boundary, left_region, left_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
+                weight_t right_region_weight = determine_region<t_uniform_v_weights>(g, p_manager, right_id, right_mark, right_max_weight, right_boundary, right_region, right_boundary_weight, seen, seen_mark, region_marker, region_mark, queue);
 
                 if (left_region.size() + right_region.size() == 0) {
                     if (alpha >= alpha_upper_bound) { return; }
@@ -416,7 +416,7 @@ namespace HeiProMap {
                 alpha = std::min(alpha * alpha_modifier, alpha_upper_bound);
 
                 // make the changes
-                change_boundary<false>(g, bv_manager, p_manager, q_graph, block_conn, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
+                change_boundary<t_uniform_v_weights>(g, bv_manager, p_manager, q_graph, block_conn, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
 
                 active_next_round[left_id] = 1;
                 active_next_round[right_id] = 1;
@@ -540,7 +540,7 @@ namespace HeiProMap {
                                                partition_t right_id,
                                                std::vector<vertex_t> &left_region,
                                                std::vector<vertex_t> &right_region,
-                                               PushRelabel<int> &pr,
+                                               PushRelabel<weight_t> &pr,
                                                MemoryStack &pr_mem,
                                                TranslationTable<vertex_t> &translation_table,
                                                AlignedArray<u32> &region_marker,
@@ -574,8 +574,8 @@ namespace HeiProMap {
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
                 int new_u = static_cast<int>(translation_table.get_n(u));
-                int left_penalty = 0;
-                int right_penalty = 0;
+                weight_t left_penalty = 0;
+                weight_t right_penalty = 0;
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
@@ -583,7 +583,7 @@ namespace HeiProMap {
                     {
                         if (region_marker[v] == right_mark) {
                             int new_v = static_cast<int>(translation_table.get_n(v));
-                            int cap = t_uniform_e_weights ? static_cast<int>(distance) : static_cast<int>(w * distance);
+                            weight_t cap = t_uniform_e_weights ? distance : w * distance;
                             pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
@@ -591,18 +591,18 @@ namespace HeiProMap {
                         if (region_marker[v] == left_mark) {
                             if (u < v) { continue; }
                             int new_v = static_cast<int>(translation_table.get_n(v));
-                            int cap = t_uniform_e_weights ? static_cast<int>(distance) : static_cast<int>(w * distance);
+                            weight_t cap = t_uniform_e_weights ? distance : w * distance;
                             pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         partition_t v_id = p_manager[v];
                         if constexpr (t_uniform_e_weights) {
-                            left_penalty += static_cast<int>(d_oracle.get(left_id, v_id));
-                            right_penalty += static_cast<int>(d_oracle.get(right_id, v_id));
+                            left_penalty += d_oracle.get(left_id, v_id);
+                            right_penalty += d_oracle.get(right_id, v_id);
                         } else {
-                            left_penalty += static_cast<int>(w * d_oracle.get(left_id, v_id));
-                            right_penalty += static_cast<int>(w * d_oracle.get(right_id, v_id));
+                            left_penalty += w * d_oracle.get(left_id, v_id);
+                            right_penalty += w * d_oracle.get(right_id, v_id);
                         }
                     }
                 }
@@ -621,8 +621,8 @@ namespace HeiProMap {
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
                 int new_u = static_cast<int>(translation_table.get_n(u));
-                int left_penalty = 0;
-                int right_penalty = 0;
+                weight_t left_penalty = 0;
+                weight_t right_penalty = 0;
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
@@ -631,7 +631,7 @@ namespace HeiProMap {
                         if (region_marker[v] == right_mark) {
                             if (u < v) { continue; }
                             int new_v = static_cast<int>(translation_table.get_n(v));
-                            int cap = t_uniform_e_weights ? static_cast<int>(distance) : static_cast<int>(w * distance);
+                            weight_t cap = t_uniform_e_weights ? distance : w * distance;
                             pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
@@ -642,11 +642,11 @@ namespace HeiProMap {
 
                         partition_t v_id = p_manager[v];
                         if constexpr (t_uniform_e_weights) {
-                            left_penalty += static_cast<int>(d_oracle.get(left_id, v_id));
-                            right_penalty += static_cast<int>(d_oracle.get(right_id, v_id));
+                            left_penalty += d_oracle.get(left_id, v_id);
+                            right_penalty += d_oracle.get(right_id, v_id);
                         } else {
-                            left_penalty += static_cast<int>(w * d_oracle.get(left_id, v_id));
-                            right_penalty += static_cast<int>(w * d_oracle.get(right_id, v_id));
+                            left_penalty += w * d_oracle.get(left_id, v_id);
+                            right_penalty += w * d_oracle.get(right_id, v_id);
                         }
                     }
                 }
@@ -669,7 +669,7 @@ namespace HeiProMap {
                                              partition_t right_id,
                                              std::vector<vertex_t> &left_region,
                                              std::vector<vertex_t> &right_region,
-                                             PushRelabel<int> &pr,
+                                             PushRelabel<weight_t> &pr,
                                              MemoryStack &pr_mem,
                                              TranslationTable<vertex_t> &translation_table,
                                              AlignedArray<u32> &region_marker,
@@ -701,8 +701,8 @@ namespace HeiProMap {
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
                 int new_u = static_cast<int>(translation_table.get_n(u));
-                int w_left = 0;
-                int w_right = 0;
+                weight_t w_left = 0;
+                weight_t w_right = 0;
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
@@ -711,13 +711,13 @@ namespace HeiProMap {
                         if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                             if (u < v) { continue; }
                             int new_v = static_cast<int>(translation_table.get_n(v));
-                            int cap = t_uniform_e_weights ? 1 : static_cast<int>(w);
+                            weight_t cap = t_uniform_e_weights ? 1 : w;
                             pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         partition_t v_id = p_manager[v];
-                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
+                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : w; } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : w; }
                     }
                 }
 
@@ -735,8 +735,8 @@ namespace HeiProMap {
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
                 int new_u = static_cast<int>(translation_table.get_n(u));
-                int w_left = 0;
-                int w_right = 0;
+                weight_t w_left = 0;
+                weight_t w_right = 0;
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
@@ -745,13 +745,13 @@ namespace HeiProMap {
                         if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                             if (u < v) { continue; }
                             int new_v = static_cast<int>(translation_table.get_n(v));
-                            int cap = t_uniform_e_weights ? 1 : static_cast<int>(w);
+                            weight_t cap = t_uniform_e_weights ? 1 : w;
                             pr.add_edge(new_u, new_v, cap, cap);
                             continue;
                         }
 
                         partition_t v_id = p_manager[v];
-                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : static_cast<int>(w); } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : static_cast<int>(w); }
+                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : w; } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : w; }
                     }
                 }
 
@@ -767,7 +767,7 @@ namespace HeiProMap {
         }
 
         void build_residual_from_cut(const graph_t &g,
-                                     PushRelabel<int> &pr,
+                                     PushRelabel<weight_t> &pr,
                                      std::vector<vertex_t> &left_region,
                                      std::vector<vertex_t> &right_region,
                                      TranslationTable<vertex_t> &translation_table,

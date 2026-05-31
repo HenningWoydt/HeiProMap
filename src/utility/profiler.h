@@ -42,10 +42,6 @@
 
 #include "utils.h"
 
-#ifndef ENABLE_PROFILER
-#define ENABLE_PROFILER 0
-#endif
-
 namespace HeiProMap {
     inline std::string pad_cell(const std::string &text, int width) {
         if (width <= 0) return "";

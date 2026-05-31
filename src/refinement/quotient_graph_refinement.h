@@ -92,6 +92,8 @@ namespace HeiProMap {
         AlignedArray<PairWeight> pairs;
         size_t pairs_size = 0;
 
+        std::vector<vertex_t> moves;
+
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
         u32 global_vertex_mark = 0;
@@ -310,7 +312,11 @@ namespace HeiProMap {
             f64 qap_gain_mean = 0.0;
             f64 qap_gain_var = 0.0;
 
-            std::vector<vertex_t> moves;
+            weight_t u_id_weight_initial = p_manager.get_bweight(u_id);
+            weight_t v_id_weight_initial = p_manager.get_bweight(v_id);
+            bool best_is_balanced = (u_id_weight_initial <= lmax && v_id_weight_initial <= lmax);
+
+            moves.clear();
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue");
             while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
@@ -349,9 +355,29 @@ namespace HeiProMap {
                 // move the vertex
                 moves.push_back(vertex);
                 curr_qap_gain += qap_delta;
-                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
+
+                weight_t current_move_id_weight = p_manager.get_bweight(move_id) + vertex_weight;
+                weight_t current_vertex_id_weight = p_manager.get_bweight(vertex_id) - vertex_weight;
+                bool current_is_balanced = (current_move_id_weight <= lmax && current_vertex_id_weight <= lmax);
+
+                bool update_best = false;
+                if (current_is_balanced) {
+                    if (!best_is_balanced || curr_qap_gain >= max_qap_gain) {
+                        update_best = true;
+                    }
+                } else {
+                    if (!best_is_balanced) {
+                        weight_t move_id_weight_initial = move_id == u_id ? u_id_weight_initial : v_id_weight_initial;
+                        if (curr_qap_gain >= max_qap_gain && current_move_id_weight <= std::max(move_id_weight_initial, lmax)) {
+                            update_best = true;
+                        }
+                    }
+                }
+
+                if (update_best) {
                     best_idx = moves.size();
                     max_qap_gain = curr_qap_gain;
+                    best_is_balanced = current_is_balanced;
 
                     steps_since_last_improvement = 0;
                     qap_gain_mean = 0.0;
@@ -491,7 +517,11 @@ namespace HeiProMap {
             f64 qap_gain_mean = 0.0;
             f64 qap_gain_var = 0.0;
 
-            std::vector<vertex_t> moves;
+            weight_t u_id_weight_initial = p_manager.get_bweight(u_id);
+            weight_t v_id_weight_initial = p_manager.get_bweight(v_id);
+            bool best_is_balanced = (u_id_weight_initial <= lmax && v_id_weight_initial <= lmax);
+
+            moves.clear();
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
             while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
@@ -530,9 +560,29 @@ namespace HeiProMap {
                 // move the vertex
                 moves.push_back(vertex);
                 curr_qap_gain += qap_delta;
-                if (curr_qap_gain >= max_qap_gain && p_manager.get_bweight(move_id) + vertex_weight <= lmax && p_manager.get_bweight(vertex_id) - vertex_weight <= lmax) {
+
+                weight_t current_move_id_weight = p_manager.get_bweight(move_id) + vertex_weight;
+                weight_t current_vertex_id_weight = p_manager.get_bweight(vertex_id) - vertex_weight;
+                bool current_is_balanced = (current_move_id_weight <= lmax && current_vertex_id_weight <= lmax);
+
+                bool update_best = false;
+                if (current_is_balanced) {
+                    if (!best_is_balanced || curr_qap_gain >= max_qap_gain) {
+                        update_best = true;
+                    }
+                } else {
+                    if (!best_is_balanced) {
+                        weight_t move_id_weight_initial = move_id == u_id ? u_id_weight_initial : v_id_weight_initial;
+                        if (curr_qap_gain >= max_qap_gain && current_move_id_weight <= std::max(move_id_weight_initial, lmax)) {
+                            update_best = true;
+                        }
+                    }
+                }
+
+                if (update_best) {
                     best_idx = moves.size();
                     max_qap_gain = curr_qap_gain;
+                    best_is_balanced = current_is_balanced;
 
                     steps_since_last_improvement = 0;
                     qap_gain_mean = 0.0;
