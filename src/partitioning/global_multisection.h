@@ -44,6 +44,7 @@
 #include "kaffpa_partitioner.h"
 #include "greedy_partitioner.h"
 #include "recursive_bisection.h"
+#include "../coarsening/heavy_edge_matching.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
@@ -124,6 +125,8 @@ namespace HeiProMap {
         GlobalMultisectionMode mode; // Which mode to use STRONG, ECO, FAST
         u64 kappa = 1;
         bool refine = false;
+        u64 v_cycles = 0;
+        u64 v_cycle_depth = 1;
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
@@ -222,7 +225,10 @@ namespace HeiProMap {
                 }
 
                 if (config.refine) {
-                    refine_partition(*item.g, item.k, item.imb, item.seed, partition, config);
+                    u64 cycles = std::max((u64)1, config.v_cycles);
+                    for (u64 v = 0; v < cycles; ++v) {
+                        refine_partition(*item.g, item.k, item.imb, item.seed + v, partition, config);
+                    }
                 }
 
                 if (item.identifier->size() == l - 1) {
@@ -329,23 +335,14 @@ namespace HeiProMap {
         }
 
     private:
-        static void refine_partition(graph_t &g,
-                                     partition_t k,
-                                     f64 imbalance,
-                                     u64 seed,
-                                     AlignedArray<partition_t> &partition,
-                                     const GlobalMultisectionConfiguration &config) {
-            HEIPROMAP_PROFILE_SCOPE("refinement", "GlobalMultisectionPartitioner", "refine_partition");
-
-            // Setup temporary data structures for refinement
+        static void run_core_refinement(graph_t &g,
+                                        partition_t k,
+                                        f64 imbalance,
+                                        u64 seed,
+                                        PartitionManager &pm,
+                                        const GlobalMultisectionConfiguration &config) {
             DistanceOracle d_oracle;
-            d_oracle.initialize({k}, {1}); // simple uniform distance for subproblems
-
-            PartitionManager pm;
-            pm.initialize(g.n, k, g.g_weight);
-            for (vertex_t u = 0; u < g.n; ++u) {
-                pm.set(u, g.v_weights[u], partition[u]);
-            }
+            d_oracle.initialize({k}, {1});
 
             BoundaryVertexManager bv_manager;
             bv_manager.initialize(g.n, k);
@@ -354,7 +351,7 @@ namespace HeiProMap {
             q_graph.initialize(k);
 
             BlockConn block_conn;
-            block_conn.initialize(g.n, g.m, k);
+            block_conn.initialize(g.n, 2 * g.m + g.n, k);
             block_conn.reset_build();
 
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -388,6 +385,67 @@ namespace HeiProMap {
                 FlowBasedRefinement flow_refine;
                 flow_refine.initialize(g.n, g.m, k, 1, seed, config.flow_based_refinement_config);
                 flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, imbalance, g.uniform_v_weights, g.uniform_e_weights);
+            }
+        }
+
+        static void refine_partition(graph_t &g,
+                                     partition_t k,
+                                     f64 imbalance,
+                                     u64 seed,
+                                     AlignedArray<partition_t> &partition,
+                                     const GlobalMultisectionConfiguration &config,
+                                     u64 depth = 0) {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "GlobalMultisectionPartitioner", "refine_partition");
+
+            PartitionManager pm;
+            pm.initialize(g.n, k, g.g_weight);
+            pm.reset_weights();
+            for (vertex_t u = 0; u < g.n; ++u) {
+                pm.set(u, g.v_weights[u], partition[u]);
+            }
+
+            // 1. Initial Refinement
+            run_core_refinement(g, k, imbalance, seed, pm, config);
+
+            // 2. V-Cycles
+            if (depth < config.v_cycle_depth) {
+                Mapping mapping;
+                HeavyEdgeMatching hem;
+                HeavyEdgeMatchingConfiguration hem_config;
+                hem.match(g, pm, mapping, imbalance, seed + depth * 100, hem_config);
+
+                if (g.n > 2 * k) {
+                    graph_t coarse_g;
+                    if (g.uniform_v_weights && g.uniform_e_weights) {
+                        coarse_g.initialize<true, true>(g, mapping);
+                    } else if (g.uniform_v_weights) {
+                        coarse_g.initialize<true, false>(g, mapping);
+                    } else if (g.uniform_e_weights) {
+                        coarse_g.initialize<false, true>(g, mapping);
+                    } else {
+                        coarse_g.initialize<false, false>(g, mapping);
+                    }
+
+                    AlignedArray<partition_t> coarse_partition;
+                    coarse_partition.initialize(coarse_g.n);
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        coarse_partition[mapping.get(u)] = pm[u];
+                    }
+
+                    refine_partition(coarse_g, k, imbalance, seed + depth * 100, coarse_partition, config, depth + 1);
+
+                    // Project back
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        partition_t old_id = pm[u];
+                        partition_t new_id = coarse_partition[mapping.get(u)];
+                        if (old_id != new_id) {
+                            pm.move(u, g.uniform_v_weights ? 1 : g.v_weights[u], old_id, new_id);
+                        }
+                    }
+
+                    // Refine Fine again
+                    run_core_refinement(g, k, imbalance, seed + depth * 100 + 10, pm, config);
+                }
             }
 
             for (vertex_t u = 0; u < g.n; ++u) {

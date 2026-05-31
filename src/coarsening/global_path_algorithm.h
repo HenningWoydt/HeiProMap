@@ -606,6 +606,7 @@ namespace HeiProMap {
 
         void finalize_matching(const graph_t &g, Matching &matching, Mapping &mapping) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "get_mapping");
+            mapping.initialize(g.n);
             matching.set_translation();
             mapping.set_coarse_n(matching.get_n_coarse_nodes());
             for (vertex_t u = 0; u < matching.get_n(); ++u) {

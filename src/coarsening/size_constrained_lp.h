@@ -229,6 +229,7 @@ namespace HeiProMap {
                      Mapping &mapping,
                      f64 imbalance,
                      u64 threads) {
+            mapping.initialize(g.n);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             weight_t max_w = 0; // (weight_t) ((f64) m_l_max / config->f);

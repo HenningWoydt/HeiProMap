@@ -448,7 +448,7 @@ namespace HeiProMap {
 
                         p_manager.copy_from(local_p_managers[best_idx]);
                     } else {
-                        HeiProMap::GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
+                        GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
                     }
                 } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY) {
                     if (ac.threads > 1) {

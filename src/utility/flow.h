@@ -270,7 +270,7 @@ namespace HeiProMap {
             scc_weights.resize(n_scc, 0);
             for (vertex_t u = 0; u < n; ++u) {
                 if (u != source && u != target) {
-                    scc_weights[scc_id[u]] += g.weight(tt.get_o(u));
+                    scc_weights[scc_id[u]] += g.v_weights[tt.get_o(u)];
                 }
             }
         }
@@ -472,7 +472,7 @@ namespace HeiProMap {
             for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
                 if (t_is_active[scc_u] == 1) { active_nodes.push_back(scc_u); }
             }
-            vertex_t m = active_nodes.size();
+            vertex_t m = (vertex_t) active_nodes.size();
 
             weight_t s_weight = 0;
             for (vertex_t scc_u: scc_s_successors) { s_weight += scc_weights[scc_u]; }
@@ -481,25 +481,34 @@ namespace HeiProMap {
             weight_t total_active_weight = 0;
             for (vertex_t i = 0; i < m; ++i) { total_active_weight += scc_weights[active_nodes[i]]; }
 
-            // Max closure weight that could satisfy left constraint
-            weight_t max_w = left_lmax - left_non_region_weight - s_weight;
-            if (max_w < 0) { return false; }
-            // Min closure weight that could satisfy right constraint
-            weight_t min_w = total_active_weight - (right_lmax - right_non_region_weight - t_weight);
+            if (m == 0) {
+                // No active nodes, check if fixed assignment is feasible
+                weight_t left = left_non_region_weight + s_weight;
+                weight_t right = right_non_region_weight + t_weight;
+                if (left <= left_lmax && right <= right_lmax) {
+                    best_closure.resize(n_scc);
+                    std::fill(best_closure.begin(), best_closure.end(), 0);
+                    for (vertex_t scc_u: scc_s_successors) { best_closure[scc_u] = 1; }
+                    is_left.resize(n - 2);
+                    for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
+                    return true;
+                }
+                return false;
+            }
 
-            // Build local topo order of active nodes
+            // Build local topo order of active nodes to compute transitive closure
             std::vector<vertex_t> local_id(n_scc, UNVISITED);
             for (vertex_t i = 0; i < m; ++i) { local_id[active_nodes[i]] = i; }
 
             std::vector<vertex_t> local_in_deg(m, 0);
-            std::vector<std::vector<vertex_t>> local_preds(m);
+            std::vector<std::vector<vertex_t>> local_succs(m);
             for (vertex_t i = 0; i < m; ++i) {
                 vertex_t scc_u = active_nodes[i];
                 for (vertex_t scc_v: edges[scc_u]) {
                     if (local_id[scc_v] == UNVISITED) { continue; }
                     vertex_t j = local_id[scc_v];
                     local_in_deg[j] += 1;
-                    local_preds[j].push_back(i);
+                    local_succs[i].push_back(j);
                 }
             }
 
@@ -513,77 +522,23 @@ namespace HeiProMap {
                 vertex_t i = q.back();
                 q.pop_back();
                 local_topo.push_back(i);
-                vertex_t scc_u = active_nodes[i];
-                for (vertex_t scc_v: edges[scc_u]) {
-                    if (local_id[scc_v] == UNVISITED) { continue; }
-                    vertex_t j = local_id[scc_v];
+                for (vertex_t j : local_succs[i]) {
                     if (--local_in_deg[j] == 0) { q.push_back(j); }
                 }
             }
 
-            // DP: dp[w] = 1 means closure weight w is achievable
-            // Process nodes in topo order. For each node, we can include it
-            // only if all its active predecessors are included.
-            // We track a bitmask per weight to know which nodes are "must be included"
-            // -- too expensive. Instead: process in topo order, for each node either
-            // include (add weight) or exclude (then all successors must be excluded).
-            //
-            // Better formulation: process in REVERSE topo order.
-            // dp[i][w] = can we achieve active-closure-weight w considering nodes
-            //            local_topo[i..m-1], where node i is the last in topo order.
-            // In reverse topo: if we exclude node i, we can still include or exclude
-            // later nodes (earlier in topo). If we include node i, all its predecessors
-            // (earlier in reverse topo = later in topo) must also be included -- but
-            // they haven't been decided yet.
-            //
-            // Correct approach: process in topo order with "forced inclusion" tracking.
-            // Use a 1D DP array. For each node in topo order:
-            //   - If node has no active predecessors excluded, it CAN be included.
-            //   - We branch: include (add weight) or exclude (mark successors as blocked).
-            //
-            // Since tracking blocked status per-node requires exponential states,
-            // we use a different formulation:
-            //
-            // A valid closure = any antichain-bounded downward-closed set.
-            // Enumerate by processing topo order and using DP on achievable weights,
-            // but only allow including node i if we can prove all preds are included.
-            // Since we process in topo order, all preds of node i come before it.
-            // We need to know WHICH nodes are included -- that's exponential.
-            //
-            // Practical exact approach for small m: bitmask DP.
-            // For m <= 24, use bitmask enumeration of valid closures.
-
-            if (m == 0) {
-                // No active nodes, check if fixed assignment is feasible
-                weight_t left = left_non_region_weight + s_weight;
-                weight_t right = right_non_region_weight + t_weight + total_active_weight;
-                if (left <= left_lmax && right <= right_lmax) {
-                    best_closure.resize(n_scc);
-                    std::fill(best_closure.begin(), best_closure.end(), 0);
-                    for (vertex_t scc_u: scc_s_successors) { best_closure[scc_u] = 1; }
-                    is_left.resize(n - 2);
-                    for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
-                    return true;
-                }
-                return false;
-            }
-
-            // Bitmask enumeration for small DAGs
-            // A subset S is a valid closure iff for every node i in S,
-            // all predecessors of i are also in S.
-            // Precompute predecessor masks.
-            std::vector<u64> pred_mask(m, 0);
+            // Precompute successor masks.
+            std::vector<u64> succ_mask(m, 0);
             for (vertex_t i = 0; i < m; ++i) {
-                for (vertex_t p: local_preds[i]) {
-                    pred_mask[i] |= (1ULL << p);
+                for (vertex_t s: local_succs[i]) {
+                    succ_mask[i] |= (1ULL << s);
                 }
             }
-            // Transitive closure of pred_mask: pred_mask[i] should include
-            // all ancestors, not just direct predecessors.
-            for (vertex_t idx = 0; idx < local_topo.size(); ++idx) {
+            // Transitive closure of succ_mask
+            for (int idx = (int)m - 1; idx >= 0; --idx) {
                 vertex_t i = local_topo[idx];
-                for (vertex_t p: local_preds[i]) {
-                    pred_mask[i] |= pred_mask[p];
+                for (vertex_t s: local_succs[i]) {
+                    succ_mask[i] |= succ_mask[s];
                 }
             }
 
@@ -593,11 +548,11 @@ namespace HeiProMap {
 
             u64 total = 1ULL << m;
             for (u64 mask = 0; mask < total; ++mask) {
-                // Check closure property: for each included node, all ancestors included
+                // Check closure property: for each included node, all successors included
                 bool valid = true;
                 for (vertex_t i = 0; i < m; ++i) {
                     if ((mask >> i) & 1) {
-                        if ((mask & pred_mask[i]) != pred_mask[i]) {
+                        if ((mask & succ_mask[i]) != succ_mask[i]) {
                             valid = false;
                             break;
                         }

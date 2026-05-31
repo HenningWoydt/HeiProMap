@@ -93,6 +93,8 @@ namespace HeiProMap {
                             u64 seed) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "HeavyEdgeMatching", "match");
 
+            mapping.initialize(g.n);
+
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             Matching matching;

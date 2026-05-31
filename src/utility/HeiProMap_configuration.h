@@ -174,6 +174,8 @@ namespace HeiProMap {
             // Partitioning multisection
             {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast, metis-kway, greedy, heipa-fast, heipa-eco, heipa-strong, heipa-super-strong, recursive-bisection, ggg, hybrid} to use.", "strong", "", false},
             {"--partitioning-algorithm-multisection-refine", "", "If true, enables refinement after each multisection step.", "0", "", false},
+            {"--partitioning-algorithm-multisection-v-cycles", "", "Number of V-cycles to perform during refinement.", "0", "", false},
+            {"--partitioning-algorithm-multisection-v-cycle-depth", "", "Recursion depth of V-cycles.", "1", "", false},
 
             // Partitioning recursive-bisection
             {"--partitioning-algorithm-recursive-bisection-kappa", "", "Number of independent trials for recursive bisection (best edge-cut is kept).", "1", "", false},
@@ -192,6 +194,8 @@ namespace HeiProMap {
 
             // Refinement Flow Based
             {"--refinement-flow-enable", "", "Enables the flow based refinement.", "0", "", false},
+            {"--refinement-flow-always-include-boundary", "", "If true, unconditionally includes all boundary nodes in the flow region.", "0", "", false},
+            {"--refinement-flow-growth-strategy", "", "Which strategy to use for region growth. Allowed values are {bfs, heavy-first, light-first}.", "bfs", "", false},
         };
 
     public:
@@ -325,6 +329,13 @@ namespace HeiProMap {
             }
         }
 
+        static GrowthStrategy string_to_growth_strategy(const std::string &str) {
+            if (str == "bfs") return GrowthStrategy::BFS;
+            if (str == "heavy-first") return GrowthStrategy::HEAVY_FIRST;
+            if (str == "light-first") return GrowthStrategy::LIGHT_FIRST;
+            return GrowthStrategy::BFS;
+        }
+
         void set_rating_function(const EdgeRatingFunction rating_function) {
             global_path_algorithm_config.rating_function = rating_function;
             for (auto &opt: options) {
@@ -372,6 +383,14 @@ namespace HeiProMap {
                 global_multisection_config.refine = (get("--partitioning-algorithm-multisection-refine") == "1");
             }
 
+            if (use_default || is_set("--partitioning-algorithm-multisection-v-cycles")) {
+                global_multisection_config.v_cycles = std::stoull(get("--partitioning-algorithm-multisection-v-cycles"));
+            }
+
+            if (use_default || is_set("--partitioning-algorithm-multisection-v-cycle-depth")) {
+                global_multisection_config.v_cycle_depth = std::stoull(get("--partitioning-algorithm-multisection-v-cycle-depth"));
+            }
+
             if (use_default || is_set("--partitioning-algorithm-recursive-bisection-kappa")) {
                 rb_kappa = std::stoull(get("--partitioning-algorithm-recursive-bisection-kappa"));
             }
@@ -416,6 +435,12 @@ namespace HeiProMap {
             // initialize flow based refinement
             if (use_default || is_set("--refinement-flow-enable")) {
                 flow_based_refinement_config.enabled = get("--refinement-flow-enable") == "1";
+            }
+            if (use_default || is_set("--refinement-flow-always-include-boundary")) {
+                flow_based_refinement_config.always_include_boundary = get("--refinement-flow-always-include-boundary") == "1";
+            }
+            if (use_default || is_set("--refinement-flow-growth-strategy")) {
+                flow_based_refinement_config.growth_strategy = string_to_growth_strategy(get("--refinement-flow-growth-strategy"));
             }
 
             global_multisection_config.label_propagation_config = label_propagation_config;
@@ -511,6 +536,8 @@ namespace HeiProMap {
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 2;
             global_multisection_config.refine = true;
+            global_multisection_config.v_cycles = 0;
+            global_multisection_config.v_cycle_depth = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -563,6 +590,8 @@ namespace HeiProMap {
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 2;
             global_multisection_config.refine = true;
+            global_multisection_config.v_cycles = 2;
+            global_multisection_config.v_cycle_depth = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -614,6 +643,9 @@ namespace HeiProMap {
             global_multisection_config.mode_string = "kaffpa-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
+            global_multisection_config.refine = true;
+            global_multisection_config.v_cycles = 2;
+            global_multisection_config.v_cycle_depth = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -629,13 +661,15 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
-            flow_based_refinement_config.max_global_iteration = 10;
-            flow_based_refinement_config.max_local_iteration = 10;
+            flow_based_refinement_config.max_global_iteration = 3;
+            flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+            flow_based_refinement_config.always_include_boundary = true;
+            flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
         }
 
         void set_super_strong() {
@@ -658,6 +692,8 @@ namespace HeiProMap {
             global_multisection_config.mode_string = "heipa-super-strong";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
+            global_multisection_config.v_cycles = 3;
+            global_multisection_config.v_cycle_depth = 1;
 
             // enable label propagation
             label_propagation_config.enabled = true;

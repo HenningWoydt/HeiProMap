@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <queue>
 #include <stack>
 #include <string>
 #include <unordered_set>
@@ -56,6 +57,12 @@
 #include "../utility/qap.h"
 
 namespace HeiProMap {
+    enum struct GrowthStrategy {
+        BFS,
+        HEAVY_FIRST,
+        LIGHT_FIRST
+    };
+
     class FlowBasedRefinementConfiguration final {
     public:
         explicit FlowBasedRefinementConfiguration(const std::string &t_name) {
@@ -72,6 +79,8 @@ namespace HeiProMap {
         f64 alpha_modifier = 2.0;
         bool use_closed_vertex_set = true;
         u64 closed_vertex_sets_repeats = 10;
+        bool always_include_boundary = false;
+        GrowthStrategy growth_strategy = GrowthStrategy::BFS;
     };
 
     class FlowBasedRefinement final {
@@ -482,11 +491,11 @@ namespace HeiProMap {
                                   weight_t max_weight,
                                   const std::vector<vertex_t> &boundary,
                                   std::vector<vertex_t> &region,
-                                  weight_t boundary_weight,
+                                  [[maybe_unused]] weight_t boundary_weight,
                                   AlignedArray<u32> &seen,
                                   u32 &seen_mark,
                                   AlignedArray<u32> &region_marker,
-                                  u32 &region_mark,
+                                  [[maybe_unused]] u32 &region_mark_ref,
                                   std::vector<vertex_t> &queue) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "determine_regions");
 
@@ -503,30 +512,110 @@ namespace HeiProMap {
                 seen[u] = seen_mark - 1;
             }
 
-            size_t queue_idx = 0;
+            size_t boundary_size = queue.size();
             region.clear();
-            while (queue_idx < queue.size()) {
-                vertex_t u = queue[queue_idx++];
-                if (seen[u] == seen_mark) { continue; }
 
-                if (curr_weight + (t_uniform_v_weights ? 1 : g.v_weights[u]) <= max_weight) {
-                    region.push_back(u);
-                    region_marker[u] = mark;
-                    curr_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g.edges_v[i];
-                        {
-                            partition_t v_id = p_manager[v];
-                            if (v_id != id) { continue; }
+            if (config->growth_strategy == GrowthStrategy::BFS) {
+                size_t queue_idx = 0;
+                while (queue_idx < queue.size()) {
+                    vertex_t u = queue[queue_idx++];
+                    if (seen[u] == seen_mark) { continue; }
 
-                            if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                    weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    bool include = (curr_weight + u_w <= max_weight);
+                    if (config->always_include_boundary && queue_idx <= boundary_size) {
+                        include = true;
+                    }
+
+                    if (include) {
+                        region.push_back(u);
+                        region_marker[u] = mark;
+                        curr_weight += u_w;
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            const vertex_t v = g.edges_v[i];
+                            {
+                                partition_t v_id = p_manager[v];
+                                if (v_id != id) { continue; }
+
+                                if (seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                                    queue.push_back(v);
+                                    seen[v] = seen_mark - 1;
+                                }
+                            }
+                        }
+                    }
+                    seen[u] = seen_mark;
+                }
+            } else {
+                auto heavy_cmp = [&](vertex_t lhs, vertex_t rhs) {
+                    weight_t wl = t_uniform_v_weights ? 1 : g.v_weights[lhs];
+                    weight_t wr = t_uniform_v_weights ? 1 : g.v_weights[rhs];
+                    return wl < wr;
+                };
+                auto light_cmp = [&](vertex_t lhs, vertex_t rhs) {
+                    weight_t wl = t_uniform_v_weights ? 1 : g.v_weights[lhs];
+                    weight_t wr = t_uniform_v_weights ? 1 : g.v_weights[rhs];
+                    return wl > wr;
+                };
+
+                size_t queue_idx = 0;
+                if (config->always_include_boundary) {
+                    while (queue_idx < boundary_size) {
+                        vertex_t u = queue[queue_idx++];
+                        if (seen[u] == seen_mark) continue;
+
+                        region.push_back(u);
+                        region_marker[u] = mark;
+                        curr_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
+
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            vertex_t v = g.edges_v[i];
+                            if (p_manager[v] == id && seen[v] != seen_mark && seen[v] != seen_mark - 1) {
                                 queue.push_back(v);
                                 seen[v] = seen_mark - 1;
                             }
                         }
+                        seen[u] = seen_mark;
                     }
                 }
-                seen[u] = seen_mark;
+
+                if (queue_idx < queue.size()) {
+                    if (config->growth_strategy == GrowthStrategy::HEAVY_FIRST)
+                        std::make_heap(queue.begin() + queue_idx, queue.end(), heavy_cmp);
+                    else
+                        std::make_heap(queue.begin() + queue_idx, queue.end(), light_cmp);
+                }
+
+                while (queue_idx < queue.size() && curr_weight < max_weight) {
+                    if (config->growth_strategy == GrowthStrategy::HEAVY_FIRST)
+                        std::pop_heap(queue.begin() + queue_idx, queue.end(), heavy_cmp);
+                    else
+                        std::pop_heap(queue.begin() + queue_idx, queue.end(), light_cmp);
+
+                    vertex_t u = queue.back();
+                    queue.pop_back();
+
+                    if (seen[u] == seen_mark) continue;
+
+                    weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    if (curr_weight + u_w <= max_weight) {
+                        region.push_back(u);
+                        region_marker[u] = mark;
+                        curr_weight += u_w;
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            const vertex_t v = g.edges_v[i];
+                            if (p_manager[v] == id && seen[v] != seen_mark && seen[v] != seen_mark - 1) {
+                                queue.push_back(v);
+                                if (config->growth_strategy == GrowthStrategy::HEAVY_FIRST)
+                                    std::push_heap(queue.begin() + queue_idx, queue.end(), heavy_cmp);
+                                else
+                                    std::push_heap(queue.begin() + queue_idx, queue.end(), light_cmp);
+                                seen[v] = seen_mark - 1;
+                            }
+                        }
+                    }
+                    seen[u] = seen_mark;
+                }
             }
 
             return curr_weight;
