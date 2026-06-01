@@ -34,18 +34,13 @@ int main(const int argc, char *argv[]) {
         {
             HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
-                {"--graph", "../../ProMapRepo/data/mapping/del23.graph"},
-                {"--mapping", "../data/out/partition/del23.txt"},
+                {"--graph", "../../ProMapRepo/data/mapping/G2_circuit.mtx.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                {"--mapping", "../data/out/partition/G2_circuit.mtx.graph.txt"},
                 {"--k", "16"},
                 {"--imbalance", "0.03"},
                 {"--config", "fast"},
                 {"--seed", "0"},
                 {"--threads", "1"},
-                // {"--partitioning-algorithm", "recursive-bisection"},
-                {"--partitioning-algorithm-recursive-bisection-kappa", "5"},
-                {"--partitioning-algorithm", "kaffpa"},
-                {"--partitioning-algorithm-kaffpa-partitioning-mode", "strong"},
-                {"--partitioning-algorithm-kaffpa-partitioning-method", "bisection"},
             };
 
             std::vector<std::string> args = {"HeiPa"};
@@ -75,16 +70,28 @@ int main(const int argc, char *argv[]) {
             HeiProMap::HeiPaSolver solver(ac);
             solver.solve();
 
+            if (ac.json_output) {
+                std::cout << solver.get_summary_json() << std::endl;
+            }
+
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
 
-            HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
+            if (!ac.json_output) {
+                HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
+            }
         }
     } else {
         HeiProMap::HeiPaConfiguration ac(argc, argv);
 
         HeiProMap::HeiPaSolver solver(ac);
         solver.solve();
+
+        if (ac.json_output) {
+            std::cout << solver.get_summary_json() << std::endl;
+        } else {
+            HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
+        }
     }
 
     auto ep = HeiProMap::get_time_point();
