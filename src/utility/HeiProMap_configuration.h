@@ -143,11 +143,14 @@ namespace HeiProMap {
             {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
             {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
+            {"--per-level-imbalance-add", "", "Amount of imbalance to add per level during coarsening.", "0.005", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
             {"--k", "-k", "Number of partitions.", "0", "", false},
+            {"--collect-dataset", "", "If true, saves the graph, parameters, and results to the data/ directory.", "0", "", false},
+            {"--data-dir", "", "Directory to store the collected dataset.", std::string(HEIPROMAP_SOURCE_DIR) + "/data", "", false},
 
             /** Coarsening */
             {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp, heavy-edge}.", "global-paths", "", false},
@@ -214,11 +217,15 @@ namespace HeiProMap {
 
         // balancing information
         f64 imbalance = -1.0;
+        f64 per_level_imb_add = 0.005;
 
         // random initialization
         u64 seed = 0;
 
         u64 threads = 1;
+
+        bool collect_dataset = false;
+        std::string data_dir = std::string(HEIPROMAP_SOURCE_DIR) + "/data";
 
         u64 hm_level = 0;
 
@@ -273,13 +280,14 @@ namespace HeiProMap {
             }
         }
 
-        void set_imbalance() {
-            imbalance = std::stod(get("--imbalance"));
+        void set_imbalance() { 
+            imbalance = std::stod(get("--imbalance")); 
+            per_level_imb_add = std::stod(get("--per-level-imbalance-add"));
         }
 
         void set_seed() {
             if (is_set("--seed")) {
-                seed = std::stoi(get("--seed"));
+                seed = std::stoull(get("--seed"));
             } else {
                 seed = std::random_device{}();
             }
@@ -287,7 +295,7 @@ namespace HeiProMap {
 
         void set_threads() {
             if (is_set("--threads")) {
-                threads = std::stoi(get("--threads"));
+                threads = std::stoull(get("--threads"));
             } else {
                 threads = 1;
             }
@@ -295,7 +303,7 @@ namespace HeiProMap {
 
         void set_hm_level() {
             if (is_set("--hm-level")) {
-                hm_level = std::stoi(get("--hm-level"));
+                hm_level = std::stoull(get("--hm-level"));
             }
         }
 
@@ -350,7 +358,7 @@ namespace HeiProMap {
         void set_coarsening_algorithm(const bool use_default = false) {
             // initialize global-paths config
             if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
-                global_path_algorithm_config.random_level = std::stoi(get("--coarsening-algorithm-global-paths-random-level"));
+                global_path_algorithm_config.random_level = std::stoull(get("--coarsening-algorithm-global-paths-random-level"));
             }
 
             if (use_default || is_set("--coarsening-algorithm-global-paths-rating-function")) {
@@ -399,6 +407,9 @@ namespace HeiProMap {
                 rb_use_full_refine = (get("--partitioning-algorithm-recursive-bisection-use-full-refine") == "1");
             }
 
+            global_multisection_config.collect_dataset = collect_dataset;
+            global_multisection_config.data_dir = data_dir;
+
             // initialize heipa config
             if (use_default || is_set("--partitioning-algorithm-heipa-config")) {
                 heipa_config_string = get("--partitioning-algorithm-heipa-config");
@@ -421,7 +432,7 @@ namespace HeiProMap {
         void enable_refinement_algorithms(const bool use_default = false) {
             // initialize label propagation configuration
             if (use_default || is_set("--refinement-label-propagation-max-iterations")) {
-                label_propagation_config.max_iteration = std::stoi(get("--refinement-label-propagation-max-iterations"));
+                label_propagation_config.max_iteration = std::stoull(get("--refinement-label-propagation-max-iterations"));
             }
             if (use_default || is_set("--refinement-label-propagation-enable")) {
                 label_propagation_config.enabled = get("--refinement-label-propagation-enable") == "1";
@@ -473,7 +484,9 @@ namespace HeiProMap {
             }
 
             graph_in = get("--graph");
-            mapping_out = get("--mapping");
+            if (is_set("--mapping")) {
+                mapping_out = get("--mapping");
+            }
 
             set_hierarchy();
             set_distance();
@@ -481,6 +494,14 @@ namespace HeiProMap {
             set_seed();
             set_threads();
             set_hm_level();
+
+            if (is_set("--collect-dataset")) {
+                collect_dataset = get("--collect-dataset") == "1";
+            }
+
+            if (is_set("--data-dir")) {
+                data_dir = get("--data-dir");
+            }
 
             set_coarsening_algorithm(true);
             set_partitioning_algorithm(true);
@@ -509,6 +530,8 @@ namespace HeiProMap {
         }
 
         void set_fast() {
+            collect_dataset = false;
+
             initial_c = 16;
 
             // set GPA matching algorithm
