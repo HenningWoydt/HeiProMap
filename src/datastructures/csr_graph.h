@@ -502,6 +502,23 @@ namespace HeiProMap {
 
         size_t deg(const vertex_t u) const { return neighborhoods[u + 1] - neighborhoods[u]; }
 
+        u64 hash() const {
+            u64 h = 0;
+            h ^= splitmix64(n);
+            h ^= splitmix64(m);
+            for (vertex_t i = 0; i < n; ++i) {
+                h ^= splitmix64(v_weights[i] + i);
+            }
+            for (vertex_t i = 0; i < n + 1; ++i) {
+                h ^= splitmix64(neighborhoods[i] + i);
+            }
+            for (vertex_t i = 0; i < m; ++i) {
+                h ^= splitmix64(edges_v[i] + i);
+                h ^= splitmix64(edges_w[i] + i);
+            }
+            return h;
+        }
+
         void write_graph(const std::string &file_path) const {
             std::ofstream file(file_path);
 
