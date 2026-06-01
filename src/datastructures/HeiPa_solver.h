@@ -156,6 +156,29 @@ namespace HeiProMap {
         }
 
     public:
+        inline std::string get_summary_json() {
+            weight_t final_cut = get_qap(graphs[0], p_manager, d_oracle) / 2;
+            weight_t max_b_weight = p_manager.max_weight();
+            weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+            f64 total_partition_time_ms = coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms;
+
+            std::stringstream ss;
+            ss << "{\n";
+            ss << "  \"edge_cut\": " << final_cut << ",\n";
+            ss << "  \"time_ms\": " << total_partition_time_ms << ",\n";
+            ss << "  \"max_block_weight\": " << max_b_weight << ",\n";
+            ss << "  \"graph_weight\": " << graphs[0].g_weight << ",\n";
+            ss << "  \"lmax\": " << lmax << ",\n";
+            ss << "  \"coarsening_ms\": " << coarsening_ms << ",\n";
+            ss << "  \"contraction_ms\": " << contraction_ms << ",\n";
+            ss << "  \"initial_partitioning_ms\": " << initial_partitioning_ms << ",\n";
+            ss << "  \"uncontraction_ms\": " << uncontraction_ms << ",\n";
+            ss << "  \"rebalance_ms\": " << rebalance_ms << ",\n";
+            ss << "  \"refinement_ms\": " << refinement_ms << "\n";
+            ss << "}";
+            return ss.str();
+        }
+
         explicit HeiPaSolver(const HeiPaConfiguration &t_ac) {
             graphs.reserve(100);
             auto sp_io = get_time_point();
@@ -296,7 +319,7 @@ namespace HeiProMap {
             u64 mult = ac.initial_c;
 
             f64 level_imbalance = 0.0;
-            f64 per_level_imb_add = 1.0 / 400.0;
+            f64 per_level_imb_add = ac.per_level_imb_add;
             [[maybe_unused]] weight_t level_lmax = 0;
 
             while (graphs.back().n > ac.k * mult) {
@@ -382,7 +405,8 @@ namespace HeiProMap {
                     } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
                         method = BisectionMethod::HYBRID;
                     }
-                    rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, ac.rb_kappa, ac.imbalance, method);
+
+                    rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, ac.recursive_bisection_config.kappa, level_imbalance, method, ac.recursive_bisection_config);
 
                     p_manager.copy_from(local_pm);
 
