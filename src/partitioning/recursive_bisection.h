@@ -183,10 +183,13 @@ namespace HeiProMap {
             q_graph.initialize(2);
             block_conn.reset_build();
 
+            // Set all vertices to block 0 in the partition array without updating weights,
+            // to ensure refiners have a valid block ID for all vertices.
             for (vertex_t u = 0; u < g.n; ++u) {
-                p_manager.set(u, g.v_weights[u], 0); // Default all to 0 to prevent out-of-bounds access by refinement tools
+                p_manager.partition[u] = 0;
             }
 
+            // Only add weights for the vertices in the current bisection subset.
             for (vertex_t u: vertices) {
                 u8 u_id = side[u];
                 if (u_id > 1) continue; // Should be 0 or 1. If 2 (unassigned) or 3 (outside), skip.
