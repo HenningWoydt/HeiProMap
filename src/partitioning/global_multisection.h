@@ -127,6 +127,8 @@ namespace HeiProMap {
         bool refine = false;
         u64 v_cycles = 0;
         u64 v_cycle_depth = 1;
+        bool collect_dataset = false;
+        std::string data_dir = "data";
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
@@ -210,11 +212,11 @@ namespace HeiProMap {
                 stack.pop_back();         // remove top item
 
                 if (config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
-                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa);
+                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa, config.collect_dataset, config.data_dir);
                 } else if (config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
-                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_ECO, item.seed, partition, config.kappa);
+                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_ECO, item.seed, partition, config.kappa, config.collect_dataset, config.data_dir);
                 } else if (config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
-                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa);
+                    kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_FAST, item.seed, partition, config.kappa, config.collect_dataset, config.data_dir);
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
                 } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
