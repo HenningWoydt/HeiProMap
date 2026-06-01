@@ -29,6 +29,8 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <string>
 
@@ -60,8 +62,23 @@ namespace HeiProMap {
                                  KaffpaPartitionMode kaffpa_mode,
                                  u64 seed,
                                  AlignedArray<partition_t> &partition,
-                                 u64 kappa) {
+                                 u64 kappa,
+                                 bool collect_dataset = false,
+                                 const std::string &data_dir = "data") {
         ASSERT(assert_graph(g));
+
+        u64 g_hash = 0;
+        if (collect_dataset) {
+            g_hash = g.hash();
+            std::filesystem::create_directories(data_dir + "/graphs");
+            std::filesystem::create_directories(data_dir + "/results");
+            std::filesystem::create_directories(data_dir + "/partitions");
+
+            std::string graph_path = data_dir + "/graphs/" + std::to_string(g_hash) + ".graph";
+            if (!std::filesystem::exists(graph_path)) {
+                g.write_graph(graph_path);
+            }
+        }
 
         int n = (int) g.n;
         int m = (int) g.m;
@@ -81,6 +98,7 @@ namespace HeiProMap {
         if (kaffpa_mode == KAFFPA_PARTITION_ECO) { mode = ECO; }
         if (kaffpa_mode == KAFFPA_PARTITION_FAST) { mode = FAST; }
 
+
         // set vertex weights
         for (int i = 0; i < n; i++) { vwgt[i] = (int) g.v_weights[i]; }
 
@@ -93,8 +111,7 @@ namespace HeiProMap {
         // set adjcwgt
         for (int i = 0; i < m; i++) { adjcwgt[i] = (int) g.edges_w[i]; }
 
-        // for (int i=0;i<n;++i) vwgt[i]=1;
-        // for (int e=0;e<m;++e) adjcwgt[e]=1;
+        auto start_time = get_time_point();
 
         for (u64 j = 0; j < kappa; j++) {
             kaffpa(&n, vwgt, xadj, adjcwgt, adjncy, &nparts, &imbalance, suppress_output, (int) seed + j, mode, &edge_cut, part);
@@ -103,6 +120,48 @@ namespace HeiProMap {
                 best_edge_cut = edge_cut;
                 for (int i = 0; i < n; i++) { partition[i] = part[i]; }
             }
+        }
+
+        auto end_time = get_time_point();
+        f64 time_ms = get_milli_seconds(start_time, end_time);
+
+        if (collect_dataset) {
+            std::string base_name = std::to_string(g_hash) + "_" + std::to_string(k) + "_" + std::to_string(seed);
+
+            // Calculate max block weight
+            std::vector<weight_t> block_weights(k, 0);
+            for (int i = 0; i < n; i++) {
+                block_weights[partition[i]] += g.v_weights[i];
+            }
+            weight_t max_block_weight = 0;
+            for (partition_t i = 0; i < k; i++) {
+                if (block_weights[i] > max_block_weight) {
+                    max_block_weight = block_weights[i];
+                }
+            }
+
+            // Save partition
+            std::string part_path = data_dir + "/partitions/" + base_name + ".partition";
+            std::ofstream p_out(part_path);
+            for (int i = 0; i < n; i++) {
+                p_out << partition[i] << "\n";
+            }
+
+            // Save metadata
+            std::string json_path = data_dir + "/results/" + base_name + ".json";
+            std::ofstream j_out(json_path);
+            j_out << "{\n";
+            j_out << "  \"graph_hash\": " << g_hash << ",\n";
+            j_out << "  \"k\": " << k << ",\n";
+            j_out << "  \"imbalance\": " << imbalance << ",\n";
+            j_out << "  \"max_block_weight\": " << max_block_weight << ",\n";
+            j_out << "  \"graph_weight\": " << g.g_weight << ",\n";
+            j_out << "  \"kaffpa_mode\": " << (int) kaffpa_mode << ",\n";
+            j_out << "  \"seed\": " << seed << ",\n";
+            j_out << "  \"kappa\": " << kappa << ",\n";
+            j_out << "  \"edge_cut\": " << best_edge_cut << ",\n";
+            j_out << "  \"time_ms\": " << time_ms << "\n";
+            j_out << "}\n";
         }
 
         free(vwgt);
