@@ -39,6 +39,8 @@
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../partitioning/kaffpa_partitioner.h"
+#include "../partitioning/recursive_bisection.h"
+#include "../refinement/flow_based_refinement.h"
 #include "HeiProMap_configuration.h"
 
 namespace HeiProMap {
@@ -50,10 +52,14 @@ namespace HeiProMap {
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
+            {"--per-level-imbalance-add", "", "Amount of imbalance to add per level during coarsening.", "0.005", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
             {"--k", "-k", "Number of partitions.", "0", "", false},
+            {"--collect-dataset", "", "If true, saves the graph, parameters, and results to the data/ directory.", "0", "", false},
+            {"--data-dir", "", "Directory to store the collected dataset.", std::string(HEIPROMAP_SOURCE_DIR) + "/data", "", false},
+            {"--json-output", "", "If true, prints a JSON summary of the result at the end.", "0", "", false},
 
             /** Coarsening */
             {"--coarsening-algorithm", "", "Which coarsening algorithm to use. Allowed values are {global-paths, size-constrained-lp}.", "global-paths", "", false},
@@ -68,6 +74,7 @@ namespace HeiProMap {
             // Partitioning kaffpa
             {"--partitioning-algorithm-kaffpa-partitioning-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
             {"--partitioning-algorithm-kaffpa-partitioning-method", "", "Which mode {bisection, multisection} to use.", "multisection", "", false},
+            {"--partitioning-algorithm-kaffpa-kappa", "", "Number of trials for kaffpa.", "1", "", false},
 
             // Partitioning multisection
             {"--partitioning-algorithm-multisection-mode", "", "Which mode {strong, eco, fast} to use.", "strong", "", false},
@@ -100,11 +107,16 @@ namespace HeiProMap {
 
         // balancing information
         f64 imbalance = -1.0;
+        f64 per_level_imb_add = 0.005;
 
         // random initialization
         u64 seed = 0;
 
         u64 threads = 1;
+
+        bool collect_dataset = false;
+        std::string data_dir = std::string(HEIPROMAP_SOURCE_DIR) + "/data";
+        bool json_output = false;
 
         u64 initial_c = 8;
 
@@ -119,8 +131,7 @@ namespace HeiProMap {
         std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
-        u64 rb_kappa = 1;
-        bool rb_use_full_refine = false;
+        RecursiveBisectionConfiguration recursive_bisection_config;
 
         GlobalMultisectionConfiguration global_multisection_config;
         KaffpaPartitionMode kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
@@ -136,11 +147,14 @@ namespace HeiProMap {
 
         HeiPaConfiguration() = default;
 
-        void set_imbalance() { imbalance = std::stod(get("--imbalance")); }
+        void set_imbalance() { 
+            imbalance = std::stod(get("--imbalance")); 
+            per_level_imb_add = std::stod(get("--per-level-imbalance-add"));
+        }
 
         void set_seed() {
             if (is_set("--seed")) {
-                seed = std::stoi(get("--seed"));
+                seed = std::stoull(get("--seed"));
             } else {
                 seed = std::random_device{}();
             }
@@ -148,7 +162,7 @@ namespace HeiProMap {
 
         void set_threads() {
             if (is_set("--threads")) {
-                threads = std::stoi(get("--threads"));
+                threads = std::stoull(get("--threads"));
             } else {
                 threads = 1;
             }
@@ -187,7 +201,7 @@ namespace HeiProMap {
         void set_coarsening_algorithm(const bool use_default = false) {
             // initialize global-paths config
             if (use_default || is_set("--coarsening-algorithm-global-paths-random-level")) {
-                global_path_algorithm_config.random_level = std::stoi(get("--coarsening-algorithm-global-paths-random-level"));
+                global_path_algorithm_config.random_level = std::stoull(get("--coarsening-algorithm-global-paths-random-level"));
             }
 
             if (use_default || is_set("--coarsening-algorithm-global-paths-rating-function")) {
@@ -212,13 +226,20 @@ namespace HeiProMap {
                 kaffpa_partition_mode = string_to_kaffpa_partition_mode(get("--partitioning-algorithm-kaffpa-partitioning-mode"));
             }
 
+            if (use_default || is_set("--partitioning-algorithm-kaffpa-kappa")) {
+                global_multisection_config.kappa = std::stoull(get("--partitioning-algorithm-kaffpa-kappa"));
+            }
+
             if (use_default || is_set("--partitioning-algorithm-recursive-bisection-kappa")) {
-                rb_kappa = std::stoull(get("--partitioning-algorithm-recursive-bisection-kappa"));
+                recursive_bisection_config.kappa = std::stoull(get("--partitioning-algorithm-recursive-bisection-kappa"));
             }
 
             if (use_default || is_set("--partitioning-algorithm-recursive-bisection-use-full-refine")) {
-                rb_use_full_refine = (get("--partitioning-algorithm-recursive-bisection-use-full-refine") == "1");
+                recursive_bisection_config.use_full_refine = (get("--partitioning-algorithm-recursive-bisection-use-full-refine") == "1");
             }
+
+            global_multisection_config.collect_dataset = collect_dataset;
+            global_multisection_config.data_dir = data_dir;
 
             // actually set which algorithm to use
             if (use_default || is_set("--partitioning-algorithm")) {
@@ -237,7 +258,7 @@ namespace HeiProMap {
         void enable_refinement_algorithms(const bool use_default = false) {
             // initialize label propagation configuration
             if (use_default || is_set("--refinement-label-propagation-max-iterations")) {
-                label_propagation_config.max_iteration = std::stoi(get("--refinement-label-propagation-max-iterations"));
+                label_propagation_config.max_iteration = std::stoull(get("--refinement-label-propagation-max-iterations"));
             }
             if (use_default || is_set("--refinement-label-propagation-enable")) {
                 label_propagation_config.enabled = get("--refinement-label-propagation-enable") == "1";
@@ -256,6 +277,10 @@ namespace HeiProMap {
             global_multisection_config.label_propagation_config = label_propagation_config;
             global_multisection_config.quotient_graph_refinement_config = quotient_graph_refinement_config;
             global_multisection_config.flow_based_refinement_config = flow_based_refinement_config;
+
+            recursive_bisection_config.lp_config = label_propagation_config;
+            recursive_bisection_config.qg_config = quotient_graph_refinement_config;
+            recursive_bisection_config.flow_config = flow_based_refinement_config;
         }
 
         HeiPaConfiguration(int argc, char *argv[]) {
@@ -283,7 +308,9 @@ namespace HeiProMap {
             }
 
             graph_in = get("--graph");
-            mapping_out = get("--mapping");
+            if (is_set("--mapping")) {
+                mapping_out = get("--mapping");
+            }
 
             if (is_set("--k")) {
                 k = std::stoull(get("--k"));
@@ -292,6 +319,18 @@ namespace HeiProMap {
             set_imbalance();
             set_seed();
             set_threads();
+
+            if (is_set("--collect-dataset")) {
+                collect_dataset = get("--collect-dataset") == "1";
+            }
+
+            if (is_set("--data-dir")) {
+                data_dir = get("--data-dir");
+            }
+
+            if (is_set("--json-output")) {
+                json_output = get("--json-output") == "1";
+            }
 
             set_coarsening_algorithm(true);
             set_partitioning_algorithm(true);
@@ -320,21 +359,28 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 8;
+            initial_c = 16;
 
+            // set GPA matching algorithm
+            // coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_string = "global-paths";
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::HEAVY_EDGE;
+            // coarsening_algorithm_string = "heavy-edge";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
-            global_path_algorithm_config.random_level = 4;
+            // configurate global-paths algorithm
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSION;
+            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
+            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 16;
 
-            partitioning_algorithm_string = "hybrid";
+            partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            rb_kappa = 10;
+            recursive_bisection_config.kappa = 5;
+            recursive_bisection_config.use_full_refine = true;
             kaffpa_partition_mode = KAFFPA_PARTITION_FAST;
 
             label_propagation_config.enabled = true;
@@ -343,7 +389,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 8;
+            quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
         }
 
@@ -362,7 +408,7 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            rb_kappa = 3;
+            recursive_bisection_config.kappa = 3;
             kaffpa_partition_mode = KAFFPA_PARTITION_ECO;
 
             label_propagation_config.enabled = true;
@@ -399,7 +445,7 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            rb_kappa = 10;
+            recursive_bisection_config.kappa = 10;
             kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
 
             label_propagation_config.enabled = true;
@@ -436,7 +482,7 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            rb_kappa = 10;
+            recursive_bisection_config.kappa = 10;
             kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
 
             label_propagation_config.enabled = true;
