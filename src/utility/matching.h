@@ -49,16 +49,15 @@ namespace HeiProMap {
         Matching() = default;
 
         void initialize(vertex_t n) {
-            vertex_t n_64 = round_up_64(n);
             m_n = n;
 
             matches_size = 0;
 
             partner.initialize(m_n);
-            std::iota(partner.get_ptr(), partner.get_ptr() + n_64, 0);
+            std::iota(partner.get_ptr(), partner.get_ptr() + m_n, 0);
 
             o_to_n.initialize(m_n);
-            std::iota(o_to_n.get_ptr(), o_to_n.get_ptr() + n_64, 0);
+            std::iota(o_to_n.get_ptr(), o_to_n.get_ptr() + m_n, 0);
         }
 
         // Move constructor
