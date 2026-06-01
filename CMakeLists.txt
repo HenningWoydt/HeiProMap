@@ -16,6 +16,8 @@ option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_PROFILER "Enable profiler" OFF)
 option(ENABLE_ASSERTS "Enable assertions" OFF)
 
+add_definitions(-DHEIPROMAP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
 if(ENABLE_PROFILER)
     add_definitions(-DENABLE_PROFILER=1)
 endif()
