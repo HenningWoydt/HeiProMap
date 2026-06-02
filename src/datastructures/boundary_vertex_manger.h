@@ -57,6 +57,8 @@ namespace HeiProMap {
             m_boundaries.resize(m_k);
         }
 
+        ~BoundaryVertexManager() = default;
+
         size_t size(const partition_t id) const {
             return m_boundaries[id].size();
         }
@@ -83,6 +85,7 @@ namespace HeiProMap {
 
         void add(const vertex_t u,
                  const partition_t id) {
+            ASSERT(id < m_k);
             if (m_n_boundary_edges[u] == 0) {
                 m_vertex_idx[u] = m_boundaries[id].size();
                 m_boundaries[id].push_back(u);
@@ -94,11 +97,13 @@ namespace HeiProMap {
                      const p_manager_t &p_manager,
                      const vertex_t u,
                      const partition_t id) {
+            ASSERT(id < m_k);
             u64 n_neighbors = 0;
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                 const vertex_t v = g.edges_v[i];
 
                 partition_t v_id = p_manager[v];
+                ASSERT(v_id < m_k);
                 if (v_id != id) {
                     n_neighbors += 1;
                     add(v, v_id);
@@ -112,20 +117,13 @@ namespace HeiProMap {
             }
         }
 
-        /**
-         * O(max_deg)
-         *
-         * @param g
-         * @param p_manager
-         * @param u
-         * @param old_id
-         * @param new_id
-         */
         void move(const graph_t &g,
                   const p_manager_t &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
                   const partition_t new_id) {
+            ASSERT(old_id < m_k);
+            ASSERT(new_id < m_k);
             bool u_was_boundary = is_boundary(u);
 
             if (u_was_boundary) {
@@ -135,6 +133,7 @@ namespace HeiProMap {
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                 const vertex_t v = g.edges_v[i];
                 partition_t v_id = p_manager[v];
+                ASSERT(v_id < m_k);
 
                 if (v_id == new_id) {
                     ASSERT(m_n_boundary_edges[u] > 0);
@@ -171,10 +170,13 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < g.n; ++u) {
                 size_t n_different = 0;
                 partition_t u_id = p_manager[u];
+                ASSERT(u_id < m_k);
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    n_different += (u_id != p_manager[v]);
+                    partition_t v_id = p_manager[v];
+                    ASSERT(v_id < m_k);
+                    n_different += (u_id != v_id);
                 }
 
                 if (n_different > 0) {
@@ -215,8 +217,10 @@ namespace HeiProMap {
     private:
         void remove(const vertex_t u,
                     const partition_t id) {
+            ASSERT(id < m_k);
             auto &boundary = m_boundaries[id];
             size_t u_idx = m_vertex_idx[u];
+            ASSERT(u_idx < boundary.size());
             vertex_t last_vertex = boundary.back();
 
             boundary[u_idx] = last_vertex;
