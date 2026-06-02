@@ -65,7 +65,6 @@ namespace HeiProMap {
 
     enum PARTITIONING_ALGS {
         PARTITIONING_ALG_UNDEFINED,
-        PARTITIONING_ALG_KAFFPA,
         PARTITIONING_ALG_MULTISECTION,
         PARTITIONING_ALG_RECURSIVE_BISECTION,
         PARTITIONING_ALG_HEIPA,
@@ -76,7 +75,6 @@ namespace HeiProMap {
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
         if (str == "UNDEFINED")              return PARTITIONING_ALG_UNDEFINED;
-        if (str == "kaffpa")                 return PARTITIONING_ALG_KAFFPA;
         if (str == "multisection")           return PARTITIONING_ALG_MULTISECTION;
         if (str == "recursive-bisection")    return PARTITIONING_ALG_RECURSIVE_BISECTION;
         if (str == "heipa")                  return PARTITIONING_ALG_HEIPA;
@@ -89,7 +87,6 @@ namespace HeiProMap {
     inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
         switch (alg) {
             case PARTITIONING_ALG_UNDEFINED:             return "UNDEFINED";
-            case PARTITIONING_ALG_KAFFPA:                return "kaffpa";
             case PARTITIONING_ALG_MULTISECTION:          return "multisection";
             case PARTITIONING_ALG_RECURSIVE_BISECTION:   return "recursive-bisection";
             case PARTITIONING_ALG_HEIPA:                 return "heipa";
@@ -665,7 +662,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 1;
+            global_multisection_config.kappa = 2;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 5;
             global_multisection_config.v_cycle_depth = 10;
