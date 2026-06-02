@@ -64,7 +64,7 @@ namespace HeiProMap {
             lp_config.max_iteration = 5;
 
             qg_config.enabled = true;
-            qg_config.max_iteration = 1;
+            qg_config.max_iteration = 5;
             qg_config.alpha = 5.0;
             qg_config.min_n_steps = 3;
             qg_config.use_preemptive_exit = true;
@@ -156,6 +156,8 @@ namespace HeiProMap {
                                      weight_t lmax_right,
                                      const RecursiveBisectionConfiguration &config) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "full_refine_setup");
+            ASSERT(initialized_refinement);
+            ASSERT(!vertices.empty());
 
             // Setup 2-way environment for the current subset
             p_manager.reset_weights();
@@ -265,6 +267,58 @@ namespace HeiProMap {
             return furthest;
         }
 
+        void assign_unassigned_components(const CSRGraph &g, const std::vector<vertex_t> &vertices, weight_t &w0, weight_t &w1, weight_t lmax_left, weight_t lmax_right) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "assign_unassigned");
+            std::vector<std::vector<vertex_t>> components;
+            
+            for (vertex_t u: vertices) {
+                if (side[u] == 2 && dist[u] == -1) {
+                    components.emplace_back();
+                    auto &comp = components.back();
+                    
+                    std::queue<vertex_t> q;
+                    q.push(u);
+                    dist[u] = -2;
+                    
+                    while (!q.empty()) {
+                        vertex_t curr = q.front();
+                        q.pop();
+                        comp.push_back(curr);
+                        
+                        for (size_t i = g.neighborhoods[curr]; i < g.neighborhoods[curr + 1]; ++i) {
+                            vertex_t v = g.edges_v[i];
+                            if (side[v] == 2 && dist[v] == -1) {
+                                dist[v] = -2;
+                                q.push(v);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            for (const auto &comp : components) {
+                for (vertex_t v : comp) dist[v] = -1;
+                
+                weight_t comp_weight = 0;
+                for (vertex_t v : comp) comp_weight += g.v_weights[v];
+                
+                u8 s = 0;
+                if (w0 + comp_weight <= lmax_left && w1 + comp_weight <= lmax_right) {
+                    s = ((f64) w0 / (f64) lmax_left <= (f64) w1 / (f64) lmax_right) ? u8(0) : u8(1);
+                } else if (w0 + comp_weight <= lmax_left) {
+                    s = 0;
+                } else if (w1 + comp_weight <= lmax_right) {
+                    s = 1;
+                } else {
+                    s = ((f64) (w0 + comp_weight) / (f64) lmax_left <= (f64) (w1 + comp_weight) / (f64) lmax_right) ? u8(0) : u8(1);
+                }
+                
+                for (vertex_t v : comp) side[v] = s;
+                if (s == 0) w0 += comp_weight;
+                else w1 += comp_weight;
+            }
+        }
+
         void bisect_bfs(const CSRGraph &g,
                         const std::vector<vertex_t> &vertices,
                         weight_t lmax_left,
@@ -346,26 +400,7 @@ namespace HeiProMap {
             }
 
             // ---- Assign remaining unassigned vertices (disconnected components) ----
-            // Any vertex that neither BFS frontier reached goes to the side that needs it less (or just fits it).
-            for (vertex_t v: vertices) {
-                if (side[v] == 2) {
-                    weight_t vw = g.v_weights[v];
-                    u8 s = 0;
-                    if (w0 + vw <= lmax_left && w1 + vw <= lmax_right) {
-                        s = ((f64) w0 / (f64) lmax_left <= (f64) w1 / (f64) lmax_right) ? u8(0) : u8(1);
-                    } else if (w0 + vw <= lmax_left) {
-                        s = 0;
-                    } else if (w1 + vw <= lmax_right) {
-                        s = 1;
-                    } else {
-                        // Both overflow, pick the one that overflows less relatively
-                        s = ((f64) (w0 + vw) / (f64) lmax_left <= (f64) (w1 + vw) / (f64) lmax_right) ? u8(0) : u8(1);
-                    }
-
-                    side[v] = s;
-                    if (s == 0) { w0 += vw; } else { w1 += vw; }
-                }
-            }
+            assign_unassigned_components(g, vertices, w0, w1, lmax_left, lmax_right);
 
             // ---- Collect results ----
             left_out.clear();
@@ -428,12 +463,9 @@ namespace HeiProMap {
                 }
             }
 
-            // Assign remaining vertices to right
-            for (vertex_t v: vertices) {
-                if (side[v] == 2) {
-                    side[v] = 1;
-                }
-            }
+            // Assign remaining vertices
+            weight_t w1 = 0;
+            assign_unassigned_components(g, vertices, w0, w1, lmax_left, lmax_right);
 
             // Collect results
             left_out.clear();
@@ -477,6 +509,8 @@ namespace HeiProMap {
                      const RecursiveBisectionConfiguration &config) {
             // Safety: handle empty vertex set
             if (vertices.empty()) return;
+            ASSERT(side.size() == g.n);
+            ASSERT(block_start + k <= total_k);
 
             // Base case: assign all vertices in this subset to block_start
             if (k == 1) {
