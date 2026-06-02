@@ -555,7 +555,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
@@ -609,9 +609,9 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 2;
+            global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 5;
             global_multisection_config.v_cycle_depth = 10;
@@ -663,9 +663,9 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "kaffpa-fast";
+            global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
-            global_multisection_config.kappa = 2;
+            global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 5;
             global_multisection_config.v_cycle_depth = 10;

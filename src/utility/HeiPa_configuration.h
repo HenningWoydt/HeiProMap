@@ -367,7 +367,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 32;
+            initial_c = 16;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -395,7 +395,7 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 5;
 
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.max_iteration = 1;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
