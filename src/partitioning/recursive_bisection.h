@@ -64,7 +64,7 @@ namespace HeiProMap {
             lp_config.max_iteration = 5;
 
             qg_config.enabled = true;
-            qg_config.max_iteration = 5;
+            qg_config.max_iteration = 1;
             qg_config.alpha = 5.0;
             qg_config.min_n_steps = 3;
             qg_config.use_preemptive_exit = true;
@@ -499,6 +499,7 @@ namespace HeiProMap {
 
             // Bisect the current vertex set using multiple trials
             weight_t best_bisect_cut = std::numeric_limits<weight_t>::max();
+            bool best_is_balanced = false;
             std::vector<vertex_t> best_left_v, best_right_v;
 
             auto perform_trials = [&](BisectionMethod m) {
@@ -516,8 +517,26 @@ namespace HeiProMap {
                     }
 
                     weight_t cut = compute_bisection_cut(g, vertices);
-                    if (cut < best_bisect_cut) {
+                    
+                    weight_t w0 = 0, w1 = 0;
+                    for (vertex_t u: vertices) {
+                        if (side[u] == 0) w0 += g.v_weights[u];
+                        else w1 += g.v_weights[u];
+                    }
+                    bool is_balanced = (w0 <= lmax_left && w1 <= lmax_right);
+
+                    bool update_best = false;
+                    if (best_left_v.empty()) {
+                        update_best = true;
+                    } else if (is_balanced && !best_is_balanced) {
+                        update_best = true;
+                    } else if (is_balanced == best_is_balanced && cut < best_bisect_cut) {
+                        update_best = true;
+                    }
+
+                    if (update_best) {
                         best_bisect_cut = cut;
+                        best_is_balanced = is_balanced;
                         best_left_v.clear();
                         best_right_v.clear();
                         for (vertex_t u: vertices) {
