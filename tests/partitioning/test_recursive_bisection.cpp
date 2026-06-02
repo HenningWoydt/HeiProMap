@@ -27,8 +27,10 @@ TEST(RecursiveBisectionTest, CycleGraphBisection) {
     config.kappa = 1;
     config.lp_config.enabled = true;
 
+    config.method = BisectionMethod::BFS;
+
     // Run partition into 2 blocks with 0% imbalance to force 2-2 split
-    partitioner.partition(g, pm, 2, 42, 1, 0.0, BisectionMethod::BFS, config);
+    partitioner.partition(g, pm, 2, 42, 0.0, config);
 
     EXPECT_EQ(pm.get_bweight(0), 2);
     EXPECT_EQ(pm.get_bweight(1), 2);
@@ -53,8 +55,10 @@ TEST(RecursiveBisectionTest, PartitionK4) {
     RecursiveBisectionConfiguration config;
     config.use_full_refine = true;
     
+    config.method = BisectionMethod::HYBRID;
+    
     // Use 0% imbalance to force 2-2-2-2 split
-    partitioner.partition(g, pm, 4, 42, 1, 0.0, BisectionMethod::HYBRID, config);
+    partitioner.partition(g, pm, 4, 42, 0.0, config);
 
     EXPECT_EQ(pm.get_bweight(0), 2);
     EXPECT_EQ(pm.get_bweight(1), 2);

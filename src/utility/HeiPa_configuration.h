@@ -246,6 +246,14 @@ namespace HeiProMap {
                 partitioning_algorithm_string = get("--partitioning-algorithm");
                 partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             }
+
+            if (partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
+                recursive_bisection_config.method = BisectionMethod::GGG;
+            } else if (partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
+                recursive_bisection_config.method = BisectionMethod::HYBRID;
+            } else if (partitioning_algorithm_id == PARTITIONING_ALG_RECURSIVE_BISECTION) {
+                recursive_bisection_config.method = BisectionMethod::BFS;
+            }
         }
 
         void set_rebalancing_algorithm(const bool use_default = false) {
@@ -359,7 +367,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 16;
+            initial_c = 32;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -379,9 +387,9 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            recursive_bisection_config.kappa = 5;
+            recursive_bisection_config.kappa = 4;
             recursive_bisection_config.use_full_refine = true;
-            kaffpa_partition_mode = KAFFPA_PARTITION_FAST;
+            recursive_bisection_config.method = BisectionMethod::HYBRID;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;

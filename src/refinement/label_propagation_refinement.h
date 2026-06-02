@@ -121,13 +121,13 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
-                    f64 imbalance,
+                    const AlignedArray<weight_t> &lmax_constraints,
                     bool uniform_v_weights,
                     bool uniform_e_weights) {
-            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
@@ -137,9 +137,7 @@ namespace HeiProMap {
                          p_manager_t &p_manager,
                          q_graph_t &q_graph,
                          block_conn_t &block_conn,
-                         f64 imbalance) {
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-
+                         const AlignedArray<weight_t> &lmax_constraints) {
             RandomEngine &random_engine = rnd_engines[0];
 
             bool positive_move_occurred = true;
@@ -183,7 +181,7 @@ namespace HeiProMap {
                             if (id == u_id) { continue; }
 
                             weight_t v_id_weight = p_manager.get_bweight(id);
-                            if (v_id_weight + u_weight <= lmax) {
+                            if (v_id_weight + u_weight <= lmax_constraints[id]) {
                                 weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
                                 if (qap_delta > best_qap_delta) {
                                     best_id = id;
@@ -208,7 +206,7 @@ namespace HeiProMap {
                         partition_t u_id = p_manager[u];
 
                         if (u_id == best_id) { continue; }
-                        if (p_manager.get_bweight(best_id) + u_weight > lmax) { continue; }
+                        if (p_manager.get_bweight(best_id) + u_weight > lmax_constraints[best_id]) { continue; }
 
                         if (best_qap_delta > -std::numeric_limits<weight_t>::max() || random_engine.get_f32() < 0.5) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
@@ -238,7 +236,7 @@ namespace HeiProMap {
                             weight_t v_id_weight = p_manager.get_bweight(id);
 
                             if (id == u_id) { continue; }
-                            if (v_id_weight + u_weight > lmax) { continue; }
+                            if (v_id_weight + u_weight > lmax_constraints[id]) { continue; }
 
                             weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
                             if (qap_delta > best_qap_delta) {

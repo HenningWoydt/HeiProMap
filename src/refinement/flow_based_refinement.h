@@ -170,13 +170,13 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
-                    f64 imbalance,
+                    const AlignedArray<weight_t> &lmax_constraints,
                     bool uniform_v_weights,
                     bool uniform_e_weights) {
-            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, imbalance);
+            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
@@ -186,7 +186,7 @@ namespace HeiProMap {
                          p_manager_t &p_manager,
                          q_graph_t &q_graph,
                          block_conn_t &block_conn,
-                         f64 imbalance) {
+                         const AlignedArray<weight_t> &lmax_constraints) {
             RandomEngine &random_engine = rnd_engines[0];
 
             // active block scheduling
@@ -198,7 +198,6 @@ namespace HeiProMap {
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
             used_this_round.initialize(m_k * m_k);
-
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
@@ -217,7 +216,7 @@ namespace HeiProMap {
                             partition_t v_id = matching[i].second;
 
                             u64 thread_id = omp_get_thread_num();
-                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                         }
 
                         HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
@@ -258,7 +257,7 @@ namespace HeiProMap {
                         partition_t v_id = pairs[i].second;
 
                         u64 thread_id = 0;
-                        refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, imbalance, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                        refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                     }
 
                     // swap active
@@ -269,6 +268,7 @@ namespace HeiProMap {
             }
         }
 
+
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_blocks(graph_t &g,
                            d_oracle_t &d_oracle,
@@ -278,7 +278,7 @@ namespace HeiProMap {
                            block_conn_t &block_conn,
                            partition_t left_id,
                            partition_t right_id,
-                           f64 imbalance,
+                           const AlignedArray<weight_t> &lmax_constraints,
                            AlignedArray<u8> &active_next_round,
                            u64 thread_id,
                            u32 &seen_mark,
@@ -286,8 +286,6 @@ namespace HeiProMap {
             ASSERT(left_id != right_id);
 
             RandomEngine &random_engine = rnd_engines[thread_id];
-
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) m_k));
 
             f64 alpha = config->alpha;
             f64 alpha_upper_bound = config->alpha_upper_bound;
@@ -319,6 +317,8 @@ namespace HeiProMap {
             std::vector<u8> &s_connected = s_connected_vecs[thread_id];
             std::vector<u8> &t_connected = t_connected_vecs[thread_id];
 
+            f64 avg_weight = (f64) g.g_weight / (f64) m_k;
+
             while (iteration < max_local_iteration) {
                 left_boundary.clear();
                 right_boundary.clear();
@@ -333,9 +333,11 @@ namespace HeiProMap {
                 determine_boundary_vertices<t_uniform_v_weights>(g, bv_manager, p_manager, block_conn, left_id, right_id, left_boundary, right_boundary, left_boundary_weight, right_boundary_weight, random_engine);
 
                 // calc max weight for each bfs
-                weight_t adapt_lmax = std::ceil((1.0 + (imbalance * alpha)) * ((f64) g.g_weight / (f64) m_k));
-                weight_t left_max_weight = adapt_lmax - p_manager.get_bweight(right_id);
-                weight_t right_max_weight = adapt_lmax - p_manager.get_bweight(left_id);
+                weight_t adapt_lmax_left = (weight_t) std::ceil(avg_weight + alpha * ((f64) lmax_constraints[left_id] - avg_weight));
+                weight_t adapt_lmax_right = (weight_t) std::ceil(avg_weight + alpha * ((f64) lmax_constraints[right_id] - avg_weight));
+
+                weight_t left_max_weight = adapt_lmax_left - p_manager.get_bweight(right_id);
+                weight_t right_max_weight = adapt_lmax_right - p_manager.get_bweight(left_id);
 
                 // get both regions
                 region_mark += 2;
@@ -377,7 +379,7 @@ namespace HeiProMap {
 
                 // check if cut is valid
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
-                bool is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax, left_region, right_region, translation_table);
+                bool is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax_constraints, left_region, right_region, translation_table);
 
                 if (!is_valid && !config->use_closed_vertex_set) {
                     if (alpha <= 1.0) { return; }
@@ -404,7 +406,7 @@ namespace HeiProMap {
                     weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
                     weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
                     f64 avg_weight = (f64) g.g_weight / (f64) m_k;
-                    bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax, lmax, avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
+                    bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax_constraints[left_id], lmax_constraints[right_id], avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
 
                     //
                     if (!closure_found) {
@@ -931,7 +933,7 @@ namespace HeiProMap {
                           partition_t left_id,
                           partition_t right_id,
                           std::vector<u8> &is_left,
-                          weight_t lmax,
+                          const AlignedArray<weight_t> &lmax_constraints,
                           std::vector<vertex_t> &left_region,
                           std::vector<vertex_t> &right_region,
                           TranslationTable<vertex_t> &translation_table) {
@@ -959,7 +961,7 @@ namespace HeiProMap {
                 }
             }
 
-            return left_weight <= lmax && right_weight <= lmax;
+            return left_weight <= lmax_constraints[left_id] && right_weight <= lmax_constraints[right_id];
         }
 
         bool cut_changes_partition(std::vector<u8> &is_left,

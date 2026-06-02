@@ -577,7 +577,14 @@ namespace HeiProMap {
                 ::HeiProMap::LabelPropagationRefinement lp_refine;
                 lp_refine.initialize(csr_g.n, csr_g.m, (partition_t)num_blocks, (u32)config.n_threads, (u32)config.seed, lp_config);
 
-                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn, config.imbalance, false, false);
+                AlignedArray<weight_t> lmax_constraints;
+                lmax_constraints.initialize((partition_t)num_blocks);
+                weight_t lmax = std::ceil((1.0 + config.imbalance) * ((f64) csr_g.g_weight / (f64) num_blocks));
+                for (partition_t i = 0; i < (partition_t)num_blocks; ++i) {
+                    lmax_constraints[i] = lmax;
+                }
+
+                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn, lmax_constraints, false, false);
             }
 
             total_migration_cost_from_start += calculate_migration_cost(partition_before, p_manager.partition.get_vector());

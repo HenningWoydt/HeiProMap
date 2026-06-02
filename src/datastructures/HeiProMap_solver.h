@@ -283,7 +283,13 @@ namespace HeiProMap {
                     }
                     block_conn.compute_from_scratch(graphs[0], p_manager);
 
-                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, ac.imbalance, graphs[0].uniform_v_weights, graphs[0].uniform_e_weights);
+                    AlignedArray<weight_t> lmax_constraints;
+                    lmax_constraints.initialize(ac.k);
+                    weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                    for (partition_t i = 0; i < ac.k; ++i) {
+                        lmax_constraints[i] = lmax;
+                    }
+                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs[0].uniform_v_weights, graphs[0].uniform_e_weights);
                 }
             } else {
                 internal_solve();
@@ -675,18 +681,25 @@ namespace HeiProMap {
         void refinement(const u64 level, const f64 level_imbalance) {
             auto sp = get_time_point();
 
+            AlignedArray<weight_t> lmax_constraints;
+            lmax_constraints.initialize(ac.k);
+            weight_t lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs.back().g_weight / (f64) ac.k));
+            for (partition_t i = 0; i < ac.k; ++i) {
+                lmax_constraints[i] = lmax;
+            }
+
             if (ac.label_propagation_config.enabled) {
-                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, level_imbalance, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
