@@ -420,7 +420,7 @@ namespace HeiProMap {
 
         void partition(u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
-            HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
+            HEIPROMAP_PROFILE_SCOPE("partition", "partition", "partition");
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
                 if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
@@ -771,7 +771,7 @@ namespace HeiProMap {
                 } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
                     kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
                 } else if (ac.global_multisection_config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && ac.global_multisection_config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
-                    heipa_multisection_partition_wrapper(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.mode);
+                    heipa_multisection_partition_wrapper(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.mode, ac.global_multisection_config.kappa);
                 } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.kappa);
                 } else {

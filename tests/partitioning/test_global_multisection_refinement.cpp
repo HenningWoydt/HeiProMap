@@ -7,7 +7,7 @@
 namespace HeiProMap {
 
 // Dummy definition to satisfy the linker for this test
-void heipa_multisection_partition_wrapper(graph_t &, partition_t, f64, u64, AlignedArray<partition_t> &, GlobalMultisectionMode) {
+void heipa_multisection_partition_wrapper(graph_t &, partition_t, f64, u64, AlignedArray<partition_t> &, GlobalMultisectionMode, u64) {
     abort(); // Should not be called in this test
 }
 

@@ -657,7 +657,7 @@ namespace HeiProMap {
         }
     };
 
-    inline void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode) {
+    inline void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode, u64 kappa) {
         HeiPaConfiguration h_ac;
         h_ac.k = k;
         h_ac.imbalance = imb;
@@ -670,6 +670,8 @@ namespace HeiProMap {
 
         h_ac.k = k;
         h_ac.imbalance = imb;
+        h_ac.recursive_bisection_config.kappa = kappa;
+        h_ac.global_multisection_config.kappa = kappa;
 
         graph_t g_copy = g;
         HeiPaSolver solver(std::move(g_copy), h_ac);

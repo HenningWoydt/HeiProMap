@@ -86,6 +86,15 @@ namespace HeiProMap {
             partner[v] = u;
         }
 
+        void remove(vertex_t u, vertex_t v) {
+            ASSERT(u != v);
+            ASSERT(partner[u] == v);
+            ASSERT(partner[v] == u);
+            matches_size.fetch_sub(1);
+            partner[u] = u;
+            partner[v] = v;
+        }
+
         size_t size() const { return matches_size; }
 
         vertex_t get_n() const { return m_n; }

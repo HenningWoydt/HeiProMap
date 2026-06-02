@@ -135,7 +135,7 @@ namespace HeiProMap {
     };
 
     // Forward declaration of the HeiPa wrapper to resolve circular dependency
-    void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode);
+    void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode, u64 kappa);
 
     struct Item {
         graph_t *g = nullptr;
@@ -156,6 +156,7 @@ namespace HeiProMap {
                               const f64 imbalance,
                               const GlobalMultisectionConfiguration &i_config,
                               u64 seed) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
             GlobalMultisectionConfiguration config = i_config;
 
             RandomEngine rnd_engine(seed);
@@ -220,7 +221,7 @@ namespace HeiProMap {
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
                 } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
-                    heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode);
+                    heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode, config.kappa);
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();
@@ -239,6 +240,7 @@ namespace HeiProMap {
                     for (partition_t i = 0; i < l - 1; ++i) { offset += item.identifier->operator[](i) * index_vec[index_vec.size() - 1 - i]; }
                     for (vertex_t u = 0; u < item.g->n; ++u) { p_manager.set(item.tt->get_o(u), item.g->v_weights[u], offset + partition[u]); }
                 } else {
+                    HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "split");
                     // split problem
                     std::vector<vertex_t> new_ns(item.k, 0);
                     std::vector<vertex_t> new_ms(item.k, 0);

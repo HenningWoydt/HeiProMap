@@ -67,6 +67,7 @@ namespace HeiProMap {
             // Coarsening global-path
             {"--coarsening-algorithm-global-paths-random-level", "", "On which levels to run random if global-paths is chosen. Smaller-equal than use random, greater than use GPA.", "4", "", false},
             {"--coarsening-algorithm-global-paths-rating-function", "", "Which rating function to use. Allowed values are {weight, expansion, heavy-edge, greedy}.", "greedy", "", false},
+            {"--coarsening-algorithm-global-paths-sampling-percentage", "", "The percentage of matches to keep during coarsening (0.0 to 1.0).", "1.0", "", false},
 
             /** Partitioning */
             {"--partitioning-algorithm", "", "Which partitioning algorithm to use. Allowed values are {kaffpa, multisection, recursive-bisection, greedy-graph-growing, hybrid}.", "recursive-bisection", "", false},
@@ -367,7 +368,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 2;
+            initial_c = 16;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -395,7 +396,7 @@ namespace HeiProMap {
             label_propagation_config.max_iteration = 5;
 
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;

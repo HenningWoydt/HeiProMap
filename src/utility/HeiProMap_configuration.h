@@ -545,9 +545,9 @@ namespace HeiProMap {
 
             heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
 
-            size_constrained_lp_config.max_rounds = 1;
+            size_constrained_lp_config.max_rounds = 3;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 16;
+            size_constrained_lp_config.multiplier = 8;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -556,8 +556,8 @@ namespace HeiProMap {
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 5;
-            global_multisection_config.v_cycle_depth = 10;
+            global_multisection_config.v_cycles = 2;
+            global_multisection_config.v_cycle_depth = 5;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -565,7 +565,7 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 1;
+            quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
@@ -610,8 +610,8 @@ namespace HeiProMap {
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 5;
-            global_multisection_config.v_cycle_depth = 10;
+            global_multisection_config.v_cycles = 2;
+            global_multisection_config.v_cycle_depth = 5;
 
             // enable label propagation
             label_propagation_config.enabled = true;

@@ -296,17 +296,15 @@ namespace HeiProMap {
 
             for (u64 round = 0; round < config->max_rounds; ++round) {
                 n_moved = 0;
-                //
-                {
-                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
 
-                    for (size_t i = 0; i < B - 1; ++i) {
-                        [[maybe_unused]] size_t beg = bucket_offsets[i];
-                        [[maybe_unused]] size_t end = bucket_offsets[i + 1];
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
+                for (size_t i = 0; i < B - 1; ++i) {
+                    size_t beg = bucket_offsets[i];
+                    size_t end = bucket_offsets[i + 1];
 
-                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine.generator);
-                    }
+                    fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine.generator);
                 }
+
                 // run clustering
                 if (threads > 1) {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_threaded");
@@ -364,7 +362,8 @@ namespace HeiProMap {
                                 n_moved += 1;
                                 if (round > 0) {
                                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                                        const vertex_t v = g.edges_v[j]; {
+                                        const vertex_t v = g.edges_v[j];
+                                        {
                                             #pragma omp atomic write
                                             active_next[v] = 1;
                                         }
