@@ -367,7 +367,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 16;
+            initial_c = 2;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
