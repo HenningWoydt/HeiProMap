@@ -350,6 +350,7 @@ namespace HeiProMap {
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             partition(level, level_imbalance);
+            refinement(level, level_imbalance);
 
             #if ENABLE_PROFILER
             level_infos[level].max_b_weight = p_manager.max_weight();
@@ -402,74 +403,6 @@ namespace HeiProMap {
                     rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, level_imbalance, ac.recursive_bisection_config);
 
                     p_manager.copy_from(local_pm);
-
-                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_KAFFPA) {
-                    // -------------------------------------------------------
-                    // KaFFPa: direct k-way partitioning, no hierarchy needed
-                    // -------------------------------------------------------
-                    const u64 kappa = ac.global_multisection_config.kappa;
-
-                    if (ac.threads > 1) {
-                        // Run one independent kaffpa call per thread, pick best edge-cut
-                        std::vector<AlignedArray<partition_t>> local_partitions(ac.threads);
-                        std::vector<weight_t> local_edge_cuts(ac.threads,
-                                std::numeric_limits<weight_t>::max());
-
-                        for (u64 tid = 0; tid < ac.threads; ++tid) {
-                            local_partitions[tid].initialize(graphs.back().n);
-                        }
-
-                        #pragma omp parallel for schedule(static) num_threads(ac.threads)
-                        for (u64 tid = 0; tid < ac.threads; ++tid) {
-                            kaffpa_partition(graphs.back(), ac.k, level_imbalance,
-                                             ac.kaffpa_partition_mode,
-                                             ac.seed + tid,
-                                             local_partitions[tid],
-                                             kappa);
-                            // compute edge-cut for this thread's result
-                            weight_t cut = 0;
-                            for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                                const partition_t u_id = local_partitions[tid][u];
-                                for (size_t i = graphs.back().neighborhoods[u];
-                                            i < graphs.back().neighborhoods[u + 1]; ++i) {
-                                    if (local_partitions[tid][graphs.back().edges_v[i]] != u_id) {
-                                        cut += graphs.back().edges_w[i];
-                                    }
-                                }
-                            }
-                            local_edge_cuts[tid] = cut;
-                        }
-
-                        // pick thread with lowest edge-cut
-                        u64 best_tid = 0;
-                        for (u64 tid = 1; tid < ac.threads; ++tid) {
-                            if (local_edge_cuts[tid] < local_edge_cuts[best_tid]) {
-                                best_tid = tid;
-                            }
-                        }
-
-                        // write best partition into p_manager via a local intermediary
-                        PartitionManager local_pm;
-                        local_pm.initialize(graphs.back().n, ac.k, graphs.back().g_weight);
-                        for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                            local_pm.set(u, graphs.back().v_weights[u], local_partitions[best_tid][u]);
-                        }
-                        p_manager.copy_from(local_pm);
-                    } else {
-                        AlignedArray<partition_t> part;
-                        part.initialize(graphs.back().n);
-                        kaffpa_partition(graphs.back(), ac.k, level_imbalance,
-                                         ac.kaffpa_partition_mode,
-                                         ac.seed,
-                                         part,
-                                         kappa);
-                        PartitionManager local_pm;
-                        local_pm.initialize(graphs.back().n, ac.k, graphs.back().g_weight);
-                        for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                            local_pm.set(u, graphs.back().v_weights[u], part[u]);
-                        }
-                        p_manager.copy_from(local_pm);
-                    }
 
                 } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                     if (ac.threads > 1) {
