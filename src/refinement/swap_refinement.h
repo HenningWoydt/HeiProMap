@@ -101,6 +101,8 @@ namespace HeiProMap {
                     const AlignedArray<weight_t> &lmax_constraints,
                     bool uniform_v_weights,
                     bool uniform_e_weights) {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "SwapRefinement", "refine");
+
             if (m_k < 2) return;
             if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
             else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);

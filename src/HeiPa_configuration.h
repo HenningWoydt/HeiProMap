@@ -238,14 +238,6 @@ namespace HeiProMap {
                 partitioning_algorithm_string = get("--partitioning-algorithm");
                 partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             }
-
-            if (partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
-                recursive_bisection_config.method = BisectionMethod::GGG;
-            } else if (partitioning_algorithm_id == PARTITIONING_ALG_HYBRID) {
-                recursive_bisection_config.method = BisectionMethod::HYBRID;
-            } else if (partitioning_algorithm_id == PARTITIONING_ALG_RECURSIVE_BISECTION) {
-                recursive_bisection_config.method = BisectionMethod::BFS;
-            }
         }
 
         void set_rebalancing_algorithm(const bool use_default = false) {
@@ -379,9 +371,11 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            recursive_bisection_config.kappa = 4;
+            recursive_bisection_config.kappa = 32;
             recursive_bisection_config.use_full_refine = true;
             recursive_bisection_config.method = BisectionMethod::HYBRID;
+            recursive_bisection_config.swap_config.enabled = true;
+            recursive_bisection_config.swap_config.max_iteration = 5;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
@@ -389,7 +383,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 3;
+            quotient_graph_refinement_config.min_n_steps = 15;
             quotient_graph_refinement_config.use_preemptive_exit = true;
         }
 
@@ -409,6 +403,8 @@ namespace HeiProMap {
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             recursive_bisection_config.kappa = 3;
+            recursive_bisection_config.use_full_refine = true;
+            recursive_bisection_config.method = BisectionMethod::HYBRID;
             kaffpa_partition_mode = KAFFPA_PARTITION_ECO;
 
             label_propagation_config.enabled = true;
@@ -417,7 +413,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 8;
+            quotient_graph_refinement_config.min_n_steps = 25;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
             flow_based_refinement_config.enabled = true;
@@ -446,7 +442,11 @@ namespace HeiProMap {
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             recursive_bisection_config.kappa = 10;
+            recursive_bisection_config.use_full_refine = true;
+            recursive_bisection_config.method = BisectionMethod::HYBRID;
             kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
+            recursive_bisection_config.swap_config.enabled = true;
+            recursive_bisection_config.swap_config.max_iteration = 5;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
@@ -454,7 +454,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 8;
+            quotient_graph_refinement_config.min_n_steps = 50;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
             flow_based_refinement_config.enabled = true;
@@ -483,7 +483,11 @@ namespace HeiProMap {
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             recursive_bisection_config.kappa = 10;
+            recursive_bisection_config.use_full_refine = true;
+            recursive_bisection_config.method = BisectionMethod::HYBRID;
             kaffpa_partition_mode = KAFFPA_PARTITION_STRONG;
+            recursive_bisection_config.swap_config.enabled = true;
+            recursive_bisection_config.swap_config.max_iteration = 5;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 25;

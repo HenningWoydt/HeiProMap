@@ -399,6 +399,8 @@ namespace HeiProMap {
                     PartitionManager local_pm;
                     local_pm.initialize(graphs.back().n, ac.k, 0);
 
+                    std::cout << "A " << ac.recursive_bisection_config.kappa << std::endl;
+
                     RecursiveBisectionPartitioner rb_partitioner;
                     rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, level_imbalance, ac.recursive_bisection_config);
 

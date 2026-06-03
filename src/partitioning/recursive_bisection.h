@@ -32,6 +32,7 @@
 #include <numeric>
 #include <queue>
 #include <vector>
+#include <unordered_set>
 
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
@@ -40,6 +41,7 @@
 #include "../utility/random_engine.h"
 #include "../utility/indexed_max_heap.h"
 #include "../utility/translation_table.h"
+#include "../utility/utils.h"
 
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
@@ -56,7 +58,7 @@ namespace HeiProMap {
     struct RecursiveBisectionConfiguration {
         u64 kappa = 1;
         bool use_full_refine = false;
-        BisectionMethod method = BisectionMethod::BFS;
+        BisectionMethod method = BisectionMethod::HYBRID;
         LabelPropagationConfiguration lp_config = LabelPropagationConfiguration("LP");
         QuotientGraphRefinementConfiguration qg_config = QuotientGraphRefinementConfiguration("QG");
         FlowBasedRefinementConfiguration flow_config = FlowBasedRefinementConfiguration("Flow");
@@ -72,7 +74,7 @@ namespace HeiProMap {
             qg_config.min_n_steps = 3;
             qg_config.use_preemptive_exit = true;
 
-            swap_config.enabled = false;
+            swap_config.enabled = true;
             swap_config.max_iteration = 5;
 
             // enable flow based refinement
@@ -204,6 +206,45 @@ namespace HeiProMap {
             }
         }
 
+        void evaluate_trial(const CSRGraph &g,
+                            weight_t lmax_left,
+                            weight_t lmax_right,
+                            const RecursiveBisectionConfiguration &config,
+                            std::vector<u8> &current_side,
+                            std::vector<u8> &best_side,
+                            weight_t &best_bisect_cut,
+                            bool &best_is_balanced) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "evaluate_trial");
+
+            if (config.use_full_refine) {
+                perform_full_refinement(g, current_side, lmax_left, lmax_right, config);
+            }
+
+            weight_t cut = compute_bisection_cut(g, current_side);
+
+            weight_t w0 = 0, w1 = 0;
+            for (vertex_t u = 0; u < g.n; ++u) {
+                if (current_side[u] == 0) w0 += g.v_weights[u];
+                else w1 += g.v_weights[u];
+            }
+            bool is_balanced = (w0 <= lmax_left && w1 <= lmax_right);
+
+            bool update_best = false;
+            if (best_side.empty()) {
+                update_best = true;
+            } else if (is_balanced && !best_is_balanced) {
+                update_best = true;
+            } else if (is_balanced == best_is_balanced && cut < best_bisect_cut) {
+                update_best = true;
+            }
+
+            if (update_best) {
+                best_bisect_cut = cut;
+                best_is_balanced = is_balanced;
+                best_side = current_side;
+            }
+        }
+
         vertex_t bfs_furthest(const CSRGraph &g, vertex_t start) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bfs_furthest");
 
@@ -246,22 +287,22 @@ namespace HeiProMap {
 
         void assign_unassigned_components(const CSRGraph &g, std::vector<u8> &side, weight_t &w0, weight_t &w1, weight_t lmax_left, weight_t lmax_right) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "assign_unassigned");
-            std::vector<std::vector<vertex_t>> components;
-            
+            std::vector<std::vector<vertex_t> > components;
+
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (side[u] == 2 && dist[u] == -1) {
                     components.emplace_back();
                     auto &comp = components.back();
-                    
+
                     std::queue<vertex_t> q;
                     q.push(u);
                     dist[u] = -2;
-                    
+
                     while (!q.empty()) {
                         vertex_t curr = q.front();
                         q.pop();
                         comp.push_back(curr);
-                        
+
                         for (size_t i = g.neighborhoods[curr]; i < g.neighborhoods[curr + 1]; ++i) {
                             vertex_t v = g.edges_v[i];
                             if (side[v] == 2 && dist[v] == -1) {
@@ -272,13 +313,13 @@ namespace HeiProMap {
                     }
                 }
             }
-            
-            for (const auto &comp : components) {
-                for (vertex_t v : comp) dist[v] = -1;
-                
+
+            for (const auto &comp: components) {
+                for (vertex_t v: comp) dist[v] = -1;
+
                 weight_t comp_weight = 0;
-                for (vertex_t v : comp) comp_weight += g.v_weights[v];
-                
+                for (vertex_t v: comp) comp_weight += g.v_weights[v];
+
                 u8 s = 0;
                 if (w0 + comp_weight <= lmax_left && w1 + comp_weight <= lmax_right) {
                     s = ((f64) w0 / (f64) lmax_left <= (f64) w1 / (f64) lmax_right) ? u8(0) : u8(1);
@@ -289,8 +330,8 @@ namespace HeiProMap {
                 } else {
                     s = ((f64) (w0 + comp_weight) / (f64) lmax_left <= (f64) (w1 + comp_weight) / (f64) lmax_right) ? u8(0) : u8(1);
                 }
-                
-                for (vertex_t v : comp) side[v] = s;
+
+                for (vertex_t v: comp) side[v] = s;
                 if (s == 0) w0 += comp_weight;
                 else w1 += comp_weight;
             }
@@ -299,110 +340,165 @@ namespace HeiProMap {
         void bisect_bfs(const CSRGraph &g,
                         weight_t lmax_left,
                         weight_t lmax_right,
-                        std::vector<u8> &side) {
+                        u64 kappa,
+                        const RecursiveBisectionConfiguration &config,
+                        std::vector<u8> &best_side,
+                        weight_t &best_bisect_cut,
+                        bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_bfs");
-            if (g.n == 0) return;
+            if (g.n == 0 || kappa == 0) return;
 
-            // ---- Furthest-point seed selection ----
-            vertex_t temp_s = rng->get_u64() % g.n;
-            vertex_t seed_0 = bfs_furthest(g, temp_s);
-            vertex_t seed_1 = bfs_furthest(g, seed_0);
+            std::unordered_set<u64> used_pairs;
+            std::vector<u8> side;
 
-            if (seed_1 == seed_0 && g.n > 1) {
-                seed_1 = (seed_0 == 0) ? 1 : 0;
-            }
+            for (u64 trial = 0; trial < kappa; ++trial) {
+                vertex_t seed_0 = 0, seed_1 = 0;
+                u64 attempts = 0;
+                while (attempts < 10) {
+                    vertex_t temp_s = rng->get_u64() % g.n;
+                    seed_0 = bfs_furthest(g, temp_s);
+                    seed_1 = bfs_furthest(g, seed_0);
 
-            // ---- Interleaved BFS growing ----
-            side.assign(g.n, 2);
-            side[seed_0] = 0;
-            side[seed_1] = 1;
-            weight_t w0 = g.v_weights[seed_0];
-            weight_t w1 = g.v_weights[seed_1];
+                    if (seed_1 == seed_0 && g.n > 1) {
+                        seed_1 = (seed_0 == 0) ? 1 : 0;
+                    }
 
-            if (seed_0 == seed_1) {
+                    vertex_t min_s = std::min(seed_0, seed_1);
+                    vertex_t max_s = std::max(seed_0, seed_1);
+                    u64 pair_hash_val = splitmix64(min_s) ^ splitmix64(max_s + 0x9e3779b97f4a7c15ULL);
+
+                    if (used_pairs.find(pair_hash_val) == used_pairs.end()) {
+                        used_pairs.insert(pair_hash_val);
+                        break;
+                    }
+                    attempts++;
+                }
+
+                // ---- Interleaved BFS growing ----
+                side.assign(g.n, 2);
                 side[seed_0] = 0;
-                w0 = g.v_weights[seed_0];
-                w1 = 0;
-            }
+                side[seed_1] = 1;
+                weight_t w0 = g.v_weights[seed_0];
+                weight_t w1 = g.v_weights[seed_1];
 
-            std::queue<vertex_t> q0, q1;
-            q0.push(seed_0);
-            if (seed_1 != seed_0) { q1.push(seed_1); }
+                if (seed_0 == seed_1) {
+                    side[seed_0] = 0;
+                    w0 = g.v_weights[seed_0];
+                    w1 = 0;
+                }
 
-            while (!q0.empty() || !q1.empty()) {
-                const bool can_grow_0 = !q0.empty() && w0 < lmax_left;
-                const bool can_grow_1 = !q1.empty() && w1 < lmax_right;
+                std::queue<vertex_t> q0, q1;
+                q0.push(seed_0);
+                if (seed_1 != seed_0) { q1.push(seed_1); }
 
-                if (!can_grow_0 && !can_grow_1) { break; }
+                while (!q0.empty() || !q1.empty()) {
+                    const bool can_grow_0 = !q0.empty() && w0 < lmax_left;
+                    const bool can_grow_1 = !q1.empty() && w1 < lmax_right;
 
-                f64 fill_0 = (f64) w0 / (f64) lmax_left;
-                f64 fill_1 = (f64) w1 / (f64) lmax_right;
-                const bool grow_left = (can_grow_0 && can_grow_1)
-                                           ? (fill_0 <= fill_1)
-                                           : can_grow_0;
+                    if (!can_grow_0 && !can_grow_1) { break; }
 
-                std::queue<vertex_t> &q = grow_left ? q0 : q1;
-                const u8 s = grow_left ? u8(0) : u8(1);
-                weight_t &w = grow_left ? w0 : w1;
-                const weight_t target_w = grow_left ? lmax_left : lmax_right;
+                    f64 fill_0 = (f64) w0 / (f64) lmax_left;
+                    f64 fill_1 = (f64) w1 / (f64) lmax_right;
+                    const bool grow_left = (can_grow_0 && can_grow_1)
+                                               ? (fill_0 <= fill_1)
+                                               : can_grow_0;
 
-                vertex_t u = q.front();
-                q.pop();
+                    std::queue<vertex_t> &q = grow_left ? q0 : q1;
+                    const u8 s = grow_left ? u8(0) : u8(1);
+                    weight_t &w = grow_left ? w0 : w1;
+                    const weight_t target_w = grow_left ? lmax_left : lmax_right;
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    vertex_t v = g.edges_v[i];
-                    if (side[v] == 2) {
-                        if (w + g.v_weights[v] > target_w) continue;
-                        side[v] = s;
-                        w += g.v_weights[v];
-                        q.push(v);
+                    vertex_t u = q.front();
+                    q.pop();
+
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        vertex_t v = g.edges_v[i];
+                        if (side[v] == 2) {
+                            if (w + g.v_weights[v] > target_w) continue;
+                            side[v] = s;
+                            w += g.v_weights[v];
+                            q.push(v);
+                        }
                     }
                 }
-            }
 
-            assign_unassigned_components(g, side, w0, w1, lmax_left, lmax_right);
+                assign_unassigned_components(g, side, w0, w1, lmax_left, lmax_right);
+                evaluate_trial(g, lmax_left, lmax_right, config, side, best_side, best_bisect_cut, best_is_balanced);
+            }
         }
 
         void bisect_ggg(const CSRGraph &g,
                         weight_t lmax_left,
                         weight_t lmax_right,
-                        std::vector<u8> &side) {
-            if (g.n == 0) return;
+                        u64 kappa,
+                        const RecursiveBisectionConfiguration &config,
+                        std::vector<u8> &best_side,
+                        weight_t &best_bisect_cut,
+                        bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_ggg");
+            if (g.n == 0 || kappa == 0) return;
 
-            pq.clear();
-            side.assign(g.n, 2);
+            std::unordered_set<vertex_t> used_seeds;
+            std::vector<u8> side;
 
-            vertex_t seed = rng->get_u64() % g.n;
-            side[seed] = 0;
-            weight_t w0 = g.v_weights[seed];
-
-            for (size_t i = g.neighborhoods[seed]; i < g.neighborhoods[seed + 1]; ++i) {
-                vertex_t v = g.edges_v[i];
-                if (side[v] == 2) {
-                    pq.push_increment(v, g.edges_w[i]);
+            for (u64 trial = 0; trial < kappa; ++trial) {
+                vertex_t seed = 0;
+                u64 attempts = 0;
+                while (attempts < 10) {
+                    seed = rng->get_u64() % g.n;
+                    if (used_seeds.find(seed) == used_seeds.end()) {
+                        used_seeds.insert(seed);
+                        break;
+                    }
+                    attempts++;
                 }
-            }
 
-            while (!pq.empty() && w0 < lmax_left) {
-                vertex_t u = pq.top_key();
-                pq.pop();
+                pq.clear();
+                side.assign(g.n, 2);
 
-                if (w0 + g.v_weights[u] > lmax_left) continue;
+                side[seed] = 0;
+                weight_t w0 = g.v_weights[seed];
 
-                side[u] = 0;
-                w0 += g.v_weights[u];
+                auto add_or_update = [&](vertex_t v, weight_t w) {
+                    if (pq.entry_exists(v)) {
+                        pq.increment(v, 2 * w);
+                    } else {
+                        weight_t deg_v = 0;
+                        for (size_t j = g.neighborhoods[v]; j < g.neighborhoods[v + 1]; ++j) {
+                            deg_v += g.edges_w[j];
+                        }
+                        pq.push(v, 2 * w - deg_v);
+                    }
+                };
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                for (size_t i = g.neighborhoods[seed]; i < g.neighborhoods[seed + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
                     if (side[v] == 2) {
-                        pq.push_increment(v, g.edges_w[i]);
+                        add_or_update(v, g.edges_w[i]);
                     }
                 }
-            }
 
-            weight_t w1 = 0;
-            assign_unassigned_components(g, side, w0, w1, lmax_left, lmax_right);
+                while (!pq.empty() && w0 < lmax_left) {
+                    vertex_t u = pq.top_key();
+                    pq.pop();
+
+                    if (w0 + g.v_weights[u] > lmax_left) continue;
+
+                    side[u] = 0;
+                    w0 += g.v_weights[u];
+
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        vertex_t v = g.edges_v[i];
+                        if (side[v] == 2) {
+                            add_or_update(v, g.edges_w[i]);
+                        }
+                    }
+                }
+
+                weight_t w1 = 0;
+                assign_unassigned_components(g, side, w0, w1, lmax_left, lmax_right);
+                evaluate_trial(g, lmax_left, lmax_right, config, side, best_side, best_bisect_cut, best_is_balanced);
+            }
         }
 
         weight_t compute_bisection_cut(const CSRGraph &g, const std::vector<u8> &side) {
@@ -450,50 +546,16 @@ namespace HeiProMap {
             bool best_is_balanced = false;
             std::vector<u8> best_side;
 
-            auto perform_trials = [&](BisectionMethod m) {
-                for (u64 trial = 0; trial < config.kappa; ++trial) {
-                    std::vector<u8> current_side;
-                    if (m == BisectionMethod::BFS) {
-                        bisect_bfs(g, lmax_left, lmax_right, current_side);
-                    } else {
-                        bisect_ggg(g, lmax_left, lmax_right, current_side);
-                    }
-
-                    if (config.use_full_refine) {
-                        perform_full_refinement(g, current_side, lmax_left, lmax_right, config);
-                    }
-
-                    weight_t cut = compute_bisection_cut(g, current_side);
-                    
-                    weight_t w0 = 0, w1 = 0;
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        if (current_side[u] == 0) w0 += g.v_weights[u];
-                        else w1 += g.v_weights[u];
-                    }
-                    bool is_balanced = (w0 <= lmax_left && w1 <= lmax_right);
-
-                    bool update_best = false;
-                    if (best_side.empty()) {
-                        update_best = true;
-                    } else if (is_balanced && !best_is_balanced) {
-                        update_best = true;
-                    } else if (is_balanced == best_is_balanced && cut < best_bisect_cut) {
-                        update_best = true;
-                    }
-
-                    if (update_best) {
-                        best_bisect_cut = cut;
-                        best_is_balanced = is_balanced;
-                        best_side = std::move(current_side);
-                    }
-                }
-            };
-
             if (config.method == BisectionMethod::HYBRID) {
-                perform_trials(BisectionMethod::BFS);
-                perform_trials(BisectionMethod::GGG);
+                u64 kappa_bfs = config.kappa / 2;
+                u64 kappa_ggg = config.kappa - kappa_bfs;
+
+                if (kappa_bfs > 0) bisect_bfs(g, lmax_left, lmax_right, kappa_bfs, config, best_side, best_bisect_cut, best_is_balanced);
+                if (kappa_ggg > 0) bisect_ggg(g, lmax_left, lmax_right, kappa_ggg, config, best_side, best_bisect_cut, best_is_balanced);
+            } else if (config.method == BisectionMethod::BFS) {
+                bisect_bfs(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
             } else {
-                perform_trials(config.method);
+                bisect_ggg(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
             }
 
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
@@ -537,15 +599,15 @@ namespace HeiProMap {
                        PartitionManager &out_pm,
                        partition_t k,
                        u64 seed,
-                       f64 imbalance = 0.03,
-                       const RecursiveBisectionConfiguration &config = RecursiveBisectionConfiguration()) {
+                       f64 imbalance,
+                       RecursiveBisectionConfiguration &config) {
             RandomEngine rand_engine(seed);
             rng = &rand_engine;
 
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "allocate");
             dist.assign(g.n, s32(-1));
             pq.initialize(g.n);
-            
+
             if (out_pm.k != k || out_pm.n != g.n) {
                 out_pm.initialize(g.n, k, g.g_weight);
             } else {
