@@ -297,7 +297,7 @@ namespace HeiProMap {
         void set_fast() {
             collect_dataset = false;
 
-            initial_c = 16;
+            initial_c = 32;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -316,6 +316,7 @@ namespace HeiProMap {
             size_constrained_lp_config.max_rounds = 3;
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 8;
+            size_constrained_lp_config.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -350,7 +351,7 @@ namespace HeiProMap {
         }
 
         void set_eco() {
-            initial_c = 16;
+            initial_c = 32;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -404,7 +405,7 @@ namespace HeiProMap {
         }
 
         void set_strong() {
-            initial_c = 16;
+            initial_c = 32;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";

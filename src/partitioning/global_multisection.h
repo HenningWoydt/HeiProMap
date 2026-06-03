@@ -136,7 +136,7 @@ namespace HeiProMap {
     };
 
     // Forward declaration of the HeiPa wrapper to resolve circular dependency
-    void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode, u64 kappa);
+    void heipa_partition(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode, u64 kappa);
 
     struct Item {
         graph_t *g = nullptr;
@@ -222,7 +222,7 @@ namespace HeiProMap {
                 } else if (config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
                     kway_partition(*item.g, item.k, item.imb, item.seed, partition, config.kappa);
                 } else if (config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
-                    heipa_multisection_partition_wrapper(*item.g, item.k, item.imb, item.seed, partition, config.mode, config.kappa);
+                    heipa_partition(*item.g, item.k, item.imb, item.seed, partition, config.mode, config.kappa);
                 } else {
                     std::cerr << "Mode " << config.mode << " not implemented" << std::endl;
                     abort();

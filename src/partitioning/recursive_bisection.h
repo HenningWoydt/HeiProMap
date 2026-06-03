@@ -217,7 +217,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "evaluate_trial");
 
             if (config.use_full_refine) {
-                // perform_full_refinement(g, current_side, lmax_left, lmax_right, config);
+                perform_full_refinement(g, current_side, lmax_left, lmax_right, config);
             }
 
             weight_t cut = compute_bisection_cut(g, current_side);
@@ -342,87 +342,237 @@ namespace HeiProMap {
                         weight_t lmax_right,
                         u64 kappa,
                         const RecursiveBisectionConfiguration &config,
+                        std::unordered_set<vertex_t> &used_seeds,
                         std::vector<u8> &best_side,
                         weight_t &best_bisect_cut,
                         bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_bfs");
             if (g.n == 0 || kappa == 0) return;
 
-            std::unordered_set<u64> used_pairs;
-            std::vector<u8> side;
+            // 1. Find all connected components
+            std::vector<std::vector<vertex_t>> components;
+            std::vector<weight_t> component_weights;
+            std::vector<s8> visited(g.n, 0);
+            for (vertex_t i = 0; i < g.n; ++i) {
+                if (!visited[i]) {
+                    components.emplace_back();
+                    auto &comp = components.back();
+                    weight_t w = 0;
+                    std::queue<vertex_t> q;
+                    q.push(i);
+                    visited[i] = 1;
+                    while (!q.empty()) {
+                        vertex_t u = q.front();
+                        q.pop();
+                        comp.push_back(u);
+                        w += g.v_weights[u];
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            vertex_t v = g.edges_v[j];
+                            if (!visited[v]) {
+                                visited[v] = 1;
+                                q.push(v);
+                            }
+                        }
+                    }
+                    component_weights.push_back(w);
+                }
+            }
+
+            // 2. Greedily distribute components
+            std::vector<u8> component_assignment(components.size(), 2); // 0, 1, or 2 (to split)
+            weight_t w0_base = 0, w1_base = 0;
+            s64 split_comp_idx = -1;
+
+            std::vector<size_t> sorted_indices(components.size());
+            std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
+            std::sort(sorted_indices.begin(), sorted_indices.end(), [&](size_t i, size_t j) {
+                return component_weights[i] > component_weights[j];
+            });
+
+            for (size_t idx : sorted_indices) {
+                weight_t w = component_weights[idx];
+                if (w0_base + w <= lmax_left && (w0_base + w) * lmax_right <= (w1_base) * lmax_left) {
+                    w0_base += w;
+                    component_assignment[idx] = 0;
+                } else if (w1_base + w <= lmax_right) {
+                    w1_base += w;
+                    component_assignment[idx] = 1;
+                } else if (w0_base + w <= lmax_left) {
+                    w0_base += w;
+                    component_assignment[idx] = 0;
+                } else {
+                    if (split_comp_idx == -1) {
+                        split_comp_idx = (s64)idx;
+                    } else {
+                        if (w0_base * lmax_right <= w1_base * lmax_left) {
+                            w0_base += w;
+                            component_assignment[idx] = 0;
+                        } else {
+                            w1_base += w;
+                            component_assignment[idx] = 1;
+                        }
+                    }
+                }
+            }
+
+            if (split_comp_idx == -1) {
+                best_side.assign(g.n, 0);
+                for (size_t i = 0; i < components.size(); ++i) {
+                    u8 s = component_assignment[i];
+                    for (vertex_t v : components[i]) best_side[v] = s;
+                }
+                best_bisect_cut = 0;
+                best_is_balanced = true;
+                return;
+            }
+
+            // 3. Perform trials on the split component
+            const auto &split_comp = components[split_comp_idx];
+            CSRGraph sub_g;
+            TranslationTable<vertex_t> sub_to_g;
+            std::vector<u8> mask(g.n, 0);
+            for (vertex_t v : split_comp) mask[v] = 1;
+            SubgraphExtractor::extract(g, mask, 1, sub_g, sub_to_g);
+
+            std::vector<std::pair<vertex_t, vertex_t>> precomputed_seeds;
+            if (sub_g.n < 100 && sub_g.n > 1) {
+                std::vector<std::vector<s32>> all_dist(sub_g.n, std::vector<s32>(sub_g.n, -1));
+                for (vertex_t i = 0; i < sub_g.n; ++i) {
+                    std::queue<vertex_t> q;
+                    q.push(i);
+                    all_dist[i][i] = 0;
+                    while (!q.empty()) {
+                        vertex_t u = q.front();
+                        q.pop();
+                        for (size_t j = sub_g.neighborhoods[u]; j < sub_g.neighborhoods[u + 1]; ++j) {
+                            vertex_t v = sub_g.edges_v[j];
+                            if (all_dist[i][v] == -1) {
+                                all_dist[i][v] = all_dist[i][u] + 1;
+                                q.push(v);
+                            }
+                        }
+                    }
+                }
+
+                std::vector<bool> invalidated(sub_g.n, false);
+                while (precomputed_seeds.size() < kappa) {
+                    s32 max_d = -1;
+                    vertex_t best_u = 0, best_v = 0;
+                    bool found = false;
+                    for (vertex_t u = 0; u < sub_g.n; ++u) {
+                        if (invalidated[u]) continue;
+                        for (vertex_t v = u + 1; v < sub_g.n; ++v) {
+                            if (invalidated[v]) continue;
+                            if (all_dist[u][v] > max_d) {
+                                max_d = all_dist[u][v];
+                                best_u = u;
+                                best_v = v;
+                                found = true;
+                            }
+                        }
+                    }
+
+                    if (found) {
+                        precomputed_seeds.push_back({best_u, best_v});
+                        invalidated[best_u] = true;
+                        for (size_t i = sub_g.neighborhoods[best_u]; i < sub_g.neighborhoods[best_u + 1]; ++i)
+                            invalidated[sub_g.edges_v[i]] = true;
+                        invalidated[best_v] = true;
+                        for (size_t i = sub_g.neighborhoods[best_v]; i < sub_g.neighborhoods[best_v + 1]; ++i)
+                            invalidated[sub_g.edges_v[i]] = true;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            std::vector<u8> side(g.n, 2);
+            for (size_t i = 0; i < components.size(); ++i) {
+                if (component_assignment[i] != 2) {
+                    for (vertex_t v : components[i]) side[v] = component_assignment[i];
+                }
+            }
 
             for (u64 trial = 0; trial < kappa; ++trial) {
                 vertex_t seed_0 = 0, seed_1 = 0;
-                u64 attempts = 0;
-                while (attempts < 10) {
-                    vertex_t temp_s = rng->get_u64() % g.n;
-                    seed_0 = bfs_furthest(g, temp_s);
-                    seed_1 = bfs_furthest(g, seed_0);
+                if (trial < precomputed_seeds.size()) {
+                    seed_0 = precomputed_seeds[trial].first;
+                    seed_1 = precomputed_seeds[trial].second;
+                    used_seeds.insert(sub_to_g.get_o(seed_0));
+                    used_seeds.insert(sub_to_g.get_o(seed_1));
+                } else {
+                    u64 attempts = 0;
+                    while (attempts < 10) {
+                        vertex_t temp_s = rng->get_u64() % sub_g.n;
+                        seed_0 = bfs_furthest(sub_g, temp_s);
+                        seed_1 = bfs_furthest(sub_g, seed_0);
+                        if (seed_1 == seed_0 && sub_g.n > 1) seed_1 = (seed_0 == 0) ? 1 : 0;
 
-                    if (seed_1 == seed_0 && g.n > 1) {
-                        seed_1 = (seed_0 == 0) ? 1 : 0;
+                        vertex_t g_seed_0 = sub_to_g.get_o(seed_0);
+                        vertex_t g_seed_1 = sub_to_g.get_o(seed_1);
+                        if (used_seeds.find(g_seed_0) == used_seeds.end() && used_seeds.find(g_seed_1) == used_seeds.end()) {
+                            used_seeds.insert(g_seed_0);
+                            used_seeds.insert(g_seed_1);
+                            break;
+                        }
+                        attempts++;
                     }
-
-                    vertex_t min_s = std::min(seed_0, seed_1);
-                    vertex_t max_s = std::max(seed_0, seed_1);
-                    u64 pair_hash_val = splitmix64(min_s) ^ splitmix64(max_s + 0x9e3779b97f4a7c15ULL);
-
-                    if (used_pairs.find(pair_hash_val) == used_pairs.end()) {
-                        used_pairs.insert(pair_hash_val);
-                        break;
-                    }
-                    attempts++;
                 }
 
-                // ---- Interleaved BFS growing ----
-                side.assign(g.n, 2);
-                side[seed_0] = 0;
-                side[seed_1] = 1;
-                weight_t w0 = g.v_weights[seed_0];
-                weight_t w1 = g.v_weights[seed_1];
-
-                if (seed_0 == seed_1) {
-                    side[seed_0] = 0;
-                    w0 = g.v_weights[seed_0];
-                    w1 = 0;
-                }
+                std::vector<u8> sub_side(sub_g.n, 2);
+                sub_side[seed_0] = 0;
+                sub_side[seed_1] = 1;
+                weight_t w0 = sub_g.v_weights[seed_0];
+                weight_t w1 = sub_g.v_weights[seed_1];
 
                 std::queue<vertex_t> q0, q1;
                 q0.push(seed_0);
-                if (seed_1 != seed_0) { q1.push(seed_1); }
+                if (seed_1 != seed_0) q1.push(seed_1);
+
+                weight_t sub_lmax_0 = lmax_left - w0_base;
+                weight_t sub_lmax_1 = lmax_right - w1_base;
 
                 while (!q0.empty() || !q1.empty()) {
-                    const bool can_grow_0 = !q0.empty() && w0 < lmax_left;
-                    const bool can_grow_1 = !q1.empty() && w1 < lmax_right;
+                    const bool can_grow_0 = !q0.empty() && w0 < sub_lmax_0;
+                    const bool can_grow_1 = !q1.empty() && w1 < sub_lmax_1;
+                    if (!can_grow_0 && !can_grow_1) break;
 
-                    if (!can_grow_0 && !can_grow_1) { break; }
-
-                    f64 fill_0 = (f64) w0 / (f64) lmax_left;
-                    f64 fill_1 = (f64) w1 / (f64) lmax_right;
-                    const bool grow_left = (can_grow_0 && can_grow_1)
-                                               ? (fill_0 <= fill_1)
-                                               : can_grow_0;
+                    f64 fill_0 = (f64)(w0_base + w0) / (f64)lmax_left;
+                    f64 fill_1 = (f64)(w1_base + w1) / (f64)lmax_right;
+                    const bool grow_left = (can_grow_0 && can_grow_1) ? (fill_0 <= fill_1) : can_grow_0;
 
                     std::queue<vertex_t> &q = grow_left ? q0 : q1;
                     const u8 s = grow_left ? u8(0) : u8(1);
                     weight_t &w = grow_left ? w0 : w1;
-                    const weight_t target_w = grow_left ? lmax_left : lmax_right;
+                    const weight_t target_w = grow_left ? sub_lmax_0 : sub_lmax_1;
 
                     vertex_t u = q.front();
                     q.pop();
 
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        vertex_t v = g.edges_v[i];
-                        if (side[v] == 2) {
-                            if (w + g.v_weights[v] > target_w) continue;
-                            side[v] = s;
-                            w += g.v_weights[v];
+                    for (size_t i = sub_g.neighborhoods[u]; i < sub_g.neighborhoods[u + 1]; ++i) {
+                        vertex_t v = sub_g.edges_v[i];
+                        if (sub_side[v] == 2) {
+                            if (w + sub_g.v_weights[v] > target_w) continue;
+                            sub_side[v] = s;
+                            w += sub_g.v_weights[v];
                             q.push(v);
                         }
                     }
                 }
 
-                assign_unassigned_components(g, side, w0, w1, lmax_left, lmax_right);
+                for (vertex_t v = 0; v < sub_g.n; ++v) {
+                    if (sub_side[v] == 2) {
+                        if ((w0_base + w0) * lmax_right <= (w1_base + w1) * lmax_left) {
+                            sub_side[v] = 0;
+                            w0 += sub_g.v_weights[v];
+                        } else {
+                            sub_side[v] = 1;
+                            w1 += sub_g.v_weights[v];
+                        }
+                    }
+                }
+
+                for (vertex_t v = 0; v < sub_g.n; ++v) side[sub_to_g.get_o(v)] = sub_side[v];
                 evaluate_trial(g, lmax_left, lmax_right, config, side, best_side, best_bisect_cut, best_is_balanced);
             }
         }
@@ -432,71 +582,154 @@ namespace HeiProMap {
                         weight_t lmax_right,
                         u64 kappa,
                         const RecursiveBisectionConfiguration &config,
+                        std::unordered_set<vertex_t> &used_seeds,
                         std::vector<u8> &best_side,
                         weight_t &best_bisect_cut,
                         bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_ggg");
             if (g.n == 0 || kappa == 0) return;
 
-            std::unordered_set<vertex_t> used_seeds;
-            std::vector<u8> side;
+            // 1. Find all connected components
+            std::vector<std::vector<vertex_t>> components;
+            std::vector<weight_t> component_weights;
+            std::vector<s8> visited(g.n, 0);
+            for (vertex_t i = 0; i < g.n; ++i) {
+                if (!visited[i]) {
+                    components.emplace_back();
+                    auto &comp = components.back();
+                    weight_t w = 0;
+                    std::queue<vertex_t> q;
+                    q.push(i);
+                    visited[i] = 1;
+                    while (!q.empty()) {
+                        vertex_t u = q.front();
+                        q.pop();
+                        comp.push_back(u);
+                        w += g.v_weights[u];
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            vertex_t v = g.edges_v[j];
+                            if (!visited[v]) {
+                                visited[v] = 1;
+                                q.push(v);
+                            }
+                        }
+                    }
+                    component_weights.push_back(w);
+                }
+            }
+
+            // 2. Greedily distribute components
+            std::vector<u8> component_assignment(components.size(), 2);
+            weight_t w0_base = 0, w1_base = 0;
+            s64 split_comp_idx = -1;
+
+            std::vector<size_t> sorted_indices(components.size());
+            std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
+            std::sort(sorted_indices.begin(), sorted_indices.end(), [&](size_t i, size_t j) {
+                return component_weights[i] > component_weights[j];
+            });
+
+            for (size_t idx : sorted_indices) {
+                weight_t w = component_weights[idx];
+                if (w0_base + w <= lmax_left && (w0_base + w) * lmax_right <= (w1_base) * lmax_left) {
+                    w0_base += w;
+                    component_assignment[idx] = 0;
+                } else if (w1_base + w <= lmax_right) {
+                    w1_base += w;
+                    component_assignment[idx] = 1;
+                } else if (w0_base + w <= lmax_left) {
+                    w0_base += w;
+                    component_assignment[idx] = 0;
+                } else {
+                    if (split_comp_idx == -1) split_comp_idx = (s64)idx;
+                    else {
+                        if (w0_base * lmax_right <= w1_base * lmax_left) {
+                            w0_base += w;
+                            component_assignment[idx] = 0;
+                        } else {
+                            w1_base += w;
+                            component_assignment[idx] = 1;
+                        }
+                    }
+                }
+            }
+
+            if (split_comp_idx == -1) {
+                best_side.assign(g.n, 0);
+                for (size_t i = 0; i < components.size(); ++i) {
+                    u8 s = component_assignment[i];
+                    for (vertex_t v : components[i]) best_side[v] = s;
+                }
+                best_bisect_cut = 0;
+                best_is_balanced = true;
+                return;
+            }
+
+            // 3. Perform trials on the split component
+            const auto &split_comp = components[split_comp_idx];
+            CSRGraph sub_g;
+            TranslationTable<vertex_t> sub_to_g;
+            std::vector<u8> mask(g.n, 0);
+            for (vertex_t v : split_comp) mask[v] = 1;
+            SubgraphExtractor::extract(g, mask, 1, sub_g, sub_to_g);
+
+            std::vector<u8> side(g.n, 2);
+            for (size_t i = 0; i < components.size(); ++i) {
+                if (component_assignment[i] != 2) {
+                    for (vertex_t v : components[i]) side[v] = component_assignment[i];
+                }
+            }
 
             for (u64 trial = 0; trial < kappa; ++trial) {
                 vertex_t seed = 0;
                 u64 attempts = 0;
                 while (attempts < 10) {
-                    seed = rng->get_u64() % g.n;
-                    if (used_seeds.find(seed) == used_seeds.end()) {
-                        used_seeds.insert(seed);
+                    seed = rng->get_u64() % sub_g.n;
+                    vertex_t g_seed = sub_to_g.get_o(seed);
+                    if (used_seeds.find(g_seed) == used_seeds.end()) {
+                        used_seeds.insert(g_seed);
                         break;
                     }
                     attempts++;
                 }
 
                 pq.clear();
-                side.assign(g.n, 2);
-
-                side[seed] = 0;
-                weight_t w0 = g.v_weights[seed];
+                std::vector<u8> sub_side(sub_g.n, 2);
+                sub_side[seed] = 0;
+                weight_t w0 = sub_g.v_weights[seed];
+                weight_t sub_lmax_0 = lmax_left - w0_base;
 
                 auto add_or_update = [&](vertex_t v, weight_t w) {
-                    if (pq.entry_exists(v)) {
-                        pq.increment(v, 2 * w);
-                    } else {
+                    if (pq.entry_exists(v)) pq.increment(v, 2 * w);
+                    else {
                         weight_t deg_v = 0;
-                        for (size_t j = g.neighborhoods[v]; j < g.neighborhoods[v + 1]; ++j) {
-                            deg_v += g.edges_w[j];
-                        }
+                        for (size_t j = sub_g.neighborhoods[v]; j < sub_g.neighborhoods[v + 1]; ++j) deg_v += sub_g.edges_w[j];
                         pq.push(v, 2 * w - deg_v);
                     }
                 };
 
-                for (size_t i = g.neighborhoods[seed]; i < g.neighborhoods[seed + 1]; ++i) {
-                    vertex_t v = g.edges_v[i];
-                    if (side[v] == 2) {
-                        add_or_update(v, g.edges_w[i]);
-                    }
+                for (size_t i = sub_g.neighborhoods[seed]; i < sub_g.neighborhoods[seed + 1]; ++i) {
+                    vertex_t v = sub_g.edges_v[i];
+                    if (sub_side[v] == 2) add_or_update(v, sub_g.edges_w[i]);
                 }
 
-                while (!pq.empty() && w0 < lmax_left) {
+                while (!pq.empty() && w0 < sub_lmax_0) {
                     vertex_t u = pq.top_key();
                     pq.pop();
-
-                    if (w0 + g.v_weights[u] > lmax_left) continue;
-
-                    side[u] = 0;
-                    w0 += g.v_weights[u];
-
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        vertex_t v = g.edges_v[i];
-                        if (side[v] == 2) {
-                            add_or_update(v, g.edges_w[i]);
-                        }
+                    if (w0 + sub_g.v_weights[u] > sub_lmax_0) continue;
+                    sub_side[u] = 0;
+                    w0 += sub_g.v_weights[u];
+                    for (size_t i = sub_g.neighborhoods[u]; i < sub_g.neighborhoods[u + 1]; ++i) {
+                        vertex_t v = sub_g.edges_v[i];
+                        if (sub_side[v] == 2) add_or_update(v, sub_g.edges_w[i]);
                     }
                 }
 
-                weight_t w1 = 0;
-                assign_unassigned_components(g, side, w0, w1, lmax_left, lmax_right);
+                for (vertex_t v = 0; v < sub_g.n; ++v) {
+                    if (sub_side[v] == 2) sub_side[v] = 1;
+                }
+
+                for (vertex_t v = 0; v < sub_g.n; ++v) side[sub_to_g.get_o(v)] = sub_side[v];
                 evaluate_trial(g, lmax_left, lmax_right, config, side, best_side, best_bisect_cut, best_is_balanced);
             }
         }
@@ -545,17 +778,18 @@ namespace HeiProMap {
             weight_t best_bisect_cut = std::numeric_limits<weight_t>::max();
             bool best_is_balanced = false;
             std::vector<u8> best_side;
+            std::unordered_set<vertex_t> used_seeds;
 
             if (config.method == BisectionMethod::HYBRID) {
                 u64 kappa_bfs = config.kappa / 2;
                 u64 kappa_ggg = config.kappa - kappa_bfs;
 
-                if (kappa_bfs > 0) bisect_bfs(g, lmax_left, lmax_right, kappa_bfs, config, best_side, best_bisect_cut, best_is_balanced);
-                if (kappa_ggg > 0) bisect_ggg(g, lmax_left, lmax_right, kappa_ggg, config, best_side, best_bisect_cut, best_is_balanced);
+                if (kappa_bfs > 0) bisect_bfs(g, lmax_left, lmax_right, kappa_bfs, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
+                if (kappa_ggg > 0) bisect_ggg(g, lmax_left, lmax_right, kappa_ggg, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
             } else if (config.method == BisectionMethod::BFS) {
-                bisect_bfs(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
+                bisect_bfs(g, lmax_left, lmax_right, config.kappa, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
             } else {
-                bisect_ggg(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
+                bisect_ggg(g, lmax_left, lmax_right, config.kappa, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
             }
 
             if (config.use_full_refine) {

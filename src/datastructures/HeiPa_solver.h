@@ -70,6 +70,7 @@ namespace HeiProMap {
         // matching
         std::vector<Mapping> mappings;
         GlobalPathAlgorithmMatcher gpa_matcher;
+        HeavyEdgeMatching heavy_edge_matcher;
         SizeConstrainedLP size_constrained_lp;
 
         Rebalancer rebalancer;
@@ -318,8 +319,6 @@ namespace HeiProMap {
             u64 level = 0;
             u64 mult = ac.initial_c;
 
-            f64 level_imbalance = 0.0;
-            f64 per_level_imb_add = ac.per_level_imb_add;
             [[maybe_unused]] weight_t level_lmax = 0;
 
             while (graphs.back().n > ac.k * mult) {
@@ -330,10 +329,9 @@ namespace HeiProMap {
                 level_infos[level].m = graphs.back().m;
                 #endif
 
-                level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
-                level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                level_lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-                coarsening(level, level_imbalance);
+                coarsening(level, ac.imbalance);
                 contraction(level);
 
                 level += 1;
@@ -346,11 +344,10 @@ namespace HeiProMap {
             level_infos[level].m = graphs.back().m;
             #endif
 
-            level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
-            level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+            level_lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-            partition(level, level_imbalance);
-            refinement(level, level_imbalance);
+            partition(level, ac.imbalance);
+            refinement(level, ac.imbalance);
 
             #if ENABLE_PROFILER
             level_infos[level].max_b_weight = p_manager.max_weight();
@@ -365,13 +362,12 @@ namespace HeiProMap {
             while (!mappings.empty()) {
                 level -= 1;
 
-                level_imbalance = ac.imbalance + (f64) level * per_level_imb_add;
-                level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                level_lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                 uncontraction(level);
 
-                rebalancing(level, level_imbalance);
+                rebalancing(level, ac.imbalance);
 
-                refinement(level, level_imbalance);
+                refinement(level, ac.imbalance);
 
                 #if ENABLE_PROFILER
                 level_infos[level].max_b_weight = p_manager.max_weight();
@@ -420,8 +416,7 @@ namespace HeiProMap {
 
                         #pragma omp parallel for schedule(static) num_threads(ac.threads)
                         for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            GlobalMultisectionPartitioner partitioner;
-                            partitioner.partition(graphs.back(), local_p_managers[thread_id], {ac.k}, {weight_t(1)}, level_imbalance, ac.global_multisection_config, thread_id);
+                            GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], {ac.k}, {weight_t(1)}, level_imbalance, ac.global_multisection_config, thread_id);
 
                             local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
                         }
@@ -435,8 +430,7 @@ namespace HeiProMap {
 
                         p_manager.copy_from(local_p_managers[best_idx]);
                     } else {
-                        GlobalMultisectionPartitioner partitioner;
-                        partitioner.partition(graphs.back(), p_manager, {ac.k}, {weight_t(1)}, level_imbalance, ac.global_multisection_config, 0);
+                        GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, {ac.k}, {weight_t(1)}, level_imbalance, ac.global_multisection_config, 0);
                     }
                 } else {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
@@ -499,6 +493,8 @@ namespace HeiProMap {
                 gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
                 size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), level_imbalance, ac.threads);
+            } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_EDGE) {
+                heavy_edge_matcher.match(graphs.back(), p_manager, mappings.back(), level_imbalance, random_engine.get_u64(), ac.heavy_edge_matching_configuration);
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
@@ -648,7 +644,7 @@ namespace HeiProMap {
         }
     };
 
-    inline void heipa_multisection_partition_wrapper(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode, u64 kappa) {
+    inline void heipa_partition(graph_t &g, partition_t k, f64 imb, u64 seed, AlignedArray<partition_t> &partition, GlobalMultisectionMode mode, u64 kappa) {
         HeiPaConfiguration h_ac;
         h_ac.k = k;
         h_ac.imbalance = imb;
@@ -661,8 +657,6 @@ namespace HeiProMap {
 
         h_ac.k = k;
         h_ac.imbalance = imb;
-        h_ac.recursive_bisection_config.kappa = kappa;
-        h_ac.global_multisection_config.kappa = kappa;
 
         graph_t g_copy = g;
         HeiPaSolver solver(std::move(g_copy), h_ac);

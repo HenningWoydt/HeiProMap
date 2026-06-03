@@ -86,6 +86,7 @@ namespace HeiProMap {
 
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
         SizeConstrainedLPConfiguration size_constrained_lp_config;
+        HeavyEdgeMatchingConfiguration heavy_edge_matching_configuration;
 
         // partitioning algorithm
         std::string partitioning_algorithm_string;
@@ -199,6 +200,9 @@ namespace HeiProMap {
             global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
 
+            // configurate global-paths algorithm
+            heavy_edge_matching_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.multiplier = 16;
@@ -208,8 +212,27 @@ namespace HeiProMap {
             recursive_bisection_config.kappa = 32;
             recursive_bisection_config.use_full_refine = true;
             recursive_bisection_config.method = BisectionMethod::HYBRID;
-            recursive_bisection_config.swap_config.enabled = false;
+
+            recursive_bisection_config.lp_config.enabled = true;
+            recursive_bisection_config.lp_config.max_iteration = 5;
+
+            recursive_bisection_config.qg_config.enabled = true;
+            recursive_bisection_config.qg_config.max_iteration = 5;
+            recursive_bisection_config.qg_config.alpha = 5.0;
+            recursive_bisection_config.qg_config.min_n_steps = 3;
+            recursive_bisection_config.qg_config.use_preemptive_exit = true;
+
+            recursive_bisection_config.swap_config.enabled = true;
             recursive_bisection_config.swap_config.max_iteration = 5;
+
+            recursive_bisection_config.flow_config.enabled = false;
+            recursive_bisection_config.flow_config.max_global_iteration = 1;
+            recursive_bisection_config.flow_config.max_local_iteration = 1;
+            recursive_bisection_config.flow_config.alpha = 1.0;
+            recursive_bisection_config.flow_config.alpha_upper_bound = 64.0;
+            recursive_bisection_config.flow_config.alpha_modifier = 2.0;
+            recursive_bisection_config.flow_config.use_closed_vertex_set = true;
+            recursive_bisection_config.flow_config.closed_vertex_sets_repeats = 500;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
@@ -217,7 +240,7 @@ namespace HeiProMap {
             quotient_graph_refinement_config.enabled = true;
             quotient_graph_refinement_config.max_iteration = 5;
             quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 15;
+            quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
         }
 

@@ -72,6 +72,11 @@ int main(const int argc, char *argv[]) {
 
             if (ac.json_output) {
                 std::cout << solver.get_summary_json() << std::endl;
+#if ENABLE_PROFILER
+                std::cout << "PROFILER_JSON_START" << std::endl;
+                std::cout << HeiProMap::Profiler::instance().to_JSON() << std::endl;
+                std::cout << "PROFILER_JSON_END" << std::endl;
+#endif
             }
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
@@ -89,6 +94,11 @@ int main(const int argc, char *argv[]) {
 
         if (ac.json_output) {
             std::cout << solver.get_summary_json() << std::endl;
+#if ENABLE_PROFILER
+            std::cout << "PROFILER_JSON_START" << std::endl;
+            std::cout << HeiProMap::Profiler::instance().to_JSON() << std::endl;
+            std::cout << "PROFILER_JSON_END" << std::endl;
+#endif
         } else {
             HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
         }
