@@ -565,7 +565,7 @@ namespace HeiProMap {
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;

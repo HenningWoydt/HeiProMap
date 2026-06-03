@@ -44,6 +44,7 @@
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/swap_refinement.h"
 
 namespace HeiProMap {
     enum struct BisectionMethod {
@@ -59,6 +60,7 @@ namespace HeiProMap {
         LabelPropagationConfiguration lp_config = LabelPropagationConfiguration("LP");
         QuotientGraphRefinementConfiguration qg_config = QuotientGraphRefinementConfiguration("QG");
         FlowBasedRefinementConfiguration flow_config = FlowBasedRefinementConfiguration("Flow");
+        SwapRefinementConfiguration swap_config = SwapRefinementConfiguration("Swap");
 
         RecursiveBisectionConfiguration() {
             lp_config.enabled = true;
@@ -69,6 +71,9 @@ namespace HeiProMap {
             qg_config.alpha = 5.0;
             qg_config.min_n_steps = 3;
             qg_config.use_preemptive_exit = true;
+
+            swap_config.enabled = false;
+            swap_config.max_iteration = 5;
 
             // enable flow based refinement
             flow_config.enabled = false;
@@ -117,6 +122,7 @@ namespace HeiProMap {
         LabelPropagationRefinement lp_refine;
         QuotientGraphRefinement qg_refine;
         FlowBasedRefinement flow_refine;
+        SwapRefinement swap_refine;
 
         void refine_pm(const CSRGraph &g,
                        PartitionManager &pm,
@@ -164,7 +170,12 @@ namespace HeiProMap {
                 flow_refine.initialize(g.n, g.m, pm.k, 1, 0, config.flow_config);
                 flow_refine.refine(const_cast<CSRGraph &>(g), do_oracle, bv, pm, qg, bc, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
             }
+            if (config.swap_config.enabled) {
+                swap_refine.initialize(g.n, g.m, pm.k, 1, 0, config.swap_config);
+                swap_refine.refine(const_cast<CSRGraph &>(g), do_oracle, bv, pm, qg, bc, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
+            }
         }
+
 
         void perform_full_refinement(const CSRGraph &g,
                                      std::vector<u8> &side,
@@ -547,4 +558,3 @@ namespace HeiProMap {
 } // namespace HeiProMap
 
 #endif // HEIPROMAP_RECURSIVE_BISECTION_H
-
