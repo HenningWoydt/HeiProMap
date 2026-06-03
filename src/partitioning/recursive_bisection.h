@@ -217,7 +217,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "evaluate_trial");
 
             if (config.use_full_refine) {
-                perform_full_refinement(g, current_side, lmax_left, lmax_right, config);
+                // perform_full_refinement(g, current_side, lmax_left, lmax_right, config);
             }
 
             weight_t cut = compute_bisection_cut(g, current_side);
@@ -556,6 +556,10 @@ namespace HeiProMap {
                 bisect_bfs(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
             } else {
                 bisect_ggg(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
+            }
+
+            if (config.use_full_refine) {
+                perform_full_refinement(g, best_side, lmax_left, lmax_right, config);
             }
 
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_overhead");
