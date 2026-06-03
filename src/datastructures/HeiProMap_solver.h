@@ -43,7 +43,7 @@
 #include "../rebalance/rebalancer.h"
 #include "../partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../utility/HeiProMap_configuration.h"
+#include "../HeiProMap_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "distance_oracle.h"
@@ -550,16 +550,7 @@ namespace HeiProMap {
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                const auto &cg = graphs.back();
-                if (cg.uniform_v_weights && cg.uniform_e_weights) {
-                    size_constrained_lp.cluster<true, true>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                } else if (cg.uniform_v_weights) {
-                    size_constrained_lp.cluster<true, false>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                } else if (cg.uniform_e_weights) {
-                    size_constrained_lp.cluster<false, true>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                } else {
-                    size_constrained_lp.cluster<false, false>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                }
+                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), level_imbalance, ac.threads);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_EDGE) {
                 heavy_edge_matching.match(graphs.back(), p_manager, mappings.back(), level_imbalance, random_engine.get_u64(), ac.heavy_edge_matching_config);
             } else {

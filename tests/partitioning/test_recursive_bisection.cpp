@@ -10,13 +10,13 @@ TEST(RecursiveBisectionTest, CycleGraphBisection) {
     // Create a cycle graph: 0-1-2-3-0
     vertex_t n = 4;
     vertex_t m = 8;
-    weight_t v_weights[] = {1, 1, 1, 1};
-    size_t neighborhoods[] = {0, 2, 4, 6, 8};
-    vertex_t edges_v[] = {1, 3, 0, 2, 1, 3, 0, 2};
-    weight_t edges_w[] = {1, 1, 1, 1, 1, 1, 1, 1};
+    std::vector<weight_t> v_weights = {1, 1, 1, 1};
+    std::vector<size_t> neighborhoods = {0, 2, 4, 6, 8};
+    std::vector<vertex_t> edges_v = {1, 3, 0, 2, 1, 3, 0, 2};
+    std::vector<weight_t> edges_w = {1, 1, 1, 1, 1, 1, 1, 1};
 
     CSRGraph g;
-    g.initialize(n, m, v_weights, neighborhoods, edges_w, edges_v);
+    g.initialize(n, m, v_weights.data(), neighborhoods.data(), edges_w.data(), edges_v.data());
 
     PartitionManager pm;
     pm.initialize(n, 2, 4);
@@ -26,6 +26,7 @@ TEST(RecursiveBisectionTest, CycleGraphBisection) {
     config.use_full_refine = true;
     config.kappa = 1;
     config.lp_config.enabled = true;
+    config.swap_config.enabled = true;
 
     config.method = BisectionMethod::BFS;
 
@@ -54,6 +55,7 @@ TEST(RecursiveBisectionTest, PartitionK4) {
     RecursiveBisectionPartitioner partitioner;
     RecursiveBisectionConfiguration config;
     config.use_full_refine = true;
+    config.swap_config.enabled = true;
     
     config.method = BisectionMethod::HYBRID;
     

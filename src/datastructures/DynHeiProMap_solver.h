@@ -43,7 +43,7 @@
 #include "block_conn.h"
 #include "../partitioning/heipromap_partition.h"
 #include "../refinement/label_propagation_refinement.h"
-#include "../utility/DynHeiProMap_configuration.h"
+#include "../DynHeiProMap_configuration.h"
 #include "../utility/profiler.h"
 #include "distance_oracle.h"
 #include "../utility/hungarian.h"

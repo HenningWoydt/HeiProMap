@@ -137,8 +137,9 @@ namespace HeiProMap {
     enum struct EdgeRatingFunction {
         WEIGHT,
         EXPANSION,
-        HEAVY_EDGE,
-        GREEDY
+        EXPANSIONSTAR,
+        EXPANSIONSTARSTAR,
+        INNEROUTER
     };
 
     class EdgeUVW {

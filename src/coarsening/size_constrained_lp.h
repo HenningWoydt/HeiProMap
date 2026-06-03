@@ -52,6 +52,7 @@ namespace HeiProMap {
         f64 min_threshold = 0.05;
         f64 f = 8;
         weight_t multiplier = 2;
+        EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
     };
 
     class SizeConstrainedLP {
@@ -88,7 +89,7 @@ namespace HeiProMap {
             random_engine = RandomEngine(seed);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void merge_when_identity([[maybe_unused]] const size_t level,
                                  const graph_t &g,
                                  [[maybe_unused]] const p_manager_t &p_manager,
@@ -145,7 +146,7 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void merge_singletons([[maybe_unused]] const size_t level,
                               const graph_t &g,
                               [[maybe_unused]] const p_manager_t &p_manager,
@@ -168,7 +169,7 @@ namespace HeiProMap {
             if (singletons_size == 0) { return; }
 
             // 3) For each singleton u: choose best neighbor cluster by summed edge weight
-            FlatMap<vertex_t, weight_t> flat_map;
+            FlatMap<vertex_t, f32> flat_map;
             flat_map.reserve(128);
 
             for (size_t i = 0; i < singletons_size; ++i) {
@@ -181,7 +182,7 @@ namespace HeiProMap {
 
                 weight_t u_w = g.v_weights[u];
                 vertex_t current_id = mapping.get(u);
-                weight_t current_id_w = 0;
+                f32 current_id_w = 0;
 
                 flat_map.clear();
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
@@ -190,17 +191,45 @@ namespace HeiProMap {
                     partition_t v_id = p_manager[v];
                     if (u_id != v_id) { continue; }
 
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    weight_t ew = t_uniform_e_weights ? 1 : w;
+
+                    f32 edge_rating;
+                    if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                        edge_rating = 1.0f;
+                    } else {
+                        if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
+                            edge_rating = (f32) ew;
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
+                            edge_rating = (f32) ew / (f32) (u_w + v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTAR) {
+                            edge_rating = (f32) ew / (f32) (u_w * v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTARSTAR) {
+                            edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::INNEROUTER) {
+                            weight_t out_v = 0;
+                            for (u64 i_edge = g.neighborhoods[v]; i_edge < g.neighborhoods[v + 1]; ++i_edge) {
+                                out_v += g.edges_w[i_edge];
+                            }
+                            weight_t out_u = 0;
+                            for (u64 i_edge = g.neighborhoods[u]; i_edge < g.neighborhoods[u + 1]; ++i_edge) {
+                                out_u += g.edges_w[i_edge];
+                            }
+                            edge_rating = (f32) ew / ((f32) (out_v + out_u - (2 * ew)));
+                        }
+                    }
+
                     vertex_t id = mapping.get(v);
                     if (id == current_id) {
-                        current_id_w += w;
+                        current_id_w += edge_rating;
                     } else {
                         if (u_w + cluster_weights[id] > max_w) { continue; }
-                        flat_map.add(id, w);
+                        flat_map.add(id, edge_rating);
                     }
                 }
 
                 vertex_t best_id = current_id;
-                weight_t best_weight = current_id_w;
+                f32 best_weight = current_id_w;
                 for (auto [id, w]: flat_map) {
                     // check constraint only for candidates != current_id (same logic as your loop)
                     if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
@@ -222,8 +251,46 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
-        void cluster([[maybe_unused]] const size_t level,
+        void cluster(const size_t level,
+                     const graph_t &g,
+                     const p_manager_t &p_manager,
+                     Mapping &mapping,
+                     f64 imbalance,
+                     u64 threads) {
+            auto dispatch_with_rating = [&](auto rating_func_const) {
+                constexpr EdgeRatingFunction rating_func = rating_func_const;
+                if (g.uniform_v_weights && g.uniform_e_weights) {
+                    cluster_templated<true, true, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                } else if (g.uniform_v_weights) {
+                    cluster_templated<true, false, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                } else if (g.uniform_e_weights) {
+                    cluster_templated<false, true, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                } else {
+                    cluster_templated<false, false, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                }
+            };
+
+            switch (config->rating_function) {
+                case EdgeRatingFunction::WEIGHT:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::WEIGHT>{});
+                    break;
+                case EdgeRatingFunction::EXPANSION:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSION>{});
+                    break;
+                case EdgeRatingFunction::EXPANSIONSTAR:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTAR>{});
+                    break;
+                case EdgeRatingFunction::EXPANSIONSTARSTAR:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTARSTAR>{});
+                    break;
+                case EdgeRatingFunction::INNEROUTER:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::INNEROUTER>{});
+                    break;
+            }
+        }
+
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
+        void cluster_templated([[maybe_unused]] const size_t level,
                      const graph_t &g,
                      [[maybe_unused]] const p_manager_t &p_manager,
                      Mapping &mapping,
@@ -310,7 +377,7 @@ namespace HeiProMap {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_threaded");
                     #pragma omp parallel num_threads(threads)
                     {
-                        FlatMap<vertex_t, weight_t> flat_map;
+                        FlatMap<vertex_t, f32> flat_map;
                         flat_map.reserve(128);
 
                         #pragma omp for schedule(dynamic) reduction(+:n_moved)
@@ -321,7 +388,7 @@ namespace HeiProMap {
                             weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
                             partition_t u_id = p_manager[u];
                             vertex_t current_id = mapping.get(u);
-                            weight_t current_id_w = 0;
+                            f32 current_id_w = 0;
 
                             flat_map.clear();
                             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
@@ -330,17 +397,45 @@ namespace HeiProMap {
                                 partition_t v_id = p_manager[v];
                                 if (u_id != v_id) { continue; }
 
+                                weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                                weight_t ew = t_uniform_e_weights ? 1 : w;
+
+                                f32 edge_rating;
+                                if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                                    edge_rating = 1.0f;
+                                } else {
+                                    if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
+                                        edge_rating = (f32) ew;
+                                    } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
+                                        edge_rating = (f32) ew / (f32) (u_w + v_w);
+                                    } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTAR) {
+                                        edge_rating = (f32) ew / (f32) (u_w * v_w);
+                                    } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTARSTAR) {
+                                        edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
+                                    } else if constexpr (t_rating_function == EdgeRatingFunction::INNEROUTER) {
+                                        weight_t out_v = 0;
+                                        for (u64 i_edge = g.neighborhoods[v]; i_edge < g.neighborhoods[v + 1]; ++i_edge) {
+                                            out_v += g.edges_w[i_edge];
+                                        }
+                                        weight_t out_u = 0;
+                                        for (u64 i_edge = g.neighborhoods[u]; i_edge < g.neighborhoods[u + 1]; ++i_edge) {
+                                            out_u += g.edges_w[i_edge];
+                                        }
+                                        edge_rating = (f32) ew / ((f32) (out_v + out_u - (2 * ew)));
+                                    }
+                                }
+
                                 vertex_t id = mapping.get(v);
                                 if (id == current_id) {
-                                    current_id_w += w;
+                                    current_id_w += edge_rating;
                                 } else {
                                     if (u_w + cluster_weights[id] > max_w) { continue; }
-                                    flat_map.add(id, w);
+                                    flat_map.add(id, edge_rating);
                                 }
                             }
 
                             vertex_t best_id = current_id;
-                            weight_t best_weight = current_id_w;
+                            f32 best_weight = current_id_w;
                             for (auto [id, w]: flat_map) {
                                 if (w > best_weight) {
                                     best_weight = w;
@@ -374,7 +469,7 @@ namespace HeiProMap {
                     }
                 } else {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_serial");
-                    FlatMap<vertex_t, weight_t> flat_map;
+                    FlatMap<vertex_t, f32> flat_map;
                     flat_map.reserve(128);
 
                     for (size_t i = 0; i < g.n; ++i) {
@@ -385,49 +480,55 @@ namespace HeiProMap {
                         partition_t u_id = p_manager[u];
 
                         vertex_t current_id = mapping.get(u);
-                        weight_t current_id_w = 0;
+                        f32 current_id_w = 0;
 
                         vertex_t best_id = current_id;
-                        weight_t best_weight = 0;
+                        f32 best_weight = 0;
 
                         flat_map.clear();
-                        if constexpr (t_uniform_e_weights) {
-                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                                const vertex_t v = g.edges_v[j];
-                                partition_t v_id = p_manager[v];
-                                if (u_id != v_id) { continue; }
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            const vertex_t v = g.edges_v[j];
+                            partition_t v_id = p_manager[v];
+                            if (u_id != v_id) { continue; }
 
-                                vertex_t id = mapping.get(v);
-                                if (id == current_id) {
-                                    current_id_w += 1;
-                                } else {
-                                    if (u_w + cluster_weights[id] > max_w) { continue; }
+                            weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                            weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
 
-                                    weight_t new_w = flat_map.add_and_ret(id, 1);
-                                    if (new_w > best_weight) {
-                                        best_weight = new_w;
-                                        best_id = id;
+                            f32 edge_rating;
+                            if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                                edge_rating = 1.0f;
+                            } else {
+                                if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
+                                    edge_rating = (f32) ew;
+                                } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
+                                    edge_rating = (f32) ew / (f32) (u_w + v_w);
+                                } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTAR) {
+                                    edge_rating = (f32) ew / (f32) (u_w * v_w);
+                                } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTARSTAR) {
+                                    edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
+                                } else if constexpr (t_rating_function == EdgeRatingFunction::INNEROUTER) {
+                                    weight_t out_v = 0;
+                                    for (u64 i_edge = g.neighborhoods[v]; i_edge < g.neighborhoods[v + 1]; ++i_edge) {
+                                        out_v += g.edges_w[i_edge];
                                     }
+                                    weight_t out_u = 0;
+                                    for (u64 i_edge = g.neighborhoods[u]; i_edge < g.neighborhoods[u + 1]; ++i_edge) {
+                                        out_u += g.edges_w[i_edge];
+                                    }
+                                    edge_rating = (f32) ew / ((f32) (out_v + out_u - (2 * ew)));
                                 }
                             }
-                        } else {
-                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                                const vertex_t v = g.edges_v[j];
-                                const weight_t w = g.edges_w[j];
-                                partition_t v_id = p_manager[v];
-                                if (u_id != v_id) { continue; }
 
-                                vertex_t id = mapping.get(v);
-                                if (id == current_id) {
-                                    current_id_w += w;
-                                } else {
-                                    if (u_w + cluster_weights[id] > max_w) { continue; }
+                            vertex_t id = mapping.get(v);
+                            if (id == current_id) {
+                                current_id_w += edge_rating;
+                            } else {
+                                if (u_w + cluster_weights[id] > max_w) { continue; }
 
-                                    weight_t new_w = flat_map.add_and_ret(id, w);
-                                    if (new_w > best_weight) {
-                                        best_weight = new_w;
-                                        best_id = id;
-                                    }
+                                f32 new_w = flat_map.add_and_ret(id, edge_rating);
+                                if (new_w > best_weight) {
+                                    best_weight = new_w;
+                                    best_id = id;
                                 }
                             }
                         }
@@ -467,7 +568,7 @@ namespace HeiProMap {
                 }
             }
 
-            merge_singletons<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
+            merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
 
             bool ident_mapping = true;
             // is identity mapping
@@ -479,7 +580,7 @@ namespace HeiProMap {
                 }
             }
             if (ident_mapping) {
-                merge_when_identity<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, mapping, max_w);
+                merge_when_identity<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
             }
 
             // map to a continuous range

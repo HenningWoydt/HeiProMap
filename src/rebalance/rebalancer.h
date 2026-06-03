@@ -40,9 +40,21 @@
 #include "../datastructures/block_conn.h"
 #include "../utility/random_engine.h"
 #include "../utility/qap.h"
-#include "../utility/indexed_update_heap.h"
+#include "../utility/indexed_max_heap.h"
 
 namespace HeiProMap {
+    struct RebalanceMovePayload {
+        partition_t id;
+        weight_t qap_delta;
+
+        bool operator>(const RebalanceMovePayload &other) const {
+            return qap_delta > other.qap_delta;
+        }
+        bool operator<=(const RebalanceMovePayload &other) const {
+            return qap_delta <= other.qap_delta;
+        }
+    };
+
     struct RebalancerMove {
         vertex_t u;
         partition_t best_id;
@@ -438,7 +450,7 @@ namespace HeiProMap {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
             weight_t fill_value = lmax / 2;
 
-            IndexedUpdateHeap heap;
+            IndexedMaxHeap<RebalanceMovePayload> heap;
             heap.initialize(g.n);
 
             for (partition_t id = 0; id < m_k; ++id) {
@@ -462,7 +474,7 @@ namespace HeiProMap {
                     }
 
                     if (best_id != NO_ID) {
-                        heap.push(u, best_id, best_qap);
+                        heap.push(u, {best_id, best_qap});
                     }
                 }
             }
@@ -470,10 +482,10 @@ namespace HeiProMap {
             u64 empty_iter = 0;
             while (!heap.empty() && empty_iter < (u64) g.n * 10) {
                 empty_iter++;
-                vertex_t u = heap.top_u();
+                vertex_t u = heap.top_key();
                 partition_t u_id = p_manager[u];
                 weight_t u_w = g.v_weights[u];
-                partition_t new_id = heap.top_id();
+                partition_t new_id = heap.top().id;
                 heap.pop();
 
                 if (p_manager.get_bweight(new_id) >= fill_value) { continue; }
@@ -512,7 +524,7 @@ namespace HeiProMap {
                     }
 
                     if (best_id != NO_ID) {
-                        heap.push_update(v, best_id, best_qap);
+                        heap.push_update(v, {best_id, best_qap});
                     }
                 }
             }

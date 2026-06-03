@@ -724,6 +724,7 @@ namespace HeiProMap {
     template<class T, class URBG>
     inline void fast_shuffle_unchecked(T *first, T *last, URBG &gen) {
         std::size_t n = last - first;
+        if (n <= 1) return;
         std::size_t swaps = n / 8;
 
         std::uniform_int_distribution<std::size_t> dist(0, n - 1);

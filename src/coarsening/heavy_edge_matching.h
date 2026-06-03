@@ -44,7 +44,7 @@ namespace HeiProMap {
 
     class HeavyEdgeMatchingConfiguration {
     public:
-        EdgeRatingFunction rating_function = EdgeRatingFunction::HEAVY_EDGE;
+        EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
     };
 
     class HeavyEdgeMatching {
@@ -75,11 +75,14 @@ namespace HeiProMap {
                 case EdgeRatingFunction::EXPANSION:
                     dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSION>{});
                     break;
-                case EdgeRatingFunction::HEAVY_EDGE:
-                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::HEAVY_EDGE>{});
+                case EdgeRatingFunction::EXPANSIONSTAR:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTAR>{});
                     break;
-                case EdgeRatingFunction::GREEDY:
-                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::GREEDY>{});
+                case EdgeRatingFunction::EXPANSIONSTARSTAR:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTARSTAR>{});
+                    break;
+                case EdgeRatingFunction::INNEROUTER:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::INNEROUTER>{});
                     break;
             }
         }
@@ -134,11 +137,21 @@ namespace HeiProMap {
                         if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
                             edge_rating = (f32) ew;
                         } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
+                            edge_rating = (f32) ew / (f32) (u_w + v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTAR) {
                             edge_rating = (f32) ew / (f32) (u_w * v_w);
-                        } else if constexpr (t_rating_function == EdgeRatingFunction::HEAVY_EDGE) {
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTARSTAR) {
                             edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
-                        } else if constexpr (t_rating_function == EdgeRatingFunction::GREEDY) {
-                            edge_rating = (f32) ew / std::sqrt((f32) u_w * (f32) v_w);
+                        } else if constexpr (t_rating_function == EdgeRatingFunction::INNEROUTER) {
+                            weight_t out_v = 0;
+                            for (u64 i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) {
+                                out_v += g.edges_w[i];
+                            }
+                            weight_t out_u = 0;
+                            for (u64 i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                                out_u += g.edges_w[i];
+                            }
+                            edge_rating = (f32) ew / ((f32) (out_v + out_u - (2 * ew)));
                         }
                     }
 

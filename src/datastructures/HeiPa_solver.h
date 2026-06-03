@@ -44,7 +44,7 @@
 #include "../refinement/flow_based_refinement.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../partitioning/recursive_bisection.h"
-#include "../utility/HeiPa_configuration.h"
+#include "../HeiPa_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 
@@ -498,16 +498,7 @@ namespace HeiProMap {
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
                 gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), level_imbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                const auto &cg = graphs.back();
-                if (cg.uniform_v_weights && cg.uniform_e_weights) {
-                    size_constrained_lp.cluster<true, true>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                } else if (cg.uniform_v_weights) {
-                    size_constrained_lp.cluster<true, false>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                } else if (cg.uniform_e_weights) {
-                    size_constrained_lp.cluster<false, true>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                } else {
-                    size_constrained_lp.cluster<false, false>(level, cg, p_manager, mappings.back(), level_imbalance, ac.threads);
-                }
+                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), level_imbalance, ac.threads);
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);

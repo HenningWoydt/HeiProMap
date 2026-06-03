@@ -25,7 +25,7 @@
  ******************************************************************************/
 
 #include "src/datastructures/HeiPa_solver.h"
-#include "src/utility/HeiPa_configuration.h"
+#include "../src/HeiPa_configuration.h"
 
 int main(const int argc, char *argv[]) {
     auto sp = HeiProMap::get_time_point();

@@ -44,6 +44,7 @@
 #include "kaffpa_partitioner.h"
 #include "greedy_partitioner.h"
 #include "recursive_bisection.h"
+#include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/heavy_edge_matching.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/label_propagation_refinement.h"
@@ -421,9 +422,17 @@ namespace HeiProMap {
             // 2. V-Cycles
             if (depth < config.v_cycle_depth) {
                 Mapping mapping;
-                HeavyEdgeMatching hem;
-                HeavyEdgeMatchingConfiguration hem_config;
-                hem.match(g, pm, mapping, imbalance, seed + depth * 100, hem_config);
+                RandomEngine rnd_engine(seed);
+
+                GlobalPathAlgorithmConfiguration gpa_config;
+                gpa_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+                gpa_config.random_level = 0;
+                gpa_config.use_adaptive_max_vertex_weight = false;
+                gpa_config.use_edge_rating_tiebreaking = false;
+
+                GlobalPathAlgorithmMatcher gpa;
+                gpa.initialize(g.n, g.m, k, 1, rnd_engine, gpa_config);
+                gpa.match(depth, g, pm, mapping, imbalance);
 
                 if (g.n > 2 * k) {
                     graph_t coarse_g;

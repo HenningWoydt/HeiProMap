@@ -61,7 +61,7 @@ namespace HeiProMap {
     class GlobalPathAlgorithmConfiguration {
     public:
         size_t random_level = 0;
-        EdgeRatingFunction rating_function = EdgeRatingFunction::HEAVY_EDGE;
+        EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
         bool use_adaptive_max_vertex_weight = false;
         bool use_edge_rating_tiebreaking = true;
         f64 two_hop_threshold = 0.75;
@@ -405,11 +405,14 @@ namespace HeiProMap {
                 case EdgeRatingFunction::EXPANSION:
                     dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSION>{});
                     break;
-                case EdgeRatingFunction::HEAVY_EDGE:
-                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::HEAVY_EDGE>{});
+                case EdgeRatingFunction::EXPANSIONSTAR:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTAR>{});
                     break;
-                case EdgeRatingFunction::GREEDY:
-                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::GREEDY>{});
+                case EdgeRatingFunction::EXPANSIONSTARSTAR:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTARSTAR>{});
+                    break;
+                case EdgeRatingFunction::INNEROUTER:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::INNEROUTER>{});
                     break;
             }
         }
@@ -446,17 +449,26 @@ namespace HeiProMap {
                     f32 edge_rating;
                     if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
                         edge_rating = 1.0f;
-                    } else {
-                        if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
-                            edge_rating = (f32) ew;
-                        } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
-                            edge_rating = (f32) ew / (f32) (u_w * v_w);
-                        } else if constexpr (t_rating_function == EdgeRatingFunction::HEAVY_EDGE) {
-                            edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
-                        } else if constexpr (t_rating_function == EdgeRatingFunction::GREEDY) {
-                            edge_rating = (f32) ew / std::sqrt((f32) u_w * (f32) v_w);
+                    } else if constexpr (t_rating_function == EdgeRatingFunction::WEIGHT) {
+                        edge_rating = (f32) ew;
+                    } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSION) {
+                        edge_rating = (f32) ew / (f32) (u_w + v_w);
+                    } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTAR) {
+                        edge_rating = (f32) ew / (f32) (u_w * v_w);
+                    } else if constexpr (t_rating_function == EdgeRatingFunction::EXPANSIONSTARSTAR) {
+                        edge_rating = (f32) (ew * ew) / (f32) (u_w * v_w);
+                    } else if constexpr (t_rating_function == EdgeRatingFunction::INNEROUTER) {
+                        weight_t out_v = 0;
+                        for (u64 i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) {
+                            out_v += g.edges_w[i];
                         }
+                        weight_t out_u = 0;
+                        for (u64 i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            out_u += g.edges_w[i];
+                        }
+                        edge_rating = (f32) ew / ((f32) (out_v + out_u - (2 * ew)));
                     }
+
 
                     local_min = std::min(local_min, edge_rating);
                     local_max = std::max(local_max, edge_rating);
@@ -746,7 +758,8 @@ namespace HeiProMap {
             std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) { return (a.hash != b.hash) ? a.hash < b.hash : a.u < b.u; });
 
             for (size_t begin = 0, end; begin < candidates.size(); begin = end) {
-                for (end = begin + 1; end < candidates.size() && candidates[end].hash == candidates[begin].hash; ++end) {}
+                for (end = begin + 1; end < candidates.size() && candidates[end].hash == candidates[begin].hash; ++end) {
+                }
                 std::vector<std::vector<vertex_t> > groups;
                 for (size_t i = begin; i < end; ++i) {
                     vertex_t u = candidates[i].u;

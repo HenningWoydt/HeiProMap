@@ -44,6 +44,10 @@ TEST(RecursiveBisectionTest, GridGraphRefinement) {
     config.lp_config.enabled = true;
     config.lp_config.max_iteration = 5;
 
+    // Swap refinement
+    config.swap_config.enabled = true;
+    config.swap_config.max_iteration = 2;
+
     partitioner.partition(g, pm, k, 42, 0.03, config);
 
     // Check balance

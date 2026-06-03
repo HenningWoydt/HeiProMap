@@ -30,12 +30,13 @@
 #include "../definitions.h"
 #include "macros.h"
 #include "aligned_array.h"
+#include <vector>
 
 namespace HeiProMap {
     /**
      * One entry in the IndexedMaxHeap.
      *
-     * @tparam T The value.
+     * @tparam T The value (payload).
      */
     template<typename T>
     class IndexedMaxHeapEntry {
@@ -52,26 +53,24 @@ namespace HeiProMap {
     };
 
     /**
-     * A datastructure that acts like a heap and additionally has O(1) access
-     * to all heap elements. This comes at a cost of additional O(n) memory, and
-     * each element must be identifiable by a key in the range [0, n-1].
+     * A unified indexed max-heap that allows O(1) existence checks and O(log n) updates.
+     * Replaces both IndexedMaxHeap and IndexedUpdateHeap.
      *
-     * @tparam T The value.
+     * @tparam T The payload type. Must support standard comparison operators if used for sorting.
      */
     template<typename T>
     class IndexedMaxHeap {
     private:
         size_t m_n = 0;
         size_t m_heap_size = 0;
-        AlignedArray<IndexedMaxHeapEntry<T> > m_heap;
+        AlignedArray<IndexedMaxHeapEntry<T>> m_heap;
         AlignedArray<size_t> m_indices;
 
-        u64 m_iteration = 0;
+        u64 m_iteration = 1;
         AlignedArray<u64> m_iteration_counter;
 
     public:
         IndexedMaxHeap() = default;
-
         ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {
@@ -79,35 +78,29 @@ namespace HeiProMap {
             m_heap_size = 0;
             m_heap.initialize(m_n);
             m_indices.initialize(m_n);
-
-            m_iteration = 0;
+            m_iteration = 1;
             m_iteration_counter.initialize(m_n, 0);
         }
 
-        void push(const size_t key, const T t) {
+        void push(const size_t key, const T val) {
             ASSERT(!entry_exists(key));
             m_indices[key] = m_heap_size;
             m_iteration_counter[key] = m_iteration;
-            m_heap[m_heap_size] = {key, t};
+            m_heap[m_heap_size] = {key, val};
             m_heap_size += 1;
             bubble_up(m_heap_size - 1);
         }
 
         void push_many_heapify(const std::vector<std::pair<size_t, T>> &entries) {
-            // Insert all elements without bubbling
             for (const auto &e : entries) {
                 const size_t key = e.first;
                 const T &val = e.second;
-
                 ASSERT(!entry_exists(key));
-
                 m_indices[key] = m_heap_size;
                 m_iteration_counter[key] = m_iteration;
                 m_heap[m_heap_size] = {key, val};
                 ++m_heap_size;
             }
-
-            // Restore heap property in O(n)
             if (m_heap_size > 1) {
                 for (size_t i = (m_heap_size - 2) / 2 + 1; i > 0; --i) {
                     bubble_down(i - 1);
@@ -115,33 +108,35 @@ namespace HeiProMap {
             }
         }
 
-        void update(const size_t key, const T t) {
+        void update(const size_t key, const T val) {
             ASSERT(entry_exists(key));
-            m_heap[m_indices[key]].val = t;
-            bubble_up(m_indices[key]);
-            bubble_down(m_indices[key]);
+            size_t idx = m_indices[key];
+            m_heap[idx].val = val;
+            bubble_up(idx);
+            bubble_down(idx);
         }
 
-        void increment(const size_t key, const T t) {
+        void increment(const size_t key, const T val) {
             ASSERT(entry_exists(key));
-            m_heap[m_indices[key]].val += t;
-            bubble_up(m_indices[key]);
-            bubble_down(m_indices[key]);
+            size_t idx = m_indices[key];
+            m_heap[idx].val += val;
+            bubble_up(idx);
+            bubble_down(idx);
         }
 
-        void push_update(const size_t key, const T t) {
+        void push_update(const size_t key, const T val) {
             if (entry_exists(key)) {
-                update(key, t);
+                update(key, val);
             } else {
-                push(key, t);
+                push(key, val);
             }
         }
 
-        void push_increment(const size_t key, const T t) {
+        void push_increment(const size_t key, const T val) {
             if (entry_exists(key)) {
-                increment(key, t);
+                increment(key, val);
             } else {
-                push(key, t);
+                push(key, val);
             }
         }
 
@@ -150,18 +145,28 @@ namespace HeiProMap {
             return m_iteration_counter[key] == m_iteration && m_indices[key] != HEAP_TOMBSTONE;
         }
 
-        T get(const size_t key) {
-            ASSERT(key < m_n);
-            return m_heap[m_indices[key]].val;
+        void remove(const size_t key) {
+            ASSERT(entry_exists(key));
+            size_t idx = m_indices[key];
+            m_indices[key] = HEAP_TOMBSTONE;
+            size_t last_idx = m_heap_size - 1;
+            if (idx != last_idx) {
+                m_heap[idx] = m_heap[last_idx];
+                m_indices[m_heap[idx].key] = idx;
+                m_heap_size -= 1;
+                bubble_up(idx);
+                bubble_down(idx);
+            } else {
+                m_heap_size -= 1;
+            }
         }
 
         void pop() {
             ASSERT(!empty());
-
-            size_t last_index = m_heap_size - 1;
             m_indices[m_heap[0].key] = HEAP_TOMBSTONE;
-            if (last_index > 0) {
-                m_heap[0] = m_heap[last_index];
+            size_t last_idx = m_heap_size - 1;
+            if (last_idx > 0) {
+                m_heap[0] = m_heap[last_idx];
                 m_indices[m_heap[0].key] = 0;
                 m_heap_size -= 1;
                 bubble_down(0);
@@ -170,65 +175,63 @@ namespace HeiProMap {
             }
         }
 
-        size_t top_key() {
+        T get(const size_t key) const {
+            ASSERT(entry_exists(key));
+            return m_heap[m_indices[key]].val;
+        }
+
+        size_t top_key() const {
             ASSERT(!empty());
             return m_heap[0].key;
         }
 
-        T &top() {
+        const T& top() const {
             ASSERT(!empty());
             return m_heap[0].val;
         }
 
-        bool empty() const {
-            return m_heap_size == 0;
+        T& top() {
+            ASSERT(!empty());
+            return m_heap[0].val;
         }
 
-        size_t size() const {
-            return m_heap_size;
-        }
+        bool empty() const { return m_heap_size == 0; }
+        size_t size() const { return m_heap_size; }
 
         void clear() {
             m_heap_size = 0;
             m_iteration += 1;
+            if (m_iteration == 0) { // handle overflow
+                m_iteration_counter.initialize(m_n, 0);
+                m_iteration = 1;
+            }
         }
 
     private:
-        // Bubbles up the element at the given index to restore the heap property
         void bubble_up(size_t index) {
             while (index > 0) {
                 size_t parent_index = (index - 1) / 2;
                 if (m_heap[index].val <= m_heap[parent_index].val) break;
-
-                swap(index, parent_index);
+                swap_nodes(index, parent_index);
                 index = parent_index;
             }
         }
 
-        // Bubbles down the element at the given index to restore the heap property
         void bubble_down(size_t index) {
             size_t last_index = m_heap_size - 1;
-
             while (true) {
-                size_t left_child_index = 2 * index + 1;
-                size_t right_child_index = 2 * index + 2;
-                size_t largest_index = index;
-
-                if (left_child_index <= last_index && m_heap[left_child_index].val > m_heap[largest_index].val) {
-                    largest_index = left_child_index;
-                }
-                if (right_child_index <= last_index && m_heap[right_child_index].val > m_heap[largest_index].val) {
-                    largest_index = right_child_index;
-                }
-                if (largest_index == index) break;
-
-                swap(index, largest_index);
-                index = largest_index;
+                size_t left = 2 * index + 1;
+                size_t right = 2 * index + 2;
+                size_t largest = index;
+                if (left <= last_index && m_heap[left].val > m_heap[largest].val) largest = left;
+                if (right <= last_index && m_heap[right].val > m_heap[largest].val) largest = right;
+                if (largest == index) break;
+                swap_nodes(index, largest);
+                index = largest;
             }
         }
 
-        // Swaps two elements in the heap and updates the indices
-        void swap(size_t i, size_t j) {
+        void swap_nodes(size_t i, size_t j) {
             std::swap(m_heap[i], m_heap[j]);
             m_indices[m_heap[i].key] = i;
             m_indices[m_heap[j].key] = j;

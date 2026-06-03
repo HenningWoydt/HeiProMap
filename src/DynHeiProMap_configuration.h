@@ -34,7 +34,7 @@
 #include <sstream>
 #include <iomanip>
 
-#include "../definitions.h"
+#include "definitions.h"
 #include "HeiProMap_configuration.h"
 
 namespace HeiProMap {
