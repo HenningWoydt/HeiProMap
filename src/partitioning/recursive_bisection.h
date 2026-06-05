@@ -118,7 +118,7 @@ namespace HeiProMap {
         std::vector<s32> dist;
         IndexedMaxHeap<weight_t> pq;
 
-        RandomEngine *rng = nullptr;
+        RandomEngine rng;
 
         // Refinement instances
         LabelPropagationRefinement lp_refine;
@@ -342,12 +342,13 @@ namespace HeiProMap {
                         weight_t lmax_right,
                         u64 kappa,
                         const RecursiveBisectionConfiguration &config,
-                        std::unordered_set<vertex_t> &used_seeds,
                         std::vector<u8> &best_side,
                         weight_t &best_bisect_cut,
                         bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_bfs");
             if (g.n == 0 || kappa == 0) return;
+
+            std::unordered_set<vertex_t> used_seeds;
 
             // 1. Find all connected components
             std::vector<std::vector<vertex_t> > components;
@@ -503,7 +504,7 @@ namespace HeiProMap {
                 } else {
                     u64 attempts = 0;
                     while (attempts < 10) {
-                        vertex_t temp_s = rng->get_u64() % sub_g.n;
+                        vertex_t temp_s = rng.get_u64() % sub_g.n;
                         seed_0 = bfs_furthest(sub_g, temp_s);
                         seed_1 = bfs_furthest(sub_g, seed_0);
                         if (seed_1 == seed_0 && sub_g.n > 1) seed_1 = (seed_0 == 0) ? 1 : 0;
@@ -582,12 +583,13 @@ namespace HeiProMap {
                         weight_t lmax_right,
                         u64 kappa,
                         const RecursiveBisectionConfiguration &config,
-                        std::unordered_set<vertex_t> &used_seeds,
                         std::vector<u8> &best_side,
                         weight_t &best_bisect_cut,
                         bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "bisect_ggg");
             if (g.n == 0 || kappa == 0) return;
+
+            std::unordered_set<vertex_t> used_seeds;
 
             // 1. Find all connected components
             std::vector<std::vector<vertex_t> > components;
@@ -684,7 +686,7 @@ namespace HeiProMap {
                 vertex_t seed = 0;
                 u64 attempts = 0;
                 while (attempts < 10) {
-                    seed = rng->get_u64() % sub_g.n;
+                    seed = rng.get_u64() % sub_g.n;
                     vertex_t g_seed = sub_to_g.get_o(seed);
                     if (used_seeds.find(g_seed) == used_seeds.end()) {
                         used_seeds.insert(g_seed);
@@ -771,25 +773,24 @@ namespace HeiProMap {
             partition_t k_left = k / 2;
             partition_t k_right = k - k_left;
 
-            f64 max_avg_weight = (1.0 + imbalance) * ((f64) global_weight / (f64) total_k);
-            weight_t lmax_left = (weight_t) std::ceil(max_avg_weight * (f64) k_left);
-            weight_t lmax_right = (weight_t) std::ceil(max_avg_weight * (f64) k_right);
+            weight_t avg_weight = std::ceil((1.0 + imbalance) * ((f64) global_weight / (f64) total_k));
+            weight_t lmax_left = avg_weight * k_left;
+            weight_t lmax_right = avg_weight * k_right;
 
             weight_t best_bisect_cut = std::numeric_limits<weight_t>::max();
             bool best_is_balanced = false;
             std::vector<u8> best_side;
-            std::unordered_set<vertex_t> used_seeds;
 
             if (config.method == BisectionMethod::HYBRID) {
                 u64 kappa_bfs = config.kappa / 2;
                 u64 kappa_ggg = config.kappa - kappa_bfs;
 
-                if (kappa_bfs > 0) bisect_bfs(g, lmax_left, lmax_right, kappa_bfs, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
-                if (kappa_ggg > 0) bisect_ggg(g, lmax_left, lmax_right, kappa_ggg, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
+                if (kappa_bfs > 0) bisect_bfs(g, lmax_left, lmax_right, kappa_bfs, config, best_side, best_bisect_cut, best_is_balanced);
+                if (kappa_ggg > 0) bisect_ggg(g, lmax_left, lmax_right, kappa_ggg, config, best_side, best_bisect_cut, best_is_balanced);
             } else if (config.method == BisectionMethod::BFS) {
-                bisect_bfs(g, lmax_left, lmax_right, config.kappa, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
+                bisect_bfs(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
             } else {
-                bisect_ggg(g, lmax_left, lmax_right, config.kappa, config, used_seeds, best_side, best_bisect_cut, best_is_balanced);
+                bisect_ggg(g, lmax_left, lmax_right, config.kappa, config, best_side, best_bisect_cut, best_is_balanced);
             }
 
             if (config.use_full_refine) {
@@ -824,7 +825,7 @@ namespace HeiProMap {
             if (config.use_full_refine) {
                 AlignedArray<weight_t> kway_lmax;
                 kway_lmax.initialize(k);
-                weight_t lmax_single = (weight_t) std::ceil(max_avg_weight);
+                weight_t lmax_single = (weight_t) std::ceil(avg_weight);
                 for (partition_t i = 0; i < k; ++i) {
                     kway_lmax[i] = lmax_single;
                 }
@@ -834,25 +835,24 @@ namespace HeiProMap {
 
     public:
         void partition(const CSRGraph &g,
-                       PartitionManager &out_pm,
+                       PartitionManager &p_manager,
                        partition_t k,
                        u64 seed,
                        f64 imbalance,
                        RecursiveBisectionConfiguration &config) {
-            RandomEngine rand_engine(seed);
-            rng = &rand_engine;
+            rng = RandomEngine(seed);
 
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "allocate");
             dist.assign(g.n, s32(-1));
             pq.initialize(g.n);
 
-            if (out_pm.k != k || out_pm.n != g.n) {
-                out_pm.initialize(g.n, k, g.g_weight);
+            if (p_manager.k != k || p_manager.n != g.n) {
+                p_manager.initialize(g.n, k, g.g_weight);
             } else {
-                out_pm.reset_weights();
+                p_manager.reset_weights();
             }
 
-            recurse(g, out_pm, k, k, g.g_weight, imbalance, config);
+            recurse(g, p_manager, k, k, g.g_weight, imbalance, config);
         }
     };
 } // namespace HeiProMap
