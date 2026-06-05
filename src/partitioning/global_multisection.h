@@ -211,7 +211,7 @@ namespace HeiProMap {
             // process the stack
             while (!stack.empty()) {
                 Item item = stack.back(); // process first item
-                stack.pop_back();         // remove top item
+                stack.pop_back(); // remove top item
 
                 if (config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa, config.collect_dataset, config.data_dir);
@@ -229,7 +229,7 @@ namespace HeiProMap {
                 }
 
                 if (config.refine) {
-                    u64 cycles = std::max((u64)1, config.v_cycles);
+                    u64 cycles = std::max((u64) 1, config.v_cycles);
                     for (u64 v = 0; v < cycles; ++v) {
                         refine_partition(*item.g, item.k, item.imb, item.seed + v, partition, config);
                     }

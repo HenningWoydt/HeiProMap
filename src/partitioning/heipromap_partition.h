@@ -35,7 +35,6 @@
 #include "../datastructures/HeiProMap_solver.h"
 
 namespace HeiProMap {
-
     inline void heipromap_partition(const DynGraph &g,
                                     const std::vector<partition_t> &hierarchy,
                                     const std::vector<weight_t> &distance,
@@ -61,8 +60,8 @@ namespace HeiProMap {
         ac.seed = seed;
         ac.threads = n_threads;
         ac.k = 1;
-        for (auto h : hierarchy) ac.k *= h;
-        
+        for (auto h: hierarchy) ac.k *= h;
+
         if (mode_str == "fast") ac.set_fast();
         else if (mode_str == "eco") ac.set_eco();
         else if (mode_str == "strong") ac.set_strong();

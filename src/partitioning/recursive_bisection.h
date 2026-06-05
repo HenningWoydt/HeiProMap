@@ -350,7 +350,7 @@ namespace HeiProMap {
             if (g.n == 0 || kappa == 0) return;
 
             // 1. Find all connected components
-            std::vector<std::vector<vertex_t>> components;
+            std::vector<std::vector<vertex_t> > components;
             std::vector<weight_t> component_weights;
             std::vector<s8> visited(g.n, 0);
             for (vertex_t i = 0; i < g.n; ++i) {
@@ -389,7 +389,7 @@ namespace HeiProMap {
                 return component_weights[i] > component_weights[j];
             });
 
-            for (size_t idx : sorted_indices) {
+            for (size_t idx: sorted_indices) {
                 weight_t w = component_weights[idx];
                 if (w0_base + w <= lmax_left && (w0_base + w) * lmax_right <= (w1_base) * lmax_left) {
                     w0_base += w;
@@ -402,7 +402,7 @@ namespace HeiProMap {
                     component_assignment[idx] = 0;
                 } else {
                     if (split_comp_idx == -1) {
-                        split_comp_idx = (s64)idx;
+                        split_comp_idx = (s64) idx;
                     } else {
                         if (w0_base * lmax_right <= w1_base * lmax_left) {
                             w0_base += w;
@@ -419,7 +419,7 @@ namespace HeiProMap {
                 best_side.assign(g.n, 0);
                 for (size_t i = 0; i < components.size(); ++i) {
                     u8 s = component_assignment[i];
-                    for (vertex_t v : components[i]) best_side[v] = s;
+                    for (vertex_t v: components[i]) best_side[v] = s;
                 }
                 best_bisect_cut = 0;
                 best_is_balanced = true;
@@ -431,12 +431,12 @@ namespace HeiProMap {
             CSRGraph sub_g;
             TranslationTable<vertex_t> sub_to_g;
             std::vector<u8> mask(g.n, 0);
-            for (vertex_t v : split_comp) mask[v] = 1;
+            for (vertex_t v: split_comp) mask[v] = 1;
             SubgraphExtractor::extract(g, mask, 1, sub_g, sub_to_g);
 
-            std::vector<std::pair<vertex_t, vertex_t>> precomputed_seeds;
+            std::vector<std::pair<vertex_t, vertex_t> > precomputed_seeds;
             if (sub_g.n < 100 && sub_g.n > 1) {
-                std::vector<std::vector<s32>> all_dist(sub_g.n, std::vector<s32>(sub_g.n, -1));
+                std::vector<std::vector<s32> > all_dist(sub_g.n, std::vector<s32>(sub_g.n, -1));
                 for (vertex_t i = 0; i < sub_g.n; ++i) {
                     std::queue<vertex_t> q;
                     q.push(i);
@@ -489,7 +489,7 @@ namespace HeiProMap {
             std::vector<u8> side(g.n, 2);
             for (size_t i = 0; i < components.size(); ++i) {
                 if (component_assignment[i] != 2) {
-                    for (vertex_t v : components[i]) side[v] = component_assignment[i];
+                    for (vertex_t v: components[i]) side[v] = component_assignment[i];
                 }
             }
 
@@ -537,8 +537,8 @@ namespace HeiProMap {
                     const bool can_grow_1 = !q1.empty() && w1 < sub_lmax_1;
                     if (!can_grow_0 && !can_grow_1) break;
 
-                    f64 fill_0 = (f64)(w0_base + w0) / (f64)lmax_left;
-                    f64 fill_1 = (f64)(w1_base + w1) / (f64)lmax_right;
+                    f64 fill_0 = (f64) (w0_base + w0) / (f64) lmax_left;
+                    f64 fill_1 = (f64) (w1_base + w1) / (f64) lmax_right;
                     const bool grow_left = (can_grow_0 && can_grow_1) ? (fill_0 <= fill_1) : can_grow_0;
 
                     std::queue<vertex_t> &q = grow_left ? q0 : q1;
@@ -590,7 +590,7 @@ namespace HeiProMap {
             if (g.n == 0 || kappa == 0) return;
 
             // 1. Find all connected components
-            std::vector<std::vector<vertex_t>> components;
+            std::vector<std::vector<vertex_t> > components;
             std::vector<weight_t> component_weights;
             std::vector<s8> visited(g.n, 0);
             for (vertex_t i = 0; i < g.n; ++i) {
@@ -629,7 +629,7 @@ namespace HeiProMap {
                 return component_weights[i] > component_weights[j];
             });
 
-            for (size_t idx : sorted_indices) {
+            for (size_t idx: sorted_indices) {
                 weight_t w = component_weights[idx];
                 if (w0_base + w <= lmax_left && (w0_base + w) * lmax_right <= (w1_base) * lmax_left) {
                     w0_base += w;
@@ -641,7 +641,7 @@ namespace HeiProMap {
                     w0_base += w;
                     component_assignment[idx] = 0;
                 } else {
-                    if (split_comp_idx == -1) split_comp_idx = (s64)idx;
+                    if (split_comp_idx == -1) split_comp_idx = (s64) idx;
                     else {
                         if (w0_base * lmax_right <= w1_base * lmax_left) {
                             w0_base += w;
@@ -658,7 +658,7 @@ namespace HeiProMap {
                 best_side.assign(g.n, 0);
                 for (size_t i = 0; i < components.size(); ++i) {
                     u8 s = component_assignment[i];
-                    for (vertex_t v : components[i]) best_side[v] = s;
+                    for (vertex_t v: components[i]) best_side[v] = s;
                 }
                 best_bisect_cut = 0;
                 best_is_balanced = true;
@@ -670,13 +670,13 @@ namespace HeiProMap {
             CSRGraph sub_g;
             TranslationTable<vertex_t> sub_to_g;
             std::vector<u8> mask(g.n, 0);
-            for (vertex_t v : split_comp) mask[v] = 1;
+            for (vertex_t v: split_comp) mask[v] = 1;
             SubgraphExtractor::extract(g, mask, 1, sub_g, sub_to_g);
 
             std::vector<u8> side(g.n, 2);
             for (size_t i = 0; i < components.size(); ++i) {
                 if (component_assignment[i] != 2) {
-                    for (vertex_t v : components[i]) side[v] = component_assignment[i];
+                    for (vertex_t v: components[i]) side[v] = component_assignment[i];
                 }
             }
 

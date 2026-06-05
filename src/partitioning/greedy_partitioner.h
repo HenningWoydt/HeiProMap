@@ -40,10 +40,10 @@
 #include "../utility/random_engine.h"
 
 namespace HeiProMap {
-
     class UniformDistanceOracle {
     public:
-        UniformDistanceOracle(const partition_t k) : m_k(k) {}
+        UniformDistanceOracle(const partition_t k) : m_k(k) {
+        }
 
         partition_t get_k() const { return m_k; }
 
@@ -73,7 +73,7 @@ namespace HeiProMap {
         const vertex_t n = g.n;
         const partition_t k = d_oracle.get_k();
         const weight_t total_weight = g.g_weight;
-        const weight_t max_block_weight = (weight_t)((1.0 + imbalance) * (total_weight / k));
+        const weight_t max_block_weight = (weight_t) ((1.0 + imbalance) * (total_weight / k));
 
         std::vector<weight_t> bweights(k, 0);
         for (vertex_t u = 0; u < n; ++u) {
@@ -88,9 +88,9 @@ namespace HeiProMap {
             std::shuffle(vertices.begin(), vertices.end(), re.generator);
         }
 
-        for (const vertex_t u : vertices) {
+        for (const vertex_t u: vertices) {
             const weight_t u_weight = g.v_weights[u];
-            
+
             partition_t best_block = NO_ID;
             weight_t min_cost = std::numeric_limits<weight_t>::max();
 
