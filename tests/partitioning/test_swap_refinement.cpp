@@ -68,10 +68,10 @@ TEST(SwapRefinementTest, SimpleSwap) {
     config.max_iteration = 1;
 
     SwapRefinement refine;
-    refine.initialize(n, m, 2, 1, 42, config);
+    refine.initialize(42, config);
 
     weight_t qap_before = get_qap(g, pm, do_oracle);
-    refine.refine(g, do_oracle, bv, pm, qg, bc, lmax, true, true);
+    refine.refine(g, do_oracle, pm, lmax, true, true);
     weight_t qap_after = get_qap(g, pm, do_oracle);
 
     EXPECT_LT(qap_after, qap_before);
