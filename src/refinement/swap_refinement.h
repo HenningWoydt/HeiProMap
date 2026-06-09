@@ -105,30 +105,30 @@ namespace HeiProMap {
                 std::shuffle(vertices.begin(), vertices.end(), random_engine.generator);
 
                 for (vertex_t u : vertices) {
-                    partition_t i = p_manager[u];
+                    partition_t u_id = p_manager[u];
                     const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
                     for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u+1]; ++e) {
                         vertex_t v = g.edges_v[e];
-                        partition_t j = p_manager[v];
-                        if (i == j) continue;
+                        partition_t v_id = p_manager[v];
+                        if (u_id == v_id) continue;
 
                         const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
 
-                        if (p_manager.get_bweight(i) - u_w + v_w > lmax_constraints[i]) continue;
-                        if (p_manager.get_bweight(j) - v_w + u_w > lmax_constraints[j]) continue;
+                        if (p_manager.get_bweight(u_id) - u_w + v_w > lmax_constraints[u_id]) continue;
+                        if (p_manager.get_bweight(v_id) - v_w + u_w > lmax_constraints[v_id]) continue;
 
-                        const weight_t gain_u = get_u_qap_delta(g, u, i, j, p_manager, d_oracle);
-                        const weight_t gain_v = get_u_qap_delta(g, v, j, i, p_manager, d_oracle);
+                        const weight_t gain_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                        const weight_t gain_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);
 
                         weight_t w_uv = t_uniform_e_weights ? 1 : g.edges_w[e];
-                        const weight_t dist_ij = d_oracle.get(i, j);
+                        const weight_t dist_ij = d_oracle.get(u_id, v_id);
 
                         const weight_t swap_gain = gain_u + gain_v - 2 * w_uv * dist_ij;
 
-                        if (swap_gain > 0) {
-                            p_manager.move_serial(u, u_w, i, j);
-                            p_manager.move_serial(v, v_w, j, i);
+                        if (swap_gain >= 0) {
+                            p_manager.move_serial(u, u_w, u_id, v_id);
+                            p_manager.move_serial(v, v_w, v_id, u_id);
                             moved = true;
                             break; // u has moved, go to next u
                         }

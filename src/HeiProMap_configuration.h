@@ -379,8 +379,8 @@ namespace HeiProMap {
             global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 2;
-            global_multisection_config.v_cycle_depth = 5;
+            global_multisection_config.v_cycles = 5;
+            global_multisection_config.v_cycle_depth = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -396,7 +396,7 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 1;
+            flow_based_refinement_config.max_local_iteration = 2;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
@@ -450,8 +450,8 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
-            flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 3;
+            flow_based_refinement_config.max_global_iteration = 2;
+            flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 16.0;
             flow_based_refinement_config.alpha_modifier = 2.0;

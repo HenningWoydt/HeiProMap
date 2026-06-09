@@ -59,33 +59,11 @@ namespace HeiProMap {
         u64 kappa = 1;
         bool use_full_refine = false;
         BisectionMethod method = BisectionMethod::HYBRID;
-        LabelPropagationConfiguration lp_config = LabelPropagationConfiguration("LP");
-        QuotientGraphRefinementConfiguration qg_config = QuotientGraphRefinementConfiguration("QG");
-        FlowBasedRefinementConfiguration flow_config = FlowBasedRefinementConfiguration("Flow");
         SwapRefinementConfiguration swap_config = SwapRefinementConfiguration("Swap");
 
         RecursiveBisectionConfiguration() {
-            lp_config.enabled = true;
-            lp_config.max_iteration = 5;
-
-            qg_config.enabled = true;
-            qg_config.max_iteration = 1;
-            qg_config.alpha = 5.0;
-            qg_config.min_n_steps = 3;
-            qg_config.use_preemptive_exit = true;
-
             swap_config.enabled = true;
             swap_config.max_iteration = 5;
-
-            // enable flow based refinement
-            flow_config.enabled = false;
-            flow_config.max_global_iteration = 1;
-            flow_config.max_local_iteration = 1;
-            flow_config.alpha = 1.0;
-            flow_config.alpha_upper_bound = 64.0;
-            flow_config.alpha_modifier = 2.0;
-            flow_config.use_closed_vertex_set = true;
-            flow_config.closed_vertex_sets_repeats = 500;
         }
     };
 
@@ -121,10 +99,12 @@ namespace HeiProMap {
         RandomEngine rng;
 
         // Refinement instances
-        LabelPropagationRefinement lp_refine;
-        QuotientGraphRefinement qg_refine;
-        FlowBasedRefinement flow_refine;
         SwapRefinement swap_refine;
+
+        partition_t original_k = 0;
+        std::vector<partition_t> k_vec;
+        std::vector<weight_t> dist_vec;
+        DistanceOracle d_oracle;
 
         void refine_pm(const CSRGraph &g,
                        PartitionManager &pm,
@@ -133,48 +113,16 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "refine_pm");
             if (pm.k <= 1) return;
 
-            // bv_manager_t bv;
-            // bv.initialize(g.n, pm.k);
-            // q_graph_t qg;
-            // qg.initialize(pm.k);
-            // block_conn_t bc;
-            // bc.initialize(g.n, g.m, pm.k);
-            //
-            // for (vertex_t u = 0; u < g.n; ++u) {
-            //     bc.begin_vertex(g, u);
-            //     partition_t u_id = pm[u];
-            //     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-            //         vertex_t v = g.edges_v[i];
-            //         partition_t v_id = pm[v];
-            //         bc.add_connection(u, v_id, g.edges_w[i]);
-            //         if (u_id != v_id) {
-            //             bv.add(u, u_id);
-            //             if (u < v) qg.add_edge(u_id, v_id, g.edges_w[i]);
-            //         }
-            //     }
-            // }
+            if (k_vec.empty()) {
+                k_vec = std::vector<partition_t>(1, original_k);
+                dist_vec = std::vector<weight_t>(1, 1);
+                d_oracle.initialize(k_vec, dist_vec);
 
-            d_oracle_t do_oracle;
-            std::vector<partition_t> k_vec(1, pm.k);
-            std::vector<weight_t> dist_vec(1, 1);
-            do_oracle.initialize(k_vec, dist_vec);
-
-            // Run refinements
-            if (config.lp_config.enabled) {
-                // lp_refine.initialize(g.n, g.m, pm.k, 1, 0, config.lp_config);
-                // lp_refine.refine(const_cast<CSRGraph &>(g), do_oracle, bv, pm, qg, bc, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
-            }
-            if (config.qg_config.enabled) {
-                // qg_refine.initialize(g.n, g.m, pm.k, 1, 0, config.qg_config);
-                // qg_refine.refine(const_cast<CSRGraph &>(g), do_oracle, bv, pm, qg, bc, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
-            }
-            if (config.flow_config.enabled) {
-                // flow_refine.initialize(g.n, g.m, pm.k, 1, 0, config.flow_config);
-                // flow_refine.refine(const_cast<CSRGraph &>(g), do_oracle, bv, pm, qg, bc, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
-            }
-            if (config.swap_config.enabled) {
                 swap_refine.initialize(0, config.swap_config);
-                swap_refine.refine(const_cast<CSRGraph &>(g), do_oracle, pm, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
+            }
+
+            if (config.swap_config.enabled) {
+                swap_refine.refine(const_cast<CSRGraph &>(g), d_oracle, pm, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
             }
         }
 
@@ -288,70 +236,31 @@ namespace HeiProMap {
         void run_bfs_trials(const CSRGraph &g, u64 kappa, weight_t lmax_left, weight_t lmax_right, const RecursiveBisectionConfiguration &config, std::vector<u8> &best_side, weight_t &best_cut, bool &best_is_balanced) {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "run_bfs_trials");
             if (g.n == 0 || kappa == 0) return;
-            if (g.n == 1) {
-                best_side[0] = 0;
-                best_cut = 0;
-                best_is_balanced = true;
-            }
 
-            u64 attempt_threshold = 10;
+            std::vector<u8> side(g.n, 0);
+            weight_t target_w1 = (weight_t) ((f64) g.g_weight * (f64) lmax_right / (f64) (lmax_left + lmax_right));
 
-            std::vector<std::pair<vertex_t, vertex_t> > used_seeds;
             for (u64 trial = 0; trial < kappa; ++trial) {
-                vertex_t seed_0 = 0, seed_1 = 0;
-                u64 attempts = 0;
-                while (attempts < attempt_threshold) {
-                    vertex_t temp_s = rng.get_u64() % g.n;
-                    seed_0 = bfs_furthest(g, temp_s);
-                    seed_1 = bfs_furthest(g, seed_0);
+                vertex_t seed = rng.get_u64() % g.n;
+                vertex_t seed_1 = bfs_furthest(g, seed);
 
-                    std::pair p = {std::min(seed_0, seed_1), std::max(seed_0, seed_1)};
-                    auto it = std::find(used_seeds.begin(), used_seeds.end(), p);
-
-                    if (it == used_seeds.end()) {
-                        used_seeds.push_back(p);
-                        break;
-                    }
-                    attempts++;
-                }
-                if (attempts == attempt_threshold) {
-                    break;
-                }
-            }
-
-            for (auto &p: used_seeds) {
-                vertex_t seed_0 = p.first, seed_1 = p.second;
-                std::vector<u8> side(g.n, 2);
-                side[seed_0] = 0;
+                std::fill(side.begin(), side.end(), 0);
                 side[seed_1] = 1;
-                weight_t w0 = g.v_weights[seed_0];
                 weight_t w1 = g.v_weights[seed_1];
 
-                std::queue<vertex_t> q0, q1;
-                q0.push(seed_0);
-                q1.push(seed_1);
+                std::queue<vertex_t> q;
+                q.push(seed_1);
 
-                while (!q0.empty() || !q1.empty()) {
-                    bool grow_left = ((f64) w0 / lmax_left <= (f64) w1 / lmax_right);
-
-                    if (grow_left && q0.empty()) {
-                        grow_left = false;
-                    } else if (!grow_left && q1.empty()) {
-                        grow_left = true;
-                    }
-
-                    std::queue<vertex_t> &q = grow_left ? q0 : q1;
-                    u8 s = grow_left ? 0 : 1;
-                    weight_t &w = grow_left ? w0 : w1;
-
+                while (!q.empty() && w1 < target_w1) {
                     vertex_t u = q.front();
                     q.pop();
 
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                         vertex_t v = g.edges_v[i];
-                        if (side[v] == 2) {
-                            side[v] = s;
-                            w += g.v_weights[v];
+                        if (side[v] == 0) {
+                            if (w1 + g.v_weights[v] > lmax_right) continue;
+                            side[v] = 1;
+                            w1 += g.v_weights[v];
                             q.push(v);
                         }
                     }
@@ -366,60 +275,59 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "run_ggg_trials");
             if (g.n == 0 || kappa == 0) return;
 
-            u64 attempt_threshold = 10;
+            std::vector<weight_t> weighted_degrees(g.n, 0);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    weighted_degrees[u] += g.edges_w[i];
+                }
+            }
 
+            u64 attempt_threshold = 10;
             std::vector<vertex_t> used_seeds;
             for (u64 trial = 0; trial < kappa; ++trial) {
                 u64 attempts = 0;
                 while (attempts < attempt_threshold) {
                     vertex_t temp_s = rng.get_u64() % g.n;
-
-                    auto it = std::find(used_seeds.begin(), used_seeds.end(), temp_s);
-                    if (it == used_seeds.end()) {
+                    if (std::find(used_seeds.begin(), used_seeds.end(), temp_s) == used_seeds.end()) {
                         used_seeds.push_back(temp_s);
                         break;
                     }
                     attempts++;
                 }
-                if (attempts == attempt_threshold) {
-                    break;
-                }
+                if (attempts == attempt_threshold) break;
             }
+
+            std::vector<u8> side(g.n, 0);
+            weight_t target_w1 = (weight_t) ((f64) g.g_weight * (f64) lmax_right / (f64) (lmax_left + lmax_right));
 
             for (vertex_t seed: used_seeds) {
                 pq.clear();
-                std::vector<u8> side(g.n, 2);
-                side[seed] = 0;
-                weight_t w0 = g.v_weights[seed];
+                std::fill(side.begin(), side.end(), 0);
+                side[seed] = 1;
+                weight_t w1 = g.v_weights[seed];
 
                 auto add_or_update = [&](vertex_t v, weight_t w) {
                     if (pq.entry_exists(v)) pq.increment(v, 2 * w);
                     else {
-                        weight_t deg_v = 0;
-                        for (size_t j = g.neighborhoods[v]; j < g.neighborhoods[v + 1]; ++j) deg_v += g.edges_w[j];
-                        pq.push(v, 2 * w - deg_v);
+                        pq.push(v, 2 * w - weighted_degrees[v]);
                     }
                 };
 
                 for (size_t i = g.neighborhoods[seed]; i < g.neighborhoods[seed + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
-                    if (side[v] == 2) add_or_update(v, g.edges_w[i]);
+                    if (side[v] == 0) add_or_update(v, g.edges_w[i]);
                 }
 
-                while (!pq.empty() && w0 < lmax_left) {
+                while (!pq.empty() && w1 < target_w1) {
                     vertex_t u = pq.top_key();
                     pq.pop();
-                    if (w0 + g.v_weights[u] > lmax_left) continue;
-                    side[u] = 0;
-                    w0 += g.v_weights[u];
+                    if (w1 + g.v_weights[u] > lmax_right) continue;
+                    side[u] = 1;
+                    w1 += g.v_weights[u];
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                         vertex_t v = g.edges_v[i];
-                        if (side[v] == 2) add_or_update(v, g.edges_w[i]);
+                        if (side[v] == 0) add_or_update(v, g.edges_w[i]);
                     }
-                }
-
-                for (vertex_t v = 0; v < g.n; ++v) {
-                    if (side[v] == 2) side[v] = 1;
                 }
 
                 evaluate_trial(g, lmax_left, lmax_right, config, side, best_side, best_cut, best_is_balanced);
@@ -563,11 +471,11 @@ namespace HeiProMap {
 
             // --- Phase 2: Iterative Splitting ---
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "split_components");
-            for (const auto &split_verts: components_to_split) {
+            for (const auto &component: components_to_split) {
                 CSRGraph sub_g;
                 TranslationTable<vertex_t> sub_to_g;
                 std::vector<u8> mask(g.n, 0);
-                for (vertex_t v: split_verts) mask[v] = 1;
+                for (vertex_t v: component) mask[v] = 1;
                 SubgraphExtractor::extract(g, mask, 1, sub_g, sub_to_g);
 
                 weight_t sub_lmax_0 = lmax_left - w0_base;
@@ -639,6 +547,7 @@ namespace HeiProMap {
                        f64 imbalance,
                        RecursiveBisectionConfiguration &config) {
             rng = RandomEngine(seed);
+            original_k = k;
 
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "allocate");
             dist.assign(g.n, s32(-1));

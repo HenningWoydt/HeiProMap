@@ -500,7 +500,6 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-
             auto ep = get_time_point();
             coarsening_ms += get_milli_seconds(sp, ep);
 

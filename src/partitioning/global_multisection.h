@@ -434,7 +434,7 @@ namespace HeiProMap {
                 gpa.initialize(g.n, g.m, k, 1, rnd_engine, gpa_config);
                 gpa.match(depth, g, pm, mapping, imbalance);
 
-                if (g.n > 2 * k) {
+                if (g.n > 4 * k) {
                     graph_t coarse_g;
                     if (g.uniform_v_weights && g.uniform_e_weights) {
                         coarse_g.initialize<true, true>(g, mapping);

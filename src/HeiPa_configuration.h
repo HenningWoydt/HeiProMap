@@ -186,7 +186,7 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            initial_c = 16;
+            initial_c = 32;
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -209,30 +209,12 @@ namespace HeiProMap {
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            recursive_bisection_config.kappa = 32;
+            recursive_bisection_config.kappa = 64;
             recursive_bisection_config.use_full_refine = true;
             recursive_bisection_config.method = BisectionMethod::HYBRID;
 
-            recursive_bisection_config.lp_config.enabled = true;
-            recursive_bisection_config.lp_config.max_iteration = 5;
-
-            recursive_bisection_config.qg_config.enabled = true;
-            recursive_bisection_config.qg_config.max_iteration = 5;
-            recursive_bisection_config.qg_config.alpha = 5.0;
-            recursive_bisection_config.qg_config.min_n_steps = 3;
-            recursive_bisection_config.qg_config.use_preemptive_exit = true;
-
             recursive_bisection_config.swap_config.enabled = true;
-            recursive_bisection_config.swap_config.max_iteration = 5;
-
-            recursive_bisection_config.flow_config.enabled = false;
-            recursive_bisection_config.flow_config.max_global_iteration = 1;
-            recursive_bisection_config.flow_config.max_local_iteration = 1;
-            recursive_bisection_config.flow_config.alpha = 1.0;
-            recursive_bisection_config.flow_config.alpha_upper_bound = 64.0;
-            recursive_bisection_config.flow_config.alpha_modifier = 2.0;
-            recursive_bisection_config.flow_config.use_closed_vertex_set = true;
-            recursive_bisection_config.flow_config.closed_vertex_sets_repeats = 500;
+            recursive_bisection_config.swap_config.max_iteration = 3;
 
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
