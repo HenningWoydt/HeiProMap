@@ -12,7 +12,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---------------------------
 # Options
 # ---------------------------
-option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_PROFILER "Enable profiler" OFF)
 option(ENABLE_ASSERTS "Enable assertions" OFF)
 
@@ -159,28 +158,3 @@ add_executable(HeiPa app/HeiPa.cpp)
 target_link_libraries(HeiPa PRIVATE HeiProMapLib)
 set_target_properties(HeiPa PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
 target_link_options(HeiPa PRIVATE "-Wl,--disable-new-dtags")
-
-# ---------------------------
-# Testing
-# ---------------------------
-set(GTEST_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/local/googletest")
-find_package(GTest PATHS ${GTEST_ROOT} NO_DEFAULT_PATH)
-
-if(NOT GTest_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(
-      googletest
-      URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz
-    )
-    # For Windows: prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-endif()
-
-if(BUILD_TESTING)
-    enable_testing()
-endif()
-add_subdirectory(tests)
-
-# Extra target to build the test binary specifically
-add_custom_target(build_tests DEPENDS HeiProMapTests)

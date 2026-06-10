@@ -261,7 +261,7 @@ namespace HeiProMap {
                 p_manager.recalculate_weights(graphs[0]);
                 HEAVYASSERT(assert_state_after_partitioning(graphs[0], p_manager, ac.k));
 
-                if (ac.get("--config") == "super-strong") {
+                if (ac.config_name == "super-strong") {
                     HEIPROMAP_PROFILE_SCOPE("final_refinement", "Solver", "refine");
 
                     bv_manager.reset();
@@ -719,13 +719,13 @@ namespace HeiProMap {
                 sub_ac.k = k_of_subgraph;
                 sub_ac.imbalance = total_remaining_slack;
 
-                if (ac.get("--config") == "fast") {
+                if (ac.config_name == "fast") {
                     sub_ac.set_fast();
-                } else if (ac.get("--config") == "eco") {
+                } else if (ac.config_name == "eco") {
                     sub_ac.set_eco();
-                } else if (ac.get("--config") == "strong") {
+                } else if (ac.config_name == "strong") {
                     sub_ac.set_strong();
-                } else if (ac.get("--config") == "super-strong") {
+                } else if (ac.config_name == "super-strong") {
                     sub_ac.set_super_strong();
                 }
 
@@ -755,20 +755,14 @@ namespace HeiProMap {
             //
             {
                 HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "partition");
-                if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
-                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_STRONG, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
-                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_ECO) {
-                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_ECO, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
-                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_KAFFPA_FAST) {
-                    kaffpa_partition(g, k, per_level_epsilon, KAFFPA_PARTITION_FAST, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
-                } else if (ac.global_multisection_config.mode >= GLOBAL_MULTISECTION_HEIPA_FAST && ac.global_multisection_config.mode <= GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG) {
-                    heipa_partition(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.mode, ac.global_multisection_config.kappa);
-                } else if (ac.global_multisection_config.mode == GLOBAL_MULTISECTION_METIS_KWAY) {
-                    kway_partition(g, k, per_level_epsilon, ac.seed, partition, ac.global_multisection_config.kappa);
-                } else {
-                    std::cerr << "Mode " << ac.global_multisection_config.mode << " not implemented" << std::endl;
-                    abort();
+
+                KaffpaPartitionMode k_mode = KAFFPA_PARTITION_FAST;
+                if (ac.config_name == "eco") {
+                    k_mode = KAFFPA_PARTITION_ECO;
+                } else if (ac.config_name == "strong" || ac.config_name == "super-strong") {
+                    k_mode = KAFFPA_PARTITION_STRONG;
                 }
+                kaffpa_partition(g, k, per_level_epsilon, k_mode, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
             }
 
             std::vector<vertex_t> new_ns(k, 0);
@@ -788,7 +782,7 @@ namespace HeiProMap {
             partition_t k_per_subgraph = prod<partition_t>(hierarchy);
 
             for (partition_t i = 0; i < k; ++i) {
-                HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "extrcact_graph");
+                HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "extract_graph");
                 graph_t sub_g(new_ns[i], new_ms[i], new_ws[i]);
                 TranslationTable<vertex_t> sub_tt;
                 sub_tt.reserve(new_ns[i], p_manager.n);

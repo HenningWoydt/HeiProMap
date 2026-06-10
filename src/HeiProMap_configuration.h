@@ -176,6 +176,8 @@ namespace HeiProMap {
 
         u64 initial_c = 8;
 
+        std::string config_name = "undefined";
+
         // coarsening algorithm
         std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
@@ -278,23 +280,25 @@ namespace HeiProMap {
             set_threads();
             set_hm_level();
 
-            if (get("--config") == "fast") {
+            config_name = get("--config");
+            if (config_name == "fast") {
                 set_fast();
-            } else if (get("--config") == "eco") {
+            } else if (config_name == "eco") {
                 set_eco();
-            } else if (get("--config") == "strong") {
+            } else if (config_name == "strong") {
                 set_strong();
-            } else if (get("--config") == "super-strong") {
+            } else if (config_name == "super-strong") {
                 set_super_strong();
-            } else if (get("--config") == "experimental") {
+            } else if (config_name == "experimental") {
                 set_experimental();
             } else {
-                std::cout << "Config " << get("--config") << " not recognized!" << std::endl;
+                std::cout << "Config " << config_name << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
             }
         }
 
         void set_fast() {
+            config_name = "fast";
             collect_dataset = false;
 
             initial_c = 32;
@@ -322,7 +326,7 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
-            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 2;
@@ -351,6 +355,7 @@ namespace HeiProMap {
         }
 
         void set_eco() {
+            config_name = "eco";
             initial_c = 32;
 
             // set GPA matching algorithm
@@ -376,7 +381,7 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
-            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 5;
@@ -405,6 +410,7 @@ namespace HeiProMap {
         }
 
         void set_strong() {
+            config_name = "strong";
             initial_c = 32;
 
             // set GPA matching algorithm
@@ -430,7 +436,7 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
-            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 5;
@@ -462,6 +468,7 @@ namespace HeiProMap {
         }
 
         void set_super_strong() {
+            config_name = "super-strong";
             initial_c = 16;
 
             // set GPA matching algorithm
@@ -479,7 +486,7 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-super-strong";
-            global_multisection_config.mode = string_to_global_multisection_mode(global_multisection_config.mode_string);
+            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG;
             global_multisection_config.kappa = 1;
             global_multisection_config.v_cycles = 3;
             global_multisection_config.v_cycle_depth = 1;
@@ -507,6 +514,7 @@ namespace HeiProMap {
         }
 
         void set_experimental() {
+            config_name = "experimental";
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);

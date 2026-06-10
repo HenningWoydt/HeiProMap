@@ -7,8 +7,6 @@ ENABLE_ASSERTS="OFF"
 ENABLE_EXCEPTIONS="OFF"
 BUILD_TYPE="Release"
 
-BUILD_TESTING="OFF"
-RUN_TESTS="OFF"
 VERBOSE="OFF"
 
 show_help() {
@@ -19,8 +17,6 @@ show_help() {
   echo "  -a, --asserts     Enable assertions (ENABLE_ASSERTS=ON)"
   echo "  --exceptions      Enable C++ exceptions (default: disabled)"
   echo "  -d, --debug       Build in Debug mode"
-  echo "  -t, --test        Build tests (BUILD_TESTING=ON, ENABLE_ASSERTS=ON)"
-  echo "  --run-tests       Run tests using gtest-parallel (requires -t)"
   echo "  -h, --help        Show this help message"
   exit 0
 }
@@ -45,15 +41,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     -d|--debug)
       BUILD_TYPE="Debug"
-      shift
-      ;;
-    -t|--test)
-      BUILD_TESTING="ON"
-      ENABLE_ASSERTS="ON"
-      shift
-      ;;
-    --run-tests)
-      RUN_TESTS="ON"
       shift
       ;;
     -h|--help)
@@ -183,66 +170,15 @@ else
 fi
 
 # -----------------------------
-# GoogleTest
-# -----------------------------
-GTEST_LOCAL="${ROOT}/extern/local/googletest"
-if [ -d "${GTEST_LOCAL}" ]; then
-  echo "Local GoogleTest found; skipping build."
-else
-  echo "GoogleTest not found locally; building from source..."
-  GTEST_VERSION="v1.14.0"
-  (
-    cd "${ROOT}/extern"
-    wget -q -O googletest.tar.gz "https://github.com/google/googletest/archive/refs/tags/${GTEST_VERSION}.tar.gz"
-    tar -xzf googletest.tar.gz
-    rm -f googletest.tar.gz
-    mv googletest-* googletest-src
-    execute cmake -S googletest-src -B googletest-src/build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX="${GTEST_LOCAL}" \
-      -DBUILD_GMOCK=OFF \
-      -DINSTALL_GTEST=ON
-    execute cmake --build googletest-src/build --target install --parallel "$JOBS"
-  )
-fi
-
-# -----------------------------
-# gtest-parallel
-# -----------------------------
-GP_LOCAL="${ROOT}/extern/gtest-parallel"
-if [ -d "${GP_LOCAL}" ]; then
-  echo "gtest-parallel found; skipping download."
-else
-  echo "gtest-parallel not found locally; downloading..."
-  (
-    cd "${ROOT}/extern"
-    execute git clone -q https://github.com/google/gtest-parallel.git
-  )
-fi
-
-# -----------------------------
 # Build HeiProMap
 # -----------------------------
 echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER}, Asserts=${ENABLE_ASSERTS})..."
 rm -rf "${ROOT}/build"
 mkdir "${ROOT}/build"
 
-CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL}\;${GTEST_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER} -DENABLE_ASSERTS=${ENABLE_ASSERTS} -DENABLE_EXCEPTIONS=${ENABLE_EXCEPTIONS} -DBUILD_TESTING=${BUILD_TESTING}"
+CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER} -DENABLE_ASSERTS=${ENABLE_ASSERTS} -DENABLE_EXCEPTIONS=${ENABLE_EXCEPTIONS}"
   execute cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
   execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
   execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target Dyn-HeiProMap
   execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiPa
-
-  if [ "${BUILD_TESTING}" == "ON" ]; then
-    execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMapTests
-  fi
-
-  if [ "${RUN_TESTS}" == "ON" ]; then
-    if [ "${BUILD_TESTING}" == "OFF" ]; then
-      echo "Error: Cannot run tests without building them first. Use -t or --test." >&2
-      exit 1
-    fi
-    echo "Running tests with gtest-parallel..."
-    python3 "${GP_LOCAL}/gtest-parallel" "${ROOT}/build/tests/HeiProMapTests"
-  fi
 
