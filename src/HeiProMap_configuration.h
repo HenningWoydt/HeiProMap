@@ -289,8 +289,6 @@ namespace HeiProMap {
                 set_strong();
             } else if (config_name == "super-strong") {
                 set_super_strong();
-            } else if (config_name == "experimental") {
-                set_experimental();
             } else {
                 std::cout << "Config " << config_name << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
