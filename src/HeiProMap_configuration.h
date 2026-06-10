@@ -486,20 +486,22 @@ namespace HeiProMap {
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-super-strong";
-            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_SUPER_STRONG;
+            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             global_multisection_config.kappa = 1;
-            global_multisection_config.v_cycles = 3;
-            global_multisection_config.v_cycle_depth = 1;
+            global_multisection_config.refine = true;
+            global_multisection_config.v_cycles = 5;
+            global_multisection_config.v_cycle_depth = 10;
 
             // enable label propagation
             label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 25;
+            label_propagation_config.max_iteration = 5;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha = 1000.0;
-            quotient_graph_refinement_config.min_n_steps = 10;
+            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.alpha = 5.0;
+            quotient_graph_refinement_config.min_n_steps = 3;
+            quotient_graph_refinement_config.use_preemptive_exit = true;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
@@ -511,26 +513,6 @@ namespace HeiProMap {
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
-        }
-
-        void set_experimental() {
-            config_name = "experimental";
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 0;
-
-            // enable flow based refinement
-            flow_based_refinement_config.enabled = false;
-            flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 5;
-            flow_based_refinement_config.alpha = 8.0;
-            flow_based_refinement_config.alpha_upper_bound = 32.0;
-            flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 100;
         }
 
         /**
