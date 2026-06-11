@@ -159,12 +159,10 @@ namespace HeiProMap {
                 if (m_threads > 1) {
                     HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices_parallel");
                     // Phase 1: compute best moves in parallel (read-only on shared state)
-                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic, 64)
+                    #pragma omp parallel for num_threads(m_threads)
                     for (size_t j = 0; j < curr_boundary_size; ++j) {
                         vertex_t u = curr_boundary[j];
                         proposed_moves[j].best_id = NO_ID;
-
-                        if (!bv_manager.is_boundary(u)) { continue; }
 
                         weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
                         partition_t u_id = p_manager[u];
@@ -205,14 +203,13 @@ namespace HeiProMap {
                         vertex_t u = curr_boundary[j];
                         partition_t u_id = p_manager[u];
 
-                        if (u_id == best_id) { continue; }
                         if (p_manager.get_bweight(best_id) + u_weight > lmax_constraints[best_id]) { continue; }
 
-                        if (best_qap_delta > -std::numeric_limits<weight_t>::max() || random_engine.get_f32() < 0.5) {
+                        if (best_qap_delta > 0 || (best_qap_delta == 0 && random_engine.get_f32() < 0.5)) {
                             bv_manager.move(g, p_manager, u, u_id, best_id);
                             q_graph.move(g, p_manager, u, u_id, best_id);
                             block_conn.move(g, u, u_id, best_id);
-                            p_manager.move(u, u_weight, u_id, best_id);
+                            p_manager.move_serial(u, u_weight, u_id, best_id);
                             positive_move_occurred |= best_qap_delta > 0;
                         }
                     }

@@ -439,8 +439,7 @@ namespace HeiProMap {
 
                         #pragma omp parallel for schedule(static) num_threads(ac.threads)
                         for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            GlobalMultisectionPartitioner partitioner;
-                            partitioner.partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
+                            GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
 
                             local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
                         }
@@ -679,20 +678,29 @@ namespace HeiProMap {
                 lmax_constraints[i] = lmax;
             }
 
+            auto sp_temp = get_time_point();
             if (ac.label_propagation_config.enabled) {
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
+            auto ep_temp = get_time_point();
+            std::cout << "lp: " << get_seconds(sp_temp, ep_temp) << std::endl;
 
+            sp_temp = get_time_point();
             if (ac.quotient_graph_refinement_config.enabled) {
                 qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
+            ep_temp = get_time_point();
+            std::cout << "qg: " << get_seconds(sp_temp, ep_temp) << std::endl;
 
+            sp_temp = get_time_point();
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
+            ep_temp = get_time_point();
+            std::cout << "fl: " << get_seconds(sp_temp, ep_temp) << std::endl;
 
             auto ep = get_time_point();
 

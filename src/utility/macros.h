@@ -46,11 +46,6 @@ namespace HeiProMap {
     #define ENABLE_PROFILER false
     #endif
 
-    #ifdef ENABLE_ASSERTS
-    #define ASSERT_ENABLED true
-    #define HEAVYASSERT_ENABLED true
-    #endif
-
     #ifndef ASSERT_ENABLED
     #define ASSERT_ENABLED false
     #endif

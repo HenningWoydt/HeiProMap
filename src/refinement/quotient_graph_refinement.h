@@ -92,7 +92,7 @@ namespace HeiProMap {
         AlignedArray<PairWeight> pairs;
         size_t pairs_size = 0;
 
-        std::vector<vertex_t> moves;
+        std::vector<std::vector<vertex_t>> moves_vec;
 
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
@@ -136,6 +136,7 @@ namespace HeiProMap {
             pairs_size = 0;
 
             for (size_t i = 0; i < m_threads; ++i) {
+                moves_vec.emplace_back();
                 boundary_vertices_u_vec.emplace_back();
                 boundary_vertices_v_vec.emplace_back();
             }
@@ -205,9 +206,9 @@ namespace HeiProMap {
                             u32 mark = base_mark + static_cast<u32>(i);
 
                             if (d_oracle.last_level_pair(u_id, v_id)) {
-                                refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
+                                refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                             } else {
-                                refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
+                                refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                             }
                         }
 
@@ -243,9 +244,9 @@ namespace HeiProMap {
                         global_vertex_mark += 1;
 
                         if (d_oracle.last_level_pair(u_id, v_id)) {
-                            refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
+                            refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[0], lmax_constraints, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
                         } else {
-                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
+                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id,moves_vec[0],  lmax_constraints, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
                         }
                     }
 
@@ -265,6 +266,7 @@ namespace HeiProMap {
                            block_conn_t &block_conn,
                            partition_t u_id,
                            partition_t v_id,
+                           std::vector<vertex_t> &moves,
                            const AlignedArray<weight_t> &lmax_constraints,
                            IndexedMaxHeap<weight_t> &boundary_vertices_u,
                            IndexedMaxHeap<weight_t> &boundary_vertices_v,
@@ -438,7 +440,7 @@ namespace HeiProMap {
                 weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                vertex_used[vertex] = vertex_mark - 1;
+                vertex_used[vertex] = global_vertex_mark - 1;
 
                 p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
             }
@@ -472,6 +474,7 @@ namespace HeiProMap {
                                     block_conn_t &block_conn,
                                     partition_t u_id,
                                     partition_t v_id,
+                                    std::vector<vertex_t> &moves,
                                     const AlignedArray<weight_t> &lmax_constraints,
                                     IndexedMaxHeap<weight_t> &boundary_vertices_u,
                                     IndexedMaxHeap<weight_t> &boundary_vertices_v,
@@ -642,7 +645,7 @@ namespace HeiProMap {
                 weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
-                vertex_used[vertex] = vertex_mark - 1;
+                vertex_used[vertex] = global_vertex_mark - 1;
 
                 p_manager.move_serial(vertex, vertex_weight, vertex_id, move_id);
             }

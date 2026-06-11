@@ -12,14 +12,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---------------------------
 # Options
 # ---------------------------
-option(ENABLE_PROFILER "Enable profiler" OFF)
 option(ENABLE_ASSERTS "Enable assertions" OFF)
 
 add_definitions(-DHEIPROMAP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
-if(ENABLE_PROFILER)
-    add_definitions(-DENABLE_PROFILER=1)
-endif()
 if(ENABLE_ASSERTS)
     add_definitions(-DENABLE_ASSERTS=1)
 endif()
@@ -90,7 +86,6 @@ find_path(KAHIP_INCLUDE_DIR
 )
 
 message(STATUS "Build type          : ${CMAKE_BUILD_TYPE}")
-message(STATUS "ENABLE_PROFILER     : ${ENABLE_PROFILER}")
 message(STATUS "ENABLE_ASSERTS      : ${ENABLE_ASSERTS}")
 message(STATUS "Selected KaHIP root : ${KAHIP_ROOT}")
 message(STATUS "Found KaHIP library : ${KAHIP_LIBRARY}")
