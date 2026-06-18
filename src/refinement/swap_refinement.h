@@ -44,6 +44,7 @@
 #include "../utility/utils.h"
 #include "../utility/qap.h"
 #include "../utility/functions.h"
+#include "../utility/small_map.h"
 
 namespace HeiProMap {
     class SwapRefinementConfiguration final {
@@ -101,9 +102,43 @@ namespace HeiProMap {
             std::iota(vertices.begin(), vertices.end(), 0);
 
             for (u64 iteration = 0; iteration < m_config->max_iteration; ++iteration) {
-                bool moved = false;
+                bool improved = false;
                 std::shuffle(vertices.begin(), vertices.end(), random_engine.generator);
 
+                // Phase 1: Simple Label Propagation (Single Moves)
+                for (vertex_t u : vertices) {
+                    partition_t u_id = p_manager[u];
+                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+
+                    partition_t best_target = u_id;
+                    weight_t best_gain = 0;
+
+                    // Collect target blocks from neighbors
+                    FlatMap<partition_t, bool> target_blocks;
+                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u+1]; ++e) {
+                        partition_t v_id = p_manager[g.edges_v[e]];
+                        if (v_id != u_id) target_blocks[v_id] = true;
+                    }
+
+                    for (auto const& kv : target_blocks) {
+                        partition_t target_id = kv.first;
+                        if (p_manager.get_bweight(target_id) + u_w > lmax_constraints[target_id]) continue;
+                        
+                        weight_t gain = get_u_qap_delta(g, u, u_id, target_id, p_manager, d_oracle);
+                        if (gain > best_gain) {
+                            best_gain = gain;
+                            best_target = target_id;
+                        }
+                    }
+
+                    if (best_target != u_id) {
+                        p_manager.move_serial(u, u_w, u_id, best_target);
+                        improved = true;
+                    }
+                }
+
+                // Phase 2: Simple Swap (Vertex Exchanges)
+                std::shuffle(vertices.begin(), vertices.end(), random_engine.generator);
                 for (vertex_t u : vertices) {
                     partition_t u_id = p_manager[u];
                     const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
@@ -126,15 +161,16 @@ namespace HeiProMap {
 
                         const weight_t swap_gain = gain_u + gain_v - 2 * w_uv * dist_ij;
 
-                        if (swap_gain >= 0) {
+                        if (swap_gain > 0) {
                             p_manager.move_serial(u, u_w, u_id, v_id);
                             p_manager.move_serial(v, v_w, v_id, u_id);
-                            moved = true;
-                            break; // u has moved, go to next u
+                            improved = true;
+                            break; // u has swapped, move to next u
                         }
                     }
                 }
-                if (!moved) break;
+
+                if (!improved) break;
             }
         }
     };

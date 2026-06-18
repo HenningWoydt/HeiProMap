@@ -165,17 +165,6 @@ namespace HeiProMap {
             unlink_one_endpoint(idx, e.b);
         }
 
-        template<typename F>
-        void for_each_neighbor(const partition_t x, F &&f) const {
-            size_t idx = m_head[x];
-            while (idx != INVALID_INDEX) {
-                const EdgeRecord &e = m_edges[idx];
-                const partition_t y = other_endpoint(e, x);
-                f(y, e.weight);
-                idx = next_for(e, x);
-            }
-        }
-
     public:
         void initialize(const partition_t t_k) {
             HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraph", "initialize");
@@ -197,6 +186,17 @@ namespace HeiProMap {
                     m_edges[idx].prev_b = INVALID_INDEX;
                     m_edges[idx].next_b = INVALID_INDEX;
                 }
+            }
+        }
+
+        template<typename F>
+        void for_each_neighbor(const partition_t x, F &&f) const {
+            size_t idx = m_head[x];
+            while (idx != INVALID_INDEX) {
+                const EdgeRecord &e = m_edges[idx];
+                const partition_t y = other_endpoint(e, x);
+                f(y, e.weight);
+                idx = next_for(e, x);
             }
         }
 

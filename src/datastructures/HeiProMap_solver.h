@@ -82,6 +82,7 @@ namespace HeiProMap {
         LabelPropagationRefinement lp_refine;
         QuotientGraphRefinement qg_refine;
         FlowBasedRefinement flow_based_refinement;
+        NegativeCycleRefinement negative_cycle_refinement;
 
         f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
@@ -196,6 +197,9 @@ namespace HeiProMap {
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
             }
+            if (ac.negative_cycle_config.enabled) {
+                negative_cycle_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.negative_cycle_config);
+            }
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -233,6 +237,9 @@ namespace HeiProMap {
             }
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+            }
+            if (ac.negative_cycle_config.enabled) {
+                negative_cycle_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.negative_cycle_config);
             }
         }
 
@@ -306,6 +313,7 @@ namespace HeiProMap {
 
             weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
+            std::cout << "Graph             : " << ac.graph_in << std::endl;
             std::cout << "Total time        : " << duration + init_time << std::endl;
             std::cout << "#Nodes            : " << graphs[0].n << std::endl;
             std::cout << "#Edges            : " << graphs[0].m << std::endl;
@@ -678,29 +686,25 @@ namespace HeiProMap {
                 lmax_constraints[i] = lmax;
             }
 
-            auto sp_temp = get_time_point();
             if (ac.label_propagation_config.enabled) {
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
-            auto ep_temp = get_time_point();
-            std::cout << "lp: " << get_seconds(sp_temp, ep_temp) << std::endl;
 
-            sp_temp = get_time_point();
             if (ac.quotient_graph_refinement_config.enabled) {
                 qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
-            ep_temp = get_time_point();
-            std::cout << "qg: " << get_seconds(sp_temp, ep_temp) << std::endl;
 
-            sp_temp = get_time_point();
+            if (ac.negative_cycle_config.enabled) {
+                negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            }
+
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
-            ep_temp = get_time_point();
-            std::cout << "fl: " << get_seconds(sp_temp, ep_temp) << std::endl;
 
             auto ep = get_time_point();
 

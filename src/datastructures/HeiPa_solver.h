@@ -79,6 +79,7 @@ namespace HeiProMap {
         LabelPropagationRefinement lp_refine;
         QuotientGraphRefinement qg_refine;
         FlowBasedRefinement flow_based_refinement;
+        NegativeCycleRefinement negative_cycle_refinement;
 
         f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
@@ -216,6 +217,9 @@ namespace HeiProMap {
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
             }
+            if (ac.negative_cycle_refinement_config.enabled) {
+                negative_cycle_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.negative_cycle_refinement_config);
+            }
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -253,6 +257,9 @@ namespace HeiProMap {
             }
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+            }
+            if (ac.negative_cycle_refinement_config.enabled) {
+                negative_cycle_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.negative_cycle_refinement_config);
             }
         }
 
@@ -623,6 +630,11 @@ namespace HeiProMap {
 
             if (ac.quotient_graph_refinement_config.enabled) {
                 qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            }
+
+            if (ac.negative_cycle_refinement_config.enabled) {
+                negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 

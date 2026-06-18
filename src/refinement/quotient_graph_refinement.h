@@ -277,6 +277,7 @@ namespace HeiProMap {
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_qap");
             // add all boundary vertices with gain
+            u64 n_init_moves = 0;
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
             for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
@@ -285,6 +286,7 @@ namespace HeiProMap {
                     if (block_conn.get_id(i) == v_id) {
                         weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                         boundary_vertices_u.push(u, qap_delta_u);
+                        n_init_moves += 1;
                         break;
                     }
                 }
@@ -296,6 +298,7 @@ namespace HeiProMap {
                     if (block_conn.get_id(i) == u_id) {
                         weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
                         boundary_vertices_v.push(v, qap_delta_v);
+                        n_init_moves += 1;
                         break;
                     }
                 }
@@ -319,7 +322,7 @@ namespace HeiProMap {
             moves.clear();
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue");
-            while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
+            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < n_init_moves) {
                 // determine from which block to choose
                 bool choose_u = true;
                 // 1. if one block is empty, then choose the other one
@@ -485,6 +488,7 @@ namespace HeiProMap {
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_edge_cut");
             // add all boundary vertices with gain
+            u64 n_init_moves = 0;
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
             for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
@@ -493,6 +497,7 @@ namespace HeiProMap {
                     if (block_conn.get_id(i) == v_id) {
                         weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
                         boundary_vertices_u.push(u, qap_delta_u);
+                        n_init_moves += 1;
                         break;
                     }
                 }
@@ -504,6 +509,7 @@ namespace HeiProMap {
                     if (block_conn.get_id(i) == u_id) {
                         weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
                         boundary_vertices_v.push(v, qap_delta_v);
+                        n_init_moves += 1;
                         break;
                     }
                 }
@@ -525,7 +531,7 @@ namespace HeiProMap {
             moves.clear();
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "process_queue_edge_cut");
-            while (!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) {
+            while ((!boundary_vertices_u.empty() || !boundary_vertices_v.empty()) && moves.size() < n_init_moves) {
                 // determine from which block to choose
                 bool choose_u = true;
                 // 1. if one block is empty, then choose the other one
