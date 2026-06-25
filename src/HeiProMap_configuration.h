@@ -119,6 +119,15 @@ namespace HeiProMap {
                 return "UNDEFINED";
         }
     }
+
+    inline EdgeRatingFunction string_to_edge_rating_function(const std::string &str) {
+        if (str == "weight") return EdgeRatingFunction::WEIGHT;
+        if (str == "expansion") return EdgeRatingFunction::EXPANSION;
+        if (str == "expansion*") return EdgeRatingFunction::EXPANSIONSTAR;
+        if (str == "expansion**") return EdgeRatingFunction::EXPANSIONSTARSTAR;
+        if (str == "innerouter") return EdgeRatingFunction::INNEROUTER;
+        return EdgeRatingFunction::EXPANSIONSTAR;
+    }
 }
 
 #include "utility/utils.h"
@@ -145,6 +154,18 @@ namespace HeiProMap {
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
+
+            {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
+            {"--gpa-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-random-level", "", "GPA random level.", "", "", false},
+            {"--gpa-adaptive-max-vertex-weight", "", "GPA use adaptive max vertex weight (true/false).", "", "", false},
+            {"--gpa-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
+            {"--gpa-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
+            {"--sclp-max-rounds", "", "SCLP max rounds.", "", "", false},
+            {"--sclp-min-threshold", "", "SCLP min threshold.", "", "", false},
+            {"--sclp-multiplier", "", "SCLP multiplier.", "", "", false},
+            {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
         };
 
     public:
@@ -282,6 +303,10 @@ namespace HeiProMap {
             set_threads();
             set_hm_level();
 
+            if (!is_set("--config")) {
+                std::cout << "Error: --config (or -c) must be specified." << std::endl;
+                exit(EXIT_FAILURE);
+            }
             config_name = get("--config");
             if (config_name == "fast") {
                 if (threads == 1) {
@@ -310,6 +335,50 @@ namespace HeiProMap {
             } else {
                 std::cout << "Config " << config_name << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
+            }
+
+            // Override coarsening settings from CLI if they are set
+            if (is_set("--coarsening")) {
+                coarsening_algorithm_string = get("--coarsening");
+                coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            }
+
+            // Override GPA configs
+            if (is_set("--gpa-rating-function")) {
+                global_path_algorithm_config.rating_function = string_to_edge_rating_function(get("--gpa-rating-function"));
+            }
+            if (is_set("--gpa-random-level")) {
+                global_path_algorithm_config.random_level = std::stoull(get("--gpa-random-level"));
+            }
+            if (is_set("--gpa-adaptive-max-vertex-weight")) {
+                std::string val = get("--gpa-adaptive-max-vertex-weight");
+                global_path_algorithm_config.use_adaptive_max_vertex_weight = (val == "true" || val == "1");
+            }
+            if (is_set("--gpa-edge-rating-tiebreaking")) {
+                std::string val = get("--gpa-edge-rating-tiebreaking");
+                global_path_algorithm_config.use_edge_rating_tiebreaking = (val == "true" || val == "1");
+            }
+            if (is_set("--gpa-two-hop-threshold")) {
+                global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-two-hop-threshold"));
+            }
+
+            // Override SCLP configs
+            if (is_set("--sclp-max-rounds")) {
+                size_constrained_lp_config.max_rounds = std::stoull(get("--sclp-max-rounds"));
+            }
+            if (is_set("--sclp-min-threshold")) {
+                size_constrained_lp_config.min_threshold = std::stod(get("--sclp-min-threshold"));
+            }
+            if (is_set("--sclp-multiplier")) {
+                size_constrained_lp_config.multiplier = std::stoull(get("--sclp-multiplier"));
+            }
+            if (is_set("--sclp-rating-function")) {
+                size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-rating-function"));
+            }
+
+            // Override HEM configs
+            if (is_set("--hem-rating-function")) {
+                heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-rating-function"));
             }
         }
 
@@ -346,7 +415,7 @@ namespace HeiProMap {
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
             global_multisection_config.v_cycles = 2;
-            global_multisection_config.v_cycle_depth = 5;
+            global_multisection_config.v_cycle_depth = 100;
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -427,7 +496,7 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 5;
+            flow_based_refinement_config.max_local_iteration = 3;
             flow_based_refinement_config.alpha = 1.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
