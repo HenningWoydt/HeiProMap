@@ -403,9 +403,9 @@ namespace HeiProMap {
 
             heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
 
-            size_constrained_lp_config.max_rounds = 3;
-            size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.f = 2.0;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.05;
+            size_constrained_lp_config.f = 4.0;
             size_constrained_lp_config.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
 
             // set multisection
@@ -464,9 +464,9 @@ namespace HeiProMap {
 
             heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
 
-            size_constrained_lp_config.max_rounds = 1;
-            size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.f = 4.0;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.05;
+            size_constrained_lp_config.f = 16.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -524,9 +524,9 @@ namespace HeiProMap {
 
             heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
 
-            size_constrained_lp_config.max_rounds = 1;
-            size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.f = 4.0;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.05;
+            size_constrained_lp_config.f = 16.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
