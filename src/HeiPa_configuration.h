@@ -207,7 +207,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 16;
+            size_constrained_lp_config.f = 16;
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
@@ -245,7 +245,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 4;
+            size_constrained_lp_config.f = 16;
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
@@ -284,7 +284,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 2;
+            size_constrained_lp_config.f = 16;
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
@@ -325,7 +325,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 2;
+            size_constrained_lp_config.f = 16;
 
             partitioning_algorithm_string = "recursive-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
