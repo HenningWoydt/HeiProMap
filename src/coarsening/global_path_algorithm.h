@@ -62,7 +62,6 @@ namespace HeiProMap {
     public:
         size_t random_level = 0;
         EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-        bool use_adaptive_max_vertex_weight = false;
         bool use_edge_rating_tiebreaking = true;
         f64 two_hop_threshold = 0.75;
     };
@@ -155,15 +154,6 @@ namespace HeiProMap {
                              Mapping &mapping,
                              f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-
-            if (config->use_adaptive_max_vertex_weight) {
-                // KaHIP's fast mode logic: 1.5 * W_total / num_stop
-                // num_stop = max(N / (2 * 60 * k), 60 * k)
-                f64 x = 60.0;
-                f64 num_stop = std::max((f64) g.n / (2.0 * x * (f64) p_manager.k), x * (f64) p_manager.k);
-                weight_t adaptive_lmax = (weight_t) (1.5 * (f64) g.g_weight / num_stop);
-                lmax = std::min(lmax, std::max((weight_t) 2, adaptive_lmax));
-            }
 
             Matching matching;
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "allocate_matching");
@@ -798,6 +788,7 @@ namespace HeiProMap {
             std::vector<vertex_t> preferred(g.n);
             std::iota(preferred.begin(), preferred.end(), 0);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) continue;
                 weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];

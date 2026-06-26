@@ -159,7 +159,6 @@ namespace HeiProMap {
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
             {"--gpa-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
             {"--gpa-random-level", "", "GPA random level.", "", "", false},
-            {"--gpa-adaptive-max-vertex-weight", "", "GPA use adaptive max vertex weight (true/false).", "", "", false},
             {"--gpa-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
             {"--gpa-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
             {"--sclp-max-rounds", "", "SCLP max rounds.", "", "", false},
@@ -351,10 +350,6 @@ namespace HeiProMap {
             if (is_set("--gpa-random-level")) {
                 global_path_algorithm_config.random_level = std::stoull(get("--gpa-random-level"));
             }
-            if (is_set("--gpa-adaptive-max-vertex-weight")) {
-                std::string val = get("--gpa-adaptive-max-vertex-weight");
-                global_path_algorithm_config.use_adaptive_max_vertex_weight = (val == "true" || val == "1");
-            }
             if (is_set("--gpa-edge-rating-tiebreaking")) {
                 std::string val = get("--gpa-edge-rating-tiebreaking");
                 global_path_algorithm_config.use_edge_rating_tiebreaking = (val == "true" || val == "1");
@@ -398,7 +393,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
 
             heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
@@ -458,7 +452,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
             global_path_algorithm_config.two_hop_threshold = 0.75;
 
@@ -518,7 +511,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
             global_path_algorithm_config.two_hop_threshold = 0.75;
 
@@ -636,7 +628,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
 
             heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
@@ -696,7 +687,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
             global_path_algorithm_config.two_hop_threshold = 0.75;
 
@@ -756,7 +746,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
             global_path_algorithm_config.two_hop_threshold = 0.75;
 

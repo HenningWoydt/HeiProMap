@@ -199,7 +199,6 @@ namespace HeiProMap {
             // configurate global-paths algorithm
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_adaptive_max_vertex_weight = false;
             global_path_algorithm_config.use_edge_rating_tiebreaking = false;
 
             // configurate global-paths algorithm
