@@ -61,6 +61,9 @@ namespace HeiProMap {
         // statistics
         weight_t initial_qap = 0;
         weight_t initial_max_block_weight = 0;
+        size_t initial_n_empty_partitions = 0;
+        size_t initial_n_overloaded_partitions = 0;
+        weight_t initial_sum_too_much = 0;
 
         std::vector<graph_t> graphs;
 
@@ -313,16 +316,19 @@ namespace HeiProMap {
 
             weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-            std::cout << "Graph             : " << ac.graph_in << std::endl;
-            std::cout << "Total time        : " << duration + init_time << std::endl;
-            std::cout << "#Nodes            : " << graphs[0].n << std::endl;
-            std::cout << "#Edges            : " << graphs[0].m << std::endl;
-            std::cout << "k                 : " << ac.k << std::endl;
-            std::cout << "Lmax              : " << lmax << std::endl;
-            std::cout << "Init. QAP         : " << initial_qap << std::endl;
-            std::cout << "Init. max block w : " << initial_max_block_weight << std::endl;
-            std::cout << "Final QAP         : " << qap << std::endl;
-            std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
+            std::cout << "Graph                   : " << ac.graph_in << std::endl;
+            std::cout << "Total time (s)          : " << duration + init_time << std::endl;
+            std::cout << "#Nodes                  : " << graphs[0].n << std::endl;
+            std::cout << "#Edges                  : " << graphs[0].m << std::endl;
+            std::cout << "k                       : " << ac.k << std::endl;
+            std::cout << "Lmax                    : " << lmax << std::endl;
+            std::cout << "Init. QAP               : " << initial_qap << std::endl;
+            std::cout << "Init. max block w       : " << initial_max_block_weight << std::endl;
+            std::cout << "Init. #empty partitions : " << initial_n_empty_partitions << std::endl;
+            std::cout << "Init. #oload partitions : " << initial_n_overloaded_partitions << std::endl;
+            std::cout << "Init. Sum oload weights : " << initial_sum_too_much << std::endl;
+            std::cout << "Final QAP               : " << qap << std::endl;
+            std::cout << "max block w             : " << max(p_manager.get_bweights()) << std::endl;
 
             size_t n_empty_partitions = 0;
             size_t n_overloaded_partitions = 0;
@@ -332,20 +338,20 @@ namespace HeiProMap {
                 n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
                 sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
             }
-            std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
-            std::cout << "#oload partitions : " << n_overloaded_partitions << std::endl;
-            std::cout << "Sum oload weights : " << sum_too_much << std::endl;
+            std::cout << "#empty partitions       : " << n_empty_partitions << std::endl;
+            std::cout << "#oload partitions       : " << n_overloaded_partitions << std::endl;
+            std::cout << "Sum oload weights       : " << sum_too_much << std::endl;
 
             if (ac.hm_level == 0) {
-                std::cout << "IO                : " << io_ms << std::endl;
-                std::cout << "Misc              : " << misc_ms << std::endl;
-                std::cout << "Coarsening        : " << coarsening_ms << std::endl;
-                std::cout << "Contraction       : " << contraction_ms << std::endl;
-                std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
-                std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
-                std::cout << "Rebalance         : " << rebalance_ms << std::endl;
-                std::cout << "Refinement        : " << refinement_ms << std::endl;
-                std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
+                std::cout << "IO (ms)                 : " << io_ms << std::endl;
+                std::cout << "Misc (ms)               : " << misc_ms << std::endl;
+                std::cout << "Coarsening (ms)         : " << coarsening_ms << std::endl;
+                std::cout << "Contraction (ms)        : " << contraction_ms << std::endl;
+                std::cout << "Init. Part. (ms)        : " << initial_partitioning_ms << std::endl;
+                std::cout << "Uncontraction (ms)      : " << uncontraction_ms << std::endl;
+                std::cout << "Rebalance (ms)          : " << rebalance_ms << std::endl;
+                std::cout << "Refinement (ms)         : " << refinement_ms << std::endl;
+                std::cout << "ALL (ms)                : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
                 #if ENABLE_PROFILER
                 print_all_levels();
@@ -391,6 +397,16 @@ namespace HeiProMap {
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             partition(level, level_imbalance);
+            initial_n_empty_partitions = 0;
+            initial_n_overloaded_partitions = 0;
+            initial_sum_too_much = 0;
+            for (partition_t id = 0; id < ac.k; ++id) {
+                initial_n_empty_partitions += p_manager.get_bweight(id) == 0;
+                initial_n_overloaded_partitions += p_manager.get_bweight(id) > level_lmax;
+                initial_sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - level_lmax);
+            }
+
+            rebalancing(level, level_imbalance);
             refinement(level, level_imbalance);
 
             #if ENABLE_PROFILER
