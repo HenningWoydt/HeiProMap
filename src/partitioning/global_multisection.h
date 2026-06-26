@@ -336,7 +336,7 @@ namespace HeiProMap {
                                                 const partition_t depth) {
             f64 local_imbalance = (((1.0 + global_imbalance) * (f64) local_k * (f64) global_g_weight) / (f64) (global_k * local_g_weight));
             local_imbalance = std::pow(local_imbalance, (f64) 1 / (f64) depth) - 1.0;
-            return local_imbalance;
+            return std::max(0.0, local_imbalance);
         }
 
     private:
@@ -427,7 +427,6 @@ namespace HeiProMap {
                 GlobalPathAlgorithmConfiguration gpa_config;
                 gpa_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
                 gpa_config.random_level = 0;
-                gpa_config.use_adaptive_max_vertex_weight = false;
                 gpa_config.use_edge_rating_tiebreaking = false;
 
                 GlobalPathAlgorithmMatcher gpa;
