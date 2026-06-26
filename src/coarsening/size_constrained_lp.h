@@ -532,7 +532,7 @@ namespace HeiProMap {
                             }
                         }
 
-                        if (current_id_w > best_weight) {
+                        if (current_id_w >= best_weight) {
                             best_weight = current_id_w;
                             best_id = current_id;
                         }
