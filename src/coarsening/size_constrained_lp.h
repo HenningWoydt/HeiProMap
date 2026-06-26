@@ -50,8 +50,7 @@ namespace HeiProMap {
     public:
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
-        f64 f = 8;
-        weight_t multiplier = 2;
+        f64 f = 16;
         EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
     };
 
@@ -299,7 +298,7 @@ namespace HeiProMap {
             mapping.initialize(g.n);
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
-            weight_t max_w = 0; // (weight_t) ((f64) m_l_max / config->f);
+            weight_t max_v_w = 0;
             vertex_t max_deg = 0;
             // get max w and max deg
             {
@@ -307,12 +306,12 @@ namespace HeiProMap {
 
                 // determine the maximum allowed cluster weight
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    max_w = std::max(max_w, g.v_weights[u]);
+                    max_v_w = std::max(max_v_w, g.v_weights[u]);
                     max_deg = std::max(max_deg, g.deg(u));
                 }
-                max_w *= config->multiplier;
-                max_w = std::min(max_w, lmax);
             }
+            weight_t W = std::ceil((f64) lmax / config->f);
+            weight_t max_w = std::max(max_v_w, W);
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
             // get all vertices
             {
