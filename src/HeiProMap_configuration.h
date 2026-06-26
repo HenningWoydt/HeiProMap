@@ -126,7 +126,8 @@ namespace HeiProMap {
         if (str == "expansion*") return EdgeRatingFunction::EXPANSIONSTAR;
         if (str == "expansion**") return EdgeRatingFunction::EXPANSIONSTARSTAR;
         if (str == "innerouter") return EdgeRatingFunction::INNEROUTER;
-        return EdgeRatingFunction::EXPANSIONSTAR;
+        std::cout << "Error: Invalid rating function '" << str << "'. Allowed values: weight, expansion, expansion*, expansion**, innerouter" << std::endl;
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -163,7 +164,7 @@ namespace HeiProMap {
             {"--gpa-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
             {"--sclp-max-rounds", "", "SCLP max rounds.", "", "", false},
             {"--sclp-min-threshold", "", "SCLP min threshold.", "", "", false},
-            {"--sclp-multiplier", "", "SCLP multiplier.", "", "", false},
+            {"--sclp-f", "", "SCLP tuning parameter f.", "8.0", "", false},
             {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
             {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
         };
@@ -369,8 +370,8 @@ namespace HeiProMap {
             if (is_set("--sclp-min-threshold")) {
                 size_constrained_lp_config.min_threshold = std::stod(get("--sclp-min-threshold"));
             }
-            if (is_set("--sclp-multiplier")) {
-                size_constrained_lp_config.multiplier = std::stoull(get("--sclp-multiplier"));
+            if (is_set("--sclp-f")) {
+                size_constrained_lp_config.f = std::stod(get("--sclp-f"));
             }
             if (is_set("--sclp-rating-function")) {
                 size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-rating-function"));
@@ -404,7 +405,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 3;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 8;
+            size_constrained_lp_config.f = 2.0;
             size_constrained_lp_config.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
 
             // set multisection
@@ -465,7 +466,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 4;
+            size_constrained_lp_config.f = 4.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -525,7 +526,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 4;
+            size_constrained_lp_config.f = 4.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -580,7 +581,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 2;
+            size_constrained_lp_config.f = 8.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -642,7 +643,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 3;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 8;
+            size_constrained_lp_config.f = 2.0;
             size_constrained_lp_config.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
 
             // set multisection
@@ -703,7 +704,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 4;
+            size_constrained_lp_config.f = 4.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -763,7 +764,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 1;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 4;
+            size_constrained_lp_config.f = 4.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -818,7 +819,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.multiplier = 2;
+            size_constrained_lp_config.f = 8.0;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
