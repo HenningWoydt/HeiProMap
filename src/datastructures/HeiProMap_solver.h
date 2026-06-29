@@ -393,6 +393,12 @@ namespace HeiProMap {
                 coarsening(level, level_imbalance);
                 contraction(level);
 
+                if (graphs.back().n == graphs[graphs.size() - 2].n) {
+                    graphs.pop_back();
+                    mappings.pop_back();
+                    break;
+                }
+
                 level += 1;
             }
 
