@@ -52,6 +52,7 @@
 #include "../utility/qap.h"
 #include "kway_partitioner/kway_core.h"
 #include "../utility/translation_table.h"
+#include "../rebalance/rebalancer.h"
 
 namespace HeiProMap {
     enum GlobalMultisectionMode {
@@ -235,6 +236,41 @@ namespace HeiProMap {
                     }
                 }
 
+                /*
+                {
+                    std::vector<weight_t> block_weights(item.k, 0);
+                    std::vector<vertex_t> block_vertices(item.k, 0);
+                    for (vertex_t u = 0; u < item.g->n; ++u) {
+                        block_weights[partition[u]] += item.g->v_weights[u];
+                        block_vertices[partition[u]] += 1;
+                    }
+                    weight_t max_block_weight = 0;
+                    for (partition_t i = 0; i < item.k; ++i) {
+                        if (block_weights[i] > max_block_weight) {
+                            max_block_weight = block_weights[i];
+                        }
+                    }
+                    double average_block_weight = static_cast<double>(item.g->g_weight) / item.k;
+                    double actual_imbalance = (average_block_weight > 0) ? ((static_cast<double>(max_block_weight) / average_block_weight) - 1.0) : 0.0;
+                    std::cout << "  - Vertices: " << item.g->n << std::endl;
+                    std::cout << "  - Total Weight: " << item.g->g_weight << std::endl;
+                    std::cout << "  - Max Block Weight: " << max_block_weight << std::endl;
+                    std::cout << "  - Avg Block Weight: " << average_block_weight << std::endl;
+                    std::cout << "  - Balance (actual / allowed): " << (1.0 + actual_imbalance) << " / " << (1.0 + item.imb) << std::endl;
+                    std::cout << "  - Imbalance (actual / allowed): " << actual_imbalance << " / " << item.imb << std::endl;
+                    std::cout << "  - Per-Block Statistics:" << std::endl;
+                    weight_t allowed_max_weight = std::ceil((1.0 + item.imb) * average_block_weight);
+                    for (partition_t i = 0; i < item.k; ++i) {
+                        double block_ratio = (average_block_weight > 0) ? (static_cast<double>(block_weights[i]) / average_block_weight) : 0.0;
+                        std::string label = (block_weights[i] > allowed_max_weight) ? " (OVERLOADED)" : "";
+                        std::cout << "    * Block " << i << ": Vertices = " << block_vertices[i]
+                                  << ", Weight = " << block_weights[i]
+                                  << ", Ratio = " << block_ratio << label << std::endl;
+                    }
+                }
+                */
+
+
                 if (item.identifier->size() == l - 1) {
                     // insert solution
                     u64 offset = 0;
@@ -380,6 +416,10 @@ namespace HeiProMap {
             for (partition_t i = 0; i < k; ++i) {
                 lmax_constraints[i] = lmax;
             }
+
+            Rebalancer rebalancer;
+            rebalancer.initialize(g.n, g.m, k, seed);
+            rebalancer.rebalance(g, pm, bv_manager, q_graph, d_oracle, block_conn, imbalance);
 
             if (config.label_propagation_config.enabled) {
                 LabelPropagationRefinement lp_refine;
