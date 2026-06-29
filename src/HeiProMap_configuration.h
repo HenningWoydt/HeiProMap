@@ -175,6 +175,7 @@ namespace HeiProMap {
             {"--flow-refinement-alpha-upper-bound", "", "Alpha upper bound for flow based refinement.", "", "", false},
             {"--flow-refinement-alpha-modifier", "", "Alpha modifier for flow based refinement.", "", "", false},
             {"--flow-refinement-use-closed-vertex-set", "", "Use closed vertex set in flow based refinement (true/false).", "", "", false},
+            {"--flow-refinement-closed-vertex-set-repeats", "", "Number of closed vertex set repeats for flow based refinement.", "", "", false},
             {"--flow-refinement-enabled-edge-cut-optimization", "", "Enable lowest level edge cut optimization (true/false).", "true", "", false},
         };
 
@@ -415,6 +416,9 @@ namespace HeiProMap {
             if (is_set("--flow-refinement-use-closed-vertex-set")) {
                 std::string val = get("--flow-refinement-use-closed-vertex-set");
                 flow_based_refinement_config.use_closed_vertex_set = (val == "true" || val == "1");
+            }
+            if (is_set("--flow-refinement-closed-vertex-set-repeats")) {
+                flow_based_refinement_config.closed_vertex_sets_repeats = std::stoull(get("--flow-refinement-closed-vertex-set-repeats"));
             }
             if (is_set("--flow-refinement-enabled-edge-cut-optimization")) {
                 std::string val = get("--flow-refinement-enabled-edge-cut-optimization");
