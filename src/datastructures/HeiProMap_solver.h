@@ -358,7 +358,7 @@ namespace HeiProMap {
                 std::cout << "Refinement (ms)         : " << refinement_ms << std::endl;
                 std::cout << "  Label Propagation (ms): " << lp_refine_ms << std::endl;
                 std::cout << "  Quotient Graph (ms)   : " << qg_refine_ms << std::endl;
-                std::cout << "  Negative Cycle (ms)   : " << negative_cycle_refine_ms << std::endl;
+                // std::cout << "  Negative Cycle (ms)   : " << negative_cycle_refine_ms << std::endl;
                 std::cout << "  Flow (ms)             : " << flow_refine_ms << std::endl;
                 std::cout << "ALL (ms)                : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
