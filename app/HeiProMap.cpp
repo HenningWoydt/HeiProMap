@@ -37,8 +37,8 @@ int main(const int argc, char *argv[]) {
                 // {"--mapping", "../data/out/partition/2cubes_sphere.mtx.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/del23.graph"}, // fast 9.72s, 4,285,098.0 comm cost, // eco 17.53s ,3,889,700.0 comm cost, // strong 63.94s 3,838,630.0 comm cost
                 // {"--mapping", "../data/out/partition/del23.txt"},
-                {"--graph", "../../ProMapRepo/data/mapping/deu.graph"}, // fast 9.72s, 4,285,098.0 comm cost, // eco 17.53s ,3,889,700.0 comm cost, // strong 63.94s 3,838,630.0 comm cost
-                {"--mapping", "../data/out/partition/deu.txt"},
+                // {"--graph", "../../ProMapRepo/data/mapping/deu.graph"}, // fast 9.72s, 4,285,098.0 comm cost, // eco 17.53s ,3,889,700.0 comm cost, // strong 63.94s 3,838,630.0 comm cost
+                // {"--mapping", "../data/out/partition/deu.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/afshell9.graph"}, // fast 1.180s, 11,526,672 comm cost, // eco 3.635s 10,133,094 comm cost, // strong 61.415s 9,595,692 comm cost
                 // {"--mapping", "../data/out/partition/afshell9.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/nlr.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
@@ -49,12 +49,16 @@ int main(const int argc, char *argv[]) {
                 // {"--mapping", "../data/out/partition/cont-300.mtx.graph.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/G2_circuit.mtx.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
                 // {"--mapping", "../data/out/partition/G2_circuit.mtx.graph.txt"},
-                {"--hierarchy", "4:8:6"},
+                {"--graph", "../../ProMapRepo/data/mapping/G3_circuit.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                {"--mapping", "../data/out/partition/G3_circuit.graph.txt"},
+                // {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                // {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
+                {"--hierarchy", "4:8:5"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
                 {"--config", "fast"},
                 {"--seed", "0"},
-                {"--threads", "16"},
+                {"--threads", "1"},
                 {"--hm-level", "0"},
             };
 
@@ -93,14 +97,12 @@ int main(const int argc, char *argv[]) {
     } else {
         HeiProMap::AlgorithmConfiguration ac(argc, argv);
 
-        std::cout << "Seed " << ac.seed << std::endl;
-
         HeiProMap::HeiProMapSolver solver(ac);
         solver.solve();
     }
 
     auto ep = HeiProMap::get_time_point();
-    std::cout << "Total Time in HeiProMap.cpp: " << HeiProMap::get_seconds(sp, ep) << std::endl;
+    std::cout << "Total Time in HeiProMap.cpp (s): " << HeiProMap::get_seconds(sp, ep) << std::endl;
 
     return 0;
 }
