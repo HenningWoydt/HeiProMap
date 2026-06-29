@@ -438,8 +438,8 @@ namespace HeiProMap {
             initial_c = 64;
 
             // set GPA matching algorithm
-            coarsening_algorithm_string = "size-constrained-lp";
-            // coarsening_algorithm_string = "global-paths";
+            // coarsening_algorithm_string = "size-constrained-lp";
+            coarsening_algorithm_string = "global-paths";
             // coarsening_algorithm_string = "heavy-edge";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
