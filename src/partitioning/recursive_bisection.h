@@ -137,6 +137,7 @@ namespace HeiProMap {
             // Setup 2-way environment for the current subgraph
             p_manager_t sub_pm;
             sub_pm.initialize(g.n, 2, g.g_weight);
+            sub_pm.reset_weights();
             for (vertex_t u = 0; u < g.n; ++u) {
                 sub_pm.set(u, g.v_weights[u], side[u]);
             }
@@ -238,6 +239,7 @@ namespace HeiProMap {
             if (g.n == 0 || kappa == 0) return;
 
             std::vector<u8> side(g.n, 0);
+            std::vector<u8> visited(g.n, 0);
             weight_t target_w1 = (weight_t) ((f64) g.g_weight * (f64) lmax_right / (f64) (lmax_left + lmax_right));
 
             for (u64 trial = 0; trial < kappa; ++trial) {
@@ -245,6 +247,8 @@ namespace HeiProMap {
                 vertex_t seed_1 = bfs_furthest(g, seed);
 
                 std::fill(side.begin(), side.end(), 0);
+                std::fill(visited.begin(), visited.end(), 0);
+                visited[seed_1] = 1;
                 side[seed_1] = 1;
                 weight_t w1 = g.v_weights[seed_1];
 
@@ -257,10 +261,12 @@ namespace HeiProMap {
 
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                         vertex_t v = g.edges_v[i];
-                        if (side[v] == 0) {
-                            if (w1 + g.v_weights[v] > lmax_right) continue;
-                            side[v] = 1;
-                            w1 += g.v_weights[v];
+                        if (visited[v] == 0) {
+                            visited[v] = 1;
+                            if (w1 + g.v_weights[v] <= lmax_right) {
+                                side[v] = 1;
+                                w1 += g.v_weights[v];
+                            }
                             q.push(v);
                         }
                     }
@@ -298,11 +304,14 @@ namespace HeiProMap {
             }
 
             std::vector<u8> side(g.n, 0);
+            std::vector<u8> visited(g.n, 0);
             weight_t target_w1 = (weight_t) ((f64) g.g_weight * (f64) lmax_right / (f64) (lmax_left + lmax_right));
 
             for (vertex_t seed: used_seeds) {
                 pq.clear();
                 std::fill(side.begin(), side.end(), 0);
+                std::fill(visited.begin(), visited.end(), 0);
+                visited[seed] = 1;
                 side[seed] = 1;
                 weight_t w1 = g.v_weights[seed];
 
@@ -315,18 +324,23 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[seed]; i < g.neighborhoods[seed + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
-                    if (side[v] == 0) add_or_update(v, g.edges_w[i]);
+                    if (visited[v] == 0) add_or_update(v, g.edges_w[i]);
                 }
 
                 while (!pq.empty() && w1 < target_w1) {
                     vertex_t u = pq.top_key();
                     pq.pop();
-                    if (w1 + g.v_weights[u] > lmax_right) continue;
-                    side[u] = 1;
-                    w1 += g.v_weights[u];
+                    if (visited[u] == 1) continue;
+                    visited[u] = 1;
+
+                    if (w1 + g.v_weights[u] <= lmax_right) {
+                        side[u] = 1;
+                        w1 += g.v_weights[u];
+                    }
+
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                         vertex_t v = g.edges_v[i];
-                        if (side[v] == 0) add_or_update(v, g.edges_w[i]);
+                        if (visited[v] == 0) add_or_update(v, g.edges_w[i]);
                     }
                 }
 
