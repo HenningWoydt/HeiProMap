@@ -284,7 +284,7 @@ namespace HeiProMap {
                         if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
 
                         state_ids[v] += 1;
-                        RebalancerMove new_move = get_local_best_move(v, g, p_manager, d_oracle, state_ids[u], lmax);
+                        RebalancerMove new_move = get_local_best_move(v, g, p_manager, d_oracle, state_ids[v], lmax);
                         if (new_move.best_id != m_k) {
                             global_queue.push(new_move);
                         }
@@ -513,6 +513,7 @@ namespace HeiProMap {
                     weight_t best_qap = -std::numeric_limits<weight_t>::max();
 
                     for (partition_t move_id: blocks_to_fill) {
+                        if (blocks_to_fill_lookup[move_id] == false) { continue; }
                         if (p_manager.get_bweight(move_id) + v_w <= lmax) {
                             weight_t qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn);
 
