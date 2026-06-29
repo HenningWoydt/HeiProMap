@@ -50,8 +50,9 @@ namespace HeiProMap {
     public:
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
-        f64 f = 16;
-        EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+        f64 f = 32;
+        EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
+        bool use_degree_ordering = true;
     };
 
     class SizeConstrainedLP {
@@ -86,6 +87,33 @@ namespace HeiProMap {
 
             config = &i_config;
             random_engine = RandomEngine(seed);
+        }
+
+        void print_weight_distribution(const graph_t &g, const Mapping &mapping, weight_t max_w) const {
+            std::vector<weight_t> weights(mapping.get_coarse_n(), 0);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                weights[mapping.get(u)] += g.v_weights[u];
+            }
+            if (weights.empty()) return;
+
+            weight_t min_w = weights[0];
+            weight_t max_w_observed = weights[0];
+            double sum_w = 0;
+            size_t over_limit_count = 0;
+            for (weight_t w : weights) {
+                min_w = std::min(min_w, w);
+                max_w_observed = std::max(max_w_observed, w);
+                sum_w += w;
+                if (w > max_w) {
+                    over_limit_count++;
+                }
+            }
+            double avg_w = sum_w / weights.size();
+
+            std::cout << "Cluster Weight Distribution (max_w = " << max_w << "):" << std::endl;
+            std::cout << "  Total clusters:                 " << weights.size() << std::endl;
+            std::cout << "  Observed weight (min/avg/max):  " << min_w << " / " << avg_w << " / " << max_w_observed << std::endl;
+            std::cout << "  Total clusters over limit:      " << over_limit_count << std::endl;
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
@@ -125,7 +153,6 @@ namespace HeiProMap {
                     if (p_manager[a] != p_manager[b]) { continue; }
 
                     weight_t sum = g.v_weights[a] + g.v_weights[b];
-                    best_b = b;
                     if (sum <= max_w) {
                         best_b = b;
                         break;
@@ -318,23 +345,29 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "flat_vertices");
 
                 flat_vertices.initialize(g.n);
-                bucket_sizes.initialize(B, 0);
-                bucket_offsets.initialize(B);
+                if (config->use_degree_ordering) {
+                    bucket_sizes.initialize(B, 0);
+                    bucket_offsets.initialize(B);
 
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    size_t d = g.deg(u);
-                    size_t b = (d == 0) ? 0 : floor_log2(d);
-                    bucket_sizes[b]++;
-                }
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        size_t d = g.deg(u);
+                        size_t b = (d == 0) ? 0 : floor_log2(d);
+                        bucket_sizes[b]++;
+                    }
 
-                bucket_offsets[0] = 0;
-                for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
+                    bucket_offsets[0] = 0;
+                    for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
 
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    size_t d = g.deg(u);
-                    size_t b = (d == 0) ? 0 : floor_log2(d);
-                    flat_vertices[bucket_offsets[b]] = u;
-                    bucket_offsets[b] += 1;
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        size_t d = g.deg(u);
+                        size_t b = (d == 0) ? 0 : floor_log2(d);
+                        flat_vertices[bucket_offsets[b]] = u;
+                        bucket_offsets[b] += 1;
+                    }
+                } else {
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        flat_vertices[u] = u;
+                    }
                 }
             }
             // setup cluster weights
@@ -363,12 +396,14 @@ namespace HeiProMap {
             for (u64 round = 0; round < config->max_rounds; ++round) {
                 n_moved = 0;
 
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
-                for (size_t i = 0; i < B - 1; ++i) {
-                    size_t beg = bucket_offsets[i];
-                    size_t end = bucket_offsets[i + 1];
+                if (config->use_degree_ordering) {
+                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
+                    for (size_t i = 0; i < B - 1; ++i) {
+                        size_t beg = bucket_offsets[i];
+                        size_t end = bucket_offsets[i + 1];
 
-                    fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine.generator);
+                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine.generator);
+                    }
                 }
 
                 // run clustering
@@ -605,6 +640,7 @@ namespace HeiProMap {
                     mapping.set(u, map_id);
                 }
             }
+            // print_weight_distribution(g, mapping, max_w);
         }
     };
 }

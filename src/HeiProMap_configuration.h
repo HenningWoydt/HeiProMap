@@ -165,6 +165,7 @@ namespace HeiProMap {
             {"--sclp-min-threshold", "", "SCLP min threshold.", "", "", false},
             {"--sclp-f", "", "SCLP tuning parameter f.", "8.0", "", false},
             {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
             {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
 
             {"--flow-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
@@ -383,6 +384,10 @@ namespace HeiProMap {
             if (is_set("--sclp-rating-function")) {
                 size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-rating-function"));
             }
+            if (is_set("--sclp-use-degree-ordering")) {
+                std::string val = get("--sclp-use-degree-ordering");
+                size_constrained_lp_config.use_degree_ordering = (val == "true" || val == "1");
+            }
 
             // Override HEM configs
             if (is_set("--hem-rating-function")) {
@@ -433,8 +438,8 @@ namespace HeiProMap {
             initial_c = 64;
 
             // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "global-paths";
             // coarsening_algorithm_string = "heavy-edge";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
@@ -447,8 +452,9 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 4.0;
-            size_constrained_lp_config.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
+            size_constrained_lp_config.f = 32.0;
+            size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
+            size_constrained_lp_config.use_degree_ordering = true;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
