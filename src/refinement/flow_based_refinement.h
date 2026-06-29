@@ -81,6 +81,7 @@ namespace HeiProMap {
         u64 closed_vertex_sets_repeats = 10;
         bool always_include_boundary = false;
         GrowthStrategy growth_strategy = GrowthStrategy::BFS;
+        bool enabled_edge_cut_optimization = true;
     };
 
     class FlowBasedRefinement final {
@@ -428,7 +429,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < left_region.size(); ++i) { translation_table.add(left_region[i], new_u++); }
                 for (size_t i = 0; i < right_region.size(); ++i) { translation_table.add(right_region[i], new_u++); }
 
-                if (!d_oracle.last_level_pair(left_id, right_id)) {
+                if (!d_oracle.last_level_pair(left_id, right_id) || !config->enabled_edge_cut_optimization) {
                     build_flow_network_with_penalties<t_uniform_e_weights>(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
                 } else {
                     build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);

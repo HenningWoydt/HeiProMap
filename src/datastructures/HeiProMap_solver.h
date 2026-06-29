@@ -95,6 +95,11 @@ namespace HeiProMap {
         f64 uncontraction_ms = 0.0;
         f64 rebalance_ms = 0.0;
         f64 refinement_ms = 0.0;
+        f64 lp_refine_ms = 0.0;
+        f64 qg_refine_ms = 0.0;
+        f64 negative_cycle_refine_ms = 0.0;
+        f64 flow_refine_ms = 0.0;
+
 
         struct level_info {
             u32 level = -1;
@@ -351,7 +356,12 @@ namespace HeiProMap {
                 std::cout << "Uncontraction (ms)      : " << uncontraction_ms << std::endl;
                 std::cout << "Rebalance (ms)          : " << rebalance_ms << std::endl;
                 std::cout << "Refinement (ms)         : " << refinement_ms << std::endl;
+                std::cout << "  Label Propagation (ms): " << lp_refine_ms << std::endl;
+                std::cout << "  Quotient Graph (ms)   : " << qg_refine_ms << std::endl;
+                std::cout << "  Negative Cycle (ms)   : " << negative_cycle_refine_ms << std::endl;
+                std::cout << "  Flow (ms)             : " << flow_refine_ms << std::endl;
                 std::cout << "ALL (ms)                : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
+
 
                 #if ENABLE_PROFILER
                 print_all_levels();
@@ -703,22 +713,30 @@ namespace HeiProMap {
             }
 
             if (ac.label_propagation_config.enabled) {
+                auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
+                auto sp_local = get_time_point();
                 qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
-            if (ac.negative_cycle_config.enabled) {
-                negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
-                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
-            }
+            // if (ac.negative_cycle_config.enabled) {
+            //     auto sp_local = get_time_point();
+            //     negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+            //     negative_cycle_refine_ms += get_milli_seconds(sp_local, get_time_point());
+            //     HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            // }
 
             if (ac.flow_based_refinement_config.enabled) {
+                auto sp_local = get_time_point();
                 flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 

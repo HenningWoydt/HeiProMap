@@ -166,6 +166,16 @@ namespace HeiProMap {
             {"--sclp-f", "", "SCLP tuning parameter f.", "8.0", "", false},
             {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
             {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+
+            {"--flow-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
+            {"--flow-refinement-use-active-block-scheduling", "", "Use active block scheduling in flow based refinement (true/false).", "", "", false},
+            {"--flow-refinement-max-global-iteration", "", "Max global iteration for flow based refinement.", "", "", false},
+            {"--flow-refinement-max-local-iteration", "", "Max local iteration for flow based refinement.", "", "", false},
+            {"--flow-refinement-alpha", "", "Alpha parameter for flow based refinement.", "", "", false},
+            {"--flow-refinement-alpha-upper-bound", "", "Alpha upper bound for flow based refinement.", "", "", false},
+            {"--flow-refinement-alpha-modifier", "", "Alpha modifier for flow based refinement.", "", "", false},
+            {"--flow-refinement-use-closed-vertex-set", "", "Use closed vertex set in flow based refinement (true/false).", "", "", false},
+            {"--flow-refinement-enabled-edge-cut-optimization", "", "Enable lowest level edge cut optimization (true/false).", "true", "", false},
         };
 
     public:
@@ -266,6 +276,7 @@ namespace HeiProMap {
                 hm_level = std::stoull(get("--hm-level"));
             }
         }
+
 
         AlgorithmConfiguration(int argc, char *argv[]) {
             // read command lines into vector
@@ -375,6 +386,39 @@ namespace HeiProMap {
             // Override HEM configs
             if (is_set("--hem-rating-function")) {
                 heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-rating-function"));
+            }
+
+            // Override flow refinement configs
+            if (is_set("--flow-refinement-enabled")) {
+                std::string val = get("--flow-refinement-enabled");
+                flow_based_refinement_config.enabled = (val == "true" || val == "1");
+            }
+            if (is_set("--flow-refinement-use-active-block-scheduling")) {
+                std::string val = get("--flow-refinement-use-active-block-scheduling");
+                flow_based_refinement_config.use_active_block_scheduling = (val == "true" || val == "1");
+            }
+            if (is_set("--flow-refinement-max-global-iteration")) {
+                flow_based_refinement_config.max_global_iteration = std::stoull(get("--flow-refinement-max-global-iteration"));
+            }
+            if (is_set("--flow-refinement-max-local-iteration")) {
+                flow_based_refinement_config.max_local_iteration = std::stoull(get("--flow-refinement-max-local-iteration"));
+            }
+            if (is_set("--flow-refinement-alpha")) {
+                flow_based_refinement_config.alpha = std::stod(get("--flow-refinement-alpha"));
+            }
+            if (is_set("--flow-refinement-alpha-upper-bound")) {
+                flow_based_refinement_config.alpha_upper_bound = std::stod(get("--flow-refinement-alpha-upper-bound"));
+            }
+            if (is_set("--flow-refinement-alpha-modifier")) {
+                flow_based_refinement_config.alpha_modifier = std::stod(get("--flow-refinement-alpha-modifier"));
+            }
+            if (is_set("--flow-refinement-use-closed-vertex-set")) {
+                std::string val = get("--flow-refinement-use-closed-vertex-set");
+                flow_based_refinement_config.use_closed_vertex_set = (val == "true" || val == "1");
+            }
+            if (is_set("--flow-refinement-enabled-edge-cut-optimization")) {
+                std::string val = get("--flow-refinement-enabled-edge-cut-optimization");
+                flow_based_refinement_config.enabled_edge_cut_optimization = (val == "true" || val == "1");
             }
         }
 
