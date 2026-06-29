@@ -95,13 +95,14 @@ else
   rm -rf extern
   mkdir -p extern
 
-  echo "Downloading KaHIP 3.19..."
+  echo "Downloading KaHIP 3.25..."
   (
     cd extern
-    wget -q -O v3.19.tar.gz https://github.com/KaHIP/KaHIP/archive/refs/tags/v3.19.tar.gz
-    tar -xzf v3.19.tar.gz
-    mv KaHIP-3.19 KaHIP
-    rm -f v3.19.tar.gz
+    wget -q -O v3.25.tar.gz https://github.com/KaHIP/KaHIP/archive/refs/tags/v3.25.tar.gz
+    tar -xzf v3.25.tar.gz
+    mv KaHIP-3.25 KaHIP
+    rm -f v3.25.tar.gz
+    sed -i 's|include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/partition/uncoarsening/refinement/quotient_graph_refinement/flow_refinement)|include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/partition/uncoarsening/refinement/quotient_graph_refinement/flow_refinement)\n    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/partition/uncoarsening/refinement/cycle_improvements)|' KaHIP/CMakeLists.txt
   )
 
   # -----------------------------
