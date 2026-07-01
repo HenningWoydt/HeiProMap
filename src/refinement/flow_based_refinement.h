@@ -451,13 +451,15 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
                 bool is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax_constraints, left_region, right_region, translation_table);
 
+                // not valid and no chance for improvement -> cancel
                 if (!is_valid && !config->use_closed_vertex_set) {
                     if (alpha <= 1.0) { return; }
                     alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
                 }
 
-                if (config->use_closed_vertex_set) {
+                // not valid but no chance for improvement
+                if (!is_valid) {
                     // build residual network from cut labels
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_residual_network");
@@ -477,7 +479,7 @@ namespace HeiProMap {
                     weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
                     bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax_constraints[left_id], lmax_constraints[right_id], avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
 
-                    //
+                    // still not valid
                     if (!closure_found) {
                         if (alpha <= 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
