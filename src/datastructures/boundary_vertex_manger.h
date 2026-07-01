@@ -206,6 +206,53 @@ namespace HeiProMap {
             }
         }
 
+        void parallel_reset(const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "parallel_reset");
+
+            m_n_boundary_edges.initialize(m_n);
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                vertex_t chunk = (m_n + num_threads - 1) / num_threads;
+                vertex_t start_u = tid * chunk;
+                vertex_t end_u = std::min(m_n, start_u + chunk);
+                std::fill_n(m_n_boundary_edges.get_ptr() + start_u, end_u - start_u, 0);
+            }
+            for (partition_t id = 0; id < m_k; ++id) {
+                m_boundaries[id].clear();
+            }
+        }
+
+        void parallel_import_boundary_vertices(const std::vector<std::vector<std::vector<vertex_t>>> &thread_boundaries, const u64 num_threads) {
+            std::vector<std::vector<size_t>> offsets(m_k, std::vector<size_t>(num_threads, 0));
+            for (partition_t id = 0; id < m_k; ++id) {
+                size_t total_bound = 0;
+                for (u64 t = 0; t < num_threads; ++t) {
+                    offsets[id][t] = total_bound;
+                    total_bound += thread_boundaries[t][id].size();
+                }
+                m_boundaries[id].resize(total_bound);
+            }
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                for (partition_t id = 0; id < m_k; ++id) {
+                    const auto &local_buf = thread_boundaries[tid][id];
+                    size_t start_offset = offsets[id][tid];
+                    for (size_t i = 0; i < local_buf.size(); ++i) {
+                        vertex_t u = local_buf[i];
+                        m_boundaries[id][start_offset + i] = u;
+                        m_vertex_idx[u] = start_offset + i;
+                    }
+                }
+            }
+        }
+
+        void set_boundary_edges_count(const vertex_t u, const size_t count) {
+            m_n_boundary_edges[u] = count;
+        }
+
         void copy_from(const BoundaryVertexManager &bm) {
             for (vertex_t u = 0; u < m_n; u++) {
                 m_n_boundary_edges[u] = bm.m_n_boundary_edges[u];

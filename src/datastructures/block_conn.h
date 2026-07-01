@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_BLOCK_CONN_H
 #define HEIPROMAP_BLOCK_CONN_H
 
+#include <omp.h>
 #include "csr_graph.h"
 #include "distance_oracle.h"
 #include "partition_manager.h"
@@ -60,6 +61,60 @@ namespace HeiProMap {
             m_arr_weights.initialize(m_m);
             std::fill_n(m_sizes.get_ptr(), m_n, 0);
             total_size = 0;
+        }
+
+        void parallel_initialize_offsets(const graph_t &g, const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "BlockConn", "parallel_initialize_offsets");
+            m_n = g.n;
+            m_m = g.m;
+
+            m_sizes.initialize(m_n);
+            m_start.initialize(m_n);
+            m_arr_ids.initialize(m_m);
+            m_arr_weights.initialize(m_m);
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                vertex_t chunk = (m_n + num_threads - 1) / num_threads;
+                vertex_t start_u = tid * chunk;
+                vertex_t end_u = std::min(m_n, start_u + chunk);
+                std::fill_n(m_sizes.get_ptr() + start_u, end_u - start_u, 0);
+            }
+
+            std::vector<size_t> thread_sums(num_threads + 1, 0);
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                vertex_t chunk = (m_n + num_threads - 1) / num_threads;
+                vertex_t start_u = tid * chunk;
+                vertex_t end_u = std::min(m_n, start_u + chunk);
+
+                size_t sum = 0;
+                for (vertex_t u = start_u; u < end_u; ++u) {
+                    sum += std::min(m_k, g.deg(u));
+                }
+                thread_sums[tid + 1] = sum;
+            }
+
+            for (u64 i = 0; i < num_threads; ++i) {
+                thread_sums[i + 1] += thread_sums[i];
+            }
+            total_size = thread_sums[num_threads];
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                vertex_t chunk = (m_n + num_threads - 1) / num_threads;
+                vertex_t start_u = tid * chunk;
+                vertex_t end_u = std::min(m_n, start_u + chunk);
+
+                size_t current_offset = thread_sums[tid];
+                for (vertex_t u = start_u; u < end_u; ++u) {
+                    m_start[u] = current_offset;
+                    current_offset += std::min(m_k, g.deg(u));
+                }
+            }
         }
 
         size_t size(const vertex_t u) const { return m_sizes[u]; }

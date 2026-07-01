@@ -27,6 +27,7 @@
 #ifndef HEIPROMAP_SOLVER_H
 #define HEIPROMAP_SOLVER_H
 
+#include <omp.h>
 #include <cmath>
 
 #include "boundary_vertex_manger.h"
@@ -638,36 +639,83 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
                 const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
-                bv_manager.reset();
-                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
-                block_conn.reset_build();
+                if (ac.threads > 1) {
+                    bv_manager.parallel_reset(ac.threads);
+                    block_conn.parallel_initialize_offsets(g_uncontracted, ac.threads);
 
-                for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
-                    const partition_t u_id = p_manager[u];
-                    size_t n_different = 0;
+                    std::vector<std::vector<std::vector<vertex_t>>> thread_boundaries(ac.threads, std::vector<std::vector<vertex_t>>(ac.k));
 
-                    block_conn.begin_vertex(g_uncontracted, u);
-                    weight_t own_weight = 0;
+                    #pragma omp parallel num_threads(ac.threads)
+                    {
+                        u64 tid = omp_get_thread_num();
+                        vertex_t chunk = (g_uncontracted.n + ac.threads - 1) / ac.threads;
+                        vertex_t start_u = tid * chunk;
+                        vertex_t end_u = std::min(g_uncontracted.n, start_u + chunk);
 
-                    for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g_uncontracted.edges_v[i];
-                        const weight_t w = g_uncontracted.edges_w[i];
-                        const partition_t v_id = p_manager[v];
+                        for (vertex_t u = start_u; u < end_u; ++u) {
+                            const partition_t u_id = p_manager[u];
+                            size_t n_different = 0;
+                            weight_t own_weight = 0;
 
-                        // rebuild block connections
-                        if (u_id == v_id) {
-                            own_weight += w;
-                        } else {
-                            block_conn.add_connection(u, v_id, w);
+                            for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
+                                const vertex_t v = g_uncontracted.edges_v[i];
+                                const weight_t w = g_uncontracted.edges_w[i];
+                                const partition_t v_id = p_manager[v];
+
+                                // rebuild block connections
+                                if (u_id == v_id) {
+                                    own_weight += w;
+                                } else {
+                                    block_conn.add_connection(u, v_id, w);
+                                }
+
+                                // rebuild boundary information
+                                n_different += (u_id != v_id);
+                            }
+                            if (own_weight > 0) {
+                                block_conn.add_connection(u, u_id, own_weight);
+                            }
+
+                            if (n_different > 0) {
+                                bv_manager.set_boundary_edges_count(u, n_different);
+                                thread_boundaries[tid][u_id].push_back(u);
+                            }
                         }
+                    }
 
-                        // rebuild boundary information
-                        n_different += (u_id != v_id);
+                    bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
+                } else {
+                    bv_manager.reset();
+                    block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
+                    block_conn.reset_build();
+
+                    for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
+                        const partition_t u_id = p_manager[u];
+                        size_t n_different = 0;
+
+                        block_conn.begin_vertex(g_uncontracted, u);
+                        weight_t own_weight = 0;
+
+                        for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
+                            const vertex_t v = g_uncontracted.edges_v[i];
+                            const weight_t w = g_uncontracted.edges_w[i];
+                            const partition_t v_id = p_manager[v];
+
+                            // rebuild block connections
+                            if (u_id == v_id) {
+                                own_weight += w;
+                            } else {
+                                block_conn.add_connection(u, v_id, w);
+                            }
+
+                            // rebuild boundary information
+                            n_different += (u_id != v_id);
+                        }
+                        if (own_weight > 0) {
+                            block_conn.add_connection(u, u_id, own_weight);
+                        }
+                        bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
                     }
-                    if (own_weight > 0) {
-                        block_conn.add_connection(u, u_id, own_weight);
-                    }
-                    bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
                 }
             }
             //
