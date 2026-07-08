@@ -219,8 +219,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
-                uniform_v_weights = t_uniform_v_weights;
-                uniform_e_weights = t_uniform_e_weights;
+                uniform_v_weights = false;
+                uniform_e_weights = false;
                 v_weights.initialize(n, 0);
                 neighborhoods.initialize(n + 1);
                 neighborhoods[0] = 0;
@@ -330,8 +330,8 @@ namespace HeiProMap {
 
                 n = mapping.get_coarse_n();
                 g_weight = g.g_weight;
-                uniform_v_weights = t_uniform_v_weights;
-                uniform_e_weights = t_uniform_e_weights;
+                uniform_v_weights = false;
+                uniform_e_weights = false;
                 v_weights.initialize(n, 0);
                 overest_sizes.initialize(n, 0);
                 overest_neighborhood.initialize(n + 1);

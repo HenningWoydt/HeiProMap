@@ -327,12 +327,17 @@ namespace HeiProMap {
             std::cout << "#Nodes                  : " << graphs[0].n << std::endl;
             std::cout << "#Edges                  : " << graphs[0].m << std::endl;
             std::cout << "k                       : " << ac.k << std::endl;
+            std::cout << "Hierarchy               : " << ac.hierarchy_string << std::endl;
+            std::cout << "Distances               : " << ac.distance_string << std::endl;
             std::cout << "Lmax                    : " << lmax << std::endl;
+            std::cout << "Threads                 : " << ac.threads << std::endl;
+            std::cout << "--------------------------" << std::endl;
             std::cout << "Init. QAP               : " << initial_qap << std::endl;
             std::cout << "Init. max block w       : " << initial_max_block_weight << std::endl;
             std::cout << "Init. #empty partitions : " << initial_n_empty_partitions << std::endl;
             std::cout << "Init. #oload partitions : " << initial_n_overloaded_partitions << std::endl;
             std::cout << "Init. Sum oload weights : " << initial_sum_too_much << std::endl;
+            std::cout << "--------------------------" << std::endl;
             std::cout << "Final QAP               : " << qap << std::endl;
             std::cout << "max block w             : " << max(p_manager.get_bweights()) << std::endl;
 
@@ -613,10 +618,29 @@ namespace HeiProMap {
             size_t prev_idx = graphs.size() - 1;
             graphs.emplace_back(); // coarse the graph
 
+            const bool uniform_v = graphs[prev_idx].uniform_v_weights;
+            const bool uniform_e = graphs[prev_idx].uniform_e_weights;
+
             if (ac.threads == 1) {
-                graphs.back().initialize<false, false>(graphs[prev_idx], mappings.back());
+                if (uniform_v && uniform_e) {
+                    graphs.back().initialize<true, true>(graphs[prev_idx], mappings.back());
+                } else if (uniform_v) {
+                    graphs.back().initialize<true, false>(graphs[prev_idx], mappings.back());
+                } else if (uniform_e) {
+                    graphs.back().initialize<false, true>(graphs[prev_idx], mappings.back());
+                } else {
+                    graphs.back().initialize<false, false>(graphs[prev_idx], mappings.back());
+                }
             } else {
-                graphs.back().parallel_initialize<false, false>(graphs[prev_idx], mappings.back(), ac.threads);
+                if (uniform_v && uniform_e) {
+                    graphs.back().parallel_initialize<true, true>(graphs[prev_idx], mappings.back(), ac.threads);
+                } else if (uniform_v) {
+                    graphs.back().parallel_initialize<true, false>(graphs[prev_idx], mappings.back(), ac.threads);
+                } else if (uniform_e) {
+                    graphs.back().parallel_initialize<false, true>(graphs[prev_idx], mappings.back(), ac.threads);
+                } else {
+                    graphs.back().parallel_initialize<false, false>(graphs[prev_idx], mappings.back(), ac.threads);
+                }
             }
             p_manager.contract(mappings.back());
 

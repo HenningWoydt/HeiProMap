@@ -55,6 +55,8 @@ namespace HeiProMap {
         std::string name;
         bool enabled = false;
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
+
+        bool use_parallel_alg = false;
     };
 
     class LabelPropagationRefinement final {
@@ -73,14 +75,8 @@ namespace HeiProMap {
         std::vector<RandomEngine> rnd_engines;
         const LabelPropagationConfiguration *config = nullptr;
 
-        // per-vertex proposed move for parallel path
-        struct ProposedMove {
-            partition_t best_id;
-            weight_t best_qap_delta;
-            weight_t u_weight;
-        };
-
-        std::vector<ProposedMove> proposed_moves;
+        AlignedArray<u8> active_this_round;
+        AlignedArray<u8> used_this_round;
 
     public:
         LabelPropagationRefinement() = default;
@@ -112,7 +108,8 @@ namespace HeiProMap {
                 rnd_engines[t] = RandomEngine(seed + t);
             }
 
-            proposed_moves.resize(m_n);
+            active_this_round.initialize(m_k);
+            used_this_round.initialize(m_k * m_k);
         }
 
         void refine(graph_t &g,
@@ -144,80 +141,64 @@ namespace HeiProMap {
             for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
 
-                HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "get_boundary");
-                curr_boundary_size = 0;
-                for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-                    for (size_t i = 0; i < bv_manager.size(id); ++i) {
-                        const vertex_t u = bv_manager.get(id, i);
-                        {
-                            curr_boundary[curr_boundary_size++] = u;
-                        }
-                    }
-                }
-                fast_shuffle_unchecked(curr_boundary.get_ptr(), curr_boundary.get_ptr() + curr_boundary_size, random_engine.generator);
+                if (m_threads > 1 || config->use_parallel_alg) {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "pick_vertices_parallel");
+                    active_this_round.initialize(m_k, 1);
+                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                if (m_threads > 1) {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices_parallel");
-                    // Phase 1: compute best moves in parallel (read-only on shared state)
-                    #pragma omp parallel for num_threads(m_threads)
-                    for (size_t j = 0; j < curr_boundary_size; ++j) {
-                        vertex_t u = curr_boundary[j];
-                        proposed_moves[j].best_id = NO_ID;
+                    std::vector<std::pair<partition_t, partition_t>> matching;
+                    bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
 
-                        weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
-                        partition_t u_id = p_manager[u];
+                    while (found_matching) {
+                        #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                        for (size_t i = 0; i < matching.size(); ++i) {
+                            partition_t A = matching[i].first;
+                            partition_t B = matching[i].second;
 
-                        partition_t best_id = NO_ID;
-                        weight_t best_qap_delta = -std::numeric_limits<weight_t>::max();
-                        f32 counter = 0;
+                            u64 tid = omp_get_thread_num();
+                            RandomEngine &rng = rnd_engines[tid];
 
-                        u64 tid = omp_get_thread_num();
-                        RandomEngine &rng = rnd_engines[tid];
+                            // Copy the boundary vertices of A and B to a local vector to avoid modification issues
+                            std::vector<vertex_t> local_boundary;
+                            local_boundary.reserve(bv_manager.size(A) + bv_manager.size(B));
+                            for (size_t idx = 0; idx < bv_manager.size(A); ++idx) {
+                                local_boundary.push_back(bv_manager.get(A, idx));
+                            }
+                            for (size_t idx = 0; idx < bv_manager.size(B); ++idx) {
+                                local_boundary.push_back(bv_manager.get(B, idx));
+                            }
 
-                        for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                            const partition_t id = block_conn.get_id(i);
-                            if (id == u_id) { continue; }
+                            // Refine vertices sequentially within matched pair (A, B)
+                            for (vertex_t u : local_boundary) {
+                                partition_t u_id = p_manager[u];
+                                if (u_id != A && u_id != B) { continue; }
 
-                            weight_t v_id_weight = p_manager.get_bweight(id);
-                            if (v_id_weight + u_weight <= lmax_constraints[id]) {
-                                weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
-                                if (qap_delta > best_qap_delta) {
-                                    best_id = id;
-                                    best_qap_delta = qap_delta;
-                                    counter = 1.0;
-                                } else if (qap_delta == best_qap_delta) {
-                                    counter += 1.0;
-                                    if (rng.get_f32() < 1.0f / counter) { best_id = id; }
+                                partition_t target_id = (u_id == A) ? B : A;
+                                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+
+                                if (p_manager.get_bweight(target_id) + u_weight > lmax_constraints[target_id]) { continue; }
+
+                                weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+
+                                if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5)) {
+                                    bv_manager.move(g, p_manager, u, u_id, target_id);
+                                    q_graph.move(g, p_manager, u, u_id, target_id);
+                                    block_conn.move(g, u, u_id, target_id);
+                                    p_manager.move_serial(u, u_weight, u_id, target_id);
+                                    #pragma omp atomic write
+                                    positive_move_occurred = true;
                                 }
                             }
                         }
 
-                        proposed_moves[j] = {best_id, best_qap_delta, u_weight};
-                    }
-
-                    // Phase 2: apply moves sequentially, re-checking balance
-                    for (size_t j = 0; j < curr_boundary_size; ++j) {
-                        auto [best_id, best_qap_delta, u_weight] = proposed_moves[j];
-                        if (best_id == NO_ID) { continue; }
-
-                        vertex_t u = curr_boundary[j];
-                        partition_t u_id = p_manager[u];
-
-                        if (p_manager.get_bweight(best_id) + u_weight > lmax_constraints[best_id]) { continue; }
-
-                        if (best_qap_delta > 0 || (best_qap_delta == 0 && random_engine.get_f32() < 0.5)) {
-                            bv_manager.move(g, p_manager, u, u_id, best_id);
-                            q_graph.move(g, p_manager, u, u_id, best_id);
-                            block_conn.move(g, u, u_id, best_id);
-                            p_manager.move_serial(u, u_weight, u_id, best_id);
-                            positive_move_occurred |= best_qap_delta > 0;
-                        }
+                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                     }
                 } else {
                     // Serial path
                     HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices");
-                    for (size_t j = 0; j < curr_boundary_size; ++j) {
-                        vertex_t u = curr_boundary[j];
+                    // for (size_t j = 0; j < curr_boundary_size; ++j) {
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        // vertex_t u = curr_boundary[j];
 
                         if (!bv_manager.is_boundary(u)) { continue; }
 

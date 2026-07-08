@@ -521,10 +521,29 @@ namespace HeiProMap {
             size_t prev_idx = graphs.size() - 1;
             graphs.emplace_back(); // coarse the graph
 
+            const bool uniform_v = graphs[prev_idx].uniform_v_weights;
+            const bool uniform_e = graphs[prev_idx].uniform_e_weights;
+
             if (ac.threads == 1) {
-                graphs.back().initialize<false, false>(graphs[prev_idx], mappings.back());
+                if (uniform_v && uniform_e) {
+                    graphs.back().initialize<true, true>(graphs[prev_idx], mappings.back());
+                } else if (uniform_v) {
+                    graphs.back().initialize<true, false>(graphs[prev_idx], mappings.back());
+                } else if (uniform_e) {
+                    graphs.back().initialize<false, true>(graphs[prev_idx], mappings.back());
+                } else {
+                    graphs.back().initialize<false, false>(graphs[prev_idx], mappings.back());
+                }
             } else {
-                graphs.back().parallel_initialize<false, false>(graphs[prev_idx], mappings.back(), ac.threads);
+                if (uniform_v && uniform_e) {
+                    graphs.back().parallel_initialize<true, true>(graphs[prev_idx], mappings.back(), ac.threads);
+                } else if (uniform_v) {
+                    graphs.back().parallel_initialize<true, false>(graphs[prev_idx], mappings.back(), ac.threads);
+                } else if (uniform_e) {
+                    graphs.back().parallel_initialize<false, true>(graphs[prev_idx], mappings.back(), ac.threads);
+                } else {
+                    graphs.back().parallel_initialize<false, false>(graphs[prev_idx], mappings.back(), ac.threads);
+                }
             }
             p_manager.contract(mappings.back());
 
@@ -668,6 +687,7 @@ namespace HeiProMap {
 
         h_ac.k = k;
         h_ac.imbalance = imb;
+        h_ac.threads = 1;
 
         graph_t g_copy = g;
         HeiPaSolver solver(std::move(g_copy), h_ac);

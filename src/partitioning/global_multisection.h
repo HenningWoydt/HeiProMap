@@ -156,11 +156,9 @@ namespace HeiProMap {
                               const std::vector<partition_t> &hierarchy,
                               [[maybe_unused]] const std::vector<weight_t> &distance,
                               const f64 imbalance,
-                              const GlobalMultisectionConfiguration &i_config,
+                              const GlobalMultisectionConfiguration &config,
                               u64 seed) {
             HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "partition");
-            GlobalMultisectionConfiguration config = i_config;
-
             RandomEngine rnd_engine(seed);
 
             AlignedArray<partition_t> partition;
