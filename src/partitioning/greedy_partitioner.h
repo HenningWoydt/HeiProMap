@@ -62,12 +62,12 @@ namespace HeiProMap {
      * (communication cost with already assigned neighbors) while respecting
      * the maximum block weight constraint.
      */
-    template<typename DistanceOracleT, typename PartitionT>
+    template<typename DistanceOracleT>
     inline void greedy_partition(const graph_t &g,
                                  const DistanceOracleT &d_oracle,
                                  const f64 imbalance,
                                  const u64 seed,
-                                 PartitionT &partition) {
+                                 PartitionManager &p_manager) {
         HEIPROMAP_PROFILE_SCOPE("partitioning", "greedy_partitioner", "greedy_partition");
 
         const vertex_t n = g.n;
@@ -75,9 +75,9 @@ namespace HeiProMap {
         const weight_t total_weight = g.g_weight;
         const weight_t max_block_weight = (weight_t) ((1.0 + imbalance) * (total_weight / k));
 
-        std::vector<weight_t> bweights(k, 0);
+        p_manager.reset_weights();
         for (vertex_t u = 0; u < n; ++u) {
-            partition[u] = NO_ID;
+            p_manager.partition[u] = NO_ID;
         }
 
         std::vector<vertex_t> vertices(n);
@@ -95,14 +95,14 @@ namespace HeiProMap {
             weight_t min_cost = std::numeric_limits<weight_t>::max();
 
             for (partition_t block = 0; block < k; ++block) {
-                if (bweights[block] + u_weight > max_block_weight) {
+                if (p_manager.bweights[block] + u_weight > max_block_weight) {
                     continue;
                 }
 
                 weight_t current_cost = 0;
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const partition_t v_block = partition[v];
+                    const partition_t v_block = p_manager.partition[v];
                     if (v_block != NO_ID) {
                         current_cost += g.edges_w[i] * d_oracle.get(block, v_block);
                     }
@@ -113,7 +113,7 @@ namespace HeiProMap {
                     best_block = block;
                 } else if (current_cost == min_cost) {
                     // Tie-breaking: prefer blocks with less weight
-                    if (best_block == NO_ID || bweights[block] < bweights[best_block]) {
+                    if (best_block == NO_ID || p_manager.bweights[block] < p_manager.bweights[best_block]) {
                         best_block = block;
                     }
                 }
@@ -123,17 +123,16 @@ namespace HeiProMap {
             // pick the one with the least weight.
             if (best_block == NO_ID) {
                 best_block = 0;
-                weight_t min_weight = bweights[0];
+                weight_t min_weight = p_manager.bweights[0];
                 for (partition_t block = 1; block < k; ++block) {
-                    if (bweights[block] < min_weight) {
-                        min_weight = bweights[block];
+                    if (p_manager.bweights[block] < min_weight) {
+                        min_weight = p_manager.bweights[block];
                         best_block = block;
                     }
                 }
             }
 
-            partition[u] = best_block;
-            bweights[best_block] += u_weight;
+            p_manager.set(u, u_weight, best_block);
         }
     }
 }

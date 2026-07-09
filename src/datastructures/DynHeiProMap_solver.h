@@ -584,7 +584,7 @@ namespace HeiProMap {
                     lmax_constraints[i] = lmax;
                 }
 
-                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn, lmax_constraints, false, false);
+                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn, lmax_constraints);
             }
 
             total_migration_cost_from_start += calculate_migration_cost(partition_before, p_manager.partition.get_vector());

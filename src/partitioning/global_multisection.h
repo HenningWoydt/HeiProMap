@@ -473,15 +473,7 @@ namespace HeiProMap {
 
                 if (g.n > 4 * k) {
                     graph_t coarse_g;
-                    if (g.uniform_v_weights && g.uniform_e_weights) {
-                        coarse_g.initialize<true, true>(g, mapping);
-                    } else if (g.uniform_v_weights) {
-                        coarse_g.initialize<true, false>(g, mapping);
-                    } else if (g.uniform_e_weights) {
-                        coarse_g.initialize<false, true>(g, mapping);
-                    } else {
-                        coarse_g.initialize<false, false>(g, mapping);
-                    }
+                    coarse_g.contract(g, mapping, 1);
 
                     AlignedArray<partition_t> coarse_partition;
                     coarse_partition.initialize(coarse_g.n);

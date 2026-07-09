@@ -469,81 +469,49 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "partition", "partition");
 
             for (u64 iteration = 0; iteration < 1; ++iteration) {
-                if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
-                    if (ac.threads > 1) {
-                        std::vector<PartitionManager> local_p_managers;
-                        std::vector<weight_t> local_qaps;
-
-                        local_p_managers.reserve(ac.threads);
-                        local_qaps.reserve(ac.threads);
-
-                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            local_p_managers.emplace_back();
-                            local_p_managers.back().initialize(graphs.back().n, graphs.back().m, graphs.back().g_weight);
-                            local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
-                        }
-
-                        #pragma omp parallel for schedule(static) num_threads(ac.threads)
-                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
-
-                            local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
-                        }
-
-                        size_t best_idx = 0;
-                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            if (local_qaps[thread_id] < local_qaps[best_idx]) {
-                                best_idx = thread_id;
-                            }
-                        }
-
-                        p_manager.copy_from(local_p_managers[best_idx]);
-                    } else {
-                        GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
-                    }
-                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY) {
-                    if (ac.threads > 1) {
-                        std::vector<PartitionManager> local_p_managers;
-                        std::vector<weight_t> local_qaps;
-
-                        local_p_managers.reserve(ac.threads);
-                        local_qaps.reserve(ac.threads);
-
-                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            local_p_managers.emplace_back();
-                            local_p_managers.back().initialize(graphs.back().n, ac.k, graphs.back().g_weight);
-                            local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
-                        }
-
-                        #pragma omp parallel for schedule(static) num_threads(ac.threads)
-                        for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                            std::vector<partition_t> part(graphs.back().n);
-                            greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, part);
-                            for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                                local_p_managers[thread_id].set(u, graphs.back().v_weights[u], part[u]);
-                            }
-                            local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
-                        }
-
-                        size_t best_idx = 0;
-                        for (u64 thread_id = 1; thread_id < ac.threads; ++thread_id) {
-                            if (local_qaps[thread_id] < local_qaps[best_idx]) {
-                                best_idx = thread_id;
-                            }
-                        }
-
-                        p_manager.copy_from(local_p_managers[best_idx]);
-                    } else {
-                        std::vector<partition_t> part(graphs.back().n);
-                        greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, part);
-                        p_manager.reset_weights();
-                        for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                            p_manager.set(u, graphs.back().v_weights[u], part[u]);
-                        }
-                    }
-                } else {
+                if (ac.partitioning_algorithm_id != PARTITIONING_ALG_MULTISECTION && ac.partitioning_algorithm_id != PARTITIONING_ALG_GREEDY) {
                     std::cerr << "Partitioning algorithm " << partitioning_algorithm_to_string(ac.partitioning_algorithm_id) << " with id " << ac.partitioning_algorithm_id << " not known!" << std::endl;
                     exit(EXIT_FAILURE);
+                }
+
+                if (ac.threads > 1) {
+                    std::vector<PartitionManager> local_p_managers;
+                    std::vector<weight_t> local_qaps;
+
+                    local_p_managers.reserve(ac.threads);
+                    local_qaps.reserve(ac.threads);
+
+                    for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                        local_p_managers.emplace_back();
+                        local_p_managers.back().initialize(graphs.back().n, ac.k, graphs.back().g_weight);
+                        local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
+                    }
+
+                    #pragma omp parallel for schedule(static) num_threads(ac.threads)
+                    for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                        if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
+                            GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
+                        } else {
+                            greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, local_p_managers[thread_id]);
+                        }
+
+                        local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
+                    }
+
+                    size_t best_idx = 0;
+                    for (u64 thread_id = 1; thread_id < ac.threads; ++thread_id) {
+                        if (local_qaps[thread_id] < local_qaps[best_idx]) {
+                            best_idx = thread_id;
+                        }
+                    }
+
+                    p_manager.copy_from(local_p_managers[best_idx]);
+                } else {
+                    if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
+                        GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
+                    } else {
+                        greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, p_manager);
+                    }
                 }
 
                 // initialize boundary vertices and quotient graph
@@ -617,30 +585,7 @@ namespace HeiProMap {
             size_t prev_idx = graphs.size() - 1;
             graphs.emplace_back(); // coarse the graph
 
-            const bool uniform_v = graphs[prev_idx].uniform_v_weights;
-            const bool uniform_e = graphs[prev_idx].uniform_e_weights;
-
-            if (ac.threads == 1) {
-                if (uniform_v && uniform_e) {
-                    graphs.back().initialize<true, true>(graphs[prev_idx], mappings.back());
-                } else if (uniform_v) {
-                    graphs.back().initialize<true, false>(graphs[prev_idx], mappings.back());
-                } else if (uniform_e) {
-                    graphs.back().initialize<false, true>(graphs[prev_idx], mappings.back());
-                } else {
-                    graphs.back().initialize<false, false>(graphs[prev_idx], mappings.back());
-                }
-            } else {
-                if (uniform_v && uniform_e) {
-                    graphs.back().parallel_initialize<true, true>(graphs[prev_idx], mappings.back(), ac.threads);
-                } else if (uniform_v) {
-                    graphs.back().parallel_initialize<true, false>(graphs[prev_idx], mappings.back(), ac.threads);
-                } else if (uniform_e) {
-                    graphs.back().parallel_initialize<false, true>(graphs[prev_idx], mappings.back(), ac.threads);
-                } else {
-                    graphs.back().parallel_initialize<false, false>(graphs[prev_idx], mappings.back(), ac.threads);
-                }
-            }
+            graphs.back().contract(graphs[prev_idx], mappings.back(), ac.threads);
             p_manager.contract(mappings.back());
 
             auto ep = get_time_point();
@@ -657,66 +602,26 @@ namespace HeiProMap {
             auto sp = get_time_point();
 
             p_manager.uncontract(mappings.back());
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
-                const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
-                if (ac.threads > 1) {
-                    bv_manager.parallel_reset(ac.threads);
-                    block_conn.parallel_initialize_offsets(g_uncontracted, ac.threads);
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
+            const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
-                    std::vector<std::vector<std::vector<vertex_t>>> thread_boundaries(ac.threads, std::vector<std::vector<vertex_t>>(ac.k));
+            if (ac.threads > 1) {
+                bv_manager.parallel_reset(ac.threads);
+                block_conn.parallel_initialize_offsets(g_uncontracted, ac.threads);
 
-                    #pragma omp parallel num_threads(ac.threads)
-                    {
-                        u64 tid = omp_get_thread_num();
-                        vertex_t chunk = (g_uncontracted.n + ac.threads - 1) / ac.threads;
-                        vertex_t start_u = tid * chunk;
-                        vertex_t end_u = std::min(g_uncontracted.n, start_u + chunk);
+                std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries(ac.threads, std::vector<std::vector<vertex_t> >(ac.k));
 
-                        for (vertex_t u = start_u; u < end_u; ++u) {
-                            const partition_t u_id = p_manager[u];
-                            size_t n_different = 0;
-                            weight_t own_weight = 0;
+                #pragma omp parallel num_threads(ac.threads)
+                {
+                    u64 tid = omp_get_thread_num();
+                    vertex_t chunk = (g_uncontracted.n + ac.threads - 1) / ac.threads;
+                    vertex_t start_u = tid * chunk;
+                    vertex_t end_u = std::min(g_uncontracted.n, start_u + chunk);
 
-                            for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
-                                const vertex_t v = g_uncontracted.edges_v[i];
-                                const weight_t w = g_uncontracted.edges_w[i];
-                                const partition_t v_id = p_manager[v];
-
-                                // rebuild block connections
-                                if (u_id == v_id) {
-                                    own_weight += w;
-                                } else {
-                                    block_conn.add_connection(u, v_id, w);
-                                }
-
-                                // rebuild boundary information
-                                n_different += (u_id != v_id);
-                            }
-                            if (own_weight > 0) {
-                                block_conn.add_connection(u, u_id, own_weight);
-                            }
-
-                            if (n_different > 0) {
-                                bv_manager.set_boundary_edges_count(u, n_different);
-                                thread_boundaries[tid][u_id].push_back(u);
-                            }
-                        }
-                    }
-
-                    bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
-                } else {
-                    bv_manager.reset();
-                    block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
-                    block_conn.reset_build();
-
-                    for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
+                    for (vertex_t u = start_u; u < end_u; ++u) {
                         const partition_t u_id = p_manager[u];
                         size_t n_different = 0;
-
-                        block_conn.begin_vertex(g_uncontracted, u);
                         weight_t own_weight = 0;
 
                         for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
@@ -737,16 +642,52 @@ namespace HeiProMap {
                         if (own_weight > 0) {
                             block_conn.add_connection(u, u_id, own_weight);
                         }
-                        bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+
+                        if (n_different > 0) {
+                            bv_manager.set_boundary_edges_count(u, n_different);
+                            thread_boundaries[tid][u_id].push_back(u);
+                        }
                     }
                 }
+
+                bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
+            } else {
+                bv_manager.reset();
+                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
+                block_conn.reset_build();
+
+                for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
+                    const partition_t u_id = p_manager[u];
+                    size_t n_different = 0;
+
+                    block_conn.begin_vertex(g_uncontracted, u);
+                    weight_t own_weight = 0;
+
+                    for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g_uncontracted.edges_v[i];
+                        const weight_t w = g_uncontracted.edges_w[i];
+                        const partition_t v_id = p_manager[v];
+
+                        // rebuild block connections
+                        if (u_id == v_id) {
+                            own_weight += w;
+                        } else {
+                            block_conn.add_connection(u, v_id, w);
+                        }
+
+                        // rebuild boundary information
+                        n_different += (u_id != v_id);
+                    }
+                    if (own_weight > 0) {
+                        block_conn.add_connection(u, u_id, own_weight);
+                    }
+                    bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+                }
             }
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
-                graphs.pop_back(); // this is doing uncontraction
-                mappings.pop_back();
-            }
+
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
+            graphs.pop_back(); // this is doing uncontraction
+            mappings.pop_back();
 
             auto ep = get_time_point();
 

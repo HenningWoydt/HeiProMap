@@ -49,7 +49,6 @@
 #include "../utility/qap.h"
 
 namespace HeiProMap {
-
     class HeiPaSolver {
         HeiPaConfiguration ac;
         RandomEngine random_engine;
@@ -406,7 +405,6 @@ namespace HeiProMap {
                     rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, level_imbalance, ac.recursive_bisection_config);
 
                     p_manager.copy_from(local_pm);
-
                 } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                     if (ac.threads > 1) {
                         std::vector<PartitionManager> local_p_managers;
@@ -521,30 +519,7 @@ namespace HeiProMap {
             size_t prev_idx = graphs.size() - 1;
             graphs.emplace_back(); // coarse the graph
 
-            const bool uniform_v = graphs[prev_idx].uniform_v_weights;
-            const bool uniform_e = graphs[prev_idx].uniform_e_weights;
-
-            if (ac.threads == 1) {
-                if (uniform_v && uniform_e) {
-                    graphs.back().initialize<true, true>(graphs[prev_idx], mappings.back());
-                } else if (uniform_v) {
-                    graphs.back().initialize<true, false>(graphs[prev_idx], mappings.back());
-                } else if (uniform_e) {
-                    graphs.back().initialize<false, true>(graphs[prev_idx], mappings.back());
-                } else {
-                    graphs.back().initialize<false, false>(graphs[prev_idx], mappings.back());
-                }
-            } else {
-                if (uniform_v && uniform_e) {
-                    graphs.back().parallel_initialize<true, true>(graphs[prev_idx], mappings.back(), ac.threads);
-                } else if (uniform_v) {
-                    graphs.back().parallel_initialize<true, false>(graphs[prev_idx], mappings.back(), ac.threads);
-                } else if (uniform_e) {
-                    graphs.back().parallel_initialize<false, true>(graphs[prev_idx], mappings.back(), ac.threads);
-                } else {
-                    graphs.back().parallel_initialize<false, false>(graphs[prev_idx], mappings.back(), ac.threads);
-                }
-            }
+            graphs.back().contract(graphs[prev_idx], mappings.back(), ac.threads);
             p_manager.contract(mappings.back());
 
             auto ep = get_time_point();
@@ -561,45 +536,43 @@ namespace HeiProMap {
             auto sp = get_time_point();
 
             p_manager.uncontract(mappings.back());
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
-                const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
-                bv_manager.reset();
-                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
-                block_conn.reset_build();
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
+            const graph_t &g_uncontracted = graphs[graphs.size() - 2];
 
-                for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
-                    {
-                        const partition_t u_id = p_manager[u];
-                        size_t n_different = 0;
+            bv_manager.reset();
+            block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
+            block_conn.reset_build();
 
-                        block_conn.begin_vertex(g_uncontracted, u);
+            for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
+                {
+                    const partition_t u_id = p_manager[u];
+                    size_t n_different = 0;
 
-                        for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
-                            const vertex_t v = g_uncontracted.edges_v[i];
-                            const weight_t w = g_uncontracted.edges_w[i]; {
-                                const partition_t v_id = p_manager[v];
+                    block_conn.begin_vertex(g_uncontracted, u);
 
-                                // rebuild block connections
-                                block_conn.add_connection(u, v_id, w);
+                    for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g_uncontracted.edges_v[i];
+                        const weight_t w = g_uncontracted.edges_w[i];
+                        {
+                            const partition_t v_id = p_manager[v];
 
-                                // rebuild boundary information
-                                n_different += (u_id != v_id);
-                            }
+                            // rebuild block connections
+                            block_conn.add_connection(u, v_id, w);
+
+                            // rebuild boundary information
+                            n_different += (u_id != v_id);
                         }
-
-                        bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
                     }
+
+                    bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
                 }
             }
-            //
-            {
-                HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
-                graphs.pop_back(); // this is doing uncontraction
-                mappings.pop_back();
-            }
+
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
+            graphs.pop_back(); // this is doing uncontraction
+            mappings.pop_back();
+
 
             auto ep = get_time_point();
 
