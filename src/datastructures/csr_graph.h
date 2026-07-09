@@ -229,7 +229,6 @@ namespace HeiProMap {
 
             n_mapped.initialize(n, 0);
             n_mapped_prefix.initialize(n + 1);
-            n_mapped_prefix[0] = 0;
             cursor.initialize(n + 1);
             mapped_vertices.initialize(g.n);
 
@@ -237,32 +236,27 @@ namespace HeiProMap {
 
             // count how many vertices are mapped to each new vertex
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "n_mapped");
-
-            // count and collect weights
-            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+            for (vertex_t u = 0; u < g.n; ++u) {
                 vertex_t map_u = mapping.get(u);
                 n_mapped[map_u] += 1;
-
                 v_weights[map_u] += t_uniform_v_weights ? 1 : g.v_weights[u];
             }
 
             // prefix sum on n_mapped
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "prefix_sum");
-
+            n_mapped_prefix[0] = 0;
             for (vertex_t map_u = 0; map_u < n; ++map_u) {
                 n_mapped_prefix[map_u + 1] = n_mapped_prefix[map_u] + n_mapped[map_u];
             }
 
             // copy so we have a cursor
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "copy_cursor");
-
-            for (vertex_t map_u = 0; map_u <= n; ++map_u) {
+            for (vertex_t map_u = 0; map_u < n + 1; ++map_u) {
                 cursor[map_u] = n_mapped_prefix[map_u];
             }
 
             // insert mapped vertices
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "mapped_vertices");
-
             for (vertex_t u = 0; u < g.n; ++u) {
                 vertex_t map_u = mapping.get(u);
                 mapped_vertices[cursor[map_u]] = u;
@@ -271,16 +265,15 @@ namespace HeiProMap {
 
             // insert edges in real array
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "real_neighborhood");
-
             m = 0;
             for (vertex_t map_u = 0; map_u < n; ++map_u) {
                 epoch += 1;
                 for (u64 i = n_mapped_prefix[map_u]; i < n_mapped_prefix[map_u + 1]; ++i) {
                     vertex_t u = mapped_vertices[i];
 
-                    if (i + 1 < n_mapped_prefix[map_u + 1])
+                    if (i + 1 < n_mapped_prefix[map_u + 1]) {
                         __builtin_prefetch(&g.neighborhoods[mapped_vertices[i + 1]], 0, 1);
-
+                    }
 
                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                         const vertex_t v = g.edges_v[j];
@@ -317,7 +310,6 @@ namespace HeiProMap {
             AlignedArray<vertex_t> sizes;
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate");
-
             n = mapping.get_coarse_n();
             g_weight = g.g_weight;
             uniform_v_weights = false;
@@ -326,12 +318,18 @@ namespace HeiProMap {
             overest_sizes.initialize(n, 0);
             overest_neighborhood.initialize(n + 1);
 
+            AlignedArray<vertex_t> n_mapped;
+            n_mapped.initialize(n, 0);
+            AlignedArray<vertex_t> cursor;
+            cursor.initialize(n + 1);
+            AlignedArray<vertex_t> mapped_vertices;
+            mapped_vertices.initialize(g.n);
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "overest_sizes");
-
-            // overestimate neighborhood sizes and collect weights
+            // overestimate neighborhood sizes, collect weights, and count n_mapped
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                 vertex_t map_u = mapping.get(u);
+                n_mapped[map_u] += 1;
                 overest_sizes[map_u] += g.deg(u);
                 v_weights[map_u] += t_uniform_v_weights ? 1 : g.v_weights[u];
             }
@@ -339,22 +337,42 @@ namespace HeiProMap {
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "prefix_sum");
             overest_neighborhood[0] = 0;
+            cursor[0] = 0;
             for (vertex_t map_u = 0; map_u < n; ++map_u) {
                 overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
+                cursor[map_u + 1] = cursor[map_u] + n_mapped[map_u];
+            }
+
+            AlignedArray<vertex_t> cursor_start;
+            cursor_start.initialize(n + 1);
+            for (vertex_t map_u = 0; map_u <= n; ++map_u) {
+                cursor_start[map_u] = cursor[map_u];
+            }
+
+            // populate mapped_vertices
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get(u);
+                mapped_vertices[cursor[map_u]] = u;
+                cursor[map_u] += 1;
             }
 
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate_insert_edges");
 
             m_per_thread.initialize(threads, 0);
-            temp_edges_v.initialize(overest_neighborhood[n], g.n);
+            temp_edges_v.initialize(overest_neighborhood[n]);
             temp_edges_w.initialize(overest_neighborhood[n]);
             sizes.initialize(n, 0);
+
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (size_t i = 0; i < overest_neighborhood[n]; ++i) {
+                temp_edges_v[i] = g.n;
+                // do not zero temp_edges_w to save memory bandwidth
+            }
 
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "insert_edges");
 
-            // insert edges in overestimated array
             m = 0;
 
             // Partition the *coarse* id space [0, m_n) into disjoint slices.
@@ -368,37 +386,38 @@ namespace HeiProMap {
                 const vertex_t mu_end = tid == threads - 1 ? n : slice_end(tid);
 
                 size_t local_m = 0;
-                for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
-                    vertex_t map_u = mapping.get(u);
-                    if (map_u < mu_beg || map_u >= mu_end) continue; // not my bucket range
+                for (vertex_t map_u = mu_beg; map_u < mu_end; ++map_u) {
+                    vertex_t beg = overest_neighborhood[map_u];
+                    vertex_t end = overest_neighborhood[map_u + 1];
+                    vertex_t len = end - beg;
+                    if (len == 0) continue;
 
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g.edges_v[i];
-                        vertex_t map_v = mapping.get(v);
-                        if (map_u == map_v) { continue; }
-                        weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
+                    for (size_t k = cursor_start[map_u]; k < cursor_start[map_u + 1]; ++k) {
+                        vertex_t u = mapped_vertices[k];
 
-                        vertex_t beg = overest_neighborhood[map_u];
-                        vertex_t end = overest_neighborhood[map_u + 1];
-                        vertex_t len = end - beg;
-                        if (len == 0) { continue; }
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            const vertex_t v = g.edges_v[i];
+                            vertex_t map_v = mapping.get(v);
+                            if (map_u == map_v) { continue; }
+                            weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
 
-                        // insert map_v
-                        vertex_t j = beg + (map_v % len);
-                        while (true) {
-                            if (j == end) { j = beg; }
-                            if (temp_edges_v[j] == map_v) {
-                                temp_edges_w[j] += w;
-                                break;
+                            // insert map_v
+                            vertex_t j = beg + (map_v % len);
+                            while (true) {
+                                if (j == end) { j = beg; }
+                                if (temp_edges_v[j] == map_v) {
+                                    temp_edges_w[j] += w;
+                                    break;
+                                }
+                                if (temp_edges_v[j] == g.n) {
+                                    temp_edges_v[j] = map_v;
+                                    temp_edges_w[j] = w;
+                                    local_m += 1;
+                                    sizes[map_u] += 1;
+                                    break;
+                                }
+                                j += 1;
                             }
-                            if (temp_edges_v[j] == g.n) {
-                                temp_edges_v[j] = map_v;
-                                temp_edges_w[j] = w;
-                                local_m += 1;
-                                sizes[map_u] += 1;
-                                break;
-                            }
-                            j += 1;
                         }
                     }
                 }
@@ -424,17 +443,19 @@ namespace HeiProMap {
             edges_v.initialize(m);
             edges_w.initialize(m);
 
-            #pragma omp parallel for num_threads(threads)
+            #pragma omp parallel for schedule(static) num_threads(threads)
             for (vertex_t map_u = 0; map_u < mapping.get_coarse_n(); ++map_u) {
                 size_t cursor = neighborhoods[map_u];
+                vertex_t valid_found = 0;
+                vertex_t total_valid = sizes[map_u];
                 for (vertex_t j = overest_neighborhood[map_u]; j < overest_neighborhood[map_u + 1]; ++j) {
+                    if (valid_found == total_valid) break;
                     vertex_t map_v = temp_edges_v[j];
-                    weight_t map_w = temp_edges_w[j];
-
                     if (map_v != g.n) {
                         edges_v[cursor] = map_v;
-                        edges_w[cursor] = map_w;
+                        edges_w[cursor] = temp_edges_w[j];
                         cursor += 1;
+                        valid_found += 1;
                     }
                 }
             }
