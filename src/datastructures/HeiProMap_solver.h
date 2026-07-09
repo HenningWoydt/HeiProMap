@@ -305,7 +305,7 @@ namespace HeiProMap {
                     for (partition_t i = 0; i < ac.k; ++i) {
                         lmax_constraints[i] = lmax;
                     }
-                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs[0].uniform_v_weights, graphs[0].uniform_e_weights);
+                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
                 }
             } else {
                 internal_solve();
@@ -603,7 +603,6 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-
             auto ep = get_time_point();
             coarsening_ms += get_milli_seconds(sp, ep);
 
@@ -792,14 +791,14 @@ namespace HeiProMap {
 
             if (ac.label_propagation_config.enabled) {
                 auto sp_local = get_time_point();
-                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
                 lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
                 qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
@@ -813,7 +812,7 @@ namespace HeiProMap {
 
             if (ac.flow_based_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
                 flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }

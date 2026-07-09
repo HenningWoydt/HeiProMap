@@ -78,15 +78,13 @@ namespace HeiProMap {
         void refine(graph_t &g,
                     d_oracle_t &d_oracle,
                     p_manager_t &p_manager,
-                    const AlignedArray<weight_t> &lmax_constraints,
-                    bool uniform_v_weights,
-                    bool uniform_e_weights) {
+                    const AlignedArray<weight_t> &lmax_constraints) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "SwapRefinement", "refine");
 
             if (p_manager.k < 2) return;
-            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, p_manager, lmax_constraints);
-            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, p_manager, lmax_constraints);
-            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, p_manager, lmax_constraints);
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, p_manager, lmax_constraints);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, p_manager, lmax_constraints);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, p_manager, lmax_constraints);
             else refine_impl<false, false>(g, d_oracle, p_manager, lmax_constraints);
         }
 

@@ -50,20 +50,6 @@
 #include "../utility/functions.h"
 
 namespace HeiProMap {
-    struct PairWeight {
-        partition_t id1;
-        partition_t id2;
-        weight_t distance;
-
-        bool operator<(const PairWeight &p) const {
-            return distance < p.distance;
-        }
-
-        bool operator>(const PairWeight &p) const {
-            return distance > p.distance;
-        }
-    };
-
     class QuotientGraphRefinementConfiguration final {
     public:
         explicit QuotientGraphRefinementConfiguration(const std::string &t_name) {
@@ -89,8 +75,6 @@ namespace HeiProMap {
         // active block scheduling
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> active_next_round;
-        AlignedArray<PairWeight> pairs;
-        size_t pairs_size = 0;
 
         std::vector<std::vector<vertex_t>> moves_vec;
 
@@ -132,8 +116,6 @@ namespace HeiProMap {
             // active block scheduling
             active_this_round.initialize(m_k);
             active_next_round.initialize(m_k);
-            pairs.initialize(m_k * m_k);
-            pairs_size = 0;
 
             for (size_t i = 0; i < m_threads; ++i) {
                 moves_vec.emplace_back();
@@ -161,12 +143,10 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
                     block_conn_t &block_conn,
-                    const AlignedArray<weight_t> &lmax_constraints,
-                    bool uniform_v_weights,
-                    bool uniform_e_weights) {
-            if (uniform_v_weights && uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    const AlignedArray<weight_t> &lmax_constraints) {
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
@@ -182,78 +162,51 @@ namespace HeiProMap {
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
 
-            if (m_threads > 1) {
-                std::vector<std::pair<partition_t, partition_t> > matching;
+            std::vector<std::pair<partition_t, partition_t> > matching;
 
-                for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
-                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
+                std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                    bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-
-                    while (found_matching) {
-                        // Pre-assign unique marks for each thread
-                        u32 base_mark = global_vertex_mark + 1;
-                        global_vertex_mark += static_cast<u32>(matching.size());
-
-                        #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
-                        for (size_t i = 0; i < matching.size(); ++i) {
-                            partition_t u_id = matching[i].first;
-                            partition_t v_id = matching[i].second;
-
-                            u64 tid = omp_get_thread_num();
-                            u32 mark = base_mark + static_cast<u32>(i);
-
-                            if (d_oracle.last_level_pair(u_id, v_id)) {
-                                refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
-                            } else {
-                                refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
-                            }
-                        }
-
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                    }
-
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
-                    std::swap(active_this_round, active_next_round);
-                    active_next_round.initialize(m_k, 0);
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
+                bool found_matching = false;
+                if (m_threads > 1) {
+                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                } else {
+                    found_matching = q_graph.find_all_pairs(active_this_round, used_this_round, matching);
                 }
-            } else {
-                RandomEngine &random_engine = rnd_engines[0];
 
-                for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "get_pairs");
-                    pairs_size = 0;
-                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                        for (partition_t v_id = u_id + 1; v_id < m_k; ++v_id) {
-                            if (!q_graph.has_edge(u_id, v_id)) continue;
-                            if (config->use_active_scheduling && !(active_this_round[u_id] || active_this_round[v_id])) continue;
-                            pairs[pairs_size++] = {u_id, v_id, d_oracle.get(u_id, v_id)};
-                        }
-                    }
-                    if (pairs_size == 0) { return; }
+                while (found_matching) {
+                    // Pre-assign unique marks for each thread
+                    u32 base_mark = global_vertex_mark + 1;
+                    global_vertex_mark += static_cast<u32>(matching.size());
 
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "shuffle");
-                    fast_shuffle_unchecked(pairs.get_ptr(), pairs.get_ptr() + pairs_size, random_engine.generator);
+                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    for (size_t i = 0; i < matching.size(); ++i) {
+                        partition_t u_id = matching[i].first;
+                        partition_t v_id = matching[i].second;
 
-                    for (size_t j = 0; j < pairs_size; ++j) {
-                        auto [u_id, v_id, distance] = pairs[j];
-
-                        global_vertex_mark += 1;
+                        u64 tid = omp_get_thread_num();
+                        u32 mark = base_mark + static_cast<u32>(i);
 
                         if (d_oracle.last_level_pair(u_id, v_id)) {
-                            refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[0], lmax_constraints, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
+                            refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                         } else {
-                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id,moves_vec[0],  lmax_constraints, boundary_vertices_u_vec[0], boundary_vertices_v_vec[0], global_vertex_mark, random_engine);
+                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                         }
                     }
 
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
-                    std::swap(active_this_round, active_next_round);
-                    active_next_round.initialize(m_k, 0);
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
+                    if (m_threads > 1) {
+                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                    } else {
+                        found_matching = q_graph.find_all_pairs(active_this_round, used_this_round, matching);
+                    }
                 }
+
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
+                std::swap(active_this_round, active_next_round);
+                active_next_round.initialize(m_k, 0);
             }
         }
 

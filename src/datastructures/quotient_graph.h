@@ -338,6 +338,33 @@ namespace HeiProMap {
             return !matching.empty();
         }
 
+        bool find_all_pairs(AlignedArray<u8> &active_this_round,
+                            AlignedArray<u8> &used_edges_this_round,
+                            std::vector<std::pair<partition_t, partition_t> > &matching) {
+            matching.clear();
+
+            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                for_each_neighbor(u_id, [&](const partition_t v_id, const weight_t) {
+                    if (v_id <= u_id) {
+                        return;
+                    }
+                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) {
+                        return;
+                    }
+
+                    const size_t eidx = edge_index(u_id, v_id);
+                    if (used_edges_this_round[eidx] == 1) {
+                        return;
+                    }
+
+                    matching.emplace_back(u_id, v_id);
+                    used_edges_this_round[eidx] = 1;
+                });
+            }
+
+            return !matching.empty();
+        }
+
         size_t edge_index(const partition_t u_id, const partition_t v_id) const {
             const partition_t min_part = min_id(u_id, v_id);
             const partition_t max_part = max_id(u_id, v_id);

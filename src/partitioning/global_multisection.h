@@ -422,19 +422,19 @@ namespace HeiProMap {
             if (config.label_propagation_config.enabled) {
                 LabelPropagationRefinement lp_refine;
                 lp_refine.initialize(g.n, g.m, k, 1, seed, config.label_propagation_config);
-                lp_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
+                lp_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints);
             }
 
             if (config.quotient_graph_refinement_config.enabled) {
                 QuotientGraphRefinement qg_refine;
                 qg_refine.initialize(g.n, g.m, k, 1, seed, config.quotient_graph_refinement_config);
-                qg_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
+                qg_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints);
             }
 
             if (config.flow_based_refinement_config.enabled) {
                 FlowBasedRefinement flow_refine;
                 flow_refine.initialize(g.n, g.m, k, 1, seed, config.flow_based_refinement_config);
-                flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints, g.uniform_v_weights, g.uniform_e_weights);
+                flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints);
             }
         }
 

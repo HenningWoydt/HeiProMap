@@ -49,16 +49,16 @@ int main(const int argc, char *argv[]) {
                 // {"--mapping", "../data/out/partition/cont-300.mtx.graph.txt"},
                 // {"--graph", "../../ProMapRepo/data/mapping/G2_circuit.mtx.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
                 // {"--mapping", "../data/out/partition/G2_circuit.mtx.graph.txt"},
-                {"--graph", "../../ProMapRepo/data/mapping/G3_circuit.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
-                {"--mapping", "../data/out/partition/G3_circuit.graph.txt"},
-                // {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
-                // {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
-                {"--hierarchy", "4:8:5"},
+                // {"--graph", "../../ProMapRepo/data/mapping/G3_circuit.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                // {"--mapping", "../data/out/partition/G3_circuit.graph.txt"},
+                {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"}, // fast 6.01s, 3,668,266 comm cost, // eco 24.56s 3,150,316 comm cost, // strong 283.43s 3,047,453 comm cost
+                {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
+                {"--hierarchy", "4:8:6"},
                 {"--distance", "1:10:100"},
                 {"--imbalance", "0.03"},
                 {"--config", "fast"},
                 {"--seed", "0"},
-                {"--threads", "1"},
+                {"--threads", "2"},
                 {"--hm-level", "0"},
             };
 
