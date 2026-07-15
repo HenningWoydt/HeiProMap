@@ -57,6 +57,7 @@ namespace HeiProMap {
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
 
         bool use_parallel_alg = false;
+        bool use_edge_cut = true;
     };
 
     class LabelPropagationRefinement final {
@@ -178,6 +179,7 @@ namespace HeiProMap {
                             local_boundary.push_back(bv_manager.get(B, idx));
                         }
 
+                        bool last_level_pair = config->use_edge_cut && d_oracle.last_level_pair(A, B);
                         // Refine vertices sequentially within matched pair (A, B)
                         for (vertex_t u : local_boundary) {
                             partition_t u_id = p_manager[u];
@@ -188,7 +190,12 @@ namespace HeiProMap {
 
                             if (p_manager.get_bweight(target_id) + u_weight > lmax_constraints[target_id]) { continue; }
 
-                            weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+                            weight_t qap_delta;
+                            if (last_level_pair) {
+                                qap_delta = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, block_conn);
+                            } else {
+                                qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+                            }
 
                             if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5)) {
                                 bv_manager.move(g, p_manager, u, u_id, target_id);

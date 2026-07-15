@@ -64,6 +64,7 @@ namespace HeiProMap {
             {"--lp-refinement-enabled", "", "Enable label propagation refinement (true/false).", "", "", false},
             {"--lp-refinement-max-iteration", "", "Max iteration for label propagation refinement.", "", "", false},
             {"--lp-refinement-use-parallel-version", "", "Label propagation use parallel version (true/false).", "", "", false},
+            {"--lp-refinement-use-edge-cut", "", "Label propagation use edge-cut on last level (true/false).", "", "", false},
 
             // Quotient Graph (QG) Refinement
             {"--qg-refinement-enabled", "", "Enable quotient graph refinement (true/false).", "", "", false},
@@ -233,6 +234,10 @@ namespace HeiProMap {
             if (is_set("--lp-refinement-use-parallel-version")) {
                 std::string val = get("--lp-refinement-use-parallel-version");
                 label_propagation_config.use_parallel_alg = (val == "true" || val == "1");
+            }
+            if (is_set("--lp-refinement-use-edge-cut")) {
+                std::string val = get("--lp-refinement-use-edge-cut");
+                label_propagation_config.use_edge_cut = (val == "true" || val == "1");
             }
 
             if (is_set("--qg-refinement-enabled")) {
