@@ -64,6 +64,7 @@ namespace HeiProMap {
         f64 beta = 1.0;
         bool use_active_scheduling = true;
         bool use_preemptive_exit = true;
+        bool use_edge_cut = true;
     };
 
     class QuotientGraphRefinement final {
@@ -168,13 +169,7 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
                 std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                bool found_matching = false;
-                if (m_threads > 1) {
-                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                } else {
-                    found_matching = q_graph.find_all_pairs(active_this_round, used_this_round, matching);
-                }
+                bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
 
                 while (found_matching) {
                     // Pre-assign unique marks for each thread
@@ -189,7 +184,7 @@ namespace HeiProMap {
                         u64 tid = omp_get_thread_num();
                         u32 mark = base_mark + static_cast<u32>(i);
 
-                        if (d_oracle.last_level_pair(u_id, v_id)) {
+                        if (config->use_edge_cut && d_oracle.last_level_pair(u_id, v_id)) {
                             refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                         } else {
                             refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
@@ -197,11 +192,7 @@ namespace HeiProMap {
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                    if (m_threads > 1) {
-                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                    } else {
-                        found_matching = q_graph.find_all_pairs(active_this_round, used_this_round, matching);
-                    }
+                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
                 }
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");

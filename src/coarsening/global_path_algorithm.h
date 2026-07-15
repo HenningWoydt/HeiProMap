@@ -159,23 +159,21 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "allocate_matching");
             matching.initialize(g.n);
 
-            if (m_threads == 1) {
-                if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
-                    HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "simple_loop");
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        if (matching.is_matched(u)) { continue; }
-                        partition_t u_id = p_manager[u];
-                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                            const vertex_t v = g.edges_v[j];
-                            if (matching.is_matched(v)) { continue; }
-                            if (u_id != p_manager[v]) { continue; }
-                            matching.add(u, v);
-                            break;
-                        }
+            if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "simple_loop");
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    if (matching.is_matched(u)) { continue; }
+                    partition_t u_id = p_manager[u];
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                        const vertex_t v = g.edges_v[j];
+                        if (matching.is_matched(v)) { continue; }
+                        if (u_id != p_manager[v]) { continue; }
+                        matching.add(u, v);
+                        break;
                     }
-                    finalize_matching(g, matching, mapping);
-                    return;
                 }
+                finalize_matching(g, matching, mapping);
+                return;
             }
 
             if (level < config->random_level) {

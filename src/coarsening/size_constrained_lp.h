@@ -53,6 +53,7 @@ namespace HeiProMap {
         f64 f = 32;
         EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
         bool use_degree_ordering = true;
+        bool use_parallel_version = false;
     };
 
     class SizeConstrainedLP {
@@ -407,7 +408,7 @@ namespace HeiProMap {
                 }
 
                 // run clustering
-                if (threads > 1) {
+                if (config->use_parallel_version) {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_threaded");
                     #pragma omp parallel num_threads(threads)
                     {

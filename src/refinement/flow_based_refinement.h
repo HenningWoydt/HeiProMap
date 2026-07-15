@@ -81,7 +81,7 @@ namespace HeiProMap {
         u64 closed_vertex_sets_repeats = 10;
         bool always_include_boundary = false;
         GrowthStrategy growth_strategy = GrowthStrategy::BFS;
-        bool enabled_edge_cut_optimization = true;
+        bool use_edge_cut = true;
     };
 
     class FlowBasedRefinement final {
@@ -186,8 +186,6 @@ namespace HeiProMap {
                          q_graph_t &q_graph,
                          block_conn_t &block_conn,
                          const AlignedArray<weight_t> &lmax_constraints) {
-            RandomEngine &random_engine = rnd_engines[0];
-
             // active block scheduling
             AlignedArray<u8> active_this_round;
             AlignedArray<u8> active_next_round;
@@ -200,67 +198,32 @@ namespace HeiProMap {
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
-            if (m_threads > 1) {
-                for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reset_used_edges");
-                    std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+            for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reset_used_edges");
+                std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-                    bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
+                bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
 
-                    if (!found_matching) break;
+                if (!found_matching) break;
 
-                    while (found_matching) {
-                        #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
-                        for (size_t i = 0; i < matching.size(); ++i) {
-                            partition_t u_id = matching[i].first;
-                            partition_t v_id = matching[i].second;
+                while (found_matching) {
+                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    for (size_t i = 0; i < matching.size(); ++i) {
+                        partition_t u_id = matching[i].first;
+                        partition_t v_id = matching[i].second;
 
-                            u64 thread_id = omp_get_thread_num();
-                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
-                        }
-
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-                        found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
-                    }
-
-                    // swap active
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
-                    if (config->use_active_block_scheduling) {
-                        std::swap(active_this_round, active_next_round);
-                        active_next_round.initialize(m_k, 0);
-                    }
-                }
-            } else {
-                std::vector<std::pair<partition_t, partition_t> > pairs;
-
-                for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_pairs");
-                    pairs.clear();
-                    for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                        if (!active_this_round[u_id]) continue;
-                        for (partition_t v_id = 0; v_id < m_k; ++v_id) {
-                            if (q_graph.has_edge(u_id, v_id)) {
-                                pairs.emplace_back(u_id, v_id);
-                            }
-                        }
-                    }
-
-                    if (pairs.empty()) break;
-
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "shuffle");
-                    fast_shuffle_unchecked(pairs.data(), pairs.data() + pairs.size(), random_engine.generator);
-
-                    for (size_t i = 0; i < pairs.size(); ++i) {
-                        partition_t u_id = pairs[i].first;
-                        partition_t v_id = pairs[i].second;
-
-                        u64 thread_id = 0;
+                        u64 thread_id = omp_get_thread_num();
                         refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                     }
 
-                    // swap active
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
+                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                }
+
+                // swap active
+                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "swap_active");
+                if (config->use_active_block_scheduling) {
                     std::swap(active_this_round, active_next_round);
                     active_next_round.initialize(m_k, 0);
                 }
@@ -427,7 +390,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < left_region.size(); ++i) { translation_table.add(left_region[i], new_u++); }
                 for (size_t i = 0; i < right_region.size(); ++i) { translation_table.add(right_region[i], new_u++); }
 
-                if (!d_oracle.last_level_pair(left_id, right_id) || !config->enabled_edge_cut_optimization) {
+                if (!d_oracle.last_level_pair(left_id, right_id) || !config->use_edge_cut) {
                     build_flow_network_with_penalties<t_uniform_e_weights>(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
                 } else {
                     build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);

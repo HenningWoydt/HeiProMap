@@ -133,7 +133,7 @@ namespace HeiProMap {
                          q_graph_t &q_graph,
                          block_conn_t &block_conn,
                          const AlignedArray<weight_t> &lmax_constraints) {
-            if (m_threads > 1 || config->use_parallel_alg) {
+            if (config->use_parallel_alg) {
                 refine_impl_parallel<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
             } else {
                 refine_impl_serial<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);

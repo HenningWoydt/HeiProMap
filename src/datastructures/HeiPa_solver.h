@@ -519,7 +519,7 @@ namespace HeiProMap {
             size_t prev_idx = graphs.size() - 1;
             graphs.emplace_back(); // coarse the graph
 
-            graphs.back().contract(graphs[prev_idx], mappings.back(), ac.threads);
+            graphs.back().contract(graphs[prev_idx], mappings.back(), ac.threads, ac.use_parallel_contraction);
             p_manager.contract(mappings.back());
 
             auto ep = get_time_point();
