@@ -163,13 +163,24 @@ namespace HeiProMap {
 
             // read all command line args
             for (int i = 1; i < argc; ++i) {
+                bool found = false;
                 for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                    if (large_key == args[i] || small_key == args[i]) {
-                        input = args[i + 1];
-                        is_set = true;
-                        i += 1;
-                        break;
+                    if (large_key == args[i] || (small_key != "" && small_key == args[i])) {
+                        if (i + 1 < argc) {
+                            input = args[i + 1];
+                            is_set = true;
+                            i += 1;
+                            found = true;
+                            break;
+                        } else {
+                            std::cout << "Error: Value missing for parameter " << args[i] << std::endl;
+                            exit(EXIT_FAILURE);
+                        }
                     }
+                }
+                if (!found) {
+                    std::cout << "Error: Unknown parameter " << args[i] << std::endl;
+                    exit(EXIT_FAILURE);
                 }
             }
 
