@@ -163,6 +163,8 @@ namespace HeiProMap {
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
+
+            // optional
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
             {"--initial-c", "", "Initial contracting limit.", "64", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
@@ -171,27 +173,26 @@ namespace HeiProMap {
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
 
             // Global Path Algorithm (GPA) Coarsening
-            {"--gpa-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--gpa-random-level", "", "GPA random level.", "", "", false},
-            {"--gpa-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
-            {"--gpa-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
+            {"--gpa-coarsening-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-coarsening-random-level", "", "GPA random level.", "", "", false},
+            {"--gpa-coarsening-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
+            {"--gpa-coarsening-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
 
             // Size-Constrained Label Propagation (SCLP) Coarsening
-            {"--sclp-max-rounds", "", "SCLP max rounds.", "", "", false},
-            {"--sclp-min-threshold", "", "SCLP min threshold.", "", "", false},
-            {"--sclp-f", "", "SCLP tuning parameter f.", "8.0", "", false},
-            {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--sclp-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
-            {"--sclp-use-parallel-version", "", "SCLP use parallel version (true/false).", "", "", false},
+            {"--sclp-coarsening-max-rounds", "", "SCLP max rounds.", "", "", false},
+            {"--sclp-coarsening-min-threshold", "", "SCLP min threshold.", "", "", false},
+            {"--sclp-coarsening-f", "", "SCLP tuning parameter f.", "8.0", "", false},
+            {"--sclp-coarsening-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-coarsening-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
+            {"--sclp-coarsening-use-parallel-version", "", "SCLP use parallel version (true/false).", "", "", false},
 
             // Heavy Edge Matching (HEM) Coarsening
-            {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--hem-coarsening-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
 
             // Label Propagation (LP) Refinement
             {"--lp-refinement-enabled", "", "Enable label propagation refinement (true/false).", "", "", false},
             {"--lp-refinement-max-iteration", "", "Max iteration for label propagation refinement.", "", "", false},
             {"--lp-refinement-use-parallel-version", "", "Label propagation use parallel version (true/false).", "", "", false},
-            {"--lp-use-parallel-version", "", "Label propagation use parallel version (true/false).", "", "", false},
 
             // Quotient Graph (QG) Refinement
             {"--qg-refinement-enabled", "", "Enable quotient graph refinement (true/false).", "", "", false},
@@ -202,7 +203,6 @@ namespace HeiProMap {
             {"--qg-refinement-use-active-scheduling", "", "Use active scheduling in quotient graph refinement (true/false).", "", "", false},
             {"--qg-refinement-use-preemptive-exit", "", "Use preemptive exit in quotient graph refinement (true/false).", "", "", false},
             {"--qg-refinement-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
-            {"--qg-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
 
             // Flow-Based Refinement (FB)
             {"--fb-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
@@ -423,11 +423,6 @@ namespace HeiProMap {
                 std::string val = get("--lp-refinement-use-parallel-version");
                 label_propagation_config.use_parallel_alg = (val == "true" || val == "1");
             }
-            if (is_set("--lp-use-parallel-version")) {
-                std::string val = get("--lp-use-parallel-version");
-                label_propagation_config.use_parallel_alg = (val == "true" || val == "1");
-            }
-
             if (is_set("--qg-refinement-enabled")) {
                 std::string val = get("--qg-refinement-enabled");
                 quotient_graph_refinement_config.enabled = (val == "true" || val == "1");
@@ -456,10 +451,6 @@ namespace HeiProMap {
                 std::string val = get("--qg-refinement-use-edge-cut");
                 quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
             }
-            if (is_set("--qg-use-edge-cut")) { // keep backward compatibility
-                std::string val = get("--qg-use-edge-cut");
-                quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
-            }
 
             // Override coarsening settings from CLI if they are set
             if (is_set("--coarsening")) {
@@ -468,47 +459,47 @@ namespace HeiProMap {
             }
 
             // Override GPA configs
-            if (is_set("--gpa-rating-function")) {
-                global_path_algorithm_config.rating_function = string_to_edge_rating_function(get("--gpa-rating-function"));
+            if (is_set("--gpa-coarsening-rating-function")) {
+                global_path_algorithm_config.rating_function = string_to_edge_rating_function(get("--gpa-coarsening-rating-function"));
             }
-            if (is_set("--gpa-random-level")) {
-                global_path_algorithm_config.random_level = std::stoull(get("--gpa-random-level"));
+            if (is_set("--gpa-coarsening-random-level")) {
+                global_path_algorithm_config.random_level = std::stoull(get("--gpa-coarsening-random-level"));
             }
-            if (is_set("--gpa-edge-rating-tiebreaking")) {
-                std::string val = get("--gpa-edge-rating-tiebreaking");
+            if (is_set("--gpa-coarsening-edge-rating-tiebreaking")) {
+                std::string val = get("--gpa-coarsening-edge-rating-tiebreaking");
                 global_path_algorithm_config.use_edge_rating_tiebreaking = (val == "true" || val == "1");
             }
-            if (is_set("--gpa-two-hop-threshold")) {
-                global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-two-hop-threshold"));
+            if (is_set("--gpa-coarsening-two-hop-threshold")) {
+                global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-coarsening-two-hop-threshold"));
             }
 
             size_constrained_lp_config.use_parallel_version = (threads > 1);
 
             // Override SCLP configs
-            if (is_set("--sclp-max-rounds")) {
-                size_constrained_lp_config.max_rounds = std::stoull(get("--sclp-max-rounds"));
+            if (is_set("--sclp-coarsening-max-rounds")) {
+                size_constrained_lp_config.max_rounds = std::stoull(get("--sclp-coarsening-max-rounds"));
             }
-            if (is_set("--sclp-min-threshold")) {
-                size_constrained_lp_config.min_threshold = std::stod(get("--sclp-min-threshold"));
+            if (is_set("--sclp-coarsening-min-threshold")) {
+                size_constrained_lp_config.min_threshold = std::stod(get("--sclp-coarsening-min-threshold"));
             }
-            if (is_set("--sclp-f")) {
-                size_constrained_lp_config.f = std::stod(get("--sclp-f"));
+            if (is_set("--sclp-coarsening-f")) {
+                size_constrained_lp_config.f = std::stod(get("--sclp-coarsening-f"));
             }
-            if (is_set("--sclp-rating-function")) {
-                size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-rating-function"));
+            if (is_set("--sclp-coarsening-rating-function")) {
+                size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-coarsening-rating-function"));
             }
-            if (is_set("--sclp-use-degree-ordering")) {
-                std::string val = get("--sclp-use-degree-ordering");
+            if (is_set("--sclp-coarsening-use-degree-ordering")) {
+                std::string val = get("--sclp-coarsening-use-degree-ordering");
                 size_constrained_lp_config.use_degree_ordering = (val == "true" || val == "1");
             }
-            if (is_set("--sclp-use-parallel-version")) {
-                std::string val = get("--sclp-use-parallel-version");
+            if (is_set("--sclp-coarsening-use-parallel-version")) {
+                std::string val = get("--sclp-coarsening-use-parallel-version");
                 size_constrained_lp_config.use_parallel_version = (val == "true" || val == "1");
             }
 
             // Override HEM configs
-            if (is_set("--hem-rating-function")) {
-                heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-rating-function"));
+            if (is_set("--hem-coarsening-rating-function")) {
+                heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-coarsening-rating-function"));
             }
 
             // Override flow refinement configs

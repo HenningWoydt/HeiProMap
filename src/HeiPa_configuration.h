@@ -74,7 +74,6 @@ namespace HeiProMap {
             {"--qg-refinement-use-active-scheduling", "", "Use active scheduling in quotient graph refinement (true/false).", "", "", false},
             {"--qg-refinement-use-preemptive-exit", "", "Use preemptive exit in quotient graph refinement (true/false).", "", "", false},
             {"--qg-refinement-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
-            {"--qg-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
         };
 
     public:
@@ -262,10 +261,6 @@ namespace HeiProMap {
             }
             if (is_set("--qg-refinement-use-edge-cut")) {
                 std::string val = get("--qg-refinement-use-edge-cut");
-                quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
-            }
-            if (is_set("--qg-use-edge-cut")) {
-                std::string val = get("--qg-use-edge-cut");
                 quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
             }
         }
