@@ -50,6 +50,7 @@
 #include "../utility/translation_table.h"
 #include "quotient_graph_refinement.h"
 #include "../utility/flow.h"
+#include "../utility/dinics.h"
 #include "../utility/push_relabel.h"
 #include "../utility/random_engine.h"
 #include "../utility/utils.h"
@@ -89,6 +90,9 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
         u64 m_threads = 1;
+
+        u64 m_scc_successes = 0;
+        u64 m_scc_failures = 0;
 
         std::vector<AlignedArray<u32> > seen_vecs;
         std::vector<AlignedArray<u32> > region_vecs;
@@ -186,6 +190,9 @@ namespace HeiProMap {
                          q_graph_t &q_graph,
                          block_conn_t &block_conn,
                          const AlignedArray<weight_t> &lmax_constraints) {
+            m_scc_successes = 0;
+            m_scc_failures = 0;
+
             // active block scheduling
             AlignedArray<u8> active_this_round;
             AlignedArray<u8> active_next_round;
@@ -228,8 +235,85 @@ namespace HeiProMap {
                     active_next_round.initialize(m_k, 0);
                 }
             }
+
+            if (config->use_closed_vertex_set) {
+                // std::cout << "[FlowBasedRefinement] SCC closure search summary: "
+                //           << "Successes = " << m_scc_successes << ", "
+                //           << "Failures = " << m_scc_failures << std::endl;
+            }
         }
 
+
+        template<bool t_uniform_e_weights>
+        weight_t compute_flow_cut_capacity(const graph_t &g,
+                                           const p_manager_t &p_manager,
+                                           const d_oracle_t &d_oracle,
+                                           partition_t left_id,
+                                           partition_t right_id,
+                                           const std::vector<vertex_t> &left_region,
+                                           const std::vector<vertex_t> &right_region,
+                                           const std::vector<u8> &is_left,
+                                           const TranslationTable<vertex_t> &translation_table,
+                                           const AlignedArray<u32> &region_marker,
+                                           u32 region_mark) {
+            u32 left_mark = region_mark - 1;
+            u32 right_mark = region_mark;
+            weight_t distance = d_oracle.get(left_id, right_id);
+            bool use_penalties = !d_oracle.last_level_pair(left_id, right_id) || !config->use_edge_cut;
+
+            weight_t total_cut = 0;
+
+            auto process_region = [&](const std::vector<vertex_t> &region) {
+                for (size_t j = 0; j < region.size(); ++j) {
+                    vertex_t u = region[j];
+                    int new_u = static_cast<int>(translation_table.get_n(u));
+                    bool u_src = (is_left[new_u] == 1);
+
+                    weight_t left_penalty = 0;
+                    weight_t right_penalty = 0;
+
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g.edges_v[i];
+                        const weight_t w = g.edges_w[i];
+
+                        if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
+                            if (u < v) {
+                                int new_v = static_cast<int>(translation_table.get_n(v));
+                                bool v_src = (is_left[new_v] == 1);
+                                if (u_src != v_src) {
+                                    weight_t cap = use_penalties ? (t_uniform_e_weights ? distance : w * distance)
+                                                                 : (t_uniform_e_weights ? 1 : w);
+                                    total_cut += cap;
+                                }
+                            }
+                        } else {
+                            partition_t v_id = p_manager[v];
+                            if (use_penalties) {
+                                weight_t dist_l = t_uniform_e_weights ? d_oracle.get(left_id, v_id) : w * d_oracle.get(left_id, v_id);
+                                weight_t dist_r = t_uniform_e_weights ? d_oracle.get(right_id, v_id) : w * d_oracle.get(right_id, v_id);
+                                left_penalty += dist_l;
+                                right_penalty += dist_r;
+                            } else {
+                                weight_t e_w = t_uniform_e_weights ? 1 : w;
+                                if (v_id == left_id) right_penalty += e_w;
+                                else if (v_id == right_id) left_penalty += e_w;
+                            }
+                        }
+                    }
+
+                    if (u_src) {
+                        total_cut += left_penalty;
+                    } else {
+                        total_cut += right_penalty;
+                    }
+                }
+            };
+
+            process_region(left_region);
+            process_region(right_region);
+
+            return total_cut;
+        }
 
         template<bool t_uniform_e_weights>
         weight_t calculate_gain(const graph_t &g,
@@ -391,7 +475,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < right_region.size(); ++i) { translation_table.add(right_region[i], new_u++); }
 
                 if (!d_oracle.last_level_pair(left_id, right_id) || !config->use_edge_cut) {
-                    build_flow_network_with_penalties<t_uniform_e_weights>(g, p_manager, d_oracle, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
+                    build_flow_network_with_penalties<t_uniform_e_weights>(g, d_oracle, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, alpha, s_connected, t_connected);
                 } else {
                     build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
                 }
@@ -440,13 +524,33 @@ namespace HeiProMap {
                     weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
                     bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax_constraints[left_id], lmax_constraints[right_id], avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
 
-                    // still not valid
+                    if (closure_found) {
+                        #pragma omp atomic
+                        m_scc_successes++;
+
+                        // SANITY CHECK 1: Verify balance constraints
+                        bool closure_is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left_2, lmax_constraints, left_region, right_region, translation_table);
+                        ASSERT(closure_is_valid);
+
+                        weight_t mincut_gain = calculate_gain<t_uniform_e_weights>(g, p_manager, d_oracle, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
+                        weight_t closure_gain = calculate_gain<t_uniform_e_weights>(g, p_manager, d_oracle, is_left_2, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
+
+                        if (closure_gain >= mincut_gain) {
+                            std::swap(is_left, is_left_2);
+                        } else {
+                            closure_found = false;
+                        }
+                    } else {
+                        #pragma omp atomic
+                        m_scc_failures++;
+                    }
+
+                    // still not valid or did not improve gain
                     if (!closure_found) {
                         if (alpha <= 1.0) { return; }
                         alpha = std::max(alpha / alpha_modifier, 1.0);
                         continue;
                     }
-                    std::swap(is_left, is_left_2);
                 }
 
                 // check if the cut actually changes the partition
@@ -658,8 +762,8 @@ namespace HeiProMap {
 
         template<bool t_uniform_e_weights>
         void build_flow_network_with_penalties(const graph_t &g,
+                                               const d_oracle_t &d_oracle,
                                                const p_manager_t &p_manager,
-                                               d_oracle_t &d_oracle,
                                                partition_t left_id,
                                                partition_t right_id,
                                                std::vector<vertex_t> &left_region,
@@ -669,6 +773,7 @@ namespace HeiProMap {
                                                TranslationTable<vertex_t> &translation_table,
                                                AlignedArray<u32> &region_marker,
                                                u32 &region_mark,
+                                               f64 alpha,
                                                std::vector<u8> &s_connected,
                                                std::vector<u8> &t_connected) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "build_flow_network_with_penalties");
@@ -896,60 +1001,15 @@ namespace HeiProMap {
                                      std::vector<u8> &s_connected,
                                      std::vector<u8> &t_connected,
                                      ResidualFlowNetwork &residual_g) {
-            u32 left_mark = region_mark - 1;
-            u32 right_mark = region_mark;
             vertex_t flow_n = left_region.size() + right_region.size();
-
             residual_g.initialize(flow_n);
 
-            // Internal edges from cut labels
-            auto add_region_edges = [&](std::vector<vertex_t> &region) {
-                for (size_t j = 0; j < region.size(); ++j) {
-                    vertex_t u = region[j];
-                    int new_u = static_cast<int>(translation_table.get_n(u));
-                    bool u_src = (pr.what_label(new_u) == SOURCE);
-
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g.edges_v[i]; {
-                            if (region_marker[v] != left_mark && region_marker[v] != right_mark) { continue; }
-                            if (u < v) { continue; }
-
-                            int new_v = static_cast<int>(translation_table.get_n(v));
-                            bool v_src = (pr.what_label(new_v) == SOURCE);
-
-                            if (u_src == v_src) {
-                                residual_g.add_directed_edge(new_u, new_v, 1);
-                                residual_g.add_directed_edge(new_v, new_u, 1);
-                            } else if (u_src) {
-                                residual_g.add_directed_edge(new_v, new_u, 1);
-                            } else {
-                                residual_g.add_directed_edge(new_u, new_v, 1);
-                            }
-                        }
-                    }
-                }
-            };
-
-            add_region_edges(left_region);
-            add_region_edges(right_region);
-
-            // Terminal edges from tracked connectivity
-            for (vertex_t i = 0; i < flow_n; ++i) {
-                bool u_src = (pr.what_label(static_cast<int>(i)) == SOURCE);
-                if (s_connected[i]) {
-                    if (u_src) {
-                        residual_g.add_edge_from_source(i, 1);
-                        residual_g.add_edge_to_source(i, 1);
-                    } else {
-                        residual_g.add_edge_to_source(i, 1);
-                    }
-                }
-                if (t_connected[i]) {
-                    if (!u_src) {
-                        residual_g.add_edge_to_target(i, 1);
-                        residual_g.add_edge_from_target(i, 1);
-                    } else {
-                        residual_g.add_edge_from_target(i, 1);
+            int pr_n = static_cast<int>(flow_n + 2);
+            for (int u = 0; u < pr_n; ++u) {
+                for (int i = pr.arc_first(u); i < pr.arc_last(u); ++i) {
+                    if (pr.arc_cap(i) > 0) {
+                        int v = pr.arc_to(i);
+                        residual_g.add_directed_edge(static_cast<vertex_t>(u), static_cast<vertex_t>(v), 1);
                     }
                 }
             }

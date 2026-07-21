@@ -347,16 +347,14 @@ public:
         return height[v] >= n ? SOURCE : SINK;
     }
 
-    // Iterate all residual arcs: calls f(u, v, residual_cap) for each arc with cap > 0
-    template<typename F>
-    void for_each_residual(F&& f) const {
-        for (int u = 0; u < n; u++) {
-            for (int i = first[u]; i < first[u + 1]; i++) {
-                if (arcs[i].cap > 0)
-                    f(u, arcs[i].to, arcs[i].cap);
-            }
-        }
-    }
+    int get_source() const { return s; }
+    int get_target() const { return t; }
+
+    // Residual graph accessors for Sanders & Schulz SCC construction
+    int arc_first(int u) const { return first[u]; }
+    int arc_last(int u) const { return first[u + 1]; }
+    int arc_to(int arc_idx) const { return arcs[arc_idx].to; }
+    Cap arc_cap(int arc_idx) const { return arcs[arc_idx].cap; }
 };
 
 } // namespace HeiProMap
