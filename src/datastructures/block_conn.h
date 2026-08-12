@@ -73,11 +73,22 @@ namespace HeiProMap {
             m_arr_ids.initialize(m_m);
             m_arr_weights.initialize(m_m);
 
+            if (m_n < 1024) {
+                std::fill_n(m_sizes.get_ptr(), m_n, 0);
+                size_t current_offset = 0;
+                for (vertex_t u = 0; u < m_n; ++u) {
+                    m_start[u] = current_offset;
+                    current_offset += std::min(m_k, g.deg(u));
+                }
+                total_size = current_offset;
+                return;
+            }
+
             #pragma omp parallel num_threads(num_threads)
             {
                 u64 tid = omp_get_thread_num();
                 vertex_t chunk = (m_n + num_threads - 1) / num_threads;
-                vertex_t start_u = tid * chunk;
+                vertex_t start_u = std::min(m_n, tid * chunk);
                 vertex_t end_u = std::min(m_n, start_u + chunk);
                 std::fill_n(m_sizes.get_ptr() + start_u, end_u - start_u, 0);
             }
@@ -87,7 +98,7 @@ namespace HeiProMap {
             {
                 u64 tid = omp_get_thread_num();
                 vertex_t chunk = (m_n + num_threads - 1) / num_threads;
-                vertex_t start_u = tid * chunk;
+                vertex_t start_u = std::min(m_n, tid * chunk);
                 vertex_t end_u = std::min(m_n, start_u + chunk);
 
                 size_t sum = 0;
@@ -106,7 +117,7 @@ namespace HeiProMap {
             {
                 u64 tid = omp_get_thread_num();
                 vertex_t chunk = (m_n + num_threads - 1) / num_threads;
-                vertex_t start_u = tid * chunk;
+                vertex_t start_u = std::min(m_n, tid * chunk);
                 vertex_t end_u = std::min(m_n, start_u + chunk);
 
                 size_t current_offset = thread_sums[tid];
