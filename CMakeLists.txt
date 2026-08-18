@@ -160,3 +160,7 @@ target_link_libraries(Deep-HeiProMap PRIVATE HeiProMapLib)
 set_target_properties(Deep-HeiProMap PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
 target_link_options(Deep-HeiProMap PRIVATE "-Wl,--disable-new-dtags")
 
+add_executable(waver_map app/waver_map.cpp)
+target_link_libraries(waver_map PRIVATE HeiProMapLib)
+set_target_properties(waver_map PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
+target_link_options(waver_map PRIVATE "-Wl,--disable-new-dtags")

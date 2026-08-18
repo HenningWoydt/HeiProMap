@@ -33,6 +33,10 @@
 #include "../utility/utils.h"
 #include "../utility/profiler.h"
 
+#ifdef USE_GRAPH_DISTANCE_ORACLE
+#include "graph_distance_oracle.h"
+#else
+
 namespace HeiProMap {
     class DistanceOracle {
         std::vector<partition_t> m_hierarchy;
