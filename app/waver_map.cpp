@@ -35,10 +35,12 @@ int main(const int argc, char *argv[]) {
         {
             HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
             std::vector<std::pair<std::string, std::string> > input = {
-                {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"},
-                {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
-                // Swap out hierarchy and distance for the topology flag
-                {"--topology", "../data/topologies/256_PEs.graph"},
+                // {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"},
+                // {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
+                // {"--topology", "../data/topologies/256_PEs.graph"},
+                {"--graph", "../data/heipromap_input.graph"},
+                {"--mapping", "../data/out/heipromap_input.txt"},
+                {"--topology", "../data/heipromap_topology.graph"},
                 {"--imbalance", "0.03"},
                 {"--config", "fast"},
                 {"--seed", "0"},

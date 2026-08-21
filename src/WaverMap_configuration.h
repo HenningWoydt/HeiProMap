@@ -451,20 +451,15 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            
-            
-            
-            
-            
-            
+
 
             // enable label propagation
-            label_propagation_config.enabled = true;
+            label_propagation_config.enabled = false;
             label_propagation_config.max_iteration = 5;
             label_propagation_config.use_parallel_alg = false;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled = false;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
@@ -511,12 +506,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            
-            
-            
-            
-            
-            
+
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -570,12 +560,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            
-            
-            
-            
-            
-            
+
 
             // enable label propagation
             label_propagation_config.enabled = true;
@@ -625,12 +610,7 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            
-            
-            
-            
-            
-            
+
 
             // enable label propagation
             label_propagation_config.enabled = true;

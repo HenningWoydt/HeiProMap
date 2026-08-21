@@ -74,7 +74,7 @@ namespace HeiProMap {
 
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
+        LargeQuotientGraph q_graph;
         BlockConn block_conn;
         DistanceOracleT d_oracle;
 
