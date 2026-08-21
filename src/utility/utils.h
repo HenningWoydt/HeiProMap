@@ -47,6 +47,26 @@
 
 namespace HeiProMap {
     /**
+     * Checks if the current process memory usage exceeds 60 GB.
+     * If it does, prints an error message and exits the program.
+     */
+    inline void check_memory_usage(const std::string& label = "", size_t limit_gb = 60) {
+        std::ifstream statm("/proc/self/statm");
+        if (statm) {
+            size_t size, resident;
+            statm >> size >> resident;
+            long page_size = sysconf(_SC_PAGESIZE);
+            size_t rss_bytes = resident * page_size;
+            size_t limit_bytes = limit_gb * 1024ULL * 1024ULL * 1024ULL;
+            if (rss_bytes > limit_bytes) {
+                std::cerr << "FATAL ERROR [" << label << "]: Memory usage exceeded " << limit_gb 
+                          << "GB (Current RSS: " << (rss_bytes / (1024ULL * 1024ULL * 1024ULL)) 
+                          << "GB). Exiting." << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+    /**
      * Splits a string into multiple sub-strings. The specified character will
      * serve as the delimiter and will not be present in any string.
      *

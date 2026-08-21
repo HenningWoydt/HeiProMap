@@ -33,7 +33,9 @@
 #include "../utility/utils.h"
 #include "../utility/profiler.h"
 
-#ifdef USE_GRAPH_DISTANCE_ORACLE
+#if defined(USE_GRID_DISTANCE_ORACLE)
+#include "grid_distance_oracle.h"
+#elif defined(USE_GRAPH_DISTANCE_ORACLE)
 #include "graph_distance_oracle.h"
 #else
 

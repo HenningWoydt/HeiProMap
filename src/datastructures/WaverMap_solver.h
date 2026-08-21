@@ -186,8 +186,9 @@ namespace HeiProMap {
             // distance
             if (!ac.topology_in.empty()) { topology_graphs.emplace_back(ac.topology_in); }
             else { std::cerr << "Topology required for WaverMap!" << std::endl; exit(1); }
+            topology_graphs[0].infer_grid_coords();
             ac.k = topology_graphs[0].n;
-            d_oracle.initialize(topology_graphs[0], ac.threads);
+            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle);
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -231,8 +232,9 @@ namespace HeiProMap {
 
             // distance
             topology_graphs.emplace_back(std::move(topology));
+            topology_graphs[0].infer_grid_coords();
             ac.k = topology_graphs[0].n;
-            d_oracle.initialize(topology_graphs[0], ac.threads);
+            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle);
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -269,8 +271,9 @@ namespace HeiProMap {
             // distance
             if (!ac.topology_in.empty()) { topology_graphs.emplace_back(ac.topology_in); }
             else { std::cerr << "Topology required for WaverMap!" << std::endl; exit(1); }
+            topology_graphs[0].infer_grid_coords();
             ac.k = topology_graphs[0].n;
-            d_oracle.initialize(topology_graphs[0], ac.threads);
+            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle);
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -421,7 +424,7 @@ namespace HeiProMap {
                     
                     // Reinitialize d_oracle
                     ac.k = topology_graphs.back().n;
-                    d_oracle.initialize(topology_graphs.back(), ac.threads);
+                    d_oracle.initialize(topology_graphs.back(), ac.threads, ac.use_grid_oracle);
                     
                     // Reinitialize structures because k changed
                     p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -491,20 +494,28 @@ namespace HeiProMap {
                 // If topology was coarsened at this level, uncontract it first
                 bool uncontracted_topology = false;
                 if (topology_mappings.size() == mappings.size()) {
+                    check_memory_usage("before_topo_uncontract");
                     auto sp_top_unc = get_time_point();
                     uncontracted_topology = true;
                     // Restore previous topology
                     topology_graphs.pop_back();
                     ac.k = topology_graphs.back().n;
-                    d_oracle.initialize(topology_graphs.back(), ac.threads);
+                    
+                    // Recompute level_lmax with the new ac.k
+                    level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+                    d_oracle.initialize(topology_graphs.back(), ac.threads, ac.use_grid_oracle);
                     
                     // Create new p_manager for the fine topology
                     partition_t coarse_k = p_manager.k;
-                    PartitionManager old_pm;
-                    old_pm.initialize(graphs[0].n, coarse_k, graphs[0].g_weight);
-                    old_pm.copy_from(p_manager);
+                    std::vector<partition_t> old_partition(graphs[graphs.size() - 1].n);
+                    for (vertex_t u = 0; u < graphs[graphs.size() - 1].n; ++u) {
+                        old_partition[u] = p_manager[u];
+                    }
+                    
                     p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
                     p_manager.reset_weights();
+                    
+                    check_memory_usage("after_pmanager_init");
                     
                     rebalancer.update_k(ac.k);
                     if (ac.label_propagation_config.enabled) lp_refine.update_k(ac.k);
@@ -512,17 +523,18 @@ namespace HeiProMap {
                     if (ac.flow_based_refinement_config.enabled) flow_based_refinement.update_k(ac.k);
                     if (ac.negative_cycle_config.enabled) negative_cycle_refinement.update_k(ac.k);
 
+                    std::vector<std::vector<partition_t>> coarse_to_fine(coarse_k);
+                    for (vertex_t f = 0; f < ac.k; ++f) {
+                        coarse_to_fine[topology_mappings.back().get(f)].push_back(f);
+                    }
+                    
+                    check_memory_usage("after_coarse_to_fine");
                     
                     // Assign vertices greedily to the fine partition with minimum accumulated weight
                     for (vertex_t u = 0; u < graphs[graphs.size() - 1].n; ++u) {
-                        partition_t coarse_id = old_pm[u];
-                        // Find fine blocks that map to coarse_id
-                        std::vector<partition_t> fine_blocks;
-                        for (vertex_t f = 0; f < ac.k; ++f) {
-                            if (topology_mappings.back().get(f) == coarse_id) {
-                                fine_blocks.push_back(f);
-                            }
-                        }
+                        partition_t coarse_id = old_partition[u];
+                        const auto& fine_blocks = coarse_to_fine[coarse_id];
+                        
                         // Weight-aware greedy assignment
                         weight_t u_weight = graphs[graphs.size() - 1].uniform_v_weights ? 1 : graphs[graphs.size() - 1].v_weights[u];
                         if (!fine_blocks.empty()) {
@@ -541,23 +553,17 @@ namespace HeiProMap {
                     }
                     topology_mappings.pop_back();
                     
+                    check_memory_usage("after_greedy_assign");
+                    
                     // We must rebuild structures because k changed
                     bv_manager.initialize(graphs[0].n, ac.k);
                     q_graph.initialize(ac.k);
                     block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
 
-                    for (vertex_t u = 0; u < graphs[graphs.size() - 1].n; ++u) {
-                        partition_t u_id = p_manager[u];
-                        for (size_t i = graphs[graphs.size() - 1].neighborhoods[u]; i < graphs[graphs.size() - 1].neighborhoods[u + 1]; ++i) {
-                            vertex_t v = graphs[graphs.size() - 1].edges_v[i];
-                            if (u < v) {
-                                partition_t v_id = p_manager[v];
-                                if (u_id != v_id) {
-                                    q_graph.add_edge(u_id, v_id, graphs[graphs.size() - 1].edges_w[i]);
-                                }
-                            }
-                        }
-                    }
+                // Rebuild q_graph for the new topology
+                q_graph.build_from_graph(graphs[graphs.size() - 1], p_manager);
+                
+                    check_memory_usage("after_rebuild_structures");
 
                     f64 top_unc_time = get_milli_seconds(sp_top_unc, get_time_point());
                     auto sp_qap = get_time_point();
