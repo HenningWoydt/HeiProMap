@@ -154,19 +154,25 @@ namespace HeiProMap {
         vertex_t u;
         vertex_t v;
         f32 w;
+        u32 tiebreaker = 0;
 
     public:
         EdgeUVW() = default;
 
-        EdgeUVW(const vertex_t u, const vertex_t v, const f32 w) : u(u), v(v), w(w) {
+        EdgeUVW(const vertex_t u, const vertex_t v, const f32 w) : u(u), v(v), w(w), tiebreaker(0) {
+        }
+        
+        EdgeUVW(const vertex_t u, const vertex_t v, const f32 w, const u32 tb) : u(u), v(v), w(w), tiebreaker(tb) {
         }
 
         bool operator<(const EdgeUVW &e) const {
-            return w < e.w;
+            if (w != e.w) return w < e.w;
+            return tiebreaker < e.tiebreaker;
         }
 
         bool operator>(const EdgeUVW &e) const {
-            return w > e.w;
+            if (w != e.w) return w > e.w;
+            return tiebreaker > e.tiebreaker;
         }
 
         bool operator==(const EdgeUVW &e) const {

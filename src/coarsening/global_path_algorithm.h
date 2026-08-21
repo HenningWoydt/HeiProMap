@@ -194,16 +194,12 @@ namespace HeiProMap {
             }
 
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "sort_ratings");
-            std::vector<u64> seeds(m_threads);
-            for (u64 i = 0; i < m_threads; ++i) { seeds[i] = random_engine->get_u64(); }
 
             #pragma omp parallel for num_threads(m_threads) schedule(static, 1)
             for (u64 i = 0; i < m_threads; ++i) {
-                if (config->use_edge_rating_tiebreaking) {
-                    std::mt19937 g(seeds[i]);
-                    std::shuffle(m_thread_infos[i].local_edges.begin(), m_thread_infos[i].local_edges.end(), g);
-                }
                 if (m_thread_infos[i].min_rating != m_thread_infos[i].max_rating) {
+                    std::sort(m_thread_infos[i].local_edges.begin(), m_thread_infos[i].local_edges.end(), std::greater<>());
+                } else if (config->use_edge_rating_tiebreaking) {
                     std::sort(m_thread_infos[i].local_edges.begin(), m_thread_infos[i].local_edges.end(), std::greater<>());
                 }
                 m_thread_infos[i].edge_idx = 0;
@@ -462,7 +458,12 @@ namespace HeiProMap {
 
                     local_min = std::min(local_min, edge_rating);
                     local_max = std::max(local_max, edge_rating);
-                    m_thread_infos[thread_id].local_edges.emplace_back(u, v, edge_rating);
+                    if (config->use_edge_rating_tiebreaking) {
+                        u32 tb = static_cast<u32>(hash_combine_u64(u, v));
+                        m_thread_infos[thread_id].local_edges.emplace_back(u, v, edge_rating, tb);
+                    } else {
+                        m_thread_infos[thread_id].local_edges.emplace_back(u, v, edge_rating);
+                    }
                 }
 
                 m_thread_infos[thread_id].min_rating = local_min;
