@@ -69,6 +69,7 @@ namespace HeiProMap {
         std::vector<graph_t> graphs;
         graph_t topology_graph;
 
+        public:
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
         QuotientGraph q_graph;
@@ -182,7 +183,7 @@ namespace HeiProMap {
             random_engine = RandomEngine(ac.seed);
 
             // distance
-            topology_graph = CSRGraph(ac.topology_in);
+            if (!ac.topology_in.empty()) topology_graph = CSRGraph(ac.topology_in);
             ac.k = topology_graph.n;
             d_oracle.initialize(topology_graph, ac.threads);
 
@@ -218,6 +219,44 @@ namespace HeiProMap {
             init_time += get_seconds(sp, ep);
         }
 
+
+        explicit WaverMapSolver(graph_t &&g, graph_t &&topology, const WaverMapConfiguration &t_ac) {
+            graphs.reserve(100);
+            graphs.emplace_back(std::move(g));
+
+            ac = t_ac;
+            random_engine = RandomEngine(ac.seed);
+
+            // distance
+            topology_graph = std::move(topology);
+            ac.k = topology_graph.n;
+            d_oracle.initialize(topology_graph, ac.threads);
+
+            // manager
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+            bv_manager.initialize(graphs[0].n, ac.k);
+            q_graph.initialize(ac.k);
+            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
+
+            // matching
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
+
+            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
+
+            // refinement
+            if (ac.label_propagation_config.enabled) {
+                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
+            }
+            if (ac.quotient_graph_refinement_config.enabled) {
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+            }
+            if (ac.flow_based_refinement_config.enabled) {
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+            }
+        }
+
         explicit WaverMapSolver(graph_t &&g, const WaverMapConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(std::move(g));
@@ -226,7 +265,7 @@ namespace HeiProMap {
             random_engine = RandomEngine(ac.seed);
 
             // distance
-            topology_graph = CSRGraph(ac.topology_in);
+            if (!ac.topology_in.empty()) topology_graph = CSRGraph(ac.topology_in);
             ac.k = topology_graph.n;
             d_oracle.initialize(topology_graph, ac.threads);
 
@@ -339,7 +378,7 @@ namespace HeiProMap {
             return p;
         }
 
-    private:
+    public:
         void internal_solve() {
             u64 level = 0;
             u64 mult = ac.initial_c;
