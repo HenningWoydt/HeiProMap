@@ -1,35 +1,12 @@
-/*******************************************************************************
- * MIT License
- *
- * This file is part of HeiProMap.
- *
- * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- ******************************************************************************/
-
+#include <cmath>
 #ifndef HEIPROMAP_GRAPH_DISTANCE_ORACLE_H
 #define HEIPROMAP_GRAPH_DISTANCE_ORACLE_H
 
 #include <queue>
 #include <vector>
 #include <limits>
+#include <iostream>
+#include <iomanip>
 
 #include "../utility/aligned_array.h"
 #include "../definitions.h"
@@ -42,17 +19,9 @@ namespace HeiProMap {
     class GraphDistanceOracle {
         partition_t m_k = 0;
         const CSRGraph* m_graph = nullptr;
+        bool m_use_grid = false;
 
-        struct CacheEntry {
-            partition_t u;
-            partition_t v;
-            weight_t dist;
-        };
-        struct CacheSet {
-            CacheEntry entries[2];
-            u8 lru;
-        };
-        static constexpr size_t NUM_CACHED_ROWS = 1024*32;
+        static constexpr size_t NUM_CACHED_ROWS = 1024*128;
 
         template <class T, class Container = std::vector<T>, class Compare = std::less<typename Container::value_type>>
         class clearable_pq : public std::priority_queue<T, Container, Compare> {
@@ -108,21 +77,33 @@ namespace HeiProMap {
             }
         }
 
-        void initialize(const CSRGraph& topology_graph, size_t max_threads) {
+        void initialize(const CSRGraph& topology_graph, size_t max_threads, bool use_grid = false) {
             HEIPROMAP_PROFILE_SCOPE("misc", "GraphDistanceOracle", "initialize");
             print_stats();
             m_graph = &topology_graph;
             m_k = topology_graph.n;
+            m_use_grid = use_grid;
             
             m_thread_states.resize(max_threads);
             for (auto& state : m_thread_states) {
-                size_t num_rows = std::min<size_t>(1024*32, m_k);
-                state.rows.resize(num_rows);
-                for (size_t i = 0; i < num_rows; ++i) {
-                    state.rows[i].u = -1;
-                    state.rows[i].dist.resize(m_k);
+                if (!m_use_grid) {
+                    // Limit total cache memory per thread to ~256MB to avoid OOM on huge graphs
+                    size_t max_mem_per_thread = 256ULL * 1024 * 1024;
+                    size_t row_size = m_k * sizeof(weight_t);
+                    size_t max_rows_by_mem = std::max<size_t>(1, max_mem_per_thread / row_size);
+                    
+                    size_t num_rows = std::min<size_t>({NUM_CACHED_ROWS, m_k, max_rows_by_mem});
+                    state.rows.resize(num_rows);
+                    for (size_t i = 0; i < num_rows; ++i) {
+                        state.rows[i].u = -1;
+                        state.rows[i].last_used = 0;
+                        state.rows[i].dist.resize(m_k);
+                    }
+                    state.row_locator.assign(m_k, -1);
+                } else {
+                    state.rows.clear();
+                    state.row_locator.clear();
                 }
-                state.row_locator.assign(m_k, -1);
                 state.tick = 0;
                 
                 state.stat_queries = 0;
@@ -143,6 +124,11 @@ namespace HeiProMap {
             ASSERT(thread_id < m_thread_states.size());
             
             if (u_id == v_id) return 0;
+            if (m_use_grid && !m_graph->coords.empty()) {
+                double dx = std::abs(m_graph->coords[u_id].first - m_graph->coords[v_id].first);
+                double dy = std::abs(m_graph->coords[u_id].second - m_graph->coords[v_id].second);
+                return static_cast<weight_t>(std::round(dx + dy));
+            }
 
             ThreadState& state = m_thread_states[thread_id];
             state.tick++;
@@ -165,8 +151,12 @@ namespace HeiProMap {
 
             // Not found. Evict LRU row
             size_t lru_idx = 0;
-            uint32_t min_tick = state.rows[0].last_used;
-            for (size_t i = 1; i < state.rows.size(); ++i) {
+            uint32_t min_tick = state.tick + 1; // Start higher than possible
+            for (size_t i = 0; i < state.rows.size(); ++i) {
+                if (state.rows[i].u == (partition_t)-1) {
+                    lru_idx = i;
+                    break;
+                }
                 if (state.rows[i].last_used < min_tick) {
                     min_tick = state.rows[i].last_used;
                     lru_idx = i;

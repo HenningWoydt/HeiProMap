@@ -49,6 +49,23 @@ namespace HeiProMap {
     */
     class CSRGraph {
     public:
+        void infer_grid_coords() {
+            if (n == 0) return;
+            coords.resize(n);
+            size_t W = 0;
+            for (vertex_t i = 1; i < n; ++i) {
+                if (neighborhoods[i+1] - neighborhoods[i] == 2) {
+                    W = i + 1;
+                    break;
+                }
+            }
+            if (W == 0) W = 1;
+            for (vertex_t i = 0; i < n; ++i) {
+                coords[i] = { (double)(i % W), (double)(i / W) };
+            }
+        }
+        std::vector<std::pair<double, double>> coords;
+    public:
         vertex_t n = 0;
         vertex_t m = 0;
         weight_t g_weight = 0;
@@ -558,6 +575,22 @@ namespace HeiProMap {
                     edge_idx++;
                 }
                 neighborhoods[map_u + 1] = edge_idx;
+            coords.resize(n, {0.0, 0.0});
+            std::vector<int> counts(n, 0);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                vertex_t map_u = mapping.get(u);
+                if (!g.coords.empty()) {
+                    coords[map_u].first += g.coords[u].first;
+                    coords[map_u].second += g.coords[u].second;
+                }
+                counts[map_u]++;
+            }
+            for(vertex_t u=0; u<n; ++u) {
+                if(counts[u] > 0) {
+                    coords[u].first /= counts[u];
+                    coords[u].second /= counts[u];
+                }
+            }
             }
         }
         // Move constructor
@@ -572,6 +605,7 @@ namespace HeiProMap {
             neighborhoods = std::move(other.neighborhoods);
             edges_v = std::move(other.edges_v);
             edges_w = std::move(other.edges_w);
+            coords = std::move(other.coords);
         }
 
         CSRGraph(const CSRGraph &other) {
@@ -585,6 +619,7 @@ namespace HeiProMap {
             neighborhoods = other.neighborhoods;
             edges_v = other.edges_v;
             edges_w = other.edges_w;
+            coords = other.coords;
         }
 
         CSRGraph &operator=(const CSRGraph &other) {
@@ -599,6 +634,7 @@ namespace HeiProMap {
                 neighborhoods = other.neighborhoods;
                 edges_v = other.edges_v;
                 edges_w = other.edges_w;
+            coords = other.coords;
             }
             return *this;
         }

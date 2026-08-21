@@ -146,6 +146,7 @@ namespace HeiProMap {
 namespace HeiProMap {
     class WaverMapConfiguration {
     public:
+        bool use_grid_oracle = true;
         std::vector<CommandLineOption> options = {
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
@@ -154,6 +155,7 @@ namespace HeiProMap {
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
+            {"--use-grid-oracle", "", "Use the GridDistanceOracle instead of the default GraphDistanceOracle.", "true", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
 
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
@@ -307,6 +309,7 @@ namespace HeiProMap {
             set_imbalance();
             set_seed();
             set_threads();
+            if (is_set("--use-grid-oracle")) { use_grid_oracle = (get("--use-grid-oracle") == "true"); }
 
             if (!is_set("--config")) {
                 std::cout << "Error: --config (or -c) must be specified." << std::endl;

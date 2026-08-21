@@ -36,7 +36,10 @@ namespace HeiProMap {
     class CSRGraph;
     typedef CSRGraph graph_t;
 
-#ifdef USE_GRAPH_DISTANCE_ORACLE
+#if defined(USE_GRID_DISTANCE_ORACLE)
+    class GridDistanceOracle;
+    typedef GridDistanceOracle d_oracle_t;
+#elif defined(USE_GRAPH_DISTANCE_ORACLE)
     class GraphDistanceOracle;
     typedef GraphDistanceOracle d_oracle_t;
 #else

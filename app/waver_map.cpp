@@ -24,7 +24,7 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#define USE_GRAPH_DISTANCE_ORACLE
+#define USE_GRID_DISTANCE_ORACLE
 #include "src/WaverMap_configuration.h"
 #include "src/datastructures/WaverMap_solver.h"
 

@@ -45,6 +45,54 @@ namespace HeiProMap {
         }
 
     public:
+        template <typename GraphT, typename PartitionManagerT>
+        void build_from_graph(const GraphT& g, const PartitionManagerT& p_manager) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "LargeQuotientGraph", "build_from_graph");
+            m_dynamic_adj.assign(m_k, std::vector<std::pair<partition_t, weight_t>>());
+            
+            // Bucket sort vertices by partition ID to process them contiguously
+            std::vector<size_t> head(m_k + 1, 0);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                head[p_manager[u] + 1]++;
+            }
+            for (partition_t i = 0; i < m_k; ++i) {
+                head[i + 1] += head[i];
+            }
+            std::vector<size_t> tail = head;
+            std::vector<vertex_t> nodes(g.n);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                nodes[tail[p_manager[u]]++] = u;
+            }
+
+            std::vector<weight_t> temp_w(m_k, 0);
+            std::vector<partition_t> neighbors;
+            
+            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
+                for (size_t ptr = head[u_id]; ptr < head[u_id + 1]; ++ptr) {
+                    vertex_t u = nodes[ptr];
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        vertex_t v = g.edges_v[i];
+                        partition_t v_id = p_manager[v];
+                        if (u_id != v_id) {
+                            if (temp_w[v_id] == 0) {
+                                neighbors.push_back(v_id);
+                            }
+                            temp_w[v_id] += g.edges_w[i];
+                        }
+                    }
+                }
+                for (partition_t v_id : neighbors) {
+                    m_dynamic_adj[u_id].push_back({v_id, temp_w[v_id]});
+                    temp_w[v_id] = 0;
+                }
+                neighbors.clear();
+            }
+            
+            m_neighborhoods.clear();
+            m_edges_v.clear();
+            m_edges_w.clear();
+            m_dirty = true;
+        }
         void initialize(const partition_t t_k) {
             HEIPROMAP_PROFILE_SCOPE("misc", "LargeQuotientGraph", "initialize");
             m_k = t_k;
