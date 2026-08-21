@@ -48,8 +48,9 @@ namespace HeiProMap {
     typedef PartitionManager p_manager_t;
     class BoundaryVertexManager;
     typedef BoundaryVertexManager bv_manager_t;
-    class QuotientGraph;
-    typedef QuotientGraph q_graph_t;
+    
+    class LargeQuotientGraph;
+typedef LargeQuotientGraph q_graph_t;
     class BlockConn;
     typedef BlockConn block_conn_t;
 

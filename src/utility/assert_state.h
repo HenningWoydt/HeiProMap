@@ -35,7 +35,7 @@
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/boundary_vertex_manger.h"
-#include "../datastructures/quotient_graph.h"
+#include "../datastructures/large_quotient_graph.h"
 #include "../datastructures/block_conn.h"
 
 namespace HeiProMap {

@@ -40,7 +40,7 @@
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
-#include "../datastructures/quotient_graph.h"
+#include "../datastructures/large_quotient_graph.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
 #include "../utility/random_engine.h"
@@ -70,6 +70,9 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
+    public:
+        void update_k(partition_t k) { m_k = k; }
+    private:
         u64 m_threads = 1;
 
         // active block scheduling

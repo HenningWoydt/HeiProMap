@@ -37,7 +37,7 @@
 
 #include "dyn_graph.h"
 #include "csr_graph.h"
-#include "quotient_graph.h"
+#include "large_quotient_graph.h"
 #include "partition_manager.h"
 #include "boundary_vertex_manger.h"
 #include "block_conn.h"
@@ -72,8 +72,8 @@ namespace HeiProMap {
         std::vector<partition_t> previous_partition;
         std::vector<partition_t> initial_partition;
 
-        QuotientGraph q;
-        QuotientGraph initial_q;
+        LargeQuotientGraph q;
+        LargeQuotientGraph initial_q;
 
         DynConfiguration config;
         DistanceOracle oracle;
@@ -388,7 +388,7 @@ namespace HeiProMap {
             }
         }
 
-        void rebuild_q(QuotientGraph &target_q) {
+        void rebuild_q(LargeQuotientGraph &target_q) {
             u64 num_blocks = p_manager.k;
             target_q.initialize((partition_t)num_blocks);
             for (vertex_t u = 0; u < g.n; ++u) {

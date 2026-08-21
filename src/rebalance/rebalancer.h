@@ -77,6 +77,9 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
+    public:
+        void update_k(partition_t k) { m_k = k; }
+    private:
 
         RandomEngine random_engine;
 

@@ -52,8 +52,7 @@ namespace HeiProMap {
             CacheEntry entries[2];
             u8 lru;
         };
-        // 524288 sets * 2 ways = 1,048,576 total entries
-        static constexpr size_t NUM_SETS = 524288; // Power of 2
+        static constexpr size_t NUM_CACHED_ROWS = 1024*32;
 
         template <class T, class Container = std::vector<T>, class Compare = std::less<typename Container::value_type>>
         class clearable_pq : public std::priority_queue<T, Container, Compare> {
@@ -61,42 +60,81 @@ namespace HeiProMap {
             void clear() { this->c.clear(); }
         };
 
-        struct ThreadState {
+        struct CachedRow {
+            partition_t u;
+            uint32_t last_used;
             std::vector<weight_t> dist;
-            std::vector<partition_t> touched;
+        };
+
+        struct ThreadState {
+            std::vector<CachedRow> rows;
+            std::vector<int32_t> row_locator;
+            uint32_t tick;
             clearable_pq<std::pair<weight_t, partition_t>,
                          std::vector<std::pair<weight_t, partition_t>>,
                          std::greater<>> pq;
-            std::vector<CacheSet> cache;
+                         
+            uint64_t stat_queries = 0;
+            uint64_t stat_hits = 0;
+            uint64_t stat_misses = 0;
+            uint64_t stat_dijkstra_visited = 0;
         };
         mutable std::vector<ThreadState> m_thread_states;
 
     public:
+        ~GraphDistanceOracle() {
+            print_stats();
+        }
+
+        void print_stats() const {
+            uint64_t total_queries = 0;
+            uint64_t total_hits = 0;
+            uint64_t total_misses = 0;
+            uint64_t total_visited = 0;
+            for (const auto& state : m_thread_states) {
+                total_queries += state.stat_queries;
+                total_hits += state.stat_hits;
+                total_misses += state.stat_misses;
+                total_visited += state.stat_dijkstra_visited;
+            }
+            if (total_queries > 0) {
+                std::cout << "[DistanceOracle] Stats for k=" << m_k 
+                          << " | Queries: " << total_queries 
+                          << " | Hits: " << total_hits 
+                          << " (" << std::fixed << std::setprecision(2) << (100.0 * total_hits / total_queries) << "%)"
+                          << " | Misses: " << total_misses 
+                          << " | Dijkstra nodes visited: " << total_visited 
+                          << std::endl;
+            }
+        }
+
         void initialize(const CSRGraph& topology_graph, size_t max_threads) {
             HEIPROMAP_PROFILE_SCOPE("misc", "GraphDistanceOracle", "initialize");
+            print_stats();
             m_graph = &topology_graph;
             m_k = topology_graph.n;
             
             m_thread_states.resize(max_threads);
             for (auto& state : m_thread_states) {
-                state.dist.resize(m_k, std::numeric_limits<weight_t>::max() / 2);
-                CacheSet empty_set = { {{ (partition_t)-1, (partition_t)-1, 0 }, { (partition_t)-1, (partition_t)-1, 0 }}, 0 };
-                state.cache.resize(NUM_SETS, empty_set);
+                size_t num_rows = std::min<size_t>(1024*32, m_k);
+                state.rows.resize(num_rows);
+                for (size_t i = 0; i < num_rows; ++i) {
+                    state.rows[i].u = -1;
+                    state.rows[i].dist.resize(m_k);
+                }
+                state.row_locator.assign(m_k, -1);
+                state.tick = 0;
+                
+                state.stat_queries = 0;
+                state.stat_hits = 0;
+                state.stat_misses = 0;
+                state.stat_dijkstra_visited = 0;
             }
         }
 
         weight_t get(partition_t u_id, partition_t v_id) const {
             size_t thread_id = omp_in_parallel() ? omp_get_thread_num() : 0;
             return get(u_id, v_id, thread_id);
-        }
-
-        inline uint64_t mix_hash(uint64_t key) const {
-            key ^= key >> 33;
-            key *= 0xff51afd7ed558ccdULL;
-            key ^= key >> 33;
-            key *= 0xc4ceb9fe1a85ec53ULL;
-            key ^= key >> 33;
-            return key;
         }
 
         weight_t get(partition_t u_id, partition_t v_id, size_t thread_id) const {
@@ -106,67 +144,70 @@ namespace HeiProMap {
             
             if (u_id == v_id) return 0;
 
-            partition_t min_u = std::min(u_id, v_id);
-            partition_t max_v = std::max(u_id, v_id);
-            uint64_t key = ((uint64_t)min_u << 32) | (uint64_t)max_v;
-            size_t idx = mix_hash(key) & (NUM_SETS - 1);
-
             ThreadState& state = m_thread_states[thread_id];
+            state.tick++;
+            state.stat_queries++;
+
+            int32_t idx_u = state.row_locator[u_id];
+            if (idx_u != -1) {
+                state.rows[idx_u].last_used = state.tick;
+                state.stat_hits++;
+                return state.rows[idx_u].dist[v_id];
+            }
+            int32_t idx_v = state.row_locator[v_id];
+            if (idx_v != -1) {
+                state.rows[idx_v].last_used = state.tick;
+                state.stat_hits++;
+                return state.rows[idx_v].dist[u_id];
+            }
             
-            if (state.cache[idx].entries[0].u == min_u && state.cache[idx].entries[0].v == max_v) {
-                state.cache[idx].lru = 1;
-                return state.cache[idx].entries[0].dist;
+            state.stat_misses++;
+
+            // Not found. Evict LRU row
+            size_t lru_idx = 0;
+            uint32_t min_tick = state.rows[0].last_used;
+            for (size_t i = 1; i < state.rows.size(); ++i) {
+                if (state.rows[i].last_used < min_tick) {
+                    min_tick = state.rows[i].last_used;
+                    lru_idx = i;
+                }
             }
-            if (state.cache[idx].entries[1].u == min_u && state.cache[idx].entries[1].v == max_v) {
-                state.cache[idx].lru = 0;
-                return state.cache[idx].entries[1].dist;
+
+            CachedRow& row = state.rows[lru_idx];
+            if (row.u != (partition_t)-1) {
+                state.row_locator[row.u] = -1; // clear old mapping
             }
+            
+            row.u = u_id;
+            row.last_used = state.tick;
+            state.row_locator[u_id] = lru_idx;
+            
+            // Fast reset
+            std::fill(row.dist.begin(), row.dist.end(), std::numeric_limits<weight_t>::max() / 2);
 
             state.pq.push({0, u_id});
-            state.dist[u_id] = 0;
-            state.touched.push_back(u_id);
-
-            weight_t result = std::numeric_limits<weight_t>::max() / 2;
+            row.dist[u_id] = 0;
 
             while (!state.pq.empty()) {
                 auto [d, u] = state.pq.top();
                 state.pq.pop();
+                state.stat_dijkstra_visited++;
 
-                if (u == v_id) {
-                    result = d;
-                    break;
-                }
-
-                if (d > state.dist[u]) continue;
+                if (d > row.dist[u]) continue;
 
                 for (size_t i = m_graph->neighborhoods[u]; i < m_graph->neighborhoods[u + 1]; ++i) {
                     partition_t v = m_graph->edges_v[i];
                     weight_t w = m_graph->edges_w[i];
 
-                    if (state.dist[u] + w < state.dist[v]) {
-                        if (state.dist[v] == std::numeric_limits<weight_t>::max() / 2) {
-                            state.touched.push_back(v);
-                        }
-                        state.dist[v] = state.dist[u] + w;
-                        state.pq.push({state.dist[v], v});
+                    if (row.dist[u] + w < row.dist[v]) {
+                        row.dist[v] = row.dist[u] + w;
+                        state.pq.push({row.dist[v], v});
                     }
                 }
             }
 
-            // Cleanup for the next query
-            for (partition_t node : state.touched) {
-                state.dist[node] = std::numeric_limits<weight_t>::max() / 2;
-            }
-            state.touched.clear();
-            state.pq.clear(); // Doesn't reallocate!
-            
-            u8 lru_idx = state.cache[idx].lru;
-            state.cache[idx].entries[lru_idx].u = min_u;
-            state.cache[idx].entries[lru_idx].v = max_v;
-            state.cache[idx].entries[lru_idx].dist = result;
-            state.cache[idx].lru = 1 - lru_idx;
-
-            return result;
+            state.pq.clear();
+            return row.dist[v_id];
         }
 
         partition_t get_h(partition_t u_id, partition_t v_id) const {

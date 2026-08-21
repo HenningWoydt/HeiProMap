@@ -485,6 +485,81 @@ namespace HeiProMap {
             }
         }
 
+
+        enum class ContractionMode { MAX, MIN, AVG };
+
+        void contract_topology(const CSRGraph &g, const Mapping &mapping, ContractionMode mode) {
+            n = mapping.get_coarse_n();
+            g_weight = g.g_weight;
+            uniform_v_weights = false;
+            uniform_e_weights = false;
+            v_weights.initialize(n, 0);
+
+            AlignedArray<vertex_t> n_mapped;
+            n_mapped.initialize(n, 0);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                vertex_t map_u = mapping.get(u);
+                n_mapped[map_u] += 1;
+                v_weights[map_u] += g.uniform_v_weights ? 1 : g.v_weights[u];
+            }
+
+            neighborhoods.initialize(n + 1);
+            neighborhoods[0] = 0;
+            
+            // Temporary structures for edges
+            std::vector<std::vector<std::pair<vertex_t, std::vector<weight_t>>>> temp_edges(n);
+
+            for (vertex_t u = 0; u < g.n; ++u) {
+                vertex_t map_u = mapping.get(u);
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    vertex_t v = g.edges_v[i];
+                    weight_t w = g.uniform_e_weights ? 1 : g.edges_w[i];
+                    vertex_t map_v = mapping.get(v);
+                    
+                    if (map_u == map_v) continue;
+                    
+                    bool found = false;
+                    for (auto& edge : temp_edges[map_u]) {
+                        if (edge.first == map_v) {
+                            edge.second.push_back(w);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        temp_edges[map_u].push_back({map_v, {w}});
+                    }
+                }
+            }
+
+            m = 0;
+            for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                m += temp_edges[map_u].size();
+            }
+
+            edges_v.initialize(m);
+            edges_w.initialize(m);
+            
+            size_t edge_idx = 0;
+            for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                for (auto& edge : temp_edges[map_u]) {
+                    edges_v[edge_idx] = edge.first;
+                    weight_t final_w = edge.second[0];
+                    if (mode == ContractionMode::MAX) {
+                        for (weight_t w : edge.second) final_w = std::max(final_w, w);
+                    } else if (mode == ContractionMode::MIN) {
+                        for (weight_t w : edge.second) final_w = std::min(final_w, w);
+                    } else if (mode == ContractionMode::AVG) {
+                        weight_t sum = 0;
+                        for (weight_t w : edge.second) sum += w;
+                        final_w = sum / edge.second.size();
+                    }
+                    edges_w[edge_idx] = final_w;
+                    edge_idx++;
+                }
+                neighborhoods[map_u + 1] = edge_idx;
+            }
+        }
         // Move constructor
         CSRGraph(CSRGraph &&other) noexcept {
             n = other.n;

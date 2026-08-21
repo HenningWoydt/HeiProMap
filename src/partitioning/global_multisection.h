@@ -38,7 +38,7 @@
 #include "../utility/utils.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/boundary_vertex_manger.h"
-#include "../datastructures/quotient_graph.h"
+#include "../datastructures/large_quotient_graph.h"
 #include "../datastructures/block_conn.h"
 #include "../datastructures/distance_oracle.h"
 #include "kaffpa_partitioner.h"
@@ -386,7 +386,7 @@ namespace HeiProMap {
             BoundaryVertexManager bv_manager;
             bv_manager.initialize(g.n, k);
 
-            QuotientGraph q_graph;
+            LargeQuotientGraph q_graph;
             q_graph.initialize(k);
 
             BlockConn block_conn;

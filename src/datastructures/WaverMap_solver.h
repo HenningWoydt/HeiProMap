@@ -32,7 +32,7 @@
 
 #include "boundary_vertex_manger.h"
 #include "partition_manager.h"
-#include "quotient_graph.h"
+#include "large_quotient_graph.h"
 #include "block_conn.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
@@ -67,12 +67,13 @@ namespace HeiProMap {
         weight_t initial_sum_too_much = 0;
 
         std::vector<graph_t> graphs;
-        graph_t topology_graph;
+        std::vector<graph_t> topology_graphs;
+        std::vector<Mapping> topology_mappings;
 
         public:
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
+        LargeQuotientGraph q_graph;
         BlockConn block_conn;
         d_oracle_t d_oracle;
 
@@ -183,9 +184,10 @@ namespace HeiProMap {
             random_engine = RandomEngine(ac.seed);
 
             // distance
-            if (!ac.topology_in.empty()) topology_graph = CSRGraph(ac.topology_in);
-            ac.k = topology_graph.n;
-            d_oracle.initialize(topology_graph, ac.threads);
+            if (!ac.topology_in.empty()) { topology_graphs.emplace_back(ac.topology_in); }
+            else { std::cerr << "Topology required for WaverMap!" << std::endl; exit(1); }
+            ac.k = topology_graphs[0].n;
+            d_oracle.initialize(topology_graphs[0], ac.threads);
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -228,9 +230,9 @@ namespace HeiProMap {
             random_engine = RandomEngine(ac.seed);
 
             // distance
-            topology_graph = std::move(topology);
-            ac.k = topology_graph.n;
-            d_oracle.initialize(topology_graph, ac.threads);
+            topology_graphs.emplace_back(std::move(topology));
+            ac.k = topology_graphs[0].n;
+            d_oracle.initialize(topology_graphs[0], ac.threads);
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -265,9 +267,10 @@ namespace HeiProMap {
             random_engine = RandomEngine(ac.seed);
 
             // distance
-            if (!ac.topology_in.empty()) topology_graph = CSRGraph(ac.topology_in);
-            ac.k = topology_graph.n;
-            d_oracle.initialize(topology_graph, ac.threads);
+            if (!ac.topology_in.empty()) { topology_graphs.emplace_back(ac.topology_in); }
+            else { std::cerr << "Topology required for WaverMap!" << std::endl; exit(1); }
+            ac.k = topology_graphs[0].n;
+            d_oracle.initialize(topology_graphs[0], ac.threads);
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -401,6 +404,39 @@ namespace HeiProMap {
                 coarsening(level, level_imbalance);
                 contraction(level);
 
+                if (topology_graphs.back().n > 64) {
+                    topology_mappings.emplace_back();
+                    topology_mappings.back().initialize(topology_graphs.back().n);
+                    
+                    PartitionManager dummy_pm;
+                    dummy_pm.initialize(topology_graphs.back().n, 1, topology_graphs.back().g_weight);
+                    for (vertex_t u=0; u<topology_graphs.back().n; ++u) {
+                        dummy_pm.set(u, topology_graphs.back().uniform_v_weights ? 1 : topology_graphs.back().v_weights[u], 0);
+                    }
+                    gpa_matcher.match(level, topology_graphs.back(), dummy_pm, topology_mappings.back(), level_imbalance);
+                    
+                    topology_graphs.emplace_back();
+                    // Choose AVG as default mode as requested "three modes" but need to pick one or parameterize
+                    topology_graphs.back().contract_topology(topology_graphs[topology_graphs.size() - 2], topology_mappings.back(), CSRGraph::ContractionMode::AVG);
+                    
+                    // Reinitialize d_oracle
+                    ac.k = topology_graphs.back().n;
+                    d_oracle.initialize(topology_graphs.back(), ac.threads);
+                    
+                    // Reinitialize structures because k changed
+                    p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+                    bv_manager.initialize(graphs[0].n, ac.k);
+                    q_graph.initialize(ac.k);
+                    block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+
+                    rebalancer.update_k(ac.k);
+                    if (ac.label_propagation_config.enabled) lp_refine.update_k(ac.k);
+                    if (ac.quotient_graph_refinement_config.enabled) qg_refine.update_k(ac.k);
+                    if (ac.flow_based_refinement_config.enabled) flow_based_refinement.update_k(ac.k);
+                    if (ac.negative_cycle_config.enabled) negative_cycle_refinement.update_k(ac.k);
+
+                }
+
                 if (graphs.back().n == graphs[graphs.size() - 2].n) {
                     graphs.pop_back();
                     mappings.pop_back();
@@ -451,11 +487,117 @@ namespace HeiProMap {
                 level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                 
                 std::cout << "[Uncoarsening] Level " << level << " | Nodes: " << graphs[graphs.size() - 2].n << std::endl;
+                
+                // If topology was coarsened at this level, uncontract it first
+                bool uncontracted_topology = false;
+                if (topology_mappings.size() == mappings.size()) {
+                    auto sp_top_unc = get_time_point();
+                    uncontracted_topology = true;
+                    // Restore previous topology
+                    topology_graphs.pop_back();
+                    ac.k = topology_graphs.back().n;
+                    d_oracle.initialize(topology_graphs.back(), ac.threads);
+                    
+                    // Create new p_manager for the fine topology
+                    partition_t coarse_k = p_manager.k;
+                    PartitionManager old_pm;
+                    old_pm.initialize(graphs[0].n, coarse_k, graphs[0].g_weight);
+                    old_pm.copy_from(p_manager);
+                    p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+                    p_manager.reset_weights();
+                    
+                    rebalancer.update_k(ac.k);
+                    if (ac.label_propagation_config.enabled) lp_refine.update_k(ac.k);
+                    if (ac.quotient_graph_refinement_config.enabled) qg_refine.update_k(ac.k);
+                    if (ac.flow_based_refinement_config.enabled) flow_based_refinement.update_k(ac.k);
+                    if (ac.negative_cycle_config.enabled) negative_cycle_refinement.update_k(ac.k);
+
+                    
+                    // Assign vertices greedily to the fine partition with minimum accumulated weight
+                    for (vertex_t u = 0; u < graphs[graphs.size() - 1].n; ++u) {
+                        partition_t coarse_id = old_pm[u];
+                        // Find fine blocks that map to coarse_id
+                        std::vector<partition_t> fine_blocks;
+                        for (vertex_t f = 0; f < ac.k; ++f) {
+                            if (topology_mappings.back().get(f) == coarse_id) {
+                                fine_blocks.push_back(f);
+                            }
+                        }
+                        // Weight-aware greedy assignment
+                        weight_t u_weight = graphs[graphs.size() - 1].uniform_v_weights ? 1 : graphs[graphs.size() - 1].v_weights[u];
+                        if (!fine_blocks.empty()) {
+                            partition_t best_fine_id = fine_blocks[0];
+                            weight_t min_w = p_manager.get_bweight(best_fine_id);
+                            for (size_t i = 1; i < fine_blocks.size(); ++i) {
+                                if (p_manager.get_bweight(fine_blocks[i]) < min_w) {
+                                    min_w = p_manager.get_bweight(fine_blocks[i]);
+                                    best_fine_id = fine_blocks[i];
+                                }
+                            }
+                            p_manager.set(u, u_weight, best_fine_id);
+                        } else {
+                            p_manager.set(u, u_weight, coarse_id);
+                        }
+                    }
+                    topology_mappings.pop_back();
+                    
+                    // We must rebuild structures because k changed
+                    bv_manager.initialize(graphs[0].n, ac.k);
+                    q_graph.initialize(ac.k);
+                    block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+
+                    for (vertex_t u = 0; u < graphs[graphs.size() - 1].n; ++u) {
+                        partition_t u_id = p_manager[u];
+                        for (size_t i = graphs[graphs.size() - 1].neighborhoods[u]; i < graphs[graphs.size() - 1].neighborhoods[u + 1]; ++i) {
+                            vertex_t v = graphs[graphs.size() - 1].edges_v[i];
+                            if (u < v) {
+                                partition_t v_id = p_manager[v];
+                                if (u_id != v_id) {
+                                    q_graph.add_edge(u_id, v_id, graphs[graphs.size() - 1].edges_w[i]);
+                                }
+                            }
+                        }
+                    }
+
+                    f64 top_unc_time = get_milli_seconds(sp_top_unc, get_time_point());
+                    auto sp_qap = get_time_point();
+                    weight_t qap = get_qap_from_quotient_graph(q_graph, ac.k, d_oracle);
+                    f64 qap_time = get_milli_seconds(sp_qap, get_time_point());
+                    std::cout << "  - Topo Uncontract: " << std::setw(8) << top_unc_time << " ms | comm_cost: " << qap << " (qap_time: " << qap_time << " ms)" << std::endl;
+                }
+
+                auto sp_unc = get_time_point();
                 uncontraction(level);
+                f64 unc_time = get_milli_seconds(sp_unc, get_time_point());
+                auto sp_qap1 = get_time_point();
+                weight_t qap1 = get_qap_from_quotient_graph(q_graph, ac.k, d_oracle);
+                f64 qap1_time = get_milli_seconds(sp_qap1, get_time_point());
+                std::cout << "  - Uncontraction:   " << std::setw(8) << unc_time << " ms | comm_cost: " << qap1 << " (qap_time: " << qap1_time << " ms)" << std::endl;
 
+                auto sp_reb = get_time_point();
                 rebalancing(level, level_imbalance);
+                f64 reb_time = get_milli_seconds(sp_reb, get_time_point());
+                auto sp_qap2 = get_time_point();
+                weight_t qap2 = get_qap_from_quotient_graph(q_graph, ac.k, d_oracle);
+                f64 qap2_time = get_milli_seconds(sp_qap2, get_time_point());
+                std::cout << "  - Rebalancing:     " << std::setw(8) << reb_time << " ms | comm_cost: " << qap2 << " (qap_time: " << qap2_time << " ms)" << std::endl;
 
+                auto sp_ref = get_time_point();
                 refinement(level, level_imbalance);
+                f64 ref_time = get_milli_seconds(sp_ref, get_time_point());
+                auto sp_qap3 = get_time_point();
+                weight_t qap3 = get_qap_from_quotient_graph(q_graph, ac.k, d_oracle);
+                f64 qap3_time = get_milli_seconds(sp_qap3, get_time_point());
+                std::cout << "  - Refinement:    " << std::setw(8) << ref_time << " ms | comm_cost: " << qap3 << " (qap_time: " << qap3_time << " ms)" << std::endl;
+
+                std::cout << "[Uncoarsening] Level " << level 
+                          << " | Nodes: " << graphs.back().n 
+                          << " | max_W: " << p_manager.max_weight() 
+                          << " | lmax: " << level_lmax 
+                          << " | oload_p: " << p_manager.n_oload_blocks(level_lmax) 
+                          << " | sum_oload: " << p_manager.sum_oload_weight(level_lmax) 
+                          << " | comm_cost: " << get_qap(graphs.back(), p_manager, d_oracle)
+                          << std::endl;
 
                 #if ENABLE_PROFILER
                 level_infos[level].max_b_weight = p_manager.max_weight();

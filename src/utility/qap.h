@@ -578,6 +578,23 @@ namespace HeiProMap {
 
         return edge_cut_delta;
     }
+
+    template<typename QuotientGraphT, typename DistanceOracleT>
+    inline weight_t get_qap_from_quotient_graph(const QuotientGraphT &q_graph,
+                                                const partition_t k,
+                                                const DistanceOracleT &d_oracle) {
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap_from_quotient_graph");
+        weight_t qap = 0;
+        for (partition_t u = 0; u < k; ++u) {
+            q_graph.for_each_neighbor(u, [&](const partition_t v, const weight_t w) {
+                if (u < v) {
+                    qap += (d_oracle.get(u, v) * w * 2);
+                }
+            });
+        }
+        return qap;
+    }
+
 }
 
 #endif //HEIPROMAP_QAP_H

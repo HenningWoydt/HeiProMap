@@ -31,7 +31,7 @@
 
 #include "boundary_vertex_manger.h"
 #include "partition_manager.h"
-#include "quotient_graph.h"
+#include "large_quotient_graph.h"
 #include "block_conn.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
@@ -62,7 +62,7 @@ namespace HeiProMap {
 
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
+        LargeQuotientGraph q_graph;
         BlockConn block_conn;
         DistanceOracle d_oracle;
 
