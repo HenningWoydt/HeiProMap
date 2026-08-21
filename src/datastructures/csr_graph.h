@@ -461,8 +461,8 @@ namespace HeiProMap {
             }
         }
 
-        void contract(const CSRGraph &g, const Mapping &mapping, const u64 threads) {
-            if (threads == 1) {
+        void contract(const CSRGraph &g, const Mapping &mapping, const u64 threads, const bool use_parallel = false) {
+            if (!use_parallel) {
                 if (g.uniform_v_weights && g.uniform_e_weights) {
                     contract<true, true>(g, mapping);
                 } else if (g.uniform_v_weights) {

@@ -142,42 +142,82 @@ namespace HeiProMap {
 
 
 namespace HeiProMap {
+    inline GrowthStrategy string_to_growth_strategy(const std::string &str) {
+        if (str == "bfs" || str == "BFS") return GrowthStrategy::BFS;
+        if (str == "heavy-first" || str == "heavy_first" || str == "HEAVY_FIRST") return GrowthStrategy::HEAVY_FIRST;
+        if (str == "light-first" || str == "light_first" || str == "LIGHT_FIRST") return GrowthStrategy::LIGHT_FIRST;
+        std::cout << "Error: Invalid growth strategy '" << str << "'. Allowed values: bfs, heavy-first, light-first" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
     class AlgorithmConfiguration {
     public:
         std::vector<CommandLineOption> options = {
+            // General Options
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
             {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
-            {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
+            {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
+
+            // optional
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
+            {"--initial-c", "", "Initial contracting limit.", "64", "", false},
+            {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
 
+            // Coarsening options
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
-            {"--gpa-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--gpa-random-level", "", "GPA random level.", "", "", false},
-            {"--gpa-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
-            {"--gpa-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
-            {"--sclp-max-rounds", "", "SCLP max rounds.", "", "", false},
-            {"--sclp-min-threshold", "", "SCLP min threshold.", "", "", false},
-            {"--sclp-f", "", "SCLP tuning parameter f.", "8.0", "", false},
-            {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--sclp-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
-            {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
 
-            {"--flow-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
-            {"--flow-refinement-use-active-block-scheduling", "", "Use active block scheduling in flow based refinement (true/false).", "", "", false},
-            {"--flow-refinement-max-global-iteration", "", "Max global iteration for flow based refinement.", "", "", false},
-            {"--flow-refinement-max-local-iteration", "", "Max local iteration for flow based refinement.", "", "", false},
-            {"--flow-refinement-alpha", "", "Alpha parameter for flow based refinement.", "", "", false},
-            {"--flow-refinement-alpha-upper-bound", "", "Alpha upper bound for flow based refinement.", "", "", false},
-            {"--flow-refinement-alpha-modifier", "", "Alpha modifier for flow based refinement.", "", "", false},
-            {"--flow-refinement-use-closed-vertex-set", "", "Use closed vertex set in flow based refinement (true/false).", "", "", false},
-            {"--flow-refinement-closed-vertex-set-repeats", "", "Number of closed vertex set repeats for flow based refinement.", "", "", false},
-            {"--flow-refinement-enabled-edge-cut-optimization", "", "Enable lowest level edge cut optimization (true/false).", "true", "", false},
+            // Global Path Algorithm (GPA) Coarsening
+            {"--gpa-coarsening-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-coarsening-random-level", "", "GPA random level.", "", "", false},
+            {"--gpa-coarsening-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
+            {"--gpa-coarsening-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
+
+            // Size-Constrained Label Propagation (SCLP) Coarsening
+            {"--sclp-coarsening-max-rounds", "", "SCLP max rounds.", "", "", false},
+            {"--sclp-coarsening-min-threshold", "", "SCLP min threshold.", "", "", false},
+            {"--sclp-coarsening-f", "", "SCLP tuning parameter f.", "8.0", "", false},
+            {"--sclp-coarsening-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-coarsening-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
+            {"--sclp-coarsening-use-parallel-version", "", "SCLP use parallel version (true/false).", "", "", false},
+
+            // Heavy Edge Matching (HEM) Coarsening
+            {"--hem-coarsening-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+
+            // Label Propagation (LP) Refinement
+            {"--lp-refinement-enabled", "", "Enable label propagation refinement (true/false).", "", "", false},
+            {"--lp-refinement-max-iteration", "", "Max iteration for label propagation refinement.", "", "", false},
+            {"--lp-refinement-use-parallel-version", "", "Label propagation use parallel version (true/false).", "", "", false},
+            {"--lp-refinement-use-edge-cut", "", "Label propagation use edge-cut on last level (true/false).", "", "", false},
+
+            // Quotient Graph (QG) Refinement
+            {"--qg-refinement-enabled", "", "Enable quotient graph refinement (true/false).", "", "", false},
+            {"--qg-refinement-max-iteration", "", "Max iteration for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-min-n-steps", "", "Min n steps for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-alpha", "", "Alpha parameter for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-beta", "", "Beta parameter for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-use-active-scheduling", "", "Use active scheduling in quotient graph refinement (true/false).", "", "", false},
+            {"--qg-refinement-use-preemptive-exit", "", "Use preemptive exit in quotient graph refinement (true/false).", "", "", false},
+            {"--qg-refinement-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
+
+            // Flow-Based Refinement (FB)
+            {"--fb-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
+            {"--fb-refinement-use-active-block-scheduling", "", "Use active block scheduling in flow based refinement (true/false).", "", "", false},
+            {"--fb-refinement-max-global-iteration", "", "Max global iteration for flow based refinement.", "", "", false},
+            {"--fb-refinement-max-local-iteration", "", "Max local iteration for flow based refinement.", "", "", false},
+            {"--fb-refinement-alpha", "", "Alpha parameter for flow based refinement.", "", "", false},
+            {"--fb-refinement-alpha-upper-bound", "", "Alpha upper bound for flow based refinement.", "", "", false},
+            {"--fb-refinement-alpha-modifier", "", "Alpha modifier for flow based refinement.", "", "", false},
+            {"--fb-refinement-use-closed-vertex-set", "", "Use closed vertex set in flow based refinement (true/false).", "", "", false},
+            {"--fb-refinement-closed-vertex-set-repeats", "", "Number of closed vertex set repeats for flow based refinement.", "", "", false},
+            {"--fb-refinement-use-edge-cut", "", "Flow refinement use edge-cut on lowest level (true/false).", "true", "", false},
+            {"--fb-refinement-always-include-boundary", "", "Flow refinement always include boundary (true/false).", "", "", false},
+            {"--fb-refinement-growth-strategy", "", "Flow refinement growth strategy (bfs, heavy-first, light-first).", "", "", false},
         };
 
     public:
@@ -208,7 +248,8 @@ namespace HeiProMap {
 
         u64 hm_level = 0;
 
-        u64 initial_c = 8;
+        u64 initial_c = 64;
+        bool use_parallel_contraction = false;
 
         std::string config_name = "undefined";
 
@@ -294,13 +335,24 @@ namespace HeiProMap {
 
             // read all command line args
             for (int i = 1; i < argc; ++i) {
+                bool found = false;
                 for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                    if (large_key == args[i] || small_key == args[i]) {
-                        input = args[i + 1];
-                        is_set = true;
-                        i += 1;
-                        break;
+                    if (large_key == args[i] || (small_key != "" && small_key == args[i])) {
+                        if (i + 1 < argc) {
+                            input = args[i + 1];
+                            is_set = true;
+                            i += 1;
+                            found = true;
+                            break;
+                        } else {
+                            std::cout << "Error: Value missing for parameter " << args[i] << std::endl;
+                            exit(EXIT_FAILURE);
+                        }
                     }
+                }
+                if (!found) {
+                    std::cout << "Error: Unknown parameter " << args[i] << std::endl;
+                    exit(EXIT_FAILURE);
                 }
             }
 
@@ -350,6 +402,61 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
+            if (is_set("--initial-c")) {
+                initial_c = std::stoull(get("--initial-c"));
+            }
+
+            use_parallel_contraction = (threads > 1);
+            if (is_set("--use-parallel-contraction")) {
+                std::string val = get("--use-parallel-contraction");
+                use_parallel_contraction = (val == "true" || val == "1");
+            }
+
+            label_propagation_config.use_parallel_alg = (threads > 1);
+            if (is_set("--lp-refinement-enabled")) {
+                std::string val = get("--lp-refinement-enabled");
+                label_propagation_config.enabled = (val == "true" || val == "1");
+            }
+            if (is_set("--lp-refinement-max-iteration")) {
+                label_propagation_config.max_iteration = std::stoull(get("--lp-refinement-max-iteration"));
+            }
+            if (is_set("--lp-refinement-use-parallel-version")) {
+                std::string val = get("--lp-refinement-use-parallel-version");
+                label_propagation_config.use_parallel_alg = (val == "true" || val == "1");
+            }
+            if (is_set("--lp-refinement-use-edge-cut")) {
+                std::string val = get("--lp-refinement-use-edge-cut");
+                label_propagation_config.use_edge_cut = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-enabled")) {
+                std::string val = get("--qg-refinement-enabled");
+                quotient_graph_refinement_config.enabled = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-max-iteration")) {
+                quotient_graph_refinement_config.max_iteration = std::stoull(get("--qg-refinement-max-iteration"));
+            }
+            if (is_set("--qg-refinement-min-n-steps")) {
+                quotient_graph_refinement_config.min_n_steps = std::stoull(get("--qg-refinement-min-n-steps"));
+            }
+            if (is_set("--qg-refinement-alpha")) {
+                quotient_graph_refinement_config.alpha = std::stod(get("--qg-refinement-alpha"));
+            }
+            if (is_set("--qg-refinement-beta")) {
+                quotient_graph_refinement_config.beta = std::stod(get("--qg-refinement-beta"));
+            }
+            if (is_set("--qg-refinement-use-active-scheduling")) {
+                std::string val = get("--qg-refinement-use-active-scheduling");
+                quotient_graph_refinement_config.use_active_scheduling = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-use-preemptive-exit")) {
+                std::string val = get("--qg-refinement-use-preemptive-exit");
+                quotient_graph_refinement_config.use_preemptive_exit = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-use-edge-cut")) {
+                std::string val = get("--qg-refinement-use-edge-cut");
+                quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
+            }
+
             // Override coarsening settings from CLI if they are set
             if (is_set("--coarsening")) {
                 coarsening_algorithm_string = get("--coarsening");
@@ -357,77 +464,90 @@ namespace HeiProMap {
             }
 
             // Override GPA configs
-            if (is_set("--gpa-rating-function")) {
-                global_path_algorithm_config.rating_function = string_to_edge_rating_function(get("--gpa-rating-function"));
+            if (is_set("--gpa-coarsening-rating-function")) {
+                global_path_algorithm_config.rating_function = string_to_edge_rating_function(get("--gpa-coarsening-rating-function"));
             }
-            if (is_set("--gpa-random-level")) {
-                global_path_algorithm_config.random_level = std::stoull(get("--gpa-random-level"));
+            if (is_set("--gpa-coarsening-random-level")) {
+                global_path_algorithm_config.random_level = std::stoull(get("--gpa-coarsening-random-level"));
             }
-            if (is_set("--gpa-edge-rating-tiebreaking")) {
-                std::string val = get("--gpa-edge-rating-tiebreaking");
+            if (is_set("--gpa-coarsening-edge-rating-tiebreaking")) {
+                std::string val = get("--gpa-coarsening-edge-rating-tiebreaking");
                 global_path_algorithm_config.use_edge_rating_tiebreaking = (val == "true" || val == "1");
             }
-            if (is_set("--gpa-two-hop-threshold")) {
-                global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-two-hop-threshold"));
+            if (is_set("--gpa-coarsening-two-hop-threshold")) {
+                global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-coarsening-two-hop-threshold"));
             }
 
+            size_constrained_lp_config.use_parallel_version = (threads > 1);
+
             // Override SCLP configs
-            if (is_set("--sclp-max-rounds")) {
-                size_constrained_lp_config.max_rounds = std::stoull(get("--sclp-max-rounds"));
+            if (is_set("--sclp-coarsening-max-rounds")) {
+                size_constrained_lp_config.max_rounds = std::stoull(get("--sclp-coarsening-max-rounds"));
             }
-            if (is_set("--sclp-min-threshold")) {
-                size_constrained_lp_config.min_threshold = std::stod(get("--sclp-min-threshold"));
+            if (is_set("--sclp-coarsening-min-threshold")) {
+                size_constrained_lp_config.min_threshold = std::stod(get("--sclp-coarsening-min-threshold"));
             }
-            if (is_set("--sclp-f")) {
-                size_constrained_lp_config.f = std::stod(get("--sclp-f"));
+            if (is_set("--sclp-coarsening-f")) {
+                size_constrained_lp_config.f = std::stod(get("--sclp-coarsening-f"));
             }
-            if (is_set("--sclp-rating-function")) {
-                size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-rating-function"));
+            if (is_set("--sclp-coarsening-rating-function")) {
+                size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-coarsening-rating-function"));
             }
-            if (is_set("--sclp-use-degree-ordering")) {
-                std::string val = get("--sclp-use-degree-ordering");
+            if (is_set("--sclp-coarsening-use-degree-ordering")) {
+                std::string val = get("--sclp-coarsening-use-degree-ordering");
                 size_constrained_lp_config.use_degree_ordering = (val == "true" || val == "1");
+            }
+            if (is_set("--sclp-coarsening-use-parallel-version")) {
+                std::string val = get("--sclp-coarsening-use-parallel-version");
+                size_constrained_lp_config.use_parallel_version = (val == "true" || val == "1");
             }
 
             // Override HEM configs
-            if (is_set("--hem-rating-function")) {
-                heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-rating-function"));
+            if (is_set("--hem-coarsening-rating-function")) {
+                heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-coarsening-rating-function"));
             }
 
             // Override flow refinement configs
-            if (is_set("--flow-refinement-enabled")) {
-                std::string val = get("--flow-refinement-enabled");
+            if (is_set("--fb-refinement-enabled")) {
+                std::string val = get("--fb-refinement-enabled");
                 flow_based_refinement_config.enabled = (val == "true" || val == "1");
             }
-            if (is_set("--flow-refinement-use-active-block-scheduling")) {
-                std::string val = get("--flow-refinement-use-active-block-scheduling");
+            if (is_set("--fb-refinement-use-active-block-scheduling")) {
+                std::string val = get("--fb-refinement-use-active-block-scheduling");
                 flow_based_refinement_config.use_active_block_scheduling = (val == "true" || val == "1");
             }
-            if (is_set("--flow-refinement-max-global-iteration")) {
-                flow_based_refinement_config.max_global_iteration = std::stoull(get("--flow-refinement-max-global-iteration"));
+            if (is_set("--fb-refinement-max-global-iteration")) {
+                flow_based_refinement_config.max_global_iteration = std::stoull(get("--fb-refinement-max-global-iteration"));
             }
-            if (is_set("--flow-refinement-max-local-iteration")) {
-                flow_based_refinement_config.max_local_iteration = std::stoull(get("--flow-refinement-max-local-iteration"));
+            if (is_set("--fb-refinement-max-local-iteration")) {
+                flow_based_refinement_config.max_local_iteration = std::stoull(get("--fb-refinement-max-local-iteration"));
             }
-            if (is_set("--flow-refinement-alpha")) {
-                flow_based_refinement_config.alpha = std::stod(get("--flow-refinement-alpha"));
+            if (is_set("--fb-refinement-alpha")) {
+                flow_based_refinement_config.alpha = std::stod(get("--fb-refinement-alpha"));
             }
-            if (is_set("--flow-refinement-alpha-upper-bound")) {
-                flow_based_refinement_config.alpha_upper_bound = std::stod(get("--flow-refinement-alpha-upper-bound"));
+            if (is_set("--fb-refinement-alpha-upper-bound")) {
+                flow_based_refinement_config.alpha_upper_bound = std::stod(get("--fb-refinement-alpha-upper-bound"));
             }
-            if (is_set("--flow-refinement-alpha-modifier")) {
-                flow_based_refinement_config.alpha_modifier = std::stod(get("--flow-refinement-alpha-modifier"));
+            if (is_set("--fb-refinement-alpha-modifier")) {
+                flow_based_refinement_config.alpha_modifier = std::stod(get("--fb-refinement-alpha-modifier"));
             }
-            if (is_set("--flow-refinement-use-closed-vertex-set")) {
-                std::string val = get("--flow-refinement-use-closed-vertex-set");
+            if (is_set("--fb-refinement-use-closed-vertex-set")) {
+                std::string val = get("--fb-refinement-use-closed-vertex-set");
                 flow_based_refinement_config.use_closed_vertex_set = (val == "true" || val == "1");
             }
-            if (is_set("--flow-refinement-closed-vertex-set-repeats")) {
-                flow_based_refinement_config.closed_vertex_sets_repeats = std::stoull(get("--flow-refinement-closed-vertex-set-repeats"));
+            if (is_set("--fb-refinement-closed-vertex-set-repeats")) {
+                flow_based_refinement_config.closed_vertex_sets_repeats = std::stoull(get("--fb-refinement-closed-vertex-set-repeats"));
             }
-            if (is_set("--flow-refinement-enabled-edge-cut-optimization")) {
-                std::string val = get("--flow-refinement-enabled-edge-cut-optimization");
-                flow_based_refinement_config.enabled_edge_cut_optimization = (val == "true" || val == "1");
+            if (is_set("--fb-refinement-use-edge-cut")) {
+                std::string val = get("--fb-refinement-use-edge-cut");
+                flow_based_refinement_config.use_edge_cut = (val == "true" || val == "1");
+            }
+            if (is_set("--fb-refinement-always-include-boundary")) {
+                std::string val = get("--fb-refinement-always-include-boundary");
+                flow_based_refinement_config.always_include_boundary = (val == "true" || val == "1");
+            }
+            if (is_set("--fb-refinement-growth-strategy")) {
+                flow_based_refinement_config.growth_strategy = string_to_growth_strategy(get("--fb-refinement-growth-strategy"));
             }
         }
 
@@ -617,7 +737,7 @@ namespace HeiProMap {
 
         void set_super_strong() {
             config_name = "super-strong";
-            initial_c = 16;
+            initial_c = 64;
 
             // set GPA matching algorithm
             coarsening_algorithm_string = "global-paths";

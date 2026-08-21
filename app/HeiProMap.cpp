@@ -58,7 +58,7 @@ int main(const int argc, char *argv[]) {
                 {"--imbalance", "0.03"},
                 {"--config", "fast"},
                 {"--seed", "0"},
-                {"--threads", "1"},
+                {"--threads", "2"},
                 {"--hm-level", "0"},
             };
 

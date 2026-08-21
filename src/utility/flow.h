@@ -192,6 +192,8 @@ namespace HeiProMap {
             scc_source = scc_id[source];
             scc_target = scc_id[target];
 
+            ASSERT(assert_scc_graph());
+
             // determine the weight of each scc in the graph
             HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_weights");
             scc_weights.clear();
@@ -278,58 +280,42 @@ namespace HeiProMap {
         vertex_t get_n_scc() const { return n_scc; }
 
         void reduce() {
-            std::vector<vertex_t> curr;
-            std::vector<vertex_t> next;
-            std::vector<u8> seen(n_scc, 0);
-
             scc_s_successors.clear();
-            next.push_back(scc_source);
-            seen[scc_source] = 1;
-            while (!next.empty()) {
-                curr.swap(next);
-                next.clear();
-
-                while (!curr.empty()) {
-                    vertex_t scc_u = curr.back();
-                    curr.pop_back();
-                    scc_s_successors.push_back(scc_u);
-
-                    for (vertex_t scc_v: edges[scc_u]) {
-                        if (seen[scc_v] == 1 || seen[scc_v] == 2) { continue; }
-                        next.push_back(scc_v);
-                        seen[scc_v] = 1;
-                    }
-                    seen[scc_u] = 2;
-                }
-            }
-
-            curr.clear();
-            next.clear();
-            seen.clear();
-            seen.resize(n_scc, 0);
             scc_t_predecessors.clear();
-            next.push_back(scc_target);
-            seen[scc_target] = 1;
-            while (!next.empty()) {
-                curr.swap(next);
-                next.clear();
 
-                while (!curr.empty()) {
-                    vertex_t scc_u = curr.back();
-                    curr.pop_back();
-                    scc_t_predecessors.push_back(scc_u);
-
-                    for (vertex_t scc_v: rev_edges[scc_u]) {
-                        if (seen[scc_v] == 1 || seen[scc_v] == 2) { continue; }
-                        next.push_back(scc_v);
-                        seen[scc_v] = 1;
+            // 1. Forward BFS from scc_source to find all forced source SCCs
+            std::vector<u8> visited_s(n_scc, 0);
+            std::vector<vertex_t> q_s;
+            q_s.push_back(scc_source);
+            visited_s[scc_source] = 1;
+            size_t qh = 0;
+            while (qh < q_s.size()) {
+                vertex_t u = q_s[qh++];
+                scc_s_successors.push_back(u);
+                for (vertex_t v : edges[u]) {
+                    if (!visited_s[v]) {
+                        visited_s[v] = 1;
+                        q_s.push_back(v);
                     }
-                    seen[scc_u] = 2;
                 }
             }
 
-            // ASSERT(no_duplicates(scc_s_successors));
-            // ASSERT(no_duplicates(scc_t_predecessors));
+            // 2. Backward BFS from scc_target via rev_edges to find all forced target SCCs
+            std::vector<u8> visited_t(n_scc, 0);
+            std::vector<vertex_t> q_t;
+            q_t.push_back(scc_target);
+            visited_t[scc_target] = 1;
+            qh = 0;
+            while (qh < q_t.size()) {
+                vertex_t u = q_t[qh++];
+                scc_t_predecessors.push_back(u);
+                for (vertex_t v : rev_edges[u]) {
+                    if (!visited_t[v]) {
+                        visited_t[v] = 1;
+                        q_t.push_back(v);
+                    }
+                }
+            }
         }
 
         bool find_best_closure(weight_t left_non_region_weight,
@@ -355,6 +341,8 @@ namespace HeiProMap {
             for (vertex_t scc_u = 0; scc_u < n_scc; ++scc_u) {
                 if (is_active[scc_u] == 1) { ++n_active; }
             }
+
+
             if (n_active <= 24) {
                 return find_best_closure_exact(left_non_region_weight, right_non_region_weight, left_lmax, right_lmax, avg_weight, is_active, is_left);
             }
@@ -588,9 +576,46 @@ namespace HeiProMap {
                 if ((best_mask >> i) & 1) { best_closure[active_nodes[i]] = 1; }
             }
 
+            ASSERT(assert_closure_validity(best_closure));
+
             is_left.resize(n - 2);
             for (vertex_t u = 0; u < n - 2; ++u) { is_left[u] = best_closure[scc_id[u]]; }
             return closure_found;
+        }
+
+        bool assert_scc_graph() const {
+            // 1. Verify source and target SCC IDs are valid
+            if (scc_source >= n_scc || scc_target >= n_scc) return false;
+            if (scc_source == scc_target) return false;
+
+            // 2. Verify all edges in SCC DAG: no self-loops and no reverse edges violating DAG
+            for (vertex_t u = 0; u < n_scc; ++u) {
+                for (vertex_t v: edges[u]) {
+                    if (u == v) return false; // DAG has no self-loops
+                }
+            }
+            return true;
+        }
+
+        bool assert_closure_validity(const std::vector<u8> &closure) const {
+            // 1. Source SCC must be in closure
+            if (!closure[scc_source]) return false;
+            // 2. Target SCC must NOT be in closure
+            if (closure[scc_target]) return false;
+
+            // 3. Closed set property: if u is in closure, all outgoing neighbors v in residual SCC DAG must also be in closure
+            for (vertex_t u = 0; u < n_scc; ++u) {
+                if (closure[u]) {
+                    for (vertex_t v: edges[u]) {
+                        if (!closure[v]) {
+                            std::cerr << "[SCC ASSERT FAIL] Edge " << u << " -> " << v 
+                                      << " crosses outside closure! u in closure, v not in closure." << std::endl;
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
         }
 
     private:

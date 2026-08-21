@@ -142,7 +142,7 @@ else
       -DCMAKE_CXX_FLAGS="-O0 -g -march=x86-64 -mtune=generic -fno-omit-frame-pointer -mno-avx512f -mno-avx512vl -mno-avx512dq -mno-avx512bw -mno-avx512cd -mno-avx2 -mno-avx -mno-fma" \
       -DCMAKE_C_FLAGS_DEBUG="" \
       -DCMAKE_CXX_FLAGS_DEBUG=""
-    execute cmake --build . --target install --parallel 1 --verbose
+    execute cmake --build . --target install --parallel "$JOBS"
   )
 fi
 

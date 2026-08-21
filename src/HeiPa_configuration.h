@@ -48,6 +48,7 @@ namespace HeiProMap {
     class HeiPaConfiguration {
     private:
         std::vector<CommandLineOption> options = {
+            // General Options
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
@@ -57,6 +58,23 @@ namespace HeiProMap {
             {"--seed", "", "Seed for diversifying results.", "", "", false},
             {"--k", "-k", "Number of partitions.", "0", "", false},
             {"--json-output", "", "If true, prints a JSON summary of the result at the end.", "0", "", false},
+            {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
+
+            // Label Propagation (LP) Refinement
+            {"--lp-refinement-enabled", "", "Enable label propagation refinement (true/false).", "", "", false},
+            {"--lp-refinement-max-iteration", "", "Max iteration for label propagation refinement.", "", "", false},
+            {"--lp-refinement-use-parallel-version", "", "Label propagation use parallel version (true/false).", "", "", false},
+            {"--lp-refinement-use-edge-cut", "", "Label propagation use edge-cut on last level (true/false).", "", "", false},
+
+            // Quotient Graph (QG) Refinement
+            {"--qg-refinement-enabled", "", "Enable quotient graph refinement (true/false).", "", "", false},
+            {"--qg-refinement-max-iteration", "", "Max iteration for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-min-n-steps", "", "Min n steps for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-alpha", "", "Alpha parameter for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-beta", "", "Beta parameter for quotient graph refinement.", "", "", false},
+            {"--qg-refinement-use-active-scheduling", "", "Use active scheduling in quotient graph refinement (true/false).", "", "", false},
+            {"--qg-refinement-use-preemptive-exit", "", "Use preemptive exit in quotient graph refinement (true/false).", "", "", false},
+            {"--qg-refinement-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
         };
 
     public:
@@ -80,6 +98,7 @@ namespace HeiProMap {
         bool json_output = false;
 
         u64 initial_c = 8;
+        bool use_parallel_contraction = false;
 
         // coarsening algorithm
         std::string coarsening_algorithm_string;
@@ -144,13 +163,24 @@ namespace HeiProMap {
 
             // read all command line args
             for (int i = 1; i < argc; ++i) {
+                bool found = false;
                 for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                    if (large_key == args[i] || small_key == args[i]) {
-                        input = args[i + 1];
-                        is_set = true;
-                        i += 1;
-                        break;
+                    if (large_key == args[i] || (small_key != "" && small_key == args[i])) {
+                        if (i + 1 < argc) {
+                            input = args[i + 1];
+                            is_set = true;
+                            i += 1;
+                            found = true;
+                            break;
+                        } else {
+                            std::cout << "Error: Value missing for parameter " << args[i] << std::endl;
+                            exit(EXIT_FAILURE);
+                        }
                     }
+                }
+                if (!found) {
+                    std::cout << "Error: Unknown parameter " << args[i] << std::endl;
+                    exit(EXIT_FAILURE);
                 }
             }
 
@@ -184,6 +214,59 @@ namespace HeiProMap {
             } else {
                 std::cout << "Config " << get("--config") << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
+            }
+
+            size_constrained_lp_config.use_parallel_version = (threads > 1);
+            use_parallel_contraction = (threads > 1);
+            if (is_set("--use-parallel-contraction")) {
+                std::string val = get("--use-parallel-contraction");
+                use_parallel_contraction = (val == "true" || val == "1");
+            }
+
+            label_propagation_config.use_parallel_alg = (threads > 1);
+            if (is_set("--lp-refinement-enabled")) {
+                std::string val = get("--lp-refinement-enabled");
+                label_propagation_config.enabled = (val == "true" || val == "1");
+            }
+            if (is_set("--lp-refinement-max-iteration")) {
+                label_propagation_config.max_iteration = std::stoull(get("--lp-refinement-max-iteration"));
+            }
+            if (is_set("--lp-refinement-use-parallel-version")) {
+                std::string val = get("--lp-refinement-use-parallel-version");
+                label_propagation_config.use_parallel_alg = (val == "true" || val == "1");
+            }
+            if (is_set("--lp-refinement-use-edge-cut")) {
+                std::string val = get("--lp-refinement-use-edge-cut");
+                label_propagation_config.use_edge_cut = (val == "true" || val == "1");
+            }
+
+            if (is_set("--qg-refinement-enabled")) {
+                std::string val = get("--qg-refinement-enabled");
+                quotient_graph_refinement_config.enabled = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-max-iteration")) {
+                quotient_graph_refinement_config.max_iteration = std::stoull(get("--qg-refinement-max-iteration"));
+            }
+            if (is_set("--qg-refinement-min-n-steps")) {
+                quotient_graph_refinement_config.min_n_steps = std::stoull(get("--qg-refinement-min-n-steps"));
+            }
+            if (is_set("--qg-refinement-alpha")) {
+                quotient_graph_refinement_config.alpha = std::stod(get("--qg-refinement-alpha"));
+            }
+            if (is_set("--qg-refinement-beta")) {
+                quotient_graph_refinement_config.beta = std::stod(get("--qg-refinement-beta"));
+            }
+            if (is_set("--qg-refinement-use-active-scheduling")) {
+                std::string val = get("--qg-refinement-use-active-scheduling");
+                quotient_graph_refinement_config.use_active_scheduling = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-use-preemptive-exit")) {
+                std::string val = get("--qg-refinement-use-preemptive-exit");
+                quotient_graph_refinement_config.use_preemptive_exit = (val == "true" || val == "1");
+            }
+            if (is_set("--qg-refinement-use-edge-cut")) {
+                std::string val = get("--qg-refinement-use-edge-cut");
+                quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
             }
         }
 
