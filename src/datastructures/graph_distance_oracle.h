@@ -48,15 +48,26 @@ namespace HeiProMap {
             partition_t v;
             weight_t dist;
         };
-        static constexpr size_t CACHE_SIZE = 131072; // Power of 2
+        struct CacheSet {
+            CacheEntry entries[2];
+            u8 lru;
+        };
+        // 524288 sets * 2 ways = 1,048,576 total entries
+        static constexpr size_t NUM_SETS = 524288; // Power of 2
+
+        template <class T, class Container = std::vector<T>, class Compare = std::less<typename Container::value_type>>
+        class clearable_pq : public std::priority_queue<T, Container, Compare> {
+        public:
+            void clear() { this->c.clear(); }
+        };
 
         struct ThreadState {
             std::vector<weight_t> dist;
             std::vector<partition_t> touched;
-            std::priority_queue<std::pair<weight_t, partition_t>,
-                                std::vector<std::pair<weight_t, partition_t>>,
-                                std::greater<>> pq;
-            std::vector<CacheEntry> cache;
+            clearable_pq<std::pair<weight_t, partition_t>,
+                         std::vector<std::pair<weight_t, partition_t>>,
+                         std::greater<>> pq;
+            std::vector<CacheSet> cache;
         };
         mutable std::vector<ThreadState> m_thread_states;
 
@@ -69,13 +80,23 @@ namespace HeiProMap {
             m_thread_states.resize(max_threads);
             for (auto& state : m_thread_states) {
                 state.dist.resize(m_k, std::numeric_limits<weight_t>::max() / 2);
-                state.cache.resize(CACHE_SIZE, { (partition_t)-1, (partition_t)-1, 0 });
+                CacheSet empty_set = { {{ (partition_t)-1, (partition_t)-1, 0 }, { (partition_t)-1, (partition_t)-1, 0 }}, 0 };
+                state.cache.resize(NUM_SETS, empty_set);
             }
         }
 
         weight_t get(partition_t u_id, partition_t v_id) const {
             size_t thread_id = omp_in_parallel() ? omp_get_thread_num() : 0;
             return get(u_id, v_id, thread_id);
+        }
+
+        inline uint64_t mix_hash(uint64_t key) const {
+            key ^= key >> 33;
+            key *= 0xff51afd7ed558ccdULL;
+            key ^= key >> 33;
+            key *= 0xc4ceb9fe1a85ec53ULL;
+            key ^= key >> 33;
+            return key;
         }
 
         weight_t get(partition_t u_id, partition_t v_id, size_t thread_id) const {
@@ -88,12 +109,17 @@ namespace HeiProMap {
             partition_t min_u = std::min(u_id, v_id);
             partition_t max_v = std::max(u_id, v_id);
             uint64_t key = ((uint64_t)min_u << 32) | (uint64_t)max_v;
-            size_t idx = std::hash<uint64_t>{}(key) & (CACHE_SIZE - 1);
+            size_t idx = mix_hash(key) & (NUM_SETS - 1);
 
             ThreadState& state = m_thread_states[thread_id];
             
-            if (state.cache[idx].u == min_u && state.cache[idx].v == max_v) {
-                return state.cache[idx].dist;
+            if (state.cache[idx].entries[0].u == min_u && state.cache[idx].entries[0].v == max_v) {
+                state.cache[idx].lru = 1;
+                return state.cache[idx].entries[0].dist;
+            }
+            if (state.cache[idx].entries[1].u == min_u && state.cache[idx].entries[1].v == max_v) {
+                state.cache[idx].lru = 0;
+                return state.cache[idx].entries[1].dist;
             }
 
             state.pq.push({0, u_id});
@@ -127,16 +153,18 @@ namespace HeiProMap {
                 }
             }
 
-            // Cleanup for the next query: only reset distances for nodes we actually touched
+            // Cleanup for the next query
             for (partition_t node : state.touched) {
                 state.dist[node] = std::numeric_limits<weight_t>::max() / 2;
             }
             state.touched.clear();
-            state.pq = decltype(state.pq)(); // clear priority queue
+            state.pq.clear(); // Doesn't reallocate!
             
-            state.cache[idx].u = min_u;
-            state.cache[idx].v = max_v;
-            state.cache[idx].dist = result;
+            u8 lru_idx = state.cache[idx].lru;
+            state.cache[idx].entries[lru_idx].u = min_u;
+            state.cache[idx].entries[lru_idx].v = max_v;
+            state.cache[idx].entries[lru_idx].dist = result;
+            state.cache[idx].lru = 1 - lru_idx;
 
             return result;
         }
