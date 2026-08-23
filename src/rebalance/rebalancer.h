@@ -166,7 +166,8 @@ namespace HeiProMap {
 
             if (move.best_id != m_k) { return move; }
 
-            for (partition_t v_id = 0; v_id < m_k; ++v_id) {
+            for (size_t i = 0; i < 50; ++i) {
+                partition_t v_id = random_engine.get_u64() % m_k;
                 if (v_id == u_id) { continue; }
                 if (p_manager.get_bweight(v_id) + u_weight > p_manager.get_lmax(v_id)) { continue; }
                 if (!p_manager.is_active(v_id)) { continue; }

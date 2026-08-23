@@ -333,6 +333,18 @@ namespace HeiProMap {
             std::cout << "Total time (s)          : " << duration + init_time << std::endl;
             std::cout << "#Nodes                  : " << graphs[0].n << std::endl;
             std::cout << "#Edges                  : " << graphs[0].m << std::endl;
+            weight_t sum_edge_weights = 0;
+            if (graphs[0].uniform_e_weights) {
+                sum_edge_weights = graphs[0].m / 2;
+            } else {
+                for (size_t i = 0; i < graphs[0].m; ++i) {
+                    sum_edge_weights += graphs[0].edges_w[i];
+                }
+                sum_edge_weights /= 2;
+            }
+
+            std::cout << "Sum Vertex Weights      : " << graphs[0].g_weight << std::endl;
+            std::cout << "Sum Edge Weights        : " << sum_edge_weights << std::endl;
             std::cout << "k                       : " << ac.k << std::endl;
             std::cout << "Hierarchy               : " << ac.hierarchy_string << std::endl;
             std::cout << "Distances               : " << ac.distance_string << std::endl;
@@ -420,7 +432,7 @@ namespace HeiProMap {
                     
                     topology_graphs.emplace_back();
                     // Choose AVG as default mode as requested "three modes" but need to pick one or parameterize
-                    topology_graphs.back().contract_topology(topology_graphs[topology_graphs.size() - 2], topology_mappings.back(), CSRGraph::ContractionMode::AVG);
+                    topology_graphs.back().contract_topology(topology_graphs[topology_graphs.size() - 2], topology_mappings.back(), CSRGraph::ContractionMode::MAX);
                     
                     // Reinitialize d_oracle
                     ac.k = topology_graphs.back().n;
