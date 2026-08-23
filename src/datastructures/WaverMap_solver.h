@@ -69,6 +69,7 @@ namespace HeiProMap {
         std::vector<graph_t> graphs;
         std::vector<graph_t> topology_graphs;
         std::vector<Mapping> topology_mappings;
+        std::vector<size_t> topo_Ws;
 
         public:
         PartitionManager p_manager;
@@ -92,7 +93,24 @@ namespace HeiProMap {
         NegativeCycleRefinement negative_cycle_refinement;
 
         f64 io_ms = 0.0;
-        f64 misc_ms = 0.0;
+                double misc_ms = 0.0;
+        
+        void init_topo_W() {
+            topo_Ws.clear();
+            if (topology_graphs.empty() || topology_graphs[0].n == 0) {
+                topo_Ws.push_back(1);
+                return;
+            }
+            size_t w = 0;
+            for (size_t i = 1; i < topology_graphs[0].n; ++i) {
+                if (topology_graphs[0].neighborhoods[i+1] - topology_graphs[0].neighborhoods[i] == 2) {
+                    w = i + 1;
+                    break;
+                }
+            }
+            if (w == 0) w = 1;
+            topo_Ws.push_back(w);
+        }
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
         f64 initial_partitioning_ms = 0.0;
@@ -187,8 +205,9 @@ namespace HeiProMap {
             if (!ac.topology_in.empty()) { topology_graphs.emplace_back(ac.topology_in); }
             else { std::cerr << "Topology required for WaverMap!" << std::endl; exit(1); }
             topology_graphs[0].infer_grid_coords();
+            init_topo_W();
             ac.k = topology_graphs[0].n;
-            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle);
+            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle, topo_Ws.back());
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -233,8 +252,9 @@ namespace HeiProMap {
             // distance
             topology_graphs.emplace_back(std::move(topology));
             topology_graphs[0].infer_grid_coords();
+            init_topo_W();
             ac.k = topology_graphs[0].n;
-            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle);
+            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle, topo_Ws.back());
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -272,8 +292,9 @@ namespace HeiProMap {
             if (!ac.topology_in.empty()) { topology_graphs.emplace_back(ac.topology_in); }
             else { std::cerr << "Topology required for WaverMap!" << std::endl; exit(1); }
             topology_graphs[0].infer_grid_coords();
+            init_topo_W();
             ac.k = topology_graphs[0].n;
-            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle);
+            d_oracle.initialize(topology_graphs[0], ac.threads, ac.use_grid_oracle, topo_Ws.back());
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -442,12 +463,22 @@ namespace HeiProMap {
                     topology_mappings.emplace_back();
                     topology_mappings.back().initialize(topology_graphs.back().n);
                     
-                    PartitionManager dummy_pm;
-                    dummy_pm.initialize(topology_graphs.back().n, 1, topology_graphs.back().g_weight);
-                    for (vertex_t u=0; u<topology_graphs.back().n; ++u) {
-                        dummy_pm.set(u, topology_graphs.back().uniform_v_weights ? 1 : topology_graphs.back().v_weights[u], 0);
+                    size_t W_old = topo_Ws.back();
+                    size_t H_old = (topology_graphs.back().n + W_old - 1) / W_old;
+                    size_t W_new = (W_old + 1) / 2;
+                    size_t H_new = (H_old + 1) / 2;
+                    size_t coarse_n = W_new * H_new;
+                    topology_mappings.back().set_coarse_n(coarse_n);
+                    
+                    for (vertex_t u = 0; u < topology_graphs.back().n; ++u) {
+                        vertex_t x_old = u % W_old;
+                        vertex_t y_old = u / W_old;
+                        vertex_t x_new = x_old / 2;
+                        vertex_t y_new = y_old / 2;
+                        vertex_t v = y_new * W_new + x_new;
+                        topology_mappings.back().set(u, v);
                     }
-                    gpa_matcher.match(level, topology_graphs.back(), dummy_pm, topology_mappings.back(), level_imbalance);
+                    topo_Ws.push_back(W_new);
                     
                     topology_graphs.emplace_back();
                     // Choose AVG as default mode as requested "three modes" but need to pick one or parameterize
@@ -455,7 +486,7 @@ namespace HeiProMap {
                     
                     // Reinitialize d_oracle
                     ac.k = topology_graphs.back().n;
-                    d_oracle.initialize(topology_graphs.back(), ac.threads, ac.use_grid_oracle);
+                    d_oracle.initialize(topology_graphs.back(), ac.threads, ac.use_grid_oracle, topo_Ws.back());
                     
                     // Reinitialize structures because k changed
                     p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
@@ -540,11 +571,12 @@ namespace HeiProMap {
                     uncontracted_topology = true;
                     // Restore previous topology
                     topology_graphs.pop_back();
+                    topo_Ws.pop_back();
                     ac.k = topology_graphs.back().n;
                     
                     // Recompute level_lmax with the new ac.k
                     level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
-                    d_oracle.initialize(topology_graphs.back(), ac.threads, ac.use_grid_oracle);
+                    d_oracle.initialize(topology_graphs.back(), ac.threads, ac.use_grid_oracle, topo_Ws.back());
                     
                     // Create new p_manager for the fine topology
                     partition_t coarse_k = p_manager.k;
