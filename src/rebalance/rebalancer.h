@@ -103,7 +103,7 @@ namespace HeiProMap {
                                      [[maybe_unused]] const q_graph_t &q_graph,
                                      const d_oracle_t &d_oracle,
                                      const u64 state_id,
-                                     weight_t lmax) const {
+                                     weight_t lmax) {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
@@ -124,7 +124,8 @@ namespace HeiProMap {
 
             if (move.best_id != m_k) { return move; }
 
-            for (partition_t v_id = 0; v_id < m_k; ++v_id) {
+            for (size_t i = 0; i < 50; ++i) {
+                partition_t v_id = random_engine.get_u64() % m_k;
                 if (v_id == u_id) { continue; }
                 if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
 
