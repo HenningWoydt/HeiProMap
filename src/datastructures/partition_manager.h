@@ -42,6 +42,7 @@ namespace HeiProMap {
         AlignedArray<partition_t> partition;
         AlignedArray<partition_t> partition_temp;
         AlignedArray<weight_t> bweights;
+        AlignedArray<weight_t> lmax_arr;
         AlignedArray<size_t> n_vertices;
 
         void initialize(const vertex_t t_n,
@@ -142,20 +143,39 @@ namespace HeiProMap {
             return n;
         }
 
-        partition_t n_oload_blocks(weight_t lmax) const {
+        weight_t get_lmax(const partition_t id) const { return lmax_arr[id]; }
+
+        void set_lmax(const std::vector<weight_t>& new_lmax) {
+            if (lmax_arr.size() != k) lmax_arr.initialize(k);
+            for (size_t i = 0; i < k; ++i) {
+                lmax_arr[i] = new_lmax[i];
+            }
+        }
+
+        partition_t n_oload_blocks() const {
             partition_t n = 0;
             for (size_t i = 0; i < k; ++i) {
-                n += bweights[i] > lmax;
+                n += bweights[i] > lmax_arr[i];
             }
             return n;
         }
 
-        weight_t sum_oload_weight(weight_t lmax) const {
+        weight_t sum_oload_weight() const {
             weight_t w = 0;
             for (size_t i = 0; i < k; ++i) {
-                w += std::max((weight_t) 0, bweights[i] - lmax);
+                w += std::max((weight_t) 0, bweights[i] - lmax_arr[i]);
             }
             return w;
+        }
+
+        double max_relative_load() const {
+            double max_load = 0.0;
+            for (size_t i = 0; i < k; ++i) {
+                if (lmax_arr[i] > 0) {
+                    max_load = std::max(max_load, (double)bweights[i] / (double)lmax_arr[i]);
+                }
+            }
+            return max_load;
         }
 
         void contract(const Mapping &mapping) {
@@ -187,9 +207,32 @@ namespace HeiProMap {
             }
         }
 
-        bool is_overloaded(weight_t lmax) {
+        partition_t n_oload_blocks(weight_t lmax) const {
+            partition_t n = 0;
+            for (size_t i = 0; i < k; ++i) {
+                n += bweights[i] > lmax;
+            }
+            return n;
+        }
+
+        weight_t sum_oload_weight(weight_t lmax) const {
+            weight_t w = 0;
+            for (size_t i = 0; i < k; ++i) {
+                w += std::max((weight_t) 0, bweights[i] - lmax);
+            }
+            return w;
+        }
+
+        bool is_overloaded(weight_t lmax) const {
             for (size_t i = 0; i < k; ++i) {
                 if (bweights[i] > lmax) { return true; }
+            }
+            return false;
+        }
+
+        bool is_overloaded() const {
+            for (size_t i = 0; i < k; ++i) {
+                if (bweights[i] > lmax_arr[i]) { return true; }
             }
             return false;
         }
