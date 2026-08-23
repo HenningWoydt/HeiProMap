@@ -21,13 +21,13 @@ namespace HeiProMap {
 
         size_t m_W = 0;
 
-        void initialize(const CSRGraph& topology_graph, size_t max_threads, bool use_grid = false) {
+        void initialize(const CSRGraph& topology_graph, size_t max_threads, bool use_grid = false, size_t grid_W = 0) {
             HEIPROMAP_PROFILE_SCOPE("misc", "GridDistanceOracle", "initialize");
             m_graph = &topology_graph;
             m_k = topology_graph.n;
             
-            m_W = 0;
-            if (m_k > 0) {
+            m_W = grid_W;
+            if (m_W == 0 && m_k > 0) {
                 for (size_t i = 1; i < m_k; ++i) {
                     if (topology_graph.neighborhoods[i+1] - topology_graph.neighborhoods[i] == 2) {
                         m_W = i + 1;
