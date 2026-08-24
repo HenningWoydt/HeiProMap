@@ -267,12 +267,12 @@ namespace HeiProMap {
             if (ac.hm_level > 0) {
                 const weight_t total_weight = graphs[0].g_weight;
                 HEAVYASSERT(assert_graph(graphs[0]));
+
                 TranslationTable<vertex_t> tt;
                 tt.reserve(graphs[0].n, graphs[0].n);
                 for (vertex_t u = 0; u < graphs[0].n; ++u) {
                     tt.add(u, u);
                 }
-
                 recursive_solve(graphs[0], p_manager, ac.hierarchy, ac.distance, 0, 0, tt, total_weight);
                 p_manager.recalculate_weights(graphs[0]);
                 HEAVYASSERT(assert_state_after_partitioning(graphs[0], p_manager, ac.k));
@@ -305,7 +305,9 @@ namespace HeiProMap {
                     for (partition_t i = 0; i < ac.k; ++i) {
                         lmax_constraints[i] = lmax;
                     }
+                    std::cout << "QAP before flow refinement: " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
                     flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    std::cout << "QAP after flow refinement : " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
                 }
             } else {
                 internal_solve();
@@ -797,7 +799,11 @@ namespace HeiProMap {
                 sub_ac.hierarchy = hierarchy;
                 sub_ac.distance = distance;
                 sub_ac.k = k_of_subgraph;
-                sub_ac.imbalance = std::max(0.0, determine_adaptive_imbalance(ac.imbalance, total_weight, ac.k, g.g_weight, k_of_subgraph, 1));
+                f64 sub_imbalance = determine_adaptive_imbalance(ac.imbalance, total_weight, ac.k, g.g_weight, k_of_subgraph, 1);
+                if (sub_imbalance < 0.0) {
+                    sub_imbalance = 0.001;
+                }
+                sub_ac.imbalance = sub_imbalance;
 
                 if (ac.config_name == "fast") {
                     sub_ac.set_fast();
@@ -828,7 +834,9 @@ namespace HeiProMap {
             distance.pop_back();
 
             f64 per_level_epsilon = determine_adaptive_imbalance(ac.imbalance, total_weight, ac.k, g.g_weight, k_of_subgraph, hierarchy.size() + 1);
-            per_level_epsilon = std::max(0.0, per_level_epsilon);
+            if (per_level_epsilon < 0.0) {
+                per_level_epsilon = 0.001;
+            }
 
             AlignedArray<partition_t> partition;
             partition.initialize(g.n, 0);
