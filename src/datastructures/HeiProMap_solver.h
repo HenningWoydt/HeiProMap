@@ -769,19 +769,35 @@ namespace HeiProMap {
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
+        inline f64 determine_adaptive_imbalance(f64 global_imbalance,
+                                                u64 global_g_weight,
+                                                u64 global_k,
+                                                u64 local_g_weight,
+                                                u64 local_k_rem,
+                                                u64 depth) {
+            f64 local_imbalance = (1.0 + global_imbalance) * ((f64) (local_k_rem * global_g_weight) / (f64) (global_k * local_g_weight));
+            local_imbalance = std::pow(local_imbalance, (f64) 1 / (f64) depth) - 1.0;
+            return local_imbalance;
+        }
+
         void recursive_solve(graph_t &g, PartitionManager &p_manager, std::vector<partition_t> hierarchy,
                              std::vector<weight_t> distance, u64 current_level, u64 offset, const TranslationTable<vertex_t> &tt,
                              const weight_t total_weight) {
-            partition_t k_of_subgraph = prod<partition_t>(hierarchy);
-            f64 total_remaining_slack = ((1.0 + ac.imbalance) * (f64) k_of_subgraph * (f64) total_weight) / ((f64) ac.k * (f64) g.g_weight) - 1.0;
-            total_remaining_slack = std::max(0.0, total_remaining_slack);
+            if (hierarchy.empty()) {
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    p_manager.set(tt.get_o(u), g.v_weights[u], offset);
+                }
+                return;
+            }
 
-            if (current_level >= ac.hm_level) {
+            partition_t k_of_subgraph = prod<partition_t>(hierarchy);
+
+            if (current_level >= ac.hm_level && hierarchy.size() > 1) {
                 AlgorithmConfiguration sub_ac = ac;
                 sub_ac.hierarchy = hierarchy;
                 sub_ac.distance = distance;
                 sub_ac.k = k_of_subgraph;
-                sub_ac.imbalance = total_remaining_slack;
+                sub_ac.imbalance = std::max(0.0, determine_adaptive_imbalance(ac.imbalance, total_weight, ac.k, g.g_weight, k_of_subgraph, 1));
 
                 if (ac.config_name == "fast") {
                     sub_ac.set_fast();
@@ -811,7 +827,7 @@ namespace HeiProMap {
             hierarchy.pop_back();
             distance.pop_back();
 
-            f64 per_level_epsilon = std::pow(1.0 + total_remaining_slack, 1.0 / (f64) (hierarchy.size() + 1)) - 1.0;
+            f64 per_level_epsilon = determine_adaptive_imbalance(ac.imbalance, total_weight, ac.k, g.g_weight, k_of_subgraph, hierarchy.size() + 1);
             per_level_epsilon = std::max(0.0, per_level_epsilon);
 
             AlignedArray<partition_t> partition;
