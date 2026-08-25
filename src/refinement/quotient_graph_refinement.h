@@ -65,6 +65,7 @@ namespace HeiProMap {
         bool use_active_scheduling = true;
         bool use_preemptive_exit = true;
         bool use_edge_cut = true;
+        bool measure_qg_edge_cut = false;
     };
 
     class QuotientGraphRefinement final {
@@ -89,7 +90,16 @@ namespace HeiProMap {
         std::vector<RandomEngine> rnd_engines;
         AlignedArray<u8> used_this_round;
 
+#include <atomic>
+#include <chrono>
+
         const QuotientGraphRefinementConfiguration *config = nullptr;
+
+        std::atomic<u64> time_initial_qap{0};
+        std::atomic<u64> time_initial_edge_cut{0};
+        std::atomic<u64> time_update_qap{0};
+        std::atomic<u64> time_update_edge_cut{0};
+        std::atomic<u64> num_evals{0};
 
     public:
         QuotientGraphRefinement() = default;
@@ -198,6 +208,14 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
                 std::swap(active_this_round, active_next_round);
                 active_next_round.initialize(m_k, 0);
+            }
+
+            if (config->measure_qg_edge_cut) {
+                std::cout << "[QGEdgeCutMeasure] time_initial_qap=" << time_initial_qap 
+                          << "us time_initial_edge_cut=" << time_initial_edge_cut 
+                          << "us time_update_qap=" << time_update_qap 
+                          << "us time_update_edge_cut=" << time_update_edge_cut 
+                          << "us num_evals=" << num_evals << std::endl;
             }
         }
 
@@ -435,6 +453,7 @@ namespace HeiProMap {
             u64 n_init_moves = 0;
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
+            
             for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
                 const vertex_t u = bv_manager.get(u_id, j);
                 for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
@@ -457,6 +476,57 @@ namespace HeiProMap {
                         break;
                     }
                 }
+            }
+            
+            if (config->measure_qg_edge_cut) {
+                u64 local_qap = 0;
+                u64 local_edge = 0;
+                
+                auto t1 = std::chrono::high_resolution_clock::now();
+                for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
+                    const vertex_t u = bv_manager.get(u_id, j);
+                    for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                        if (block_conn.get_id(i) == v_id) {
+                            volatile weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
+                            break;
+                        }
+                    }
+                }
+                for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
+                    const vertex_t v = bv_manager.get(v_id, j);
+                    for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
+                        if (block_conn.get_id(i) == u_id) {
+                            volatile weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
+                            break;
+                        }
+                    }
+                }
+                auto t2 = std::chrono::high_resolution_clock::now();
+                
+                auto t3 = std::chrono::high_resolution_clock::now();
+                for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
+                    const vertex_t u = bv_manager.get(u_id, j);
+                    for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                        if (block_conn.get_id(i) == v_id) {
+                            volatile weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
+                            break;
+                        }
+                    }
+                }
+                for (size_t j = 0; j < bv_manager.size(v_id); ++j) {
+                    const vertex_t v = bv_manager.get(v_id, j);
+                    for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
+                        if (block_conn.get_id(i) == u_id) {
+                            volatile weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
+                            break;
+                        }
+                    }
+                }
+                auto t4 = std::chrono::high_resolution_clock::now();
+                
+                time_initial_edge_cut += std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+                time_initial_qap += std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count();
+                num_evals += n_init_moves;
             }
 
             // store change

@@ -34,6 +34,8 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include <atomic>
+#include <chrono>
 
 #include <omp.h>
 
@@ -83,6 +85,7 @@ namespace HeiProMap {
         bool always_include_boundary = false;
         GrowthStrategy growth_strategy = GrowthStrategy::BFS;
         bool use_edge_cut = true;
+        bool measure_flow_edge_cut = false;
     };
 
     class FlowBasedRefinement final {
@@ -102,6 +105,11 @@ namespace HeiProMap {
 
         const FlowBasedRefinementConfiguration *config = nullptr;
         std::vector<RandomEngine> rnd_engines;
+        
+        std::atomic<u64> time_build_penalty{0};
+        std::atomic<u64> time_solve_penalty{0};
+        std::atomic<u64> time_build_no_penalty{0};
+        std::atomic<u64> time_solve_no_penalty{0};
 
         // per-thread persistent storage to avoid repeated allocations
         std::vector<std::vector<vertex_t> > left_boundaries;
@@ -240,6 +248,13 @@ namespace HeiProMap {
                 // std::cout << "[FlowBasedRefinement] SCC closure search summary: "
                 //           << "Successes = " << m_scc_successes << ", "
                 //           << "Failures = " << m_scc_failures << std::endl;
+            }
+
+            if (config->measure_flow_edge_cut) {
+                std::cout << "[FlowEdgeCutMeasure] time_build_penalty=" << time_build_penalty 
+                          << "us time_solve_penalty=" << time_solve_penalty 
+                          << "us time_build_no_penalty=" << time_build_no_penalty 
+                          << "us time_solve_no_penalty=" << time_solve_no_penalty << "us" << std::endl;
             }
         }
 
@@ -474,15 +489,38 @@ namespace HeiProMap {
                 for (size_t i = 0; i < left_region.size(); ++i) { translation_table.add(left_region[i], new_u++); }
                 for (size_t i = 0; i < right_region.size(); ++i) { translation_table.add(right_region[i], new_u++); }
 
-                if (!d_oracle.last_level_pair(left_id, right_id) || !config->use_edge_cut) {
-                    build_flow_network_with_penalties<t_uniform_e_weights>(g, d_oracle, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, alpha, s_connected, t_connected);
-                } else {
+                if (config->measure_flow_edge_cut && config->use_edge_cut && d_oracle.last_level_pair(left_id, right_id)) {
+                    PushRelabel<weight_t> pr2;
+                    MemoryStack pr_mem2;
+                    std::vector<u8> s_connected2, t_connected2;
+                    
+                    auto t1 = std::chrono::high_resolution_clock::now();
+                    build_flow_network_with_penalties<t_uniform_e_weights>(g, d_oracle, p_manager, left_id, right_id, left_region, right_region, pr2, pr_mem2, translation_table, region_marker, region_mark, alpha, s_connected2, t_connected2);
+                    auto t2 = std::chrono::high_resolution_clock::now();
+                    pr2.maxflow();
+                    auto t3 = std::chrono::high_resolution_clock::now();
+                    
+                    auto t4 = std::chrono::high_resolution_clock::now();
                     build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
-                }
+                    auto t5 = std::chrono::high_resolution_clock::now();
+                    pr.maxflow();
+                    auto t6 = std::chrono::high_resolution_clock::now();
+                    
+                    time_build_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+                    time_solve_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count();
+                    time_build_no_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4).count();
+                    time_solve_no_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t6 - t5).count();
+                } else {
+                    if (!d_oracle.last_level_pair(left_id, right_id) || !config->use_edge_cut) {
+                        build_flow_network_with_penalties<t_uniform_e_weights>(g, d_oracle, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, alpha, s_connected, t_connected);
+                    } else {
+                        build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
+                    }
 
-                // solve the flow network
-                HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "solve_maxflow");
-                pr.maxflow();
+                    // solve the flow network
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "solve_maxflow");
+                    pr.maxflow();
+                }
 
                 // get the cut
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "get_cut");

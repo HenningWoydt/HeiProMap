@@ -204,6 +204,7 @@ namespace HeiProMap {
             {"--qg-refinement-use-active-scheduling", "", "Use active scheduling in quotient graph refinement (true/false).", "", "", false},
             {"--qg-refinement-use-preemptive-exit", "", "Use preemptive exit in quotient graph refinement (true/false).", "", "", false},
             {"--qg-refinement-use-edge-cut", "", "Quotient graph refinement use edge-cut on last level (true/false).", "", "", false},
+            {"--measure-qg-edge-cut", "", "Measure QG edge cut optimization time (true/false).", "false", "", false},
 
             // Flow-Based Refinement (FB)
             {"--fb-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
@@ -218,6 +219,7 @@ namespace HeiProMap {
             {"--fb-refinement-use-edge-cut", "", "Flow refinement use edge-cut on lowest level (true/false).", "true", "", false},
             {"--fb-refinement-always-include-boundary", "", "Flow refinement always include boundary (true/false).", "", "", false},
             {"--fb-refinement-growth-strategy", "", "Flow refinement growth strategy (bfs, heavy-first, light-first).", "", "", false},
+            {"--measure-flow-edge-cut", "", "Measure time for flow edge cut optimization (true/false).", "false", "", false},
         };
 
     public:
@@ -456,6 +458,10 @@ namespace HeiProMap {
                 std::string val = get("--qg-refinement-use-edge-cut");
                 quotient_graph_refinement_config.use_edge_cut = (val == "true" || val == "1");
             }
+            if (is_set("--measure-qg-edge-cut")) {
+                std::string val = get("--measure-qg-edge-cut");
+                quotient_graph_refinement_config.measure_qg_edge_cut = (val == "true" || val == "1");
+            }
 
             // Override coarsening settings from CLI if they are set
             if (is_set("--coarsening")) {
@@ -548,6 +554,10 @@ namespace HeiProMap {
             }
             if (is_set("--fb-refinement-growth-strategy")) {
                 flow_based_refinement_config.growth_strategy = string_to_growth_strategy(get("--fb-refinement-growth-strategy"));
+            }
+            if (is_set("--measure-flow-edge-cut")) {
+                std::string val = get("--measure-flow-edge-cut");
+                flow_based_refinement_config.measure_flow_edge_cut = (val == "true" || val == "1");
             }
         }
 
