@@ -670,7 +670,8 @@ namespace HeiProMap {
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 1;
+            flow_based_refinement_config.use_active_block_scheduling = true;
+            flow_based_refinement_config.max_global_iteration = 5;
             flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 2.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
