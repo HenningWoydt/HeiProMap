@@ -661,6 +661,7 @@ namespace HeiProMap {
         h_ac.k = k;
         h_ac.imbalance = imb;
         h_ac.threads = 1;
+        h_ac.recursive_bisection_config.kappa = kappa;
 
         graph_t g_copy = g;
         HeiPaSolver solver(std::move(g_copy), h_ac);

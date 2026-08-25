@@ -581,9 +581,11 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
-            global_multisection_config.kappa = 1;
+            // global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode = GLOBAL_MULTISECTION_KAFFPA_FAST;
+            global_multisection_config.kappa = 64;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 2;
+            global_multisection_config.v_cycles = 0;
             global_multisection_config.v_cycle_depth = 100;
 
             // enable label propagation
@@ -611,6 +613,7 @@ namespace HeiProMap {
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = true;
+            flow_based_refinement_config.always_include_boundary = true;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
@@ -641,18 +644,21 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
-            global_multisection_config.kappa = 1;
+            // global_multisection_config.mode_string = "kaffpa-fast";
+            // global_multisection_config.mode = GLOBAL_MULTISECTION_KAFFPA_FAST;
+            global_multisection_config.kappa = 64;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 5;
-            global_multisection_config.v_cycle_depth = 10;
+            global_multisection_config.v_cycles = 0;
+            global_multisection_config.v_cycle_depth = 100;
 
             // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
+            label_propagation_config.use_parallel_alg = false;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
@@ -665,12 +671,14 @@ namespace HeiProMap {
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 3;
-            flow_based_refinement_config.alpha = 1.0;
+            flow_based_refinement_config.max_local_iteration = 5;
+            flow_based_refinement_config.alpha = 2.0;
             flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = true;
+            flow_based_refinement_config.use_closed_vertex_set = false;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+            flow_based_refinement_config.always_include_boundary = true;
+            flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
         }
 
         void set_strong() {
@@ -698,20 +706,23 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "heipa-fast";
-            global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
-            global_multisection_config.kappa = 1;
+            // global_multisection_config.mode_string = "heipa-fast";
+            // global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
+            global_multisection_config.mode_string = "kaffpa-strong";
+            global_multisection_config.mode = GLOBAL_MULTISECTION_KAFFPA_STRONG;
+            global_multisection_config.kappa = 3;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 5;
-            global_multisection_config.v_cycle_depth = 10;
+            global_multisection_config.v_cycles = 0;
+            global_multisection_config.v_cycle_depth = 100;
 
             // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
+            label_propagation_config.use_parallel_alg = false;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
@@ -727,7 +738,7 @@ namespace HeiProMap {
             flow_based_refinement_config.max_global_iteration = 5;
             flow_based_refinement_config.max_local_iteration = 5;
             flow_based_refinement_config.alpha = 2.0;
-            flow_based_refinement_config.alpha_upper_bound = 16.0;
+            flow_based_refinement_config.alpha_upper_bound = 64.0;
             flow_based_refinement_config.alpha_modifier = 2.0;
             flow_based_refinement_config.use_closed_vertex_set = false;
             flow_based_refinement_config.closed_vertex_sets_repeats = 500;
@@ -753,20 +764,21 @@ namespace HeiProMap {
             // set multisection
             partitioning_algorithm_string = "multisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-            global_multisection_config.mode_string = "heipa-super-strong";
+            global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             global_multisection_config.kappa = 1;
             global_multisection_config.refine = true;
-            global_multisection_config.v_cycles = 5;
-            global_multisection_config.v_cycle_depth = 10;
+            global_multisection_config.v_cycles = 2;
+            global_multisection_config.v_cycle_depth = 100;
 
             // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
+            label_propagation_config.use_parallel_alg = false;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
+            quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;

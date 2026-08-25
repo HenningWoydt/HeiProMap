@@ -202,8 +202,10 @@ namespace HeiProMap {
                                 q_graph.move(g, p_manager, u, u_id, target_id);
                                 block_conn.move(g, u, u_id, target_id);
                                 p_manager.move_serial(u, u_weight, u_id, target_id);
-                                #pragma omp atomic write
-                                positive_move_occurred = true;
+                                if (qap_delta > 0) {
+                                    #pragma omp atomic write
+                                    positive_move_occurred = true;
+                                }
                             }
                         }
                     }
