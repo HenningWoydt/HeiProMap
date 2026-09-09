@@ -1,0 +1,102 @@
+diff -u --strip-trailing-cr -r extern/KaHIP/lib/algorithms/cycle_search.cpp /tmp/KaHIP_work/lib/algorithms/cycle_search.cpp
+--- a/lib/algorithms/cycle_search.cpp	2026-03-13 22:37:01.000000000 +0000
++++ b/lib/algorithms/cycle_search.cpp	2026-09-09 08:43:26.813252549 +0000
+@@ -162,13 +162,21 @@
+         if( !negative_cycle_detected) {
+                 //if there is no negative cycle then we should return a shortest path from s to t
+                 cycle.clear();
++                if (dest >= G.number_of_nodes() || (parent[dest] == std::numeric_limits<NodeID>::max() && dest != start)) {
++                        return false;
++                }
+                 cycle.push_back(dest);
+                 NodeID cur = dest;
+                 while(cur != start) {
++                        if (cur >= G.number_of_nodes() || parent[cur] == std::numeric_limits<NodeID>::max()) {
++                                cycle.clear();
++                                return false;
++                        }
+                         cur = parent[cur];
+                         cycle.push_back(cur);
+                 }
+                 std::reverse(cycle.begin(), cycle.end());
++                return true;
+         } 
+         return negative_cycle_detected;
+ }
+diff -u --strip-trailing-cr -r extern/KaHIP/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.cpp /tmp/KaHIP_work/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.cpp
+--- a/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.cpp	2026-03-13 22:37:01.000000000 +0000
++++ b/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.cpp	2026-09-09 08:43:26.814252536 +0000
+@@ -55,6 +55,9 @@
+                 cycle_search cs;
+                 std::vector<NodeID> path;
+                 cs.find_shortest_path(cycle_problem, s, t, path);
++                if (path.size() < 2 || path.front() != s || path.back() != t) {
++                        return false;
++                }
+ 
+                 //detect conflict -- a block should be at most one time in a cycle
+                 bool conflict_detected = handle_ultra_model_conflicts(config, cycle_problem, 
+@@ -142,15 +145,14 @@
+         //solve shortest path problem in model 
+         //*************************************************************************************
+         //check wether t is reachable from s by performing a bfs
+-	std::deque<NodeID>* bfsqueue = new std::deque<NodeID>;
+-        std::vector<bool> touched(cycle_problem.number_of_nodes(), false);
+-        bfsqueue->push_back(s);
+-        touched[s] = true;
+-
+         cycle_search cs;
+         std::vector<NodeID> path;
+         cs.find_shortest_path(cycle_problem, s, t, path);
+ 
++        if (path.size() < 2 || path.front() != s || path.back() != t) {
++                return false;
++        }
++
+         //perform the found movements
+         perform_augmented_move(config, G, boundary, path, s, t, aqg);
+ 
+diff -u --strip-trailing-cr -r extern/KaHIP/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.h /tmp/KaHIP_work/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.h
+--- a/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.h	2026-03-13 22:37:01.000000000 +0000
++++ b/lib/partition/uncoarsening/refinement/cycle_improvements/advanced_models.h	2026-09-09 08:43:26.813252549 +0000
+@@ -305,6 +305,8 @@
+                                               NodeID & s, NodeID & t, 
+                                               augmented_Qgraph & aqg) {
+ 
++        if (cycleorpath.size() < 2) return;
++
+         for( unsigned i = 0; i < cycleorpath.size()-1; i++) {
+                 if(cycleorpath[i] == s || cycleorpath[i+1] == s || cycleorpath[i] == t || cycleorpath[i+1] == t) {
+                         //removeing a path in the adv cycleorpath case
+diff -u --strip-trailing-cr -r extern/KaHIP/lib/partition/uncoarsening/refinement/cycle_improvements/cycle_refinement.cpp /tmp/KaHIP_work/lib/partition/uncoarsening/refinement/cycle_improvements/cycle_refinement.cpp
+--- a/lib/partition/uncoarsening/refinement/cycle_improvements/cycle_refinement.cpp	2026-03-13 22:37:01.000000000 +0000
++++ b/lib/partition/uncoarsening/refinement/cycle_improvements/cycle_refinement.cpp	2026-09-09 08:43:26.814252536 +0000
+@@ -106,10 +106,13 @@
+                                                                                                                aqg_rebal, 
+                                                                                                                s, true);
+                                 if(!movs_allready_performed) {
+-                                        m_advanced_modelling.compute_vertex_movements_rebalance(partition_config, 
++                                        bool rebal_performed = m_advanced_modelling.compute_vertex_movements_rebalance(partition_config, 
+                                                                                                 G, 
+                                                                                                 boundary, 
+                                                                                                 aqg_rebal, s);
++                                        if(!rebal_performed) {
++                                                break;
++                                        }
+                                 } // else the fall back solution has been applied
+                         }
+                 }
+@@ -179,9 +182,12 @@
+                                                                                                        aqg_rebal, 
+                                                                                                        s, true, true);
+                                 if(!moves_performed) {
+-                                        m_advanced_modelling.compute_vertex_movements_rebalance(partition_config, 
++                                        bool rebal_performed = m_advanced_modelling.compute_vertex_movements_rebalance(partition_config, 
+                                                                                                 G, boundary, 
+                                                                                                 aqg_rebal, s);
++                                        if(!rebal_performed) {
++                                                break;
++                                        }
+                                 } // else the fall back solution has been applied
+                         }
+                        

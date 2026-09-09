@@ -92,8 +92,8 @@ else
   # -----------------------------
   # Fetch dependencies
   # -----------------------------
-  rm -rf extern
   mkdir -p extern
+  rm -rf extern/KaHIP extern/local/kahip-release extern/local/kahip-debug
 
   echo "Downloading KaHIP 3.25..."
   (
@@ -103,6 +103,10 @@ else
     mv KaHIP-3.25 KaHIP
     rm -f v3.25.tar.gz
     sed -i 's|include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/partition/uncoarsening/refinement/quotient_graph_refinement/flow_refinement)|include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/partition/uncoarsening/refinement/quotient_graph_refinement/flow_refinement)\n    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/lib/partition/uncoarsening/refinement/cycle_improvements)|' KaHIP/CMakeLists.txt
+    if [ -f "kahip.patch" ]; then
+      echo "Applying KaHIP patch..."
+      execute patch -p1 -d KaHIP -i "${ROOT}/extern/kahip.patch"
+    fi
   )
 
   # -----------------------------
