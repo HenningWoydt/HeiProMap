@@ -310,14 +310,15 @@ namespace HeiProMap {
     }
 
 
-    inline weight_t get_u_qap_delta_and_is_boundary(const graph_t &g,
+    template<typename GraphT, typename DistanceOracleT>
+    inline weight_t get_u_qap_delta_and_is_boundary(const GraphT &g,
                                                     const vertex_t u,
                                                     const partition_t old_id,
                                                     const partition_t new_id,
                                                     bool &is_boundary_old_id,
                                                     bool &is_boundary_new_id,
                                                     const p_manager_t &p_manager,
-                                                    d_oracle_t &d_oracle) {
+                                                    DistanceOracleT &d_oracle) {
         is_boundary_old_id = false;
         is_boundary_new_id = false;
 

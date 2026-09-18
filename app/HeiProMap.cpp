@@ -86,8 +86,13 @@ int main(const int argc, char *argv[]) {
 
             HeiProMap::AlgorithmConfiguration ac(temp_argc, temp_argv);
 
-            HeiProMap::HeiProMapSolver solver(ac);
-            solver.solve();
+            if (ac.use_binary_oracle()) {
+                HeiProMap::HeiProMapSolver<HeiProMap::BinaryDistanceOracle> solver(ac);
+                solver.solve();
+            } else {
+                HeiProMap::HeiProMapSolver<HeiProMap::DistanceOracle> solver(ac);
+                solver.solve();
+            }
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
             delete[] temp_argv;
@@ -97,8 +102,13 @@ int main(const int argc, char *argv[]) {
     } else {
         HeiProMap::AlgorithmConfiguration ac(argc, argv);
 
-        HeiProMap::HeiProMapSolver solver(ac);
-        solver.solve();
+        if (ac.use_binary_oracle()) {
+            HeiProMap::HeiProMapSolver<HeiProMap::BinaryDistanceOracle> solver(ac);
+            solver.solve();
+        } else {
+            HeiProMap::HeiProMapSolver<HeiProMap::DistanceOracle> solver(ac);
+            solver.solve();
+        }
     }
 
     auto ep = HeiProMap::get_time_point();

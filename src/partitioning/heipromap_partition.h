@@ -70,8 +70,14 @@ namespace HeiProMap {
 
         ac.mapping_out = ""; // Avoid writing to file unless explicitly requested
 
-        HeiProMapSolver solver(std::move(csr_g), ac);
-        std::vector<vertex_t> result = solver.solve();
+        std::vector<vertex_t> result;
+        if (ac.use_binary_oracle()) {
+            HeiProMapSolver<BinaryDistanceOracle> solver(std::move(csr_g), ac);
+            result = solver.solve();
+        } else {
+            HeiProMapSolver<DistanceOracle> solver(std::move(csr_g), ac);
+            result = solver.solve();
+        }
 
         partition.resize(g.n);
         for (vertex_t u = 0; u < g.n; ++u) {

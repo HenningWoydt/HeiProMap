@@ -120,6 +120,29 @@ namespace HeiProMap {
         }
     }
 
+    enum ORACLE_TYPE {
+        ORACLE_AUTOMATIC,
+        ORACLE_MATRIX,
+        ORACLE_BINARY
+    };
+
+    inline ORACLE_TYPE string_to_oracle_type(const std::string &str) {
+        if (str == "automatic") return ORACLE_AUTOMATIC;
+        if (str == "matrix") return ORACLE_MATRIX;
+        if (str == "binary") return ORACLE_BINARY;
+        std::cout << "Error: Invalid oracle type '" << str << "'. Allowed values: matrix, binary, automatic" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    inline std::string oracle_type_to_string(ORACLE_TYPE type) {
+        switch (type) {
+            case ORACLE_AUTOMATIC: return "automatic";
+            case ORACLE_MATRIX: return "matrix";
+            case ORACLE_BINARY: return "binary";
+            default: return "automatic";
+        }
+    }
+
     inline EdgeRatingFunction string_to_edge_rating_function(const std::string &str) {
         if (str == "weight") return EdgeRatingFunction::WEIGHT;
         if (str == "expansion") return EdgeRatingFunction::EXPANSION;
@@ -159,6 +182,7 @@ namespace HeiProMap {
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
             {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
+            {"--oracle", "-o", "Distance oracle type (matrix, binary, automatic).", "automatic", "", false},
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
@@ -282,6 +306,15 @@ namespace HeiProMap {
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
         NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
+        // distance oracle
+        std::string oracle_string = "automatic";
+        ORACLE_TYPE oracle_type = ORACLE_AUTOMATIC;
+
+        bool use_binary_oracle() const {
+            if (oracle_type == ORACLE_BINARY) return true;
+            if (oracle_type == ORACLE_MATRIX) return false;
+            return k > 1024;
+        }
 
         AlgorithmConfiguration() = default;
 
@@ -294,6 +327,15 @@ namespace HeiProMap {
         void set_distance() {
             distance_string = get("--distance");
             distance = convert<weight_t>(split(distance_string, ':'));
+        }
+
+        void set_oracle() {
+            if (is_set("--oracle")) {
+                oracle_string = get("--oracle");
+            } else {
+                oracle_string = "automatic";
+            }
+            oracle_type = string_to_oracle_type(oracle_string);
         }
 
         void set_imbalance() {
@@ -365,6 +407,7 @@ namespace HeiProMap {
 
             set_hierarchy();
             set_distance();
+            set_oracle();
             set_imbalance();
             set_seed();
             set_threads();

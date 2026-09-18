@@ -48,12 +48,14 @@
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "distance_oracle.h"
+#include "binary_distance_oracle.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../partitioning/recursive_bisection.h"
 #include "../utility/translation_table.h"
 #include "HeiPa_solver.h"
 
 namespace HeiProMap {
+    template<typename DistanceOracleT = DistanceOracle>
     class HeiProMapSolver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
@@ -72,7 +74,7 @@ namespace HeiProMap {
         BoundaryVertexManager bv_manager;
         QuotientGraph q_graph;
         BlockConn block_conn;
-        DistanceOracle d_oracle;
+        DistanceOracleT d_oracle;
 
         // matching
         std::vector<Mapping> mappings;
@@ -331,6 +333,7 @@ namespace HeiProMap {
             std::cout << "k                       : " << ac.k << std::endl;
             std::cout << "Hierarchy               : " << ac.hierarchy_string << std::endl;
             std::cout << "Distances               : " << ac.distance_string << std::endl;
+            std::cout << "Distance Oracle         : " << (std::is_same_v<DistanceOracleT, BinaryDistanceOracle> ? "binary" : "matrix") << std::endl;
             std::cout << "Lmax                    : " << lmax << std::endl;
             std::cout << "Threads                 : " << ac.threads << std::endl;
             std::cout << "--------------------------" << std::endl;
@@ -818,14 +821,25 @@ namespace HeiProMap {
                 std::vector<weight_t> v_weights(g.n);
                 const weight_t *v_weights_ptr = g.v_weights.get_ptr();
                 std::copy(v_weights_ptr, v_weights_ptr + g.n, v_weights.begin());
-                HeiProMapSolver sub_solver(std::move(g), sub_ac);
-                const PartitionManager &sub_p_manager = sub_solver.solve_subproblem();
-                HEAVYASSERT(assert_state_after_partitioning(sub_solver.get_graph(0), sub_p_manager, sub_p_manager.k));
+                if (sub_ac.use_binary_oracle()) {
+                    HeiProMapSolver<BinaryDistanceOracle> sub_solver(std::move(g), sub_ac);
+                    const PartitionManager &sub_p_manager = sub_solver.solve_subproblem();
+                    HEAVYASSERT(assert_state_after_partitioning(sub_solver.get_graph(0), sub_p_manager, sub_p_manager.k));
 
-                for (vertex_t u = 0; u < sub_p_manager.n; ++u) {
-                    p_manager.set(tt.get_o(u), v_weights[u], offset + sub_p_manager[u]);
+                    for (vertex_t u = 0; u < sub_p_manager.n; ++u) {
+                        p_manager.set(tt.get_o(u), v_weights[u], offset + sub_p_manager[u]);
+                    }
+                    HEAVYASSERT(assert_state_partial(sub_solver.get_graph(0), p_manager, tt, offset, k_of_subgraph));
+                } else {
+                    HeiProMapSolver<DistanceOracle> sub_solver(std::move(g), sub_ac);
+                    const PartitionManager &sub_p_manager = sub_solver.solve_subproblem();
+                    HEAVYASSERT(assert_state_after_partitioning(sub_solver.get_graph(0), sub_p_manager, sub_p_manager.k));
+
+                    for (vertex_t u = 0; u < sub_p_manager.n; ++u) {
+                        p_manager.set(tt.get_o(u), v_weights[u], offset + sub_p_manager[u]);
+                    }
+                    HEAVYASSERT(assert_state_partial(sub_solver.get_graph(0), p_manager, tt, offset, k_of_subgraph));
                 }
-                HEAVYASSERT(assert_state_partial(sub_solver.get_graph(0), p_manager, tt, offset, k_of_subgraph));
                 return;
             }
 

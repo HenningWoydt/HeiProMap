@@ -177,8 +177,9 @@ namespace HeiProMap {
             scc_graphs.resize(m_threads);
         }
 
+        template<typename DistanceOracleT>
         void refine(graph_t &g,
-                    d_oracle_t &d_oracle,
+                    DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
@@ -190,9 +191,9 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
         void refine_impl(graph_t &g,
-                         d_oracle_t &d_oracle,
+                         DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          q_graph_t &q_graph,
@@ -259,10 +260,10 @@ namespace HeiProMap {
         }
 
 
-        template<bool t_uniform_e_weights>
+        template<bool t_uniform_e_weights, typename DistanceOracleT>
         weight_t compute_flow_cut_capacity(const graph_t &g,
                                            const p_manager_t &p_manager,
-                                           const d_oracle_t &d_oracle,
+                                           const DistanceOracleT &d_oracle,
                                            partition_t left_id,
                                            partition_t right_id,
                                            const std::vector<vertex_t> &left_region,
@@ -330,10 +331,10 @@ namespace HeiProMap {
             return total_cut;
         }
 
-        template<bool t_uniform_e_weights>
+        template<bool t_uniform_e_weights, typename DistanceOracleT>
         weight_t calculate_gain(const graph_t &g,
                                 const p_manager_t &p_manager,
-                                const d_oracle_t &d_oracle,
+                                const DistanceOracleT &d_oracle,
                                 const std::vector<u8> &is_left,
                                 partition_t left_id,
                                 partition_t right_id,
@@ -391,9 +392,9 @@ namespace HeiProMap {
             return gain;
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
         void refine_blocks(graph_t &g,
-                           d_oracle_t &d_oracle,
+                           DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
@@ -798,9 +799,9 @@ namespace HeiProMap {
             return curr_weight;
         }
 
-        template<bool t_uniform_e_weights>
+        template<bool t_uniform_e_weights, typename DistanceOracleT>
         void build_flow_network_with_penalties(const graph_t &g,
-                                               const d_oracle_t &d_oracle,
+                                               const DistanceOracleT &d_oracle,
                                                const p_manager_t &p_manager,
                                                partition_t left_id,
                                                partition_t right_id,

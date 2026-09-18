@@ -148,8 +148,9 @@ namespace HeiProMap {
             }
         }
 
+        template<typename DistanceOracleT>
         void refine(graph_t &g,
-                    d_oracle_t &d_oracle,
+                    DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
@@ -161,9 +162,9 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
         void refine_impl(graph_t &g,
-                         d_oracle_t &d_oracle,
+                         DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          q_graph_t &q_graph,
@@ -219,9 +220,9 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
         void refine_blocks(const graph_t &g,
-                           d_oracle_t &d_oracle,
+                           DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
                            q_graph_t &q_graph,
@@ -430,9 +431,9 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
         void refine_blocks_edge_cut(const graph_t &g,
-                                    d_oracle_t &d_oracle,
+                                    DistanceOracleT &d_oracle,
                                     bv_manager_t &bv_manager,
                                     p_manager_t &p_manager,
                                     q_graph_t &q_graph,

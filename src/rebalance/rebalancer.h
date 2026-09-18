@@ -94,11 +94,12 @@ namespace HeiProMap {
             random_engine = RandomEngine(seed);
         }
 
+        template<typename DistanceOracleT>
         RebalancerMove get_best_move(vertex_t u,
                                      const graph_t &g,
                                      const p_manager_t &p_manager,
                                      [[maybe_unused]] const q_graph_t &q_graph,
-                                     const d_oracle_t &d_oracle,
+                                     const DistanceOracleT &d_oracle,
                                      const u64 state_id,
                                      weight_t lmax) const {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
@@ -135,10 +136,11 @@ namespace HeiProMap {
             return move;
         }
 
+        template<typename DistanceOracleT>
         RebalancerMove get_local_best_move(vertex_t u,
                                            const graph_t &g,
                                            const p_manager_t &p_manager,
-                                           const d_oracle_t &d_oracle,
+                                           const DistanceOracleT &d_oracle,
                                            const u64 state_id,
                                            weight_t lmax) const {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
@@ -162,11 +164,12 @@ namespace HeiProMap {
             return move;
         }
 
+        template<typename DistanceOracleT>
         void rebalance(const graph_t &g,
                        p_manager_t &p_manager,
                        bv_manager_t &bv_manager,
                        q_graph_t &q_graph,
-                       d_oracle_t &d_oracle,
+                       DistanceOracleT &d_oracle,
                        block_conn_t &block_conn,
                        f64 imbalance) {
             fill_empty_blocks(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
@@ -293,11 +296,12 @@ namespace HeiProMap {
             }
         }
 
+        template<typename DistanceOracleT>
         void rebalance_last_layer(const graph_t &g,
                                   p_manager_t &p_manager,
                                   bv_manager_t &bv_manager,
                                   q_graph_t &q_graph,
-                                  d_oracle_t &d_oracle,
+                                  DistanceOracleT &d_oracle,
                                   block_conn_t &block_conn,
                                   f64 imbalance) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
@@ -426,11 +430,12 @@ namespace HeiProMap {
             }
         }
 
+        template<typename DistanceOracleT>
         void fill_empty_blocks(const graph_t &g,
                                p_manager_t &p_manager,
                                bv_manager_t &bv_manager,
                                q_graph_t &q_graph,
-                               d_oracle_t &d_oracle,
+                               DistanceOracleT &d_oracle,
                                block_conn_t &block_conn,
                                f64 imbalance) {
             // return;

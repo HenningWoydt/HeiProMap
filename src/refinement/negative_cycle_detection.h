@@ -127,8 +127,9 @@ namespace HeiProMap {
             move_graph.adj_list.resize(m_k);
         }
 
+        template<typename DistanceOracleT>
         void refine(graph_t &g,
-                    d_oracle_t &d_oracle,
+                    DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
@@ -262,9 +263,9 @@ namespace HeiProMap {
             return false;
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
         void refine_impl(graph_t &g,
-                         d_oracle_t &d_oracle,
+                         DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          q_graph_t &q_graph,
