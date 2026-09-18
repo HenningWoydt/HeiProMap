@@ -31,17 +31,17 @@
 #include <string>
 #include <vector>
 
-#include "definitions.h"
-#include "utility/utils.h"
-#include "partitioning/global_multisection.h"
-#include "refinement/label_propagation_refinement.h"
-#include "refinement/quotient_graph_refinement.h"
-#include "coarsening/global_path_algorithm.h"
-#include "coarsening/size_constrained_lp.h"
-#include "partitioning/kaffpa_partitioner.h"
-#include "partitioning/recursive_bisection.h"
-#include "refinement/flow_based_refinement.h"
-#include "refinement/negative_cycle_detection.h"
+#include "../definitions.h"
+#include "../utility/utils.h"
+#include "../partitioning/global_multisection.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
+#include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/size_constrained_lp.h"
+#include "../partitioning/kaffpa_partitioner.h"
+#include "../partitioning/recursive_bisection.h"
+#include "../refinement/flow_based_refinement.h"
+#include "../refinement/negative_cycle_detection.h"
 #include "HeiProMap_configuration.h"
 
 namespace HeiProMap {

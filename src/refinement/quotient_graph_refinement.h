@@ -148,12 +148,12 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph,
+                    QGraphT &q_graph,
                     block_conn_t &block_conn,
                     const AlignedArray<weight_t> &lmax_constraints) {
             if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
@@ -162,12 +162,12 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_impl(graph_t &g,
                          DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
-                         q_graph_t &q_graph,
+                         QGraphT &q_graph,
                          block_conn_t &block_conn,
                          const AlignedArray<weight_t> &lmax_constraints) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "init_block_scheduling");
@@ -220,12 +220,12 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_blocks(const graph_t &g,
                            DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
-                           q_graph_t &q_graph,
+                           QGraphT &q_graph,
                            block_conn_t &block_conn,
                            partition_t u_id,
                            partition_t v_id,
@@ -431,12 +431,12 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_blocks_edge_cut(const graph_t &g,
                                     DistanceOracleT &d_oracle,
                                     bv_manager_t &bv_manager,
                                     p_manager_t &p_manager,
-                                    q_graph_t &q_graph,
+                                    QGraphT &q_graph,
                                     block_conn_t &block_conn,
                                     partition_t u_id,
                                     partition_t v_id,

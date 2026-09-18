@@ -94,11 +94,11 @@ namespace HeiProMap {
             random_engine = RandomEngine(seed);
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
         RebalancerMove get_best_move(vertex_t u,
                                      const graph_t &g,
                                      const p_manager_t &p_manager,
-                                     [[maybe_unused]] const q_graph_t &q_graph,
+                                     [[maybe_unused]] const QuotientGraphT &q_graph,
                                      const DistanceOracleT &d_oracle,
                                      const u64 state_id,
                                      weight_t lmax) const {
@@ -164,11 +164,11 @@ namespace HeiProMap {
             return move;
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
         void rebalance(const graph_t &g,
                        p_manager_t &p_manager,
                        bv_manager_t &bv_manager,
-                       q_graph_t &q_graph,
+                       QuotientGraphT &q_graph,
                        DistanceOracleT &d_oracle,
                        block_conn_t &block_conn,
                        f64 imbalance) {
@@ -296,11 +296,11 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
         void rebalance_last_layer(const graph_t &g,
                                   p_manager_t &p_manager,
                                   bv_manager_t &bv_manager,
-                                  q_graph_t &q_graph,
+                                  QuotientGraphT &q_graph,
                                   DistanceOracleT &d_oracle,
                                   block_conn_t &block_conn,
                                   f64 imbalance) {
@@ -430,11 +430,11 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
         void fill_empty_blocks(const graph_t &g,
                                p_manager_t &p_manager,
                                bv_manager_t &bv_manager,
-                               q_graph_t &q_graph,
+                               QuotientGraphT &q_graph,
                                DistanceOracleT &d_oracle,
                                block_conn_t &block_conn,
                                f64 imbalance) {

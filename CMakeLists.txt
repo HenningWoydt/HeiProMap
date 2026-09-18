@@ -153,3 +153,9 @@ add_executable(HeiPa app/HeiPa.cpp)
 target_link_libraries(HeiPa PRIVATE HeiProMapLib)
 set_target_properties(HeiPa PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
 target_link_options(HeiPa PRIVATE "-Wl,--disable-new-dtags")
+
+add_executable(Deep-HeiProMap app/Deep-HeiProMap.cpp)
+target_link_libraries(Deep-HeiProMap PRIVATE HeiProMapLib)
+set_target_properties(Deep-HeiProMap PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
+target_link_options(Deep-HeiProMap PRIVATE "-Wl,--disable-new-dtags")
+

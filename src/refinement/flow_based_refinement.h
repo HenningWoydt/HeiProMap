@@ -177,12 +177,12 @@ namespace HeiProMap {
             scc_graphs.resize(m_threads);
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph,
+                    QGraphT &q_graph,
                     block_conn_t &block_conn,
                     const AlignedArray<weight_t> &lmax_constraints) {
             if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
@@ -191,12 +191,12 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_impl(graph_t &g,
                          DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
-                         q_graph_t &q_graph,
+                         QGraphT &q_graph,
                          block_conn_t &block_conn,
                          const AlignedArray<weight_t> &lmax_constraints) {
             m_scc_successes = 0;
@@ -392,12 +392,12 @@ namespace HeiProMap {
             return gain;
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_blocks(graph_t &g,
                            DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
-                           q_graph_t &q_graph,
+                           QGraphT &q_graph,
                            block_conn_t &block_conn,
                            partition_t left_id,
                            partition_t right_id,

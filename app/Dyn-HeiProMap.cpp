@@ -27,8 +27,8 @@
  #include <string>
  #include <vector>
 
- #include "src/datastructures/DynHeiProMap_solver.h"
-#include "../src/DynHeiProMap_configuration.h"
+ #include "../src/solver/DynHeiProMap_solver.h"
+#include "../src/configuration/DynHeiProMap_configuration.h"
 
 int main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);

@@ -189,6 +189,27 @@ namespace HeiProMap {
             }
         }
 
+        template<typename GraphT, typename PartitionManagerT>
+        void compute_from_scratch(const GraphT &g, const PartitionManagerT &p_manager) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraph", "compute_from_scratch");
+            initialize(p_manager.get_k());
+
+            for (vertex_t u = 0; u < g.n; ++u) {
+                const partition_t u_id = p_manager[u];
+                ASSERT(u_id < m_k);
+
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    const vertex_t v = g.edges_v[i];
+                    if (u < v) {
+                        const partition_t v_id = p_manager[v];
+                        ASSERT(v_id < m_k);
+                        const weight_t w = g.edges_w[i];
+                        add_edge(u_id, v_id, w);
+                    }
+                }
+            }
+        }
+
         template<typename F>
         void for_each_neighbor(const partition_t x, F &&f) const {
             size_t idx = m_head[x];
@@ -262,7 +283,9 @@ namespace HeiProMap {
             ASSERT(old_id < m_k);
             ASSERT(new_id != old_id);
 
-            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const weight_t w = g.edges_w[i];
                 {
                     const partition_t v_id = p_manager[v];
 

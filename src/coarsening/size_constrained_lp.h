@@ -125,51 +125,37 @@ namespace HeiProMap {
                                  weight_t max_w) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "merge_when_identity");
 
-            // 2) collect active cluster ids
-            std::vector<vertex_t> ids;
-            std::vector<u32> used(g.n, 0);
-            ids.reserve(g.n);
-            for (vertex_t id = 0; id < g.n; ++id) {
-                ids.push_back(id);
-            }
-
-            // 3) sort by cluster weight ascending (merge small into something feasible)
-            std::sort(ids.begin(), ids.end(), [&](vertex_t a, vertex_t b) { return g.v_weights[a] < g.v_weights[b]; });
-
-            // 4) greedy merging:
-            // for each small cluster a, find the smallest cluster b (b != a) s.t. cw[a]+cw[b] <= max_w
-            // and move all members of a into b.
-            for (size_t ia = 0; ia < ids.size(); ++ia) {
-                vertex_t a = ids[ia];
+            std::vector<u8> used(g.n, 0);
+            // 2) Fast greedy merging: iterate through vertices, check incident neighbors
+            // in the same partition block whose combined weight <= max_w.
+            for (vertex_t a = 0; a < g.n; ++a) {
                 if (used[a] == 1) { continue; }
+                partition_t a_id = p_manager[a];
+                weight_t a_w = g.v_weights[a];
 
-                // find best target b
                 vertex_t best_b = (vertex_t) -1;
+                weight_t best_ew = 0;
 
-                for (size_t ib = 0; ib < ids.size(); ++ib) {
-                    vertex_t b = ids[ids.size() - ib - 1];
-                    if (b == a) continue;
+                for (size_t i = g.neighborhoods[a]; i < g.neighborhoods[a + 1]; ++i) {
+                    vertex_t b = g.edges_v[i];
                     if (used[b] == 1) { continue; }
+                    if (p_manager[b] != a_id) { continue; }
 
-                    if (p_manager[a] != p_manager[b]) { continue; }
-
-                    weight_t sum = g.v_weights[a] + g.v_weights[b];
+                    weight_t sum = a_w + g.v_weights[b];
                     if (sum <= max_w) {
-                        best_b = b;
-                        break;
+                        weight_t ew = g.edges_w[i];
+                        if (ew > best_ew || best_b == (vertex_t) -1) {
+                            best_ew = ew;
+                            best_b = b;
+                        }
                     }
                 }
 
-                if (best_b == (vertex_t) -1) {
-                    // No feasible merge target for this cluster under max_w.
-                    // In identity-mapping case this happens only if max_w < 2*min_vertex_weight etc.
-                    continue;
+                if (best_b != (vertex_t) -1) {
+                    used[a] = 1;
+                    used[best_b] = 1;
+                    mapping.set(a, best_b);
                 }
-
-                used[a] = 1;
-                used[best_b] = 1;
-
-                mapping.set(a, best_b);
             }
         }
 
@@ -599,10 +585,14 @@ namespace HeiProMap {
                 }
 
                 if ((f64) n_moved < (f64) g.n * config->min_threshold) {
+                    std::cout << "[SCLP lvl " << level << " rnd " << round << ": moved=" << n_moved << "/" << g.n << " (below threshold)] " << std::flush;
                     break;
+                } else {
+                    std::cout << "[SCLP lvl " << level << " rnd " << round << ": moved=" << n_moved << "/" << g.n << "] " << std::flush;
                 }
             }
 
+            std::cout << "[merge_singletons] " << std::flush;
             merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
 
             bool ident_mapping = true;
@@ -615,6 +605,7 @@ namespace HeiProMap {
                 }
             }
             if (ident_mapping) {
+                std::cout << "[merge_when_identity (max_w=" << max_w << ")] " << std::flush;
                 merge_when_identity<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
             }
 
@@ -640,6 +631,7 @@ namespace HeiProMap {
                     const vertex_t map_id = remap[id];
                     mapping.set(u, map_id);
                 }
+                std::cout << "[coarse_n=" << new_id << "] " << std::flush;
             }
             // print_weight_distribution(g, mapping, max_w);
         }

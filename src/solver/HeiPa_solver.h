@@ -29,10 +29,10 @@
 
 #include <cmath>
 
-#include "boundary_vertex_manger.h"
-#include "partition_manager.h"
-#include "quotient_graph.h"
-#include "block_conn.h"
+#include "../datastructures/boundary_vertex_manger.h"
+#include "../datastructures/partition_manager.h"
+#include "../datastructures/quotient_graph.h"
+#include "../datastructures/block_conn.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
 #include "../utility/random_engine.h"
@@ -44,7 +44,7 @@
 #include "../refinement/flow_based_refinement.h"
 #include "../partitioning/kaffpa_partitioner.h"
 #include "../partitioning/recursive_bisection.h"
-#include "../HeiPa_configuration.h"
+#include "../configuration/HeiPa_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 

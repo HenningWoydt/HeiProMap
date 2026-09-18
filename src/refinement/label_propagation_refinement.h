@@ -113,12 +113,12 @@ namespace HeiProMap {
             used_this_round.initialize(m_k * m_k);
         }
 
-        template<typename DistanceOracleT>
+        template<typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
-                    q_graph_t &q_graph,
+                    QGraphT &q_graph,
                     block_conn_t &block_conn,
                     const AlignedArray<weight_t> &lmax_constraints) {
             if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
@@ -127,12 +127,12 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_impl(graph_t &g,
                          DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
-                         q_graph_t &q_graph,
+                         QGraphT &q_graph,
                          block_conn_t &block_conn,
                          const AlignedArray<weight_t> &lmax_constraints) {
             if (config->use_parallel_alg) {
@@ -142,12 +142,12 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_impl_parallel(graph_t &g,
                                   DistanceOracleT &d_oracle,
                                   bv_manager_t &bv_manager,
                                   p_manager_t &p_manager,
-                                  q_graph_t &q_graph,
+                                  QGraphT &q_graph,
                                   block_conn_t &block_conn,
                                   const AlignedArray<weight_t> &lmax_constraints) {
             bool positive_move_occurred = true;
@@ -216,12 +216,12 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
         void refine_impl_serial(graph_t &g,
                                 DistanceOracleT &d_oracle,
                                 bv_manager_t &bv_manager,
                                 p_manager_t &p_manager,
-                                q_graph_t &q_graph,
+                                QGraphT &q_graph,
                                 block_conn_t &block_conn,
                                 const AlignedArray<weight_t> &lmax_constraints) {
             RandomEngine &random_engine = rnd_engines[0];

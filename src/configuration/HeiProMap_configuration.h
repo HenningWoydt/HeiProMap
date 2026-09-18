@@ -30,8 +30,8 @@
 #include <string>
 #include <vector>
 
-#include "definitions.h"
-#include "refinement/negative_cycle_detection.h"
+#include "../definitions.h"
+#include "../refinement/negative_cycle_detection.h"
 
 namespace HeiProMap {
     enum COARSENING_ALGS {
@@ -154,14 +154,14 @@ namespace HeiProMap {
     }
 }
 
-#include "utility/utils.h"
-#include "partitioning/global_multisection.h"
-#include "refinement/label_propagation_refinement.h"
-#include "refinement/quotient_graph_refinement.h"
-#include "coarsening/global_path_algorithm.h"
-#include "coarsening/size_constrained_lp.h"
-#include "coarsening/heavy_edge_matching.h"
-#include "partitioning/kaffpa_partitioner.h"
+#include "../utility/utils.h"
+#include "../partitioning/global_multisection.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
+#include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/size_constrained_lp.h"
+#include "../coarsening/heavy_edge_matching.h"
+#include "../partitioning/kaffpa_partitioner.h"
 
 
 namespace HeiProMap {

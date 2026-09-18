@@ -32,7 +32,7 @@
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
 #include "../utility/random_engine.h"
-#include "../datastructures/HeiProMap_solver.h"
+#include "../solver/HeiProMap_solver.h"
 
 namespace HeiProMap {
     inline void heipromap_partition(const DynGraph &g,

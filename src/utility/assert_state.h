@@ -252,9 +252,10 @@ namespace HeiProMap {
         return true;
     }
 
+    template<typename QGraphT>
     inline bool assert_correct_quotient_graph(const graph_t &g,
                                               const p_manager_t &p_manager,
-                                              const q_graph_t &q_graph,
+                                              const QGraphT &q_graph,
                                               [[maybe_unused]] const partition_t k) {
         HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_quotient_graph");
 
@@ -368,10 +369,11 @@ namespace HeiProMap {
         return true;
     }
 
+    template<typename QGraphT = q_graph_t>
     inline bool assert_state_after_partitioning([[maybe_unused]] const graph_t &g,
                                                 [[maybe_unused]] const p_manager_t &p_manager,
                                                 [[maybe_unused]] bv_manager_t &bv_manager,
-                                                [[maybe_unused]] const q_graph_t &q_graph,
+                                                [[maybe_unused]] const QGraphT &q_graph,
                                                 [[maybe_unused]] const block_conn_t &block_conn,
                                                 [[maybe_unused]] const partition_t k) {
         // assert csr structure

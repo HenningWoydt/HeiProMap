@@ -35,17 +35,17 @@
 #include <map>
 #include <algorithm>
 
-#include "dyn_graph.h"
-#include "csr_graph.h"
-#include "quotient_graph.h"
-#include "partition_manager.h"
-#include "boundary_vertex_manger.h"
-#include "block_conn.h"
+#include "../datastructures/dyn_graph.h"
+#include "../datastructures/csr_graph.h"
+#include "../datastructures/quotient_graph.h"
+#include "../datastructures/partition_manager.h"
+#include "../datastructures/boundary_vertex_manger.h"
+#include "../datastructures/block_conn.h"
 #include "../partitioning/heipromap_partition.h"
 #include "../refinement/label_propagation_refinement.h"
-#include "../DynHeiProMap_configuration.h"
+#include "../configuration/DynHeiProMap_configuration.h"
 #include "../utility/profiler.h"
-#include "distance_oracle.h"
+#include "../datastructures/distance_oracle.h"
 #include "../utility/hungarian.h"
 #include "../utility/qap.h"
 

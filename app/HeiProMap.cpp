@@ -24,7 +24,7 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include "src/datastructures/HeiProMap_solver.h"
+#include "../src/solver/HeiProMap_solver.h"
 
 int main(const int argc, char *argv[]) {
     auto sp = HeiProMap::get_time_point();
