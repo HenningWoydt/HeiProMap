@@ -42,15 +42,15 @@
 #include "../coarsening/size_constrained_lp.h"
 #include "../coarsening/heavy_edge_matching.h"
 #include "../rebalance/rebalancer.h"
-#include "../partitioning/global_multisection.h"
+#include "../init_partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../configuration/HeiProMap_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
-#include "../datastructures/distance_oracle.h"
-#include "../datastructures/binary_distance_oracle.h"
-#include "../partitioning/kaffpa_partitioner.h"
-#include "../partitioning/recursive_bisection.h"
+#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/binary_distance_oracle.h"
+#include "../init_partitioning/kaffpa_partitioner.h"
+#include "../init_partitioning/recursive_bisection.h"
 #include "../utility/translation_table.h"
 #include "HeiPa_solver.h"
 
@@ -90,11 +90,11 @@ namespace HeiProMap {
         FlowBasedRefinement flow_based_refinement;
         NegativeCycleRefinement negative_cycle_refinement;
 
-        f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
         f64 initial_partitioning_ms = 0.0;
+        f64 intermediate_partitioning_ms = 0.0;
         f64 uncontraction_ms = 0.0;
         f64 rebalance_ms = 0.0;
         f64 refinement_ms = 0.0;
@@ -174,9 +174,7 @@ namespace HeiProMap {
     public:
         explicit HeiProMapSolver(const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
-            auto sp_io = get_time_point();
             graphs.emplace_back(t_ac.graph_in);
-            io_ms += get_milli_seconds(sp_io, get_time_point());
 
             auto sp = get_time_point();
             ac = t_ac;
@@ -301,14 +299,12 @@ namespace HeiProMap {
                     }
                     block_conn.compute_from_scratch(graphs[0], p_manager);
 
-                    AlignedArray<weight_t> lmax_constraints;
-                    lmax_constraints.initialize(ac.k);
                     weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                     for (partition_t i = 0; i < ac.k; ++i) {
-                        lmax_constraints[i] = lmax;
+                        p_manager.set_lmax(i, lmax);
                     }
                     std::cout << "QAP before flow refinement: " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
-                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn);
                     std::cout << "QAP after flow refinement : " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
                 }
             } else {
@@ -319,7 +315,6 @@ namespace HeiProMap {
 
             std::vector<partition_t> p(graphs[0].n);
             for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
-            write_partition(p, ac.mapping_out);
 
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
@@ -358,26 +353,21 @@ namespace HeiProMap {
             std::cout << "#oload partitions       : " << n_overloaded_partitions << std::endl;
             std::cout << "Sum oload weights       : " << sum_too_much << std::endl;
 
-            if (ac.hm_level == 0) {
-                std::cout << "IO (ms)                 : " << io_ms << std::endl;
-                std::cout << "Misc (ms)               : " << misc_ms << std::endl;
-                std::cout << "Coarsening (ms)         : " << coarsening_ms << std::endl;
-                std::cout << "Contraction (ms)        : " << contraction_ms << std::endl;
-                std::cout << "Init. Part. (ms)        : " << initial_partitioning_ms << std::endl;
-                std::cout << "Uncontraction (ms)      : " << uncontraction_ms << std::endl;
-                std::cout << "Rebalance (ms)          : " << rebalance_ms << std::endl;
-                std::cout << "Refinement (ms)         : " << refinement_ms << std::endl;
-                std::cout << "  Label Propagation (ms): " << lp_refine_ms << std::endl;
-                std::cout << "  Quotient Graph (ms)   : " << qg_refine_ms << std::endl;
-                // std::cout << "  Negative Cycle (ms)   : " << negative_cycle_refine_ms << std::endl;
-                std::cout << "  Flow (ms)             : " << flow_refine_ms << std::endl;
-                std::cout << "ALL (ms)                : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
+            std::cout << "------- Time -------" << std::endl;
+            std::cout << "Total solve time  : " << (duration + init_time) * 1000.0 << std::endl;
+            std::cout << "Coarsening        : " << coarsening_ms << std::endl;
+            std::cout << "Contraction       : " << contraction_ms << std::endl;
+            std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
+            std::cout << "Inter. Part.      : " << intermediate_partitioning_ms << std::endl;
+            std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
+            std::cout << "Rebalance         : " << rebalance_ms << std::endl;
+            std::cout << "Refinement        : " << refinement_ms << std::endl;
+            std::cout << "Misc              : " << misc_ms << std::endl;
+            std::cout << "ALL               : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
 
-
-                #if ENABLE_PROFILER
-                print_all_levels();
-                #endif
-            }
+            #if ENABLE_PROFILER
+            print_all_levels();
+            #endif
 
             return p;
         }
@@ -531,7 +521,7 @@ namespace HeiProMap {
                     block_conn.begin_vertex(graphs.back(), u);
 
                     const partition_t u_id = p_manager[u];
-                    const weight_t u_w = graphs.back().v_weights[u];
+                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weights[u];
                     p_manager.set(u, u_w, u_id);
 
                     for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
@@ -728,37 +718,35 @@ namespace HeiProMap {
         void refinement(const u64 level, const f64 level_imbalance) {
             auto sp = get_time_point();
 
-            AlignedArray<weight_t> lmax_constraints;
-            lmax_constraints.initialize(ac.k);
             weight_t lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs.back().g_weight / (f64) ac.k));
             for (partition_t i = 0; i < ac.k; ++i) {
-                lmax_constraints[i] = lmax;
+                p_manager.set_lmax(i, lmax);
             }
 
             if (ac.label_propagation_config.enabled) {
                 auto sp_local = get_time_point();
-                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             // if (ac.negative_cycle_config.enabled) {
             //     auto sp_local = get_time_point();
-            //     negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
+            //     negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, p_manager.lmax, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
             //     negative_cycle_refine_ms += get_milli_seconds(sp_local, get_time_point());
             //     HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             // }
 
             if (ac.flow_based_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
@@ -855,17 +843,16 @@ namespace HeiProMap {
             AlignedArray<partition_t> partition;
             partition.initialize(g.n, 0);
             //
-            {
-                HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "partition");
+            HEIPROMAP_PROFILE_SCOPE("adaptive_solver", "adaptive_solver", "partition");
 
-                KaffpaPartitionMode k_mode = KAFFPA_PARTITION_FAST;
-                if (ac.config_name == "eco") {
-                    k_mode = KAFFPA_PARTITION_ECO;
-                } else if (ac.config_name == "strong" || ac.config_name == "super-strong") {
-                    k_mode = KAFFPA_PARTITION_STRONG;
-                }
-                kaffpa_partition(g, k, per_level_epsilon, k_mode, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
+            KaffpaPartitionMode k_mode = KAFFPA_PARTITION_FAST;
+            if (ac.config_name == "eco") {
+                k_mode = KAFFPA_PARTITION_ECO;
+            } else if (ac.config_name == "strong" || ac.config_name == "super-strong") {
+                k_mode = KAFFPA_PARTITION_STRONG;
             }
+            kaffpa_partition(g, k, per_level_epsilon, k_mode, ac.seed, partition, ac.global_multisection_config.kappa, ac.collect_dataset, ac.data_dir);
+
 
             std::vector<vertex_t> new_ns(k, 0);
             std::vector<vertex_t> new_ms(k, 0);

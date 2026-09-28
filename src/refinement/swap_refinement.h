@@ -36,7 +36,7 @@
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
@@ -77,22 +77,20 @@ namespace HeiProMap {
 
         void refine(graph_t &g,
                     d_oracle_t &d_oracle,
-                    p_manager_t &p_manager,
-                    const AlignedArray<weight_t> &lmax_constraints) {
+                    p_manager_t &p_manager) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "SwapRefinement", "refine");
 
             if (p_manager.k < 2) return;
-            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, p_manager, lmax_constraints);
-            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, p_manager, lmax_constraints);
-            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, p_manager, lmax_constraints);
-            else refine_impl<false, false>(g, d_oracle, p_manager, lmax_constraints);
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, p_manager);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, p_manager);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, p_manager);
+            else refine_impl<false, false>(g, d_oracle, p_manager);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_impl(graph_t &g,
                          d_oracle_t &d_oracle,
-                         p_manager_t &p_manager,
-                         const AlignedArray<weight_t> &lmax_constraints) {
+                         p_manager_t &p_manager) {
             if (m_rnd_engines.empty()) return;
             RandomEngine &random_engine = m_rnd_engines[0];
 
@@ -104,7 +102,7 @@ namespace HeiProMap {
                 std::shuffle(vertices.begin(), vertices.end(), random_engine.generator);
 
                 // Phase 1: Simple Label Propagation (Single Moves)
-                for (vertex_t u : vertices) {
+                for (vertex_t u: vertices) {
                     partition_t u_id = p_manager[u];
                     const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
@@ -113,15 +111,15 @@ namespace HeiProMap {
 
                     // Collect target blocks from neighbors
                     FlatMap<partition_t, bool> target_blocks;
-                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u+1]; ++e) {
+                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
                         partition_t v_id = p_manager[g.edges_v[e]];
                         if (v_id != u_id) target_blocks[v_id] = true;
                     }
 
-                    for (auto const& kv : target_blocks) {
+                    for (auto const &kv: target_blocks) {
                         partition_t target_id = kv.first;
-                        if (p_manager.get_bweight(target_id) + u_w > lmax_constraints[target_id]) continue;
-                        
+                        if (p_manager.get_bweight(target_id) + u_w > p_manager.lmax[target_id]) continue;
+
                         weight_t gain = get_u_qap_delta(g, u, u_id, target_id, p_manager, d_oracle);
                         if (gain > best_gain) {
                             best_gain = gain;
@@ -137,19 +135,19 @@ namespace HeiProMap {
 
                 // Phase 2: Simple Swap (Vertex Exchanges)
                 std::shuffle(vertices.begin(), vertices.end(), random_engine.generator);
-                for (vertex_t u : vertices) {
+                for (vertex_t u: vertices) {
                     partition_t u_id = p_manager[u];
                     const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
 
-                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u+1]; ++e) {
+                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
                         vertex_t v = g.edges_v[e];
                         partition_t v_id = p_manager[v];
                         if (u_id == v_id) continue;
 
                         const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
 
-                        if (p_manager.get_bweight(u_id) - u_w + v_w > lmax_constraints[u_id]) continue;
-                        if (p_manager.get_bweight(v_id) - v_w + u_w > lmax_constraints[v_id]) continue;
+                        if (p_manager.get_bweight(u_id) - u_w + v_w > p_manager.lmax[u_id]) continue;
+                        if (p_manager.get_bweight(v_id) - v_w + u_w > p_manager.lmax[v_id]) continue;
 
                         const weight_t gain_u = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                         const weight_t gain_v = get_u_qap_delta(g, v, v_id, u_id, p_manager, d_oracle);

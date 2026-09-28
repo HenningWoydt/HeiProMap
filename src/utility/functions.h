@@ -28,7 +28,7 @@
 #define HEIPROMAP_FUNCTIONS_H
 
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
 
@@ -39,12 +39,11 @@ namespace HeiProMap {
                             vertex_t u) {
         partition_t u_id = p_manager[u];
 
-        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-            {
-                partition_t v_id = p_manager[v];
-                if (u_id != v_id) {
-                    return true;
-                }
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+            const vertex_t v = g.edges_v[i];
+            partition_t v_id = p_manager[v];
+            if (u_id != v_id) {
+                return true;
             }
         }
         return false;
@@ -55,12 +54,11 @@ namespace HeiProMap {
                                 const PartitionManagerT &p_manager,
                                 vertex_t u,
                                 partition_t id) {
-        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-            {
-                partition_t v_id = p_manager[v];
-                if (id == v_id) {
-                    return true;
-                }
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+            const vertex_t v = g.edges_v[i];
+            partition_t v_id = p_manager[v];
+            if (id == v_id) {
+                return true;
             }
         }
         return false;

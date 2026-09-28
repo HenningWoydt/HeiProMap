@@ -36,7 +36,7 @@
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../utility/aligned_array.h"
 #include "../utility/mapping.h"
@@ -101,7 +101,7 @@ namespace HeiProMap {
             weight_t max_w_observed = weights[0];
             double sum_w = 0;
             size_t over_limit_count = 0;
-            for (weight_t w : weights) {
+            for (weight_t w: weights) {
                 min_w = std::min(min_w, w);
                 max_w_observed = std::max(max_w_observed, w);
                 sum_w += w;
@@ -315,79 +315,77 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void cluster_templated([[maybe_unused]] const size_t level,
-                     const graph_t &g,
-                     [[maybe_unused]] const p_manager_t &p_manager,
-                     Mapping &mapping,
-                     [[maybe_unused]] f64 imbalance,
-                     u64 threads,
-                     weight_t lmax) {
+                               const graph_t &g,
+                               [[maybe_unused]] const p_manager_t &p_manager,
+                               Mapping &mapping,
+                               [[maybe_unused]] f64 imbalance,
+                               u64 threads,
+                               weight_t lmax) {
             mapping.initialize(g.n);
 
+            // get max w and max deg
             weight_t max_v_w = 0;
             vertex_t max_deg = 0;
-            // get max w and max deg
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "max");
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "max");
 
-                // determine the maximum allowed cluster weight
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    max_v_w = std::max(max_v_w, g.v_weights[u]);
-                    max_deg = std::max(max_deg, g.deg(u));
-                }
+            // determine the maximum allowed cluster weight
+            for (vertex_t u = 0; u < g.n; ++u) {
+                max_v_w = std::max(max_v_w, g.v_weights[u]);
+                max_deg = std::max(max_deg, g.deg(u));
             }
+
             weight_t W = std::ceil((f64) lmax / config->f);
             weight_t max_w = std::max(max_v_w, W);
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
             // get all vertices
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "flat_vertices");
 
-                flat_vertices.initialize(g.n);
-                if (config->use_degree_ordering) {
-                    bucket_sizes.initialize(B, 0);
-                    bucket_offsets.initialize(B);
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "flat_vertices");
 
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        size_t d = g.deg(u);
-                        size_t b = (d == 0) ? 0 : floor_log2(d);
-                        bucket_sizes[b]++;
-                    }
+            flat_vertices.initialize(g.n);
+            if (config->use_degree_ordering) {
+                bucket_sizes.initialize(B, 0);
+                bucket_offsets.initialize(B);
 
-                    bucket_offsets[0] = 0;
-                    for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
-
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        size_t d = g.deg(u);
-                        size_t b = (d == 0) ? 0 : floor_log2(d);
-                        flat_vertices[bucket_offsets[b]] = u;
-                        bucket_offsets[b] += 1;
-                    }
-                } else {
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        flat_vertices[u] = u;
-                    }
-                }
-            }
-            // setup cluster weights
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_weights");
-
-                // set each vertex to its own id
-                cluster_weights.initialize(g.n);
-                cluster_count.initialize(g.n);
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    mapping.set(u, u);
-                    cluster_weights[u] = g.v_weights[u];
-                    cluster_count[u] = 1;
+                    size_t d = g.deg(u);
+                    size_t b = (d == 0) ? 0 : floor_log2(d);
+                    bucket_sizes[b]++;
+                }
+
+                bucket_offsets[0] = 0;
+                for (size_t i = 1; i < B; ++i) { bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1]; }
+
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    size_t d = g.deg(u);
+                    size_t b = (d == 0) ? 0 : floor_log2(d);
+                    flat_vertices[bucket_offsets[b]] = u;
+                    bucket_offsets[b] += 1;
+                }
+            } else {
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    flat_vertices[u] = u;
                 }
             }
-            // setup active
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "active");
 
-                active.initialize(g.n, 1);
-                active_next.initialize(g.n, 1);
+            // setup cluster weights
+
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_weights");
+
+            // set each vertex to its own id
+            cluster_weights.initialize(g.n);
+            cluster_count.initialize(g.n);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                mapping.set(u, u);
+                cluster_weights[u] = g.v_weights[u];
+                cluster_count[u] = 1;
             }
+
+            // setup active
+
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "active");
+
+            active.initialize(g.n, 1);
+            active_next.initialize(g.n, 1);
 
             u64 n_moved = 0;
 
@@ -490,10 +488,9 @@ namespace HeiProMap {
                                 if (round > 0) {
                                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                                         const vertex_t v = g.edges_v[j];
-                                        {
-                                            #pragma omp atomic write
-                                            active_next[v] = 1;
-                                        }
+
+                                        #pragma omp atomic write
+                                        active_next[v] = 1;
                                     }
                                 }
                             }
@@ -587,63 +584,49 @@ namespace HeiProMap {
                         }
                     }
                 }
+
                 // swap active
-                {
-                    HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "swap_active");
-
-                    std::swap(active, active_next);
-                    active_next.initialize(g.n, 0);
-                }
-
-                if ((f64) n_moved < (f64) g.n * config->min_threshold) {
-                    std::cout << "[SCLP lvl " << level << " rnd " << round << ": moved=" << n_moved << "/" << g.n << " (below threshold)] " << std::flush;
-                    break;
-                } else {
-                    std::cout << "[SCLP lvl " << level << " rnd " << round << ": moved=" << n_moved << "/" << g.n << "] " << std::flush;
-                }
+                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "swap_active");
+                std::swap(active, active_next);
+                active_next.initialize(g.n, 0);
             }
 
-            std::cout << "[merge_singletons] " << std::flush;
             merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
 
             bool ident_mapping = true;
             // is identity mapping
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "is_identity_mapping");
-
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    ident_mapping &= u == mapping.get(u);
-                }
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "is_identity_mapping");
+            for (vertex_t u = 0; u < g.n; ++u) {
+                ident_mapping &= u == mapping.get(u);
             }
+
             if (ident_mapping) {
                 std::cout << "[merge_when_identity (max_w=" << max_w << ")] " << std::flush;
                 merge_when_identity<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
             }
 
             // map to a continuous range
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "calc_map");
-
-                // mapping starts at 0 and increments
-                remap.initialize(g.n, m_n);
-                vertex_t new_id = 0;
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    const vertex_t id = mapping.get(u);
-                    if (remap[id] == m_n) {
-                        remap[id] = new_id;
-                        new_id += 1;
-                    }
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "calc_map");
+            // mapping starts at 0 and increments
+            remap.initialize(g.n, m_n);
+            vertex_t new_id = 0;
+            for (vertex_t u = 0; u < g.n; ++u) {
+                const vertex_t id = mapping.get(u);
+                if (remap[id] == m_n) {
+                    remap[id] = new_id;
+                    new_id += 1;
                 }
-                mapping.set_coarse_n(new_id);
-
-                // remap
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    const vertex_t id = mapping.get(u);
-                    const vertex_t map_id = remap[id];
-                    mapping.set(u, map_id);
-                }
-                std::cout << "[coarse_n=" << new_id << "] " << std::flush;
             }
+            mapping.set_coarse_n(new_id);
+
+            // remap
+            for (vertex_t u = 0; u < g.n; ++u) {
+                const vertex_t id = mapping.get(u);
+                const vertex_t map_id = remap[id];
+                mapping.set(u, map_id);
+            }
+            std::cout << "[coarse_n=" << new_id << "] " << std::flush;
+
             // print_weight_distribution(g, mapping, max_w);
         }
     };

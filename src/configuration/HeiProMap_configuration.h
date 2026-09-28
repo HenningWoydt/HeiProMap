@@ -36,6 +36,7 @@
 namespace HeiProMap {
     #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
     #define HEIPROMAP_COARSENING_ALGS_DEFINED
+
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GLOBAL_PATHS,
@@ -70,6 +71,7 @@ namespace HeiProMap {
 
     #ifndef HEIPROMAP_PARTITIONING_ALGS_DEFINED
     #define HEIPROMAP_PARTITIONING_ALGS_DEFINED
+
     enum PARTITIONING_ALGS {
         PARTITIONING_ALG_UNDEFINED,
         PARTITIONING_ALG_MULTISECTION,
@@ -107,6 +109,7 @@ namespace HeiProMap {
 
     #ifndef HEIPROMAP_REBALANCING_ALGS_DEFINED
     #define HEIPROMAP_REBALANCING_ALGS_DEFINED
+
     enum REBALANCING_ALGS {
         REBALANCING_ALG_UNDEFINED,
         REBALANCING_ALG_SIMPLE
@@ -165,13 +168,13 @@ namespace HeiProMap {
 }
 
 #include "../utility/utils.h"
-#include "../partitioning/global_multisection.h"
+#include "../init_partitioning/global_multisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../coarsening/heavy_edge_matching.h"
-#include "../partitioning/kaffpa_partitioner.h"
+#include "../init_partitioning/kaffpa_partitioner.h"
 
 
 namespace HeiProMap {

@@ -32,6 +32,7 @@
 
 #include "csr_graph.h"
 #include "../utility/translation_table.h"
+#include "../utility/small_translation_table.h"
 
 namespace HeiProMap {
     class SubgraphExtractor {
@@ -104,10 +105,83 @@ namespace HeiProMap {
                     vertex_t sub_v = old_to_new[v];
                     if (sub_v != std::numeric_limits<vertex_t>::max()) {
                         sub_g.edges_v[edge_cursor] = sub_v;
-                        sub_g.edges_w[edge_cursor] = g.edges_w[j];
+                        sub_g.edges_w[edge_cursor] = g.edges_w[i];
                         edge_cursor++;
                     }
                 }
+            }
+        }
+
+        // Multi-block batch extraction
+        partition_t k = 0;
+        u64 threads = 1;
+        std::vector<CSRGraph> graphs;
+        std::vector<SmallTranslationTable<vertex_t> > tts;
+        std::vector<u64> idxs;
+
+        void initialize(partition_t t_k, u64 t_threads) {
+            k = t_k;
+            threads = t_threads;
+            graphs.resize(t_k);
+            tts.resize(t_k);
+            idxs.resize(t_k);
+        }
+
+        template<typename PartitionManagerT>
+        void extract(const CSRGraph &g,
+                     PartitionManagerT &p_manager,
+                     const std::vector<u32> &one_hot) {
+            // Reset
+            for (size_t i = 0; i < k; ++i) {
+                if (one_hot[i] == 1) {
+                    graphs[i].clear();
+                    tts[i].clear();
+                }
+            }
+            std::fill(idxs.begin(), idxs.end(), 0);
+
+            // Count
+            for (vertex_t u = 0; u < g.n; ++u) {
+                partition_t u_id = p_manager[u];
+                if (one_hot[u_id] == 0) continue;
+
+                tts[u_id].add(u, graphs[u_id].n);
+                graphs[u_id].n += 1;
+                graphs[u_id].g_weight += g.v_weights[u];
+
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    vertex_t v = g.edges_v[i];
+                    if (p_manager[v] == u_id) {
+                        graphs[u_id].m += 1;
+                    }
+                }
+            }
+
+            // Allocate
+            for (size_t i = 0; i < k; ++i) {
+                if (one_hot[i] == 1) {
+                    graphs[i].resize(graphs[i].n, graphs[i].m, graphs[i].g_weight);
+                }
+            }
+
+            // Build
+            for (vertex_t u = 0; u < g.n; ++u) {
+                partition_t u_id = p_manager[u];
+                if (one_hot[u_id] == 0) continue;
+
+                vertex_t sub_u = tts[u_id].get_n(u);
+                graphs[u_id].v_weights[sub_u] = g.v_weights[u];
+
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    vertex_t v = g.edges_v[i];
+                    if (p_manager[v] == u_id) {
+                        vertex_t sub_v = tts[u_id].get_n(v);
+                        graphs[u_id].edges_v[idxs[u_id]] = sub_v;
+                        graphs[u_id].edges_w[idxs[u_id]] = g.edges_w[i];
+                        idxs[u_id] += 1;
+                    }
+                }
+                graphs[u_id].neighborhoods[sub_u + 1] = idxs[u_id];
             }
         }
     };

@@ -31,7 +31,7 @@
 #include "macros.h"
 #include "aligned_array.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/dyn_graph.h"
 #include "../datastructures/partition_manager.h"
 
@@ -537,10 +537,10 @@ namespace HeiProMap {
 
         for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
             const partition_t id = block_conn.get_id(i);
-            const weight_t idw = block_conn.get_w(i); {
-                edge_cut_delta -= (id != new_id) * idw;
-                edge_cut_delta += (id != old_id) * idw;
-            }
+            const weight_t idw = block_conn.get_w(i);
+
+            edge_cut_delta -= (id != new_id) * idw;
+            edge_cut_delta += (id != old_id) * idw;
         }
 
         return edge_cut_delta;
@@ -558,22 +558,21 @@ namespace HeiProMap {
 
         if constexpr (t_uniform_e_weights) {
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                const vertex_t v = g.edges_v[i]; {
-                    partition_t v_id = p_manager[v];
-                    is_connected_to_new_id |= (v_id == new_id);
-                    edge_cut_delta -= (v_id != new_id);
-                    edge_cut_delta += (v_id != old_id);
-                }
+                const vertex_t v = g.edges_v[i];
+
+                partition_t v_id = p_manager[v];
+                is_connected_to_new_id |= (v_id == new_id);
+                edge_cut_delta -= (v_id != new_id);
+                edge_cut_delta += (v_id != old_id);
             }
         } else {
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                 const vertex_t v = g.edges_v[i];
-                const weight_t w = g.edges_w[i]; {
-                    partition_t v_id = p_manager[v];
-                    is_connected_to_new_id |= (v_id == new_id);
-                    edge_cut_delta -= (v_id != new_id) * w;
-                    edge_cut_delta += (v_id != old_id) * w;
-                }
+                const weight_t w = g.edges_w[i];
+                partition_t v_id = p_manager[v];
+                is_connected_to_new_id |= (v_id == new_id);
+                edge_cut_delta -= (v_id != new_id) * w;
+                edge_cut_delta += (v_id != old_id) * w;
             }
         }
 

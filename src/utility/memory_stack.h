@@ -48,7 +48,7 @@ namespace HeiProMap {
 
         MemoryStack &operator=(const MemoryStack &) = delete;
 
-        MemoryStack(MemoryStack &&other) noexcept: buffer(other.buffer), capacity(other.capacity), offset(other.offset) {
+        MemoryStack(MemoryStack &&other) noexcept : buffer(other.buffer), capacity(other.capacity), offset(other.offset) {
             other.buffer = nullptr;
             other.capacity = 0;
             other.offset = 0;

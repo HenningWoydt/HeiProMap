@@ -650,6 +650,30 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
         }
+
+    public:
+        void clear() {
+            n = 0;
+            m = 0;
+            g_weight = 0;
+
+            v_weights.free_memory();
+            neighborhoods.free_memory();
+            edges_v.free_memory();
+            edges_w.free_memory();
+        }
+
+        void resize(vertex_t t_n, vertex_t t_m, weight_t t_g_weight) {
+            n = t_n;
+            m = t_m;
+            g_weight = t_g_weight;
+
+            v_weights.initialize(n);
+            neighborhoods.initialize(n + 1);
+            neighborhoods[0] = 0;
+            edges_v.initialize(m);
+            edges_w.initialize(m);
+        }
     };
 }
 

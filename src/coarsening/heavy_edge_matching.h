@@ -41,7 +41,6 @@
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
-
     class HeavyEdgeMatchingConfiguration {
     public:
         EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
@@ -101,11 +100,11 @@ namespace HeiProMap {
     private:
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void match_templated(const graph_t &g,
-                            const p_manager_t &p_manager,
-                            Mapping &mapping,
-                            [[maybe_unused]] f64 imbalance,
-                            u64 seed,
-                            weight_t lmax) {
+                             const p_manager_t &p_manager,
+                             Mapping &mapping,
+                             [[maybe_unused]] f64 imbalance,
+                             u64 seed,
+                             weight_t lmax) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "HeavyEdgeMatching", "match");
 
             mapping.initialize(g.n);
@@ -115,12 +114,12 @@ namespace HeiProMap {
 
             std::vector<vertex_t> permutation(g.n);
             std::iota(permutation.begin(), permutation.end(), 0);
-            
+
             // Randomly shuffle the vertices to avoid bias
             RandomEngine random_engine(seed);
             std::shuffle(permutation.begin(), permutation.end(), random_engine.generator);
 
-            for (vertex_t u : permutation) {
+            for (vertex_t u: permutation) {
                 if (matching.is_matched(u)) continue;
 
                 partition_t u_id = p_manager[u];
@@ -132,14 +131,14 @@ namespace HeiProMap {
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                     vertex_t v = g.edges_v[j];
                     if (matching.is_matched(v)) continue;
-                    
+
                     if (u_id != p_manager[v]) continue;
 
                     weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
                     if (u_w + v_w > lmax) continue;
 
                     weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
-                    
+
                     f32 edge_rating;
                     if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
                         edge_rating = 1.0f;
@@ -177,13 +176,11 @@ namespace HeiProMap {
             }
 
             // Finalize matching and create mapping
-            {
-                HEIPROMAP_PROFILE_SCOPE("coarsening", "HeavyEdgeMatching", "finalize");
-                matching.set_translation();
-                mapping.set_coarse_n(matching.get_n_coarse_nodes());
-                for (vertex_t u = 0; u < matching.get_n(); ++u) {
-                    mapping.set(u, matching.get_n(u));
-                }
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "HeavyEdgeMatching", "finalize");
+            matching.set_translation();
+            mapping.set_coarse_n(matching.get_n_coarse_nodes());
+            for (vertex_t u = 0; u < matching.get_n(); ++u) {
+                mapping.set(u, matching.get_n(u));
             }
         }
     };

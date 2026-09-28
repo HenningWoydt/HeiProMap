@@ -453,26 +453,25 @@ namespace HeiProMap {
 
             output_stream << colorize_rule(make_rule_line());
 
-            {
-                std::string header_line;
-                header_line.reserve(120);
+            std::string header_line;
+            header_line.reserve(120);
 
-                if (use_colors) {
-                    header_line += theme.bold_on;
-                }
-
-                header_line += pad_cell("Scope", name_column_width);
-                header_line += "   " + pad_cell("Calls", calls_column_width);
-                header_line += "   " + pad_cell("Total ms", total_column_width);
-                header_line += "   " + pad_cell("Avg ms", average_column_width);
-                header_line += "   " + pad_cell("%Tot", percent_column_width);
-
-                if (use_colors) {
-                    header_line += theme.bold_off;
-                }
-
-                output_stream << colorize_row(header_line, true, true);
+            if (use_colors) {
+                header_line += theme.bold_on;
             }
+
+            header_line += pad_cell("Scope", name_column_width);
+            header_line += "   " + pad_cell("Calls", calls_column_width);
+            header_line += "   " + pad_cell("Total ms", total_column_width);
+            header_line += "   " + pad_cell("Avg ms", average_column_width);
+            header_line += "   " + pad_cell("%Tot", percent_column_width);
+
+            if (use_colors) {
+                header_line += theme.bold_off;
+            }
+
+            output_stream << colorize_row(header_line, true, true);
+
 
             output_stream << colorize_rule(make_rule_line());
 

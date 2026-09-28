@@ -29,7 +29,7 @@
 
 #include <omp.h>
 #include "csr_graph.h"
-#include "distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "partition_manager.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
@@ -160,6 +160,10 @@ namespace HeiProMap {
         void compute_from_scratch(const graph_t &g, const p_manager_t &p_manager) {
             HEIPROMAP_PROFILE_SCOPE("uncontraction", "BlockConn", "compute_from_scratch");
 
+            m_n = g.n;
+            m_m = g.m;
+            m_k = p_manager.k;
+
             m_sizes.initialize(g.n);
             m_start.initialize(g.n);
             m_arr_ids.initialize(g.m);
@@ -175,6 +179,33 @@ namespace HeiProMap {
                     const weight_t w = g.edges_w[i];
                     partition_t v_id = p_manager[v];
                     add(u, v_id, w);
+                }
+            }
+        }
+
+        void compute_from_scratch(const graph_t &g, const p_manager_t &p_manager, const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BlockConn", "compute_from_scratch_par");
+            if (num_threads <= 1 || g.n < 1024) {
+                compute_from_scratch(g, p_manager);
+                return;
+            }
+
+            parallel_initialize_offsets(g, num_threads);
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                vertex_t chunk = (g.n + num_threads - 1) / num_threads;
+                vertex_t start_u = std::min(g.n, tid * chunk);
+                vertex_t end_u = std::min(g.n, start_u + chunk);
+
+                for (vertex_t u = start_u; u < end_u; ++u) {
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g.edges_v[i];
+                        const weight_t w = g.edges_w[i];
+                        partition_t v_id = p_manager[v];
+                        add(u, v_id, w);
+                    }
                 }
             }
         }

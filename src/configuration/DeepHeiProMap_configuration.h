@@ -39,12 +39,14 @@
 #include "../coarsening/heavy_edge_matching.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
+#include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
 
 namespace HeiProMap {
     #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
     #define HEIPROMAP_COARSENING_ALGS_DEFINED
+
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GLOBAL_PATHS,
@@ -79,6 +81,7 @@ namespace HeiProMap {
 
     #ifndef HEIPROMAP_REBALANCING_ALGS_DEFINED
     #define HEIPROMAP_REBALANCING_ALGS_DEFINED
+
     enum REBALANCING_ALGS {
         REBALANCING_ALG_UNDEFINED,
         REBALANCING_ALG_SIMPLE
@@ -189,10 +192,11 @@ namespace HeiProMap {
         // hierarchy contraction thresholds
         vertex_t initial_C = 32;
         u64 initial_kappa = 10;
-        vertex_t intermediate_C = 8;
+        vertex_t intermediate_C = 32;
         u64 intermediate_kappa = 1;
 
         // refinement algorithms
+        LabelPropagationConfiguration deep_label_propagation_refinement_config = LabelPropagationConfiguration("Deep Label Propagation Refinement");
         QuotientGraphRefinementConfiguration deep_quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Deep Quotient Graph Refinement");
         FlowBasedRefinementConfiguration deep_flow_based_refinement_config = FlowBasedRefinementConfiguration("Deep Flow Based Refinement");
 
@@ -283,19 +287,25 @@ namespace HeiProMap {
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
             // refinement
-            deep_quotient_graph_refinement_config.enabled = false;
-            deep_quotient_graph_refinement_config.max_iteration = 3;
-            deep_quotient_graph_refinement_config.alpha = 1000.0;
-            deep_quotient_graph_refinement_config.beta = 1.0;
+            deep_label_propagation_refinement_config.enabled = true;
+            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.use_parallel_alg = false;
+
+            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.max_iteration = 2;
+            deep_quotient_graph_refinement_config.alpha = 5.0;
+            deep_quotient_graph_refinement_config.min_n_steps = 3;
+            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
 
             deep_flow_based_refinement_config.enabled = false;
-            deep_flow_based_refinement_config.max_global_iteration = 2;
-            deep_flow_based_refinement_config.max_local_iteration = 5;
-            deep_flow_based_refinement_config.alpha = 2.0;
-            deep_flow_based_refinement_config.alpha_upper_bound = 16.0;
+            deep_flow_based_refinement_config.max_global_iteration = 1;
+            deep_flow_based_refinement_config.max_local_iteration = 1;
+            deep_flow_based_refinement_config.alpha = 1.0;
+            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
             deep_flow_based_refinement_config.alpha_modifier = 2.0;
             deep_flow_based_refinement_config.use_closed_vertex_set = true;
-            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
+            deep_flow_based_refinement_config.always_include_boundary = true;
+            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
         void set_eco() {
@@ -306,19 +316,27 @@ namespace HeiProMap {
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
             // refinement
-            deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 3;
-            deep_quotient_graph_refinement_config.alpha = 1000.0;
-            deep_quotient_graph_refinement_config.beta = 1.0;
+            deep_label_propagation_refinement_config.enabled = true;
+            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.use_parallel_alg = false;
 
-            deep_flow_based_refinement_config.enabled = false;
-            deep_flow_based_refinement_config.max_global_iteration = 2;
+            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.max_iteration = 2;
+            deep_quotient_graph_refinement_config.alpha = 5.0;
+            deep_quotient_graph_refinement_config.min_n_steps = 3;
+            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
+
+            deep_flow_based_refinement_config.enabled = true;
+            deep_flow_based_refinement_config.use_active_block_scheduling = true;
+            deep_flow_based_refinement_config.max_global_iteration = 5;
             deep_flow_based_refinement_config.max_local_iteration = 5;
             deep_flow_based_refinement_config.alpha = 2.0;
-            deep_flow_based_refinement_config.alpha_upper_bound = 16.0;
+            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
             deep_flow_based_refinement_config.alpha_modifier = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set = true;
-            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
+            deep_flow_based_refinement_config.use_closed_vertex_set = false;
+            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+            deep_flow_based_refinement_config.always_include_boundary = true;
+            deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
         }
 
         void set_strong() {
@@ -329,19 +347,27 @@ namespace HeiProMap {
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
             // refinement
+            deep_label_propagation_refinement_config.enabled = true;
+            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.use_parallel_alg = false;
+
             deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 3;
-            deep_quotient_graph_refinement_config.alpha = 1000.0;
-            deep_quotient_graph_refinement_config.beta = 1.0;
+            deep_quotient_graph_refinement_config.max_iteration = 2;
+            deep_quotient_graph_refinement_config.alpha = 5.0;
+            deep_quotient_graph_refinement_config.min_n_steps = 3;
+            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
 
             deep_flow_based_refinement_config.enabled = true;
-            deep_flow_based_refinement_config.max_global_iteration = 2;
+            deep_flow_based_refinement_config.use_active_block_scheduling = true;
+            deep_flow_based_refinement_config.max_global_iteration = 5;
             deep_flow_based_refinement_config.max_local_iteration = 5;
             deep_flow_based_refinement_config.alpha = 2.0;
-            deep_flow_based_refinement_config.alpha_upper_bound = 16.0;
+            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
             deep_flow_based_refinement_config.alpha_modifier = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set = true;
-            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
+            deep_flow_based_refinement_config.use_closed_vertex_set = false;
+            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+            deep_flow_based_refinement_config.always_include_boundary = true;
+            deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
         }
 
         void set_experimental() {
@@ -352,19 +378,27 @@ namespace HeiProMap {
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
             // refinement
-            deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 3;
-            deep_quotient_graph_refinement_config.alpha = 1000.0;
-            deep_quotient_graph_refinement_config.beta = 1.0;
+            deep_label_propagation_refinement_config.enabled = true;
+            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.use_parallel_alg = false;
 
-            deep_flow_based_refinement_config.enabled = false;
+            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.max_iteration = 2;
+            deep_quotient_graph_refinement_config.alpha = 5.0;
+            deep_quotient_graph_refinement_config.min_n_steps = 3;
+            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
+
+            deep_flow_based_refinement_config.enabled = true;
+            deep_flow_based_refinement_config.use_active_block_scheduling = true;
             deep_flow_based_refinement_config.max_global_iteration = 5;
-            deep_flow_based_refinement_config.max_local_iteration = 10;
+            deep_flow_based_refinement_config.max_local_iteration = 5;
             deep_flow_based_refinement_config.alpha = 2.0;
-            deep_flow_based_refinement_config.alpha_upper_bound = 16.0;
+            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
             deep_flow_based_refinement_config.alpha_modifier = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set = true;
-            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 100;
+            deep_flow_based_refinement_config.use_closed_vertex_set = false;
+            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+            deep_flow_based_refinement_config.always_include_boundary = true;
+            deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
         }
 
         /**

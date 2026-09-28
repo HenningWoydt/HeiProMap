@@ -131,6 +131,7 @@ namespace HeiProMap {
             m_m = t_m;
             m_k = t_k;
             m_threads = t_threads;
+            m_threads = 1;
 
             config = &i_config;
             random_engine = &t_random_engine;
@@ -724,31 +725,31 @@ namespace HeiProMap {
 
             size_t n_unmatched = 0;
             //
-            {
-                std::vector<std::vector<Candidate> > local_candidates(m_threads);
-                for (auto &v: local_candidates) v.reserve(g.n / m_threads);
 
-                #pragma omp parallel num_threads(m_threads)
-                {
-                    u64 tid = omp_get_thread_num();
-                    #pragma omp for schedule(static)
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        if (!matching.is_matched(u)) {
-                            local_candidates[tid].push_back({neighborhood_hash<t_uniform_e_weights>(g, u), u});
-                        }
+            std::vector<std::vector<Candidate> > local_candidates(m_threads);
+            for (auto &v: local_candidates) v.reserve(g.n / m_threads);
+
+            #pragma omp parallel num_threads(m_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                #pragma omp for schedule(static)
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    if (!matching.is_matched(u)) {
+                        local_candidates[tid].push_back({neighborhood_hash<t_uniform_e_weights>(g, u), u});
                     }
                 }
-
-                std::vector<size_t> offsets(m_threads + 1, 0);
-                for (u64 i = 0; i < m_threads; ++i) offsets[i + 1] = offsets[i] + local_candidates[i].size();
-                n_unmatched = offsets[m_threads];
-                candidates.resize(n_unmatched);
-
-                #pragma omp parallel for num_threads(m_threads) schedule(static)
-                for (u64 i = 0; i < m_threads; ++i) {
-                    std::copy(local_candidates[i].begin(), local_candidates[i].end(), candidates.begin() + offsets[i]);
-                }
             }
+
+            std::vector<size_t> offsets(m_threads + 1, 0);
+            for (u64 i = 0; i < m_threads; ++i) offsets[i + 1] = offsets[i] + local_candidates[i].size();
+            n_unmatched = offsets[m_threads];
+            candidates.resize(n_unmatched);
+
+            #pragma omp parallel for num_threads(m_threads) schedule(static)
+            for (u64 i = 0; i < m_threads; ++i) {
+                std::copy(local_candidates[i].begin(), local_candidates[i].end(), candidates.begin() + offsets[i]);
+            }
+
 
             std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) { return (a.hash != b.hash) ? a.hash < b.hash : a.u < b.u; });
 

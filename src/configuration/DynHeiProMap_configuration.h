@@ -79,7 +79,7 @@ namespace HeiProMap {
             }
             ac.hierarchy = hierarchy;
             ac.k = 1;
-            for (auto h : hierarchy) ac.k *= h;
+            for (auto h: hierarchy) ac.k *= h;
         }
 
         void set_distance() {
@@ -106,21 +106,21 @@ namespace HeiProMap {
             if (is_set("--threads")) {
                 n_threads = std::stoull(get("--threads"));
             }
-            ac.threads = (u32)n_threads;
+            ac.threads = (u32) n_threads;
         }
 
         void set_seed() {
             if (is_set("--seed")) {
                 seed = std::stoull(get("--seed"));
             }
-            ac.seed = (u32)seed;
+            ac.seed = (u32) seed;
         }
 
         /**
          * Returns whether the option was entered.
          */
         bool is_set(const std::string &var) {
-            for (const auto &o : ac.options) {
+            for (const auto &o: ac.options) {
                 if (o.large_key == var || o.small_key == var) {
                     return o.is_set;
                 }
@@ -132,7 +132,7 @@ namespace HeiProMap {
          * Gets the entered input as a string.
          */
         std::string get(const std::string &var) {
-            for (const auto &o : ac.options) {
+            for (const auto &o: ac.options) {
                 if (o.large_key == var || o.small_key == var) {
                     if (o.input.empty()) return o.default_val;
                     return o.input;
@@ -148,7 +148,7 @@ namespace HeiProMap {
             std::cout << "Dyn-HeiProMap - Dynamic Graph Partitioning Tool\n\n";
             std::cout << "Usage: Dyn-HeiProMap [options]\n\n";
             std::cout << "Options:\n";
-            for (const auto &o : ac.options) {
+            for (const auto &o: ac.options) {
                 if (o.small_key.empty()) {
                     std::cout << "  " << std::left << std::setw(30) << o.large_key << " - " << o.description;
                 } else {

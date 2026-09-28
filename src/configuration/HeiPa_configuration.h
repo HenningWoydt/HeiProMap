@@ -33,13 +33,13 @@
 
 #include "../definitions.h"
 #include "../utility/utils.h"
-#include "../partitioning/global_multisection.h"
+#include "../init_partitioning/global_multisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
-#include "../partitioning/kaffpa_partitioner.h"
-#include "../partitioning/recursive_bisection.h"
+#include "../init_partitioning/kaffpa_partitioner.h"
+#include "../init_partitioning/recursive_bisection.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/negative_cycle_detection.h"
 
@@ -80,6 +80,7 @@ namespace HeiProMap {
 
     #ifndef HEIPROMAP_PARTITIONING_ALGS_DEFINED
     #define HEIPROMAP_PARTITIONING_ALGS_DEFINED
+
     enum PARTITIONING_ALGS {
         PARTITIONING_ALG_UNDEFINED,
         PARTITIONING_ALG_MULTISECTION,

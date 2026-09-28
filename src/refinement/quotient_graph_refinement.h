@@ -38,7 +38,7 @@
 #include "../datastructures/block_conn.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../utility/aligned_array.h"
@@ -78,7 +78,7 @@ namespace HeiProMap {
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> active_next_round;
 
-        std::vector<std::vector<vertex_t>> moves_vec;
+        std::vector<std::vector<vertex_t> > moves_vec;
 
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
@@ -90,8 +90,8 @@ namespace HeiProMap {
         std::vector<RandomEngine> rnd_engines;
         AlignedArray<u8> used_this_round;
 
-#include <atomic>
-#include <chrono>
+        #include <atomic>
+        #include <chrono>
 
         const QuotientGraphRefinementConfiguration *config = nullptr;
 
@@ -154,12 +154,11 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     QGraphT &q_graph,
-                    block_conn_t &block_conn,
-                    const AlignedArray<weight_t> &lmax_constraints) {
-            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    block_conn_t &block_conn) {
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
@@ -168,8 +167,7 @@ namespace HeiProMap {
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          QGraphT &q_graph,
-                         block_conn_t &block_conn,
-                         const AlignedArray<weight_t> &lmax_constraints) {
+                         block_conn_t &block_conn) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "init_block_scheduling");
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
@@ -196,9 +194,9 @@ namespace HeiProMap {
                         u32 mark = base_mark + static_cast<u32>(i);
 
                         if (config->use_edge_cut && d_oracle.last_level_pair(u_id, v_id)) {
-                            refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
+                            refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                         } else {
-                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], lmax_constraints, boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
+                            refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                         }
                     }
 
@@ -212,16 +210,16 @@ namespace HeiProMap {
             }
 
             if (config->measure_qg_edge_cut) {
-                std::cout << "[QGEdgeCutMeasure] time_initial_qap=" << time_initial_qap 
-                          << "us time_initial_edge_cut=" << time_initial_edge_cut 
-                          << "us time_update_qap=" << time_update_qap 
-                          << "us time_update_edge_cut=" << time_update_edge_cut 
-                          << "us num_evals=" << num_evals << std::endl;
+                std::cout << "[QGEdgeCutMeasure] time_initial_qap=" << time_initial_qap
+                        << "us time_initial_edge_cut=" << time_initial_edge_cut
+                        << "us time_update_qap=" << time_update_qap
+                        << "us time_update_edge_cut=" << time_update_edge_cut
+                        << "us num_evals=" << num_evals << std::endl;
             }
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
-        void refine_blocks(const graph_t &g,
+        void refine_blocks(graph_t &g,
                            DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
                            p_manager_t &p_manager,
@@ -230,7 +228,6 @@ namespace HeiProMap {
                            partition_t u_id,
                            partition_t v_id,
                            std::vector<vertex_t> &moves,
-                           const AlignedArray<weight_t> &lmax_constraints,
                            IndexedMaxHeap<weight_t> &boundary_vertices_u,
                            IndexedMaxHeap<weight_t> &boundary_vertices_v,
                            vertex_t vertex_mark,
@@ -280,7 +277,7 @@ namespace HeiProMap {
 
             weight_t u_id_weight_initial = p_manager.get_bweight(u_id);
             weight_t v_id_weight_initial = p_manager.get_bweight(v_id);
-            bool best_is_balanced = (u_id_weight_initial <= lmax_constraints[u_id] && v_id_weight_initial <= lmax_constraints[v_id]);
+            bool best_is_balanced = (u_id_weight_initial <= p_manager.lmax[u_id] && v_id_weight_initial <= p_manager.lmax[v_id]);
 
             moves.clear();
 
@@ -303,9 +300,9 @@ namespace HeiProMap {
                     weight_t u_id_weight = p_manager.get_bweight(u_id);
                     weight_t v_id_weight = p_manager.get_bweight(v_id);
 
-                    if (u_id_weight > lmax_constraints[u_id] && u_id_weight > v_id_weight) { choose_u = true; }
-                    if (v_id_weight > lmax_constraints[v_id] && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > lmax_constraints[u_id] && v_id_weight > lmax_constraints[v_id] && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
+                    if (u_id_weight > p_manager.lmax[u_id] && u_id_weight > v_id_weight) { choose_u = true; }
+                    if (v_id_weight > p_manager.lmax[v_id] && v_id_weight > u_id_weight) { choose_u = false; }
+                    if (u_id_weight > p_manager.lmax[u_id] && v_id_weight > p_manager.lmax[v_id] && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
@@ -324,7 +321,7 @@ namespace HeiProMap {
 
                 weight_t current_move_id_weight = p_manager.get_bweight(move_id) + vertex_weight;
                 weight_t current_vertex_id_weight = p_manager.get_bweight(vertex_id) - vertex_weight;
-                bool current_is_balanced = (current_move_id_weight <= lmax_constraints[move_id] && current_vertex_id_weight <= lmax_constraints[vertex_id]);
+                bool current_is_balanced = (current_move_id_weight <= p_manager.lmax[move_id] && current_vertex_id_weight <= p_manager.lmax[vertex_id]);
 
                 bool update_best = false;
                 if (current_is_balanced) {
@@ -334,7 +331,7 @@ namespace HeiProMap {
                 } else {
                     if (!best_is_balanced) {
                         weight_t move_id_weight_initial = move_id == u_id ? u_id_weight_initial : v_id_weight_initial;
-                        if (curr_qap_gain >= max_qap_gain && current_move_id_weight <= std::max(move_id_weight_initial, lmax_constraints[move_id])) {
+                        if (curr_qap_gain >= max_qap_gain && current_move_id_weight <= std::max(move_id_weight_initial, p_manager.lmax[move_id])) {
                             update_best = true;
                         }
                     }
@@ -441,7 +438,6 @@ namespace HeiProMap {
                                     partition_t u_id,
                                     partition_t v_id,
                                     std::vector<vertex_t> &moves,
-                                    const AlignedArray<weight_t> &lmax_constraints,
                                     IndexedMaxHeap<weight_t> &boundary_vertices_u,
                                     IndexedMaxHeap<weight_t> &boundary_vertices_v,
                                     vertex_t vertex_mark,
@@ -454,7 +450,7 @@ namespace HeiProMap {
             u64 n_init_moves = 0;
             boundary_vertices_u.clear();
             boundary_vertices_v.clear();
-            
+
             for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
                 const vertex_t u = bv_manager.get(u_id, j);
                 for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
@@ -478,11 +474,11 @@ namespace HeiProMap {
                     }
                 }
             }
-            
+
             if (config->measure_qg_edge_cut) {
                 u64 local_qap = 0;
                 u64 local_edge = 0;
-                
+
                 auto t1 = std::chrono::high_resolution_clock::now();
                 for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
                     const vertex_t u = bv_manager.get(u_id, j);
@@ -503,7 +499,7 @@ namespace HeiProMap {
                     }
                 }
                 auto t2 = std::chrono::high_resolution_clock::now();
-                
+
                 auto t3 = std::chrono::high_resolution_clock::now();
                 for (size_t j = 0; j < bv_manager.size(u_id); ++j) {
                     const vertex_t u = bv_manager.get(u_id, j);
@@ -524,7 +520,7 @@ namespace HeiProMap {
                     }
                 }
                 auto t4 = std::chrono::high_resolution_clock::now();
-                
+
                 time_initial_edge_cut += std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
                 time_initial_qap += std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3).count();
                 num_evals += n_init_moves;
@@ -541,7 +537,7 @@ namespace HeiProMap {
 
             weight_t u_id_weight_initial = p_manager.get_bweight(u_id);
             weight_t v_id_weight_initial = p_manager.get_bweight(v_id);
-            bool best_is_balanced = (u_id_weight_initial <= lmax_constraints[u_id] && v_id_weight_initial <= lmax_constraints[v_id]);
+            bool best_is_balanced = (u_id_weight_initial <= p_manager.lmax[u_id] && v_id_weight_initial <= p_manager.lmax[v_id]);
 
             moves.clear();
 
@@ -564,9 +560,9 @@ namespace HeiProMap {
                     weight_t u_id_weight = p_manager.get_bweight(u_id);
                     weight_t v_id_weight = p_manager.get_bweight(v_id);
 
-                    if (u_id_weight > lmax_constraints[u_id] && u_id_weight > v_id_weight) { choose_u = true; }
-                    if (v_id_weight > lmax_constraints[v_id] && v_id_weight > u_id_weight) { choose_u = false; }
-                    if (u_id_weight > lmax_constraints[u_id] && v_id_weight > lmax_constraints[v_id] && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
+                    if (u_id_weight > p_manager.lmax[u_id] && u_id_weight > v_id_weight) { choose_u = true; }
+                    if (v_id_weight > p_manager.lmax[v_id] && v_id_weight > u_id_weight) { choose_u = false; }
+                    if (u_id_weight > p_manager.lmax[u_id] && v_id_weight > p_manager.lmax[v_id] && u_id_weight == v_id_weight) { choose_u = random_engine.get_f32() < 0.5; }
                 }
 
                 // choose the priority queue
@@ -585,7 +581,7 @@ namespace HeiProMap {
 
                 weight_t current_move_id_weight = p_manager.get_bweight(move_id) + vertex_weight;
                 weight_t current_vertex_id_weight = p_manager.get_bweight(vertex_id) - vertex_weight;
-                bool current_is_balanced = (current_move_id_weight <= lmax_constraints[move_id] && current_vertex_id_weight <= lmax_constraints[vertex_id]);
+                bool current_is_balanced = (current_move_id_weight <= p_manager.lmax[move_id] && current_vertex_id_weight <= p_manager.lmax[vertex_id]);
 
                 bool update_best = false;
                 if (current_is_balanced) {
@@ -595,7 +591,7 @@ namespace HeiProMap {
                 } else {
                     if (!best_is_balanced) {
                         weight_t move_id_weight_initial = move_id == u_id ? u_id_weight_initial : v_id_weight_initial;
-                        if (curr_qap_gain >= max_qap_gain && current_move_id_weight <= std::max(move_id_weight_initial, lmax_constraints[move_id])) {
+                        if (curr_qap_gain >= max_qap_gain && current_move_id_weight <= std::max(move_id_weight_initial, p_manager.lmax[move_id])) {
                             update_best = true;
                         }
                     }

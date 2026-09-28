@@ -57,7 +57,7 @@ namespace HeiProMap {
 
     private:
         partition_t m_k = 0;
-        std::vector<std::vector<HalfEdge>> m_adj;
+        std::vector<std::vector<HalfEdge> > m_adj;
         std::vector<weight_t> m_self_weights;
 
         static auto find_edge(std::vector<HalfEdge> &vec, const partition_t target) {
@@ -183,7 +183,7 @@ namespace HeiProMap {
         template<typename F>
         void for_each_neighbor(const partition_t x, F &&f) const {
             ASSERT(x < m_k);
-            for (const auto &edge : m_adj[x]) {
+            for (const auto &edge: m_adj[x]) {
                 if (edge.weight > 0) {
                     f(edge.target, edge.weight);
                 }
@@ -225,7 +225,7 @@ namespace HeiProMap {
 
         bool find_distance_3_matching(AlignedArray<u8> &active_this_round,
                                       AlignedArray<u8> &used_edges_this_round,
-                                      std::vector<std::pair<partition_t, partition_t>> &matching) {
+                                      std::vector<std::pair<partition_t, partition_t> > &matching) {
             matching.clear();
 
             std::vector<u8> vertex_frozen(m_k, 0);
@@ -285,7 +285,7 @@ namespace HeiProMap {
 
         bool find_all_pairs(AlignedArray<u8> &active_this_round,
                             AlignedArray<u8> &used_edges_this_round,
-                            std::vector<std::pair<partition_t, partition_t>> &matching) {
+                            std::vector<std::pair<partition_t, partition_t> > &matching) {
             matching.clear();
 
             for (partition_t u_id = 0; u_id < m_k; ++u_id) {

@@ -41,11 +41,11 @@
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/block_conn.h"
-#include "../partitioning/heipromap_partition.h"
+#include "../init_partitioning/heipromap_partition.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../configuration/DynHeiProMap_configuration.h"
 #include "../utility/profiler.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../utility/hungarian.h"
 #include "../utility/qap.h"
 
@@ -53,10 +53,12 @@ namespace HeiProMap {
     struct KTStat {
         u32 calls = 0;
         double total_ms = 0;
+
         void add(double ms) {
             calls++;
             total_ms += ms;
         }
+
         double avg() const {
             return calls > 0 ? total_ms / calls : 0;
         }
@@ -64,7 +66,7 @@ namespace HeiProMap {
 
     class DynHeiProMapSolver {
         DynGraph g;
-        
+
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
         BlockConn b_conn;
@@ -178,17 +180,17 @@ namespace HeiProMap {
                 }
 
                 oracle.initialize(config.hierarchy, config.distance);
-                
+
                 u64 num_blocks = 1;
-                for (auto h : config.hierarchy) num_blocks *= h;
-                
+                for (auto h: config.hierarchy) num_blocks *= h;
+
                 // Reset managers if hierarchy changes
-                p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
-                bv_manager.initialize(g.n, (partition_t)num_blocks);
-                b_conn.initialize(g.n, g.m, (partition_t)num_blocks);
-                q.initialize((partition_t)num_blocks);
-                initial_q.initialize((partition_t)num_blocks);
-                
+                p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                bv_manager.initialize(g.n, (partition_t) num_blocks);
+                b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
+                q.initialize((partition_t) num_blocks);
+                initial_q.initialize((partition_t) num_blocks);
+
                 std::cout << "Hierarchy set to " << h_str << " with distances " << d_str << std::endl;
             } else if (cmd == "partition") {
                 std::string config_str;
@@ -255,7 +257,7 @@ namespace HeiProMap {
                     }
                     edge_cut /= 2;
                     weight_t max_block_weight = p_manager.max_weight();
-                    double balance = (double) max_block_weight / ((double)g.g_weight / (double)p_manager.k);
+                    double balance = (double) max_block_weight / ((double) g.g_weight / (double) p_manager.k);
 
                     std::cout << "Partition Statistics:" << std::endl;
                     std::cout << "  Edge Cut:       " << edge_cut << std::endl;
@@ -301,17 +303,17 @@ namespace HeiProMap {
 
         explicit DynHeiProMapSolver(DynConfiguration &t_config) : config(t_config) {
             oracle.initialize(t_config.hierarchy, t_config.distance);
-            
-            u64 num_blocks = 1;
-            for (auto h : config.hierarchy) num_blocks *= h;
-            
-            p_manager.initialize(0, (partition_t)num_blocks, 0);
-            bv_manager.initialize(0, (partition_t)num_blocks);
-            b_conn.initialize(0, 0, (partition_t)num_blocks);
-            q.initialize((partition_t)num_blocks);
-            initial_q.initialize((partition_t)num_blocks);
 
-            g.dirty_callback = [this](vertex_t v) {
+            u64 num_blocks = 1;
+            for (auto h: config.hierarchy) num_blocks *= h;
+
+            p_manager.initialize(0, (partition_t) num_blocks, 0);
+            bv_manager.initialize(0, (partition_t) num_blocks);
+            b_conn.initialize(0, 0, (partition_t) num_blocks);
+            q.initialize((partition_t) num_blocks);
+            initial_q.initialize((partition_t) num_blocks);
+
+            g.dirty_callback = [](vertex_t v) {
                 // Placeholder for incremental manager updates if needed
             };
         }
@@ -319,7 +321,7 @@ namespace HeiProMap {
         weight_t calculate_migration_cost(const std::vector<partition_t> &old_partition,
                                           const std::vector<partition_t> &new_partition) {
             weight_t total_migration_cost = 0;
-            vertex_t num_vertices = std::min((vertex_t)old_partition.size(), (vertex_t)new_partition.size());
+            vertex_t num_vertices = std::min((vertex_t) old_partition.size(), (vertex_t) new_partition.size());
             for (vertex_t v = 0; v < num_vertices; ++v) {
                 if (old_partition[v] != new_partition[v]) {
                     total_migration_cost += g.v_weights[v] * oracle.get(old_partition[v], new_partition[v]);
@@ -331,7 +333,7 @@ namespace HeiProMap {
         u64 count_moved_vertices(const std::vector<partition_t> &old_partition,
                                  const std::vector<partition_t> &new_partition) {
             u64 moved_count = 0;
-            vertex_t num_vertices = std::min((vertex_t)old_partition.size(), (vertex_t)new_partition.size());
+            vertex_t num_vertices = std::min((vertex_t) old_partition.size(), (vertex_t) new_partition.size());
             for (vertex_t v = 0; v < num_vertices; ++v) {
                 if (old_partition[v] != new_partition[v]) {
                     moved_count++;
@@ -375,10 +377,10 @@ namespace HeiProMap {
     private:
         void rebuild_managers() {
             u64 num_blocks = p_manager.k;
-            p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
-            bv_manager.initialize(g.n, (partition_t)num_blocks);
-            b_conn.initialize(g.n, g.m, (partition_t)num_blocks);
-            q.initialize((partition_t)num_blocks);
+            p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+            bv_manager.initialize(g.n, (partition_t) num_blocks);
+            b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
+            q.initialize((partition_t) num_blocks);
 
             // This is a full rebuild, so we just iterate over the current graph
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -390,7 +392,7 @@ namespace HeiProMap {
 
         void rebuild_q(QuotientGraph &target_q) {
             u64 num_blocks = p_manager.k;
-            target_q.initialize((partition_t)num_blocks);
+            target_q.initialize((partition_t) num_blocks);
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (!g.vertex_exists(u)) continue;
                 partition_t u_id = p_manager[u];
@@ -456,7 +458,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("solver", "run_partition", "run_partition");
 
             std::cout << "Partitioning with config: " << config_str << " (HeiProMap multisection)" << std::endl;
-            
+
             std::vector<partition_t> new_partition;
             heipromap_partition(g, config.hierarchy, config.distance, config.imbalance, config.seed, config.n_threads, config_str, new_partition);
 
@@ -464,11 +466,11 @@ namespace HeiProMap {
 
             if (initial_partition.empty()) {
                 // First partition
-                p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
+                p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }
-                
+
                 initial_partition = new_partition;
                 previous_partition = new_partition;
 
@@ -486,13 +488,13 @@ namespace HeiProMap {
                 align_partitions_hierarchically(new_partition);
                 weight_t migration_after = calculate_migration_cost(reference, new_partition);
 
-                previous_partition = reference; 
-                
-                p_manager.initialize(g.n, (partition_t)num_blocks, g.g_weight);
+                previous_partition = reference;
+
+                p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }
-                
+
                 total_migration_cost_from_start += migration_after;
 
                 rebuild_q(q);
@@ -512,7 +514,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("solver", "refine-fast", "refine-fast");
 
             if (p_manager.n < g.n) {
-                // Should not happen if incremental updates are implemented, 
+                // Should not happen if incremental updates are implemented,
                 // but for now we re-initialize if needed.
                 p_manager.initialize(g.n, p_manager.k, g.g_weight);
                 // Need to recover partition data... this highlights why we need incremental updates.
@@ -520,9 +522,9 @@ namespace HeiProMap {
 
             size_t num_dirty = g.dirty_list.size();
             size_t num_new = g.new_vertices.size();
-            
+
             weight_t comm_cost_before = get_qap(g, p_manager.partition.get_vector(), oracle);
-            double balance_before = (double)p_manager.max_weight() / ((double)g.g_weight / (double)p_manager.k);
+            double balance_before = (double) p_manager.max_weight() / ((double) g.g_weight / (double) p_manager.k);
 
             u64 num_blocks = p_manager.k;
             weight_t allowed_max_block_weight = (weight_t) ((1.0 + config.imbalance) * ((f64) g.g_weight / (f64) num_blocks));
@@ -535,57 +537,56 @@ namespace HeiProMap {
             std::vector<partition_t> partition_before = p_manager.partition.get_vector();
 
             // 2. Incremental Refinement
-            {
-                // Create temporary CSRGraph (Still needed because refinement algorithms expect CSRGraph)
-                ::HeiProMap::CSRGraph csr_g(g.n, g.m, g.g_weight);
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    csr_g.v_weights[u] = g.v_weights[u];
-                    csr_g.neighborhoods[u + 1] = csr_g.neighborhoods[u] + g.neighbors[u].size();
-                    for (size_t i = 0; i < g.neighbors[u].size(); ++i) {
-                        csr_g.edges_v[csr_g.neighborhoods[u] + i] = g.neighbors[u][i].u;
-                        csr_g.edges_w[csr_g.neighborhoods[u] + i] = g.neighbors[u][i].w;
-                    }
+            // Create temporary CSRGraph (Still needed because refinement algorithms expect CSRGraph)
+            ::HeiProMap::CSRGraph csr_g(g.n, g.m, g.g_weight);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                csr_g.v_weights[u] = g.v_weights[u];
+                csr_g.neighborhoods[u + 1] = csr_g.neighborhoods[u] + g.neighbors[u].size();
+                for (size_t i = 0; i < g.neighbors[u].size(); ++i) {
+                    csr_g.edges_v[csr_g.neighborhoods[u] + i] = g.neighbors[u][i].u;
+                    csr_g.edges_w[csr_g.neighborhoods[u] + i] = g.neighbors[u][i].w;
                 }
-
-                // Initialize managers (fully for now, later incrementally)
-                bv_manager.initialize(csr_g.n, (partition_t)num_blocks);
-                b_conn.initialize(csr_g.n, csr_g.m, (partition_t)num_blocks);
-                b_conn.reset_build();
-                q.initialize((partition_t)num_blocks);
-
-                // Populate structures
-                for (vertex_t u = 0; u < csr_g.n; ++u) {
-                    b_conn.begin_vertex(csr_g, u);
-                    partition_t u_id = p_manager[u];
-                    for (size_t i = csr_g.neighborhoods[u]; i < csr_g.neighborhoods[u + 1]; ++i) {
-                        vertex_t v = csr_g.edges_v[i];
-                        weight_t w = csr_g.edges_w[i];
-                        partition_t v_id = p_manager[v];
-                        b_conn.add_connection(u, v_id, w);
-                        if (u_id != v_id) {
-                            bv_manager.add(u, u_id);
-                            if (u < v) q.add_edge(u_id, v_id, w);
-                        }
-                    }
-                }
-
-                // Initialize and run refinement
-                ::HeiProMap::LabelPropagationConfiguration lp_config("Label Propagation");
-                lp_config.enabled = true;
-                lp_config.max_iteration = num_iterations;
-
-                ::HeiProMap::LabelPropagationRefinement lp_refine;
-                lp_refine.initialize(csr_g.n, csr_g.m, (partition_t)num_blocks, (u32)config.n_threads, (u32)config.seed, lp_config);
-
-                AlignedArray<weight_t> lmax_constraints;
-                lmax_constraints.initialize((partition_t)num_blocks);
-                weight_t lmax = std::ceil((1.0 + config.imbalance) * ((f64) csr_g.g_weight / (f64) num_blocks));
-                for (partition_t i = 0; i < (partition_t)num_blocks; ++i) {
-                    lmax_constraints[i] = lmax;
-                }
-
-                lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn, lmax_constraints);
             }
+
+            // Initialize managers (fully for now, later incrementally)
+            bv_manager.initialize(csr_g.n, (partition_t) num_blocks);
+            b_conn.initialize(csr_g.n, csr_g.m, (partition_t) num_blocks);
+            b_conn.reset_build();
+            q.initialize((partition_t) num_blocks);
+
+            // Populate structures
+            for (vertex_t u = 0; u < csr_g.n; ++u) {
+                b_conn.begin_vertex(csr_g, u);
+                partition_t u_id = p_manager[u];
+                for (size_t i = csr_g.neighborhoods[u]; i < csr_g.neighborhoods[u + 1]; ++i) {
+                    vertex_t v = csr_g.edges_v[i];
+                    weight_t w = csr_g.edges_w[i];
+                    partition_t v_id = p_manager[v];
+                    b_conn.add_connection(u, v_id, w);
+                    if (u_id != v_id) {
+                        bv_manager.add(u, u_id);
+                        if (u < v) q.add_edge(u_id, v_id, w);
+                    }
+                }
+            }
+
+            // Initialize and run refinement
+            ::HeiProMap::LabelPropagationConfiguration lp_config("Label Propagation");
+            lp_config.enabled = true;
+            lp_config.max_iteration = num_iterations;
+
+            ::HeiProMap::LabelPropagationRefinement lp_refine;
+            lp_refine.initialize(csr_g.n, csr_g.m, (partition_t) num_blocks, (u32) config.n_threads, (u32) config.seed, lp_config);
+
+            AlignedArray<weight_t> lmax_constraints;
+            lmax_constraints.initialize((partition_t) num_blocks);
+            weight_t lmax = std::ceil((1.0 + config.imbalance) * ((f64) csr_g.g_weight / (f64) num_blocks));
+            for (partition_t i = 0; i < (partition_t) num_blocks; ++i) {
+                lmax_constraints[i] = lmax;
+            }
+
+            lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn);
+
 
             total_migration_cost_from_start += calculate_migration_cost(partition_before, p_manager.partition.get_vector());
 
@@ -593,7 +594,7 @@ namespace HeiProMap {
             g.clear_new_vertices();
 
             weight_t comm_cost_after = get_qap(g, p_manager.partition.get_vector(), oracle);
-            double balance_after = (double)p_manager.max_weight() / ((double)g.g_weight / (double)p_manager.k);
+            double balance_after = (double) p_manager.max_weight() / ((double) g.g_weight / (double) p_manager.k);
 
             std::cout << "Incremental Refinement done (" << num_dirty << " dirty, " << num_new << " new vertices):" <<
                     std::endl;
@@ -606,7 +607,7 @@ namespace HeiProMap {
             weight_t migration_cost = 0;
             for (vertex_t v: g.new_vertices) {
                 if (!g.vertex_exists(v)) continue;
-                
+
                 partition_t current_block = p_manager[v];
                 weight_t v_weight = g.v_weights[v];
 

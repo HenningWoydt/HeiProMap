@@ -122,7 +122,7 @@ namespace HeiProMap {
             }
 
             if (config.swap_config.enabled) {
-                swap_refine.refine(const_cast<CSRGraph &>(g), d_oracle, pm, lmax_constraints);
+                swap_refine.refine(const_cast<CSRGraph &>(g), d_oracle, pm);
             }
         }
 

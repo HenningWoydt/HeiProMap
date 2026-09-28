@@ -129,11 +129,11 @@ namespace HeiProMap {
             return ptr[index];
         }
 
-        T * get_ptr() {
+        T *get_ptr() {
             return HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
         }
 
-        const T * get_ptr() const {
+        const T *get_ptr() const {
             return HEIPROMAP_ASSUME_ALIGNED(m_ptr, 64);
         }
 

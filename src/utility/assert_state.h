@@ -32,7 +32,7 @@
 #include "../definitions.h"
 #include "utils.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/quotient_graph.h"
@@ -54,11 +54,9 @@ namespace HeiProMap {
         HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_no_self_loops");
 
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    for (size_t j = i + 1; j < g.neighborhoods[u + 1]; ++j) {
-                        ASSERT(g.edges_v[i] != g.edges_v[j]);
-                    }
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                for (size_t j = i + 1; j < g.neighborhoods[u + 1]; ++j) {
+                    ASSERT(g.edges_v[i] != g.edges_v[j]);
                 }
             }
         }
@@ -70,14 +68,12 @@ namespace HeiProMap {
 
         std::vector<vertex_t> manual;
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                manual.clear();
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    manual.push_back(g.edges_v[i]);
-                }
-                std::sort(manual.begin(), manual.end());
-                ASSERT(no_duplicates_sorted(manual));
+            manual.clear();
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                manual.push_back(g.edges_v[i]);
             }
+            std::sort(manual.begin(), manual.end());
+            ASSERT(no_duplicates_sorted(manual));
         }
         return true;
     }
@@ -90,9 +86,7 @@ namespace HeiProMap {
         std::vector<size_t> sizes(k, 0);
 
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                sizes[p_manager[u]] += 1;
-            }
+            sizes[p_manager[u]] += 1;
         }
 
         for (partition_t id = 0; id < k; ++id) {
@@ -109,11 +103,9 @@ namespace HeiProMap {
 
         std::vector<weight_t> weights(k, 0);
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                partition_t u_id = p_manager[u];
+            partition_t u_id = p_manager[u];
 
-                weights[u_id] += g.v_weights[u];
-            }
+            weights[u_id] += g.uniform_v_weights ? 1 : g.v_weights[u];
         }
 
         for (partition_t id = 0; id < k; ++id) {
@@ -134,7 +126,7 @@ namespace HeiProMap {
         for (vertex_t u = 0; u < g.n; ++u) {
             partition_t u_id = p_manager[tt.get_o(u)];
             ASSERT(u_id >= offset && u_id < offset + k);
-            weights[u_id - offset] += g.v_weights[u];
+            weights[u_id - offset] += g.uniform_v_weights ? 1 : g.v_weights[u];
         }
 
         // We can only check if the weights are consistent if we knew the partial weights in p_manager.
@@ -170,25 +162,23 @@ namespace HeiProMap {
 
         std::vector<vertex_t> manual;
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                partition_t u_id = p_manager[u];
+            partition_t u_id = p_manager[u];
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    partition_t v_id = p_manager[g.edges_v[i]];
-                    if (u_id != v_id) {
-                        manual.push_back(u);
-                        break;
-                    }
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                partition_t v_id = p_manager[g.edges_v[i]];
+                if (u_id != v_id) {
+                    manual.push_back(u);
+                    break;
                 }
             }
         }
 
         std::vector<vertex_t> automatic;
         for (partition_t id = 0; id < bv_manager.get_k(); ++id) {
-            for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
-                {
-                    automatic.push_back(u);
-                }
+            for (size_t i = 0; i < bv_manager.size(id); ++i) {
+                const vertex_t u = bv_manager.get(id, i);
+
+                automatic.push_back(u);
             }
         }
 
@@ -203,33 +193,31 @@ namespace HeiProMap {
 
     inline bool assert_correct_vertices_boundary_per_block(const graph_t &g,
                                                            const p_manager_t &p_manager,
-                                                           bv_manager_t &bv_manager,
+                                                           const bv_manager_t &bv_manager,
                                                            const partition_t k) {
         HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_vertices_boundary_per_block");
 
         std::vector<std::vector<vertex_t> > manual(k);
 
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                partition_t u_id = p_manager[u];
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i];
-                    {
-                        partition_t v_id = p_manager[v];
-                        if (u_id != v_id) {
-                            manual[u_id].push_back(u);
-                            break;
-                        }
-                    }
+            partition_t u_id = p_manager[u];
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+
+                partition_t v_id = p_manager[v];
+                if (u_id != v_id) {
+                    manual[u_id].push_back(u);
+                    break;
                 }
             }
         }
 
         for (partition_t id = 0; id < k; ++id) {
             std::vector<vertex_t> automatic;
-            for (size_t i = 0; i < bv_manager.size(id); ++i) { const vertex_t u = bv_manager.get(id, i);
-                {
-                    automatic.push_back(u);
-                }
+            for (size_t i = 0; i < bv_manager.size(id); ++i) {
+                const vertex_t u = bv_manager.get(id, i);
+
+                automatic.push_back(u);
             }
 
             std::sort(manual[id].begin(), manual[id].end());
@@ -245,7 +233,7 @@ namespace HeiProMap {
 
     inline bool assert_correct_boundary([[maybe_unused]] const graph_t &g,
                                         [[maybe_unused]] const p_manager_t &p_manager,
-                                        [[maybe_unused]] bv_manager_t &bv_manager,
+                                        [[maybe_unused]] const bv_manager_t &bv_manager,
                                         [[maybe_unused]] const partition_t k) {
         ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager));
         ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
@@ -262,15 +250,14 @@ namespace HeiProMap {
         std::map<std::pair<partition_t, partition_t>, weight_t> manual;
 
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                partition_t u_id = p_manager[u];
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
-                    {
-                        partition_t v_id = p_manager[v];
-                        if (u_id != v_id) {
-                            manual[{u_id, v_id}] += w;
-                        }
-                    }
+            partition_t u_id = p_manager[u];
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const weight_t w = g.edges_w[i];
+
+                partition_t v_id = p_manager[v];
+                if (u_id != v_id) {
+                    manual[{u_id, v_id}] += w;
                 }
             }
         }
@@ -278,10 +265,6 @@ namespace HeiProMap {
         for (auto [pair, w]: manual) {
             partition_t id1 = pair.first;
             partition_t id2 = pair.second;
-
-            if (w != q_graph.get_weight(id1, id2)) {
-                std::cout << w << " " << q_graph.get_weight(id1, id2) << " " << id1 << " " << id2 << std::endl;
-            }
 
             ASSERT(w == q_graph.get_weight(id1, id2));
         }
@@ -295,43 +278,45 @@ namespace HeiProMap {
         HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_block_conn");
 
         for (vertex_t u = 0; u < g.n; ++u) {
-            {
-                std::map<partition_t, weight_t> manual_map;
+            std::map<partition_t, weight_t> manual_map;
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { const vertex_t v = g.edges_v[i]; const weight_t w = g.edges_w[i];
-                    {
-                        partition_t v_id = p_manager[v];
-                        manual_map[v_id] += w;
-                    }
-                }
-                std::vector<std::pair<partition_t, weight_t> > manual;
-                for (auto [id, w]: manual_map) {
-                    manual.emplace_back(id, w);
-                }
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const weight_t w = g.edges_w[i];
 
-                std::vector<std::pair<partition_t, weight_t> > automatic;
+                partition_t v_id = p_manager[v];
+                manual_map[v_id] += w;
+            }
 
-                for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) { const partition_t id = block_conn.get_id(i); const weight_t idw = block_conn.get_w(i);
-                    {
-                        automatic.emplace_back(id, idw);
-                    }
-                }
+            std::vector<std::pair<partition_t, weight_t> > manual;
+            manual.reserve(manual_map.size());
+            for (auto [id, w]: manual_map) {
+                manual.emplace_back(id, w);
+            }
 
-                std::sort(manual.begin(), manual.end(), [](const auto &a, const auto &b) {
-                    return a.first < b.first;
-                });
-                std::sort(automatic.begin(), automatic.end(), [](const auto &a, const auto &b) {
-                    return a.first < b.first;
-                });
+            std::vector<std::pair<partition_t, weight_t> > automatic;
 
-                ASSERT(no_duplicates_sorted(manual));
-                ASSERT(no_duplicates_sorted(automatic));
-                ASSERT(manual.size() == automatic.size());
+            for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
+                const partition_t id = block_conn.get_id(i);
+                const weight_t idw = block_conn.get_w(i);
 
-                for (size_t i = 0; i < manual.size(); ++i) {
-                    ASSERT(manual[i].first == automatic[i].first);
-                    ASSERT(manual[i].second == automatic[i].second);
-                }
+                automatic.emplace_back(id, idw);
+            }
+
+            std::sort(manual.begin(), manual.end(), [](const auto &a, const auto &b) {
+                return a.first < b.first;
+            });
+            std::sort(automatic.begin(), automatic.end(), [](const auto &a, const auto &b) {
+                return a.first < b.first;
+            });
+
+            ASSERT(no_duplicates_sorted(manual));
+            ASSERT(no_duplicates_sorted(automatic));
+            ASSERT(manual.size() == automatic.size());
+
+            for (size_t i = 0; i < manual.size(); ++i) {
+                ASSERT(manual[i].first == automatic[i].first);
+                ASSERT(manual[i].second == automatic[i].second);
             }
         }
 
@@ -408,6 +393,8 @@ namespace HeiProMap {
     inline bool assert_state_after_partitioning([[maybe_unused]] const graph_t &g,
                                                 [[maybe_unused]] const p_manager_t &p_manager,
                                                 [[maybe_unused]] const partition_t k) {
+        std::cout << "asserting" << std::endl;
+
         // assert csr structure
         ASSERT(assert_csr_structure(g));
 

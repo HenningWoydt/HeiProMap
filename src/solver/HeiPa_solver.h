@@ -40,10 +40,10 @@
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../rebalance/rebalancer.h"
-#include "../partitioning/global_multisection.h"
+#include "../init_partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../partitioning/kaffpa_partitioner.h"
-#include "../partitioning/recursive_bisection.h"
+#include "../init_partitioning/kaffpa_partitioner.h"
+#include "../init_partitioning/recursive_bisection.h"
 #include "../configuration/HeiPa_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
@@ -80,11 +80,11 @@ namespace HeiProMap {
         FlowBasedRefinement flow_based_refinement;
         NegativeCycleRefinement negative_cycle_refinement;
 
-        f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
         f64 initial_partitioning_ms = 0.0;
+        f64 intermediate_partitioning_ms = 0.0;
         f64 uncontraction_ms = 0.0;
         f64 rebalance_ms = 0.0;
         f64 refinement_ms = 0.0;
@@ -182,9 +182,7 @@ namespace HeiProMap {
 
         explicit HeiPaSolver(const HeiPaConfiguration &t_ac) {
             graphs.reserve(100);
-            auto sp_io = get_time_point();
             graphs.emplace_back(t_ac.graph_in);
-            io_ms += get_milli_seconds(sp_io, get_time_point());
 
             auto sp = get_time_point();
             ac = t_ac;
@@ -275,7 +273,6 @@ namespace HeiProMap {
 
             std::vector<partition_t> p(graphs.back().n);
             for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_manager[u]; }
-            write_partition(p, ac.mapping_out);
 
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
@@ -303,15 +300,17 @@ namespace HeiProMap {
             std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
             std::cout << "#oload partitions : " << n_overloaded_partitions << std::endl;
             std::cout << "Sum oload weights : " << sum_too_much << std::endl;
-            std::cout << "IO                : " << io_ms << std::endl;
-            std::cout << "Misc              : " << misc_ms << std::endl;
+            std::cout << "------- Time -------" << std::endl;
+            std::cout << "Total solve time  : " << (duration + init_time) * 1000.0 << std::endl;
             std::cout << "Coarsening        : " << coarsening_ms << std::endl;
             std::cout << "Contraction       : " << contraction_ms << std::endl;
             std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
+            std::cout << "Inter. Part.      : " << intermediate_partitioning_ms << std::endl;
             std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
             std::cout << "Rebalance         : " << rebalance_ms << std::endl;
             std::cout << "Refinement        : " << refinement_ms << std::endl;
-            std::cout << "ALL               : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
+            std::cout << "Misc              : " << misc_ms << std::endl;
+            std::cout << "ALL               : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
 
             #if ENABLE_PROFILER
             print_all_levels();
@@ -443,38 +442,33 @@ namespace HeiProMap {
                 }
 
                 // initialize boundary vertices and quotient graph
-                {
-                    HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
-                    p_manager.reset_weights();
-                    bv_manager.reset();
-                    q_graph.initialize(ac.k);
-                    block_conn.initialize(graphs.back().n, graphs.back().m, ac.k);
-                    block_conn.reset_build();
+                HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
+                p_manager.reset_weights();
+                bv_manager.reset();
+                q_graph.initialize(ac.k);
+                block_conn.initialize(graphs.back().n, graphs.back().m, ac.k);
+                block_conn.reset_build();
 
-                    for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                        {
-                            block_conn.begin_vertex(graphs.back(), u);
+                for (vertex_t u = 0; u < graphs.back().n; ++u) {
+                    block_conn.begin_vertex(graphs.back(), u);
 
-                            const partition_t u_id = p_manager[u];
-                            const weight_t u_w = graphs.back().v_weights[u];
-                            p_manager.set(u, u_w, u_id);
+                    const partition_t u_id = p_manager[u];
+                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weights[u];
+                    p_manager.set(u, u_w, u_id);
 
-                            for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
-                                const vertex_t v = graphs.back().edges_v[i];
-                                const weight_t w = graphs.back().edges_w[i];
-                                {
-                                    const partition_t v_id = p_manager[v];
+                    for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = graphs.back().edges_v[i];
+                        const weight_t w = graphs.back().edges_w[i];
 
-                                    // build block_conns directly here
-                                    block_conn.add_connection(u, v_id, w);
+                        const partition_t v_id = p_manager[v];
 
-                                    if (u_id != v_id) {
-                                        bv_manager.add(u, u_id); // boundary vertex
-                                        if (u < v) {
-                                            q_graph.add_edge(u_id, v_id, w); // quotient graph
-                                        }
-                                    }
-                                }
+                        // build block_conns directly here
+                        block_conn.add_connection(u, v_id, w);
+
+                        if (u_id != v_id) {
+                            bv_manager.add(u, u_id); // boundary vertex
+                            if (u < v) {
+                                q_graph.add_edge(u_id, v_id, w); // quotient graph
                             }
                         }
                     }
@@ -545,28 +539,23 @@ namespace HeiProMap {
             block_conn.reset_build();
 
             for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
-                {
-                    const partition_t u_id = p_manager[u];
-                    size_t n_different = 0;
+                const partition_t u_id = p_manager[u];
+                size_t n_different = 0;
 
-                    block_conn.begin_vertex(g_uncontracted, u);
+                block_conn.begin_vertex(g_uncontracted, u);
 
-                    for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g_uncontracted.edges_v[i];
-                        const weight_t w = g_uncontracted.edges_w[i];
-                        {
-                            const partition_t v_id = p_manager[v];
+                for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
+                    const vertex_t v = g_uncontracted.edges_v[i];
+                    const weight_t w = g_uncontracted.edges_w[i];
+                    const partition_t v_id = p_manager[v];
 
-                            // rebuild block connections
-                            block_conn.add_connection(u, v_id, w);
+                    // rebuild block connections
+                    block_conn.add_connection(u, v_id, w);
 
-                            // rebuild boundary information
-                            n_different += (u_id != v_id);
-                        }
-                    }
-
-                    bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+                    // rebuild boundary information
+                    n_different += (u_id != v_id);
                 }
+                bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
             }
 
             HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "free_graph");
@@ -608,30 +597,28 @@ namespace HeiProMap {
         void refinement(const u64 level, const f64 level_imbalance) {
             auto sp = get_time_point();
 
-            AlignedArray<weight_t> lmax_constraints;
-            lmax_constraints.initialize(ac.k);
             weight_t lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs.back().g_weight / (f64) ac.k));
             for (partition_t i = 0; i < ac.k; ++i) {
-                lmax_constraints[i] = lmax;
+                p_manager.set_lmax(i, lmax);
             }
 
             if (ac.label_propagation_config.enabled) {
-                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.negative_cycle_refinement_config.enabled) {
-                negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 
             if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
             }
 

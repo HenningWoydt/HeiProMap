@@ -286,18 +286,16 @@ namespace HeiProMap {
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                 const vertex_t v = g.edges_v[i];
                 const weight_t w = g.edges_w[i];
-                {
-                    const partition_t v_id = p_manager[v];
+                const partition_t v_id = p_manager[v];
 
-                    // remove old edge, if existed
-                    if (old_id != v_id) {
-                        remove_edge(old_id, v_id, w);
-                    }
+                // remove old edge, if existed
+                if (old_id != v_id) {
+                    remove_edge(old_id, v_id, w);
+                }
 
-                    // add new edge, if has to exist
-                    if (new_id != v_id) {
-                        add_edge(new_id, v_id, w);
-                    }
+                // add new edge, if has to exist
+                if (new_id != v_id) {
+                    add_edge(new_id, v_id, w);
                 }
             }
         }

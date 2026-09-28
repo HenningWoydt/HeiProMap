@@ -33,7 +33,7 @@
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/quotient_graph.h"
@@ -50,6 +50,7 @@ namespace HeiProMap {
         bool operator>(const RebalanceMovePayload &other) const {
             return qap_delta > other.qap_delta;
         }
+
         bool operator<=(const RebalanceMovePayload &other) const {
             return qap_delta <= other.qap_delta;
         }
@@ -125,6 +126,7 @@ namespace HeiProMap {
             for (partition_t v_id = 0; v_id < m_k; ++v_id) {
                 if (v_id == u_id) { continue; }
                 if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
+                if (!p_manager.is_active(v_id)) { continue; }
 
                 weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                 if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
@@ -258,8 +260,8 @@ namespace HeiProMap {
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
-                    if (move.best_id == m_k) { continue; }                 // not a valid destination
-                    if (bv_manager.is_boundary(u) == false) { continue; }  // not a boundary vertex
+                    if (move.best_id == m_k) { continue; } // not a valid destination
+                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
                     if (p_manager.get_bweight(u_id) <= lmax) { continue; } // dont need to move anymore
                     if (state_ids[u] != move.state_id) { continue; }
 
@@ -392,8 +394,8 @@ namespace HeiProMap {
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
-                    if (move.best_id == m_k) { continue; }                 // not a valid destination
-                    if (bv_manager.is_boundary(u) == false) { continue; }  // not a boundary vertex
+                    if (move.best_id == m_k) { continue; } // not a valid destination
+                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
                     if (p_manager.get_bweight(u_id) <= lmax) { continue; } // dont need to move anymore
                     if (state_ids[u] != move.state_id) { continue; }
 
@@ -444,7 +446,8 @@ namespace HeiProMap {
             std::vector<bool> blocks_to_fill_lookup(m_k, false);
             std::vector<partition_t> blocks_to_fill;
             for (partition_t id = 0; id < m_k; ++id) {
-                if (p_manager.get_bweight(id) == 0) {
+                if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) {
+                    continue;
                     blocks_to_fill_lookup[id] = true;
                     blocks_to_fill.push_back(id);
                 }

@@ -55,7 +55,7 @@ namespace HeiProMap {
      * @return Vector of sub-strings.
      */
     inline std::vector<std::string> split(const std::string &str,
-                                   char c) {
+                                          char c) {
         std::vector<std::string> splits;
         std::istringstream iss(str);
         std::string token;
@@ -270,6 +270,18 @@ namespace HeiProMap {
         for (size_t i = 0; i < vec.size(); ++i) {
             std::cout << +vec[i];
             if (i != vec.size() - 1) {
+                std::cout << ", ";
+            }
+        }
+        std::cout << "]" << std::endl;
+    }
+
+    template<typename T>
+    void print(const T *arr, size_t n, const std::string &msg = "") {
+        std::cout << msg << " : [";
+        for (size_t i = 0; i < n; ++i) {
+            std::cout << +(arr[i]);
+            if (i != n - 1) {
                 std::cout << ", ";
             }
         }
@@ -556,7 +568,7 @@ namespace HeiProMap {
     }
 
     inline void str_to_ints(const std::string &str,
-                     std::vector<u64> &ints) {
+                            std::vector<u64> &ints) {
         ints.resize(str.size());
 
         u64 idx = 0;
@@ -653,22 +665,22 @@ namespace HeiProMap {
 
     inline std::size_t floor_log2(std::size_t x) noexcept {
         if (x == 0) return 0;
-#if defined(__GNUC__) || defined(__clang__)
+        #if defined(__GNUC__) || defined(__clang__)
         return static_cast<std::size_t>(8 * sizeof(unsigned long long) - 1 - __builtin_clzll(static_cast<unsigned long long>(x)));
-#elif defined(_MSC_VER)
+        #elif defined(_MSC_VER)
         unsigned long index;
-#   if defined(_WIN64)
+        #   if defined(_WIN64)
         _BitScanReverse64(&index, x);
-#   else
+        #   else
         _BitScanReverse(&index, static_cast<unsigned long>(x));
-#   endif
+        #   endif
         return static_cast<std::size_t>(index);
-#else
+        #else
         // Fallback portable loop
         std::size_t res = 0;
         while ((std::size_t(1) << (res + 1)) <= x) ++res;
         return res;
-#endif
+        #endif
     }
 
     // Suggested shape of your helper
@@ -694,10 +706,10 @@ namespace HeiProMap {
         }
         size_t size = static_cast<size_t>(st.st_size);
 
-#ifdef __linux__
+        #ifdef __linux__
         // 1) Tell the kernel we’ll read sequentially (before mmap)
         (void) posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-#endif
+        #endif
 
         void *addr = ::mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (addr == MAP_FAILED) {
@@ -705,10 +717,10 @@ namespace HeiProMap {
             std::exit(EXIT_FAILURE);
         }
 
-#ifdef __linux__
+        #ifdef __linux__
         // 2) Hint that we’ll need these pages, sequentially (right after mmap)
         (void) madvise(addr, size, MADV_SEQUENTIAL | MADV_WILLNEED);
-#endif
+        #endif
 
         mm.data = static_cast<char *>(addr);
         mm.size = size;

@@ -63,7 +63,7 @@ namespace HeiProMap {
     private:
         size_t m_n = 0;
         size_t m_heap_size = 0;
-        AlignedArray<IndexedMaxHeapEntry<T>> m_heap;
+        AlignedArray<IndexedMaxHeapEntry<T> > m_heap;
         AlignedArray<size_t> m_indices;
 
         u64 m_iteration = 1;
@@ -71,6 +71,7 @@ namespace HeiProMap {
 
     public:
         IndexedMaxHeap() = default;
+
         ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {
@@ -91,8 +92,8 @@ namespace HeiProMap {
             bubble_up(m_heap_size - 1);
         }
 
-        void push_many_heapify(const std::vector<std::pair<size_t, T>> &entries) {
-            for (const auto &e : entries) {
+        void push_many_heapify(const std::vector<std::pair<size_t, T> > &entries) {
+            for (const auto &e: entries) {
                 const size_t key = e.first;
                 const T &val = e.second;
                 ASSERT(!entry_exists(key));
@@ -185,12 +186,12 @@ namespace HeiProMap {
             return m_heap[0].key;
         }
 
-        const T& top() const {
+        const T &top() const {
             ASSERT(!empty());
             return m_heap[0].val;
         }
 
-        T& top() {
+        T &top() {
             ASSERT(!empty());
             return m_heap[0].val;
         }
@@ -201,7 +202,8 @@ namespace HeiProMap {
         void clear() {
             m_heap_size = 0;
             m_iteration += 1;
-            if (m_iteration == 0) { // handle overflow
+            if (m_iteration == 0) {
+                // handle overflow
                 m_iteration_counter.initialize(m_n, 0);
                 m_iteration = 1;
             }

@@ -177,13 +177,18 @@ fi
 # -----------------------------
 # Build HeiProMap
 # -----------------------------
+BUILD_DIR="${ROOT}/build"
+if [ "${BUILD_TYPE}" == "Debug" ]; then
+  BUILD_DIR="${ROOT}/build-debug"
+fi
+
 echo "Building HeiProMap (${BUILD_TYPE}, Profiler=${ENABLE_PROFILER}, Asserts=${ENABLE_ASSERTS})..."
-rm -rf "${ROOT}/build"
-mkdir "${ROOT}/build"
+rm -rf "${BUILD_DIR}"
+mkdir -p "${BUILD_DIR}"
 
 CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PROFILER} -DENABLE_ASSERTS=${ENABLE_ASSERTS} -DENABLE_EXCEPTIONS=${ENABLE_EXCEPTIONS}"
-  execute cmake -S "${ROOT}" -B "${ROOT}/build" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
-  execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiProMap
-  execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target Dyn-HeiProMap
-  execute cmake --build "${ROOT}/build" --parallel "$JOBS" --target HeiPa
-
+  execute cmake -S "${ROOT}" -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" ${CMAKE_EXTRA_ARGS}
+  execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target HeiProMap
+  execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target Dyn-HeiProMap
+  execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target HeiPa
+  execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target Deep-HeiProMap

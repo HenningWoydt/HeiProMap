@@ -37,7 +37,7 @@
 #include "../datastructures/block_conn.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../utility/aligned_array.h"
@@ -133,12 +133,11 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     q_graph_t &q_graph,
-                    block_conn_t &block_conn,
-                    const AlignedArray<weight_t> &lmax_constraints) {
-            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    block_conn_t &block_conn) {
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
     private:
@@ -179,8 +178,7 @@ namespace HeiProMap {
                         weight_t max_qap_delta,
                         graph_t &g,
                         p_manager_t &p_manager,
-                        std::vector<weight_t> &curr_bweights,
-                        const AlignedArray<weight_t> &lmax_constraints) {
+                        std::vector<weight_t> &curr_bweights) {
             if (path.size() >= config.max_path_length) return false;
 
             // Pruning: if we cannot achieve a positive total_qap_delta even with the best remaining moves
@@ -188,14 +186,14 @@ namespace HeiProMap {
             if (total_qap_delta + m_top_qap_prefix_sums[remaining_steps] <= 0) return false;
 
             auto &moves = move_graph.adj_list[curr_id];
-            
+
             m_active_move_id_at_depth[path.size()] = m_next_move_id++;
 
             for (size_t i = 0; i < std::min<size_t>(moves.size(), config.threshold); ++i) {
                 const auto &m = moves[i];
 
                 int d = m_invalid_at_depth[m.u];
-                if (d != -1 && d < (int)path.size() && m_invalid_by_move_id[m.u] == m_active_move_id_at_depth[d]) continue;
+                if (d != -1 && d < (int) path.size() && m_invalid_by_move_id[m.u] == m_active_move_id_at_depth[d]) continue;
                 if (m_block_in_use[m.target_id]) continue;
 
                 // Reachability Pruning: if target_id is start_id, it closes the cycle.
@@ -213,12 +211,12 @@ namespace HeiProMap {
                 if (!path.empty()) {
                     entering_w = t_uniform_v_weights ? 1 : g.v_weights[path.back().u];
                 }
-                if (curr_bweights[curr_id] + entering_w - u_w > lmax_constraints[curr_id]) continue;
+                if (curr_bweights[curr_id] + entering_w - u_w > p_manager.lmax[curr_id]) continue;
 
                 if (m.target_id == start_id) {
                     // Check balance for the start block: start_bweight + u_w - first_w <= lmax
                     weight_t first_w = t_uniform_v_weights ? 1 : g.v_weights[path.empty() ? m.u : path[0].u];
-                    if (curr_bweights[start_id] + u_w - first_w <= lmax_constraints[start_id]) {
+                    if (curr_bweights[start_id] + u_w - first_w <= p_manager.lmax[start_id]) {
                         if (total_qap_delta + m.qap_delta > 0) {
                             path.push_back(m);
                             total_qap_delta += m.qap_delta;
@@ -241,7 +239,7 @@ namespace HeiProMap {
                 path.push_back(m);
                 total_qap_delta += m.qap_delta;
                 m_block_in_use[m.target_id] = true;
-                
+
                 m_invalid_at_depth[m.u] = path.size() - 1;
                 m_invalid_by_move_id[m.u] = m_active_move_id_at_depth[path.size() - 1];
                 for (u64 j = g.neighborhoods[m.u]; j < g.neighborhoods[m.u + 1]; ++j) {
@@ -250,7 +248,7 @@ namespace HeiProMap {
                     m_invalid_by_move_id[v] = m_active_move_id_at_depth[path.size() - 1];
                 }
 
-                if (find_cycle<t_uniform_v_weights, t_uniform_e_weights>(m.target_id, start_id, path, total_qap_delta, min_qap_delta, max_qap_delta, g, p_manager, curr_bweights, lmax_constraints)) {
+                if (find_cycle<t_uniform_v_weights, t_uniform_e_weights>(m.target_id, start_id, path, total_qap_delta, min_qap_delta, max_qap_delta, g, p_manager, curr_bweights)) {
                     return true;
                 }
 
@@ -269,8 +267,7 @@ namespace HeiProMap {
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          q_graph_t &q_graph,
-                         block_conn_t &block_conn,
-                         const AlignedArray<weight_t> &lmax_constraints) {
+                         block_conn_t &block_conn) {
             for (size_t global_i = 0; global_i < config.max_iterations; global_i++) {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "NegativeCycleRefinement", "reset_graph");
                 for (partition_t i = 0; i < m_k; ++i) move_graph.adj_list[i].clear();
@@ -293,10 +290,10 @@ namespace HeiProMap {
                             weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
 
                             if (qap_delta > -100) {
-                            move_graph.adj_list[u_id].push_back({u, u_id, target_id, qap_delta});
-                            min_qap_delta = std::min(min_qap_delta, qap_delta);
-                            max_qap_delta = std::max(max_qap_delta, qap_delta);
-                            all_qaps.push_back(qap_delta);
+                                move_graph.adj_list[u_id].push_back({u, u_id, target_id, qap_delta});
+                                min_qap_delta = std::min(min_qap_delta, qap_delta);
+                                max_qap_delta = std::max(max_qap_delta, qap_delta);
+                                all_qaps.push_back(qap_delta);
                             }
                         }
                     }
@@ -339,7 +336,7 @@ namespace HeiProMap {
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "NegativeCycleRefinement", "find_cycle");
                     weight_t total_qap_delta = 0;
-                    if (find_cycle<t_uniform_v_weights, t_uniform_e_weights>(start_id, start_id, path, total_qap_delta, min_qap_delta, max_qap_delta, g, p_manager, curr_bweights, lmax_constraints)) {
+                    if (find_cycle<t_uniform_v_weights, t_uniform_e_weights>(start_id, start_id, path, total_qap_delta, min_qap_delta, max_qap_delta, g, p_manager, curr_bweights)) {
                         m_distances_invalid = true;
                         // apply all moves
                         // std::cout << "path_size: " << path.size() << " qap: " << total_qap_delta << std::endl;
@@ -360,7 +357,7 @@ namespace HeiProMap {
                             auto &adj = move_graph.adj_list[i];
                             adj.erase(std::remove_if(adj.begin(), adj.end(), [&](const Move &m) {
                                 int d = m_invalid_at_depth[m.u];
-                                return d != -1 && d < (int)path.size() && m_invalid_by_move_id[m.u] == m_active_move_id_at_depth[d];
+                                return d != -1 && d < (int) path.size() && m_invalid_by_move_id[m.u] == m_active_move_id_at_depth[d];
                             }), adj.end());
                         }
 

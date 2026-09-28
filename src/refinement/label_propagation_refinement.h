@@ -37,7 +37,7 @@
 #include "../datastructures/block_conn.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../utility/aligned_array.h"
@@ -74,7 +74,7 @@ namespace HeiProMap {
         size_t blocks_size = 0;
 
         std::vector<RandomEngine> rnd_engines;
-        const LabelPropagationConfiguration *config = nullptr;
+        LabelPropagationConfiguration config = LabelPropagationConfiguration("default_label_propagation");
 
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> used_this_round;
@@ -95,7 +95,7 @@ namespace HeiProMap {
             m_k = t_k;
             m_threads = t_threads;
 
-            config = &i_config;
+            config = i_config;
 
             curr_boundary.initialize(m_n);
             curr_boundary_size = 0;
@@ -119,12 +119,11 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     QGraphT &q_graph,
-                    block_conn_t &block_conn,
-                    const AlignedArray<weight_t> &lmax_constraints) {
-            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    block_conn_t &block_conn) {
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
@@ -133,12 +132,11 @@ namespace HeiProMap {
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          QGraphT &q_graph,
-                         block_conn_t &block_conn,
-                         const AlignedArray<weight_t> &lmax_constraints) {
-            if (config->use_parallel_alg) {
-                refine_impl_parallel<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                         block_conn_t &block_conn) {
+            if (config.use_parallel_alg) {
+                refine_impl_parallel<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
             } else {
-                refine_impl_serial<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                refine_impl_serial<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
             }
         }
 
@@ -148,17 +146,16 @@ namespace HeiProMap {
                                   bv_manager_t &bv_manager,
                                   p_manager_t &p_manager,
                                   QGraphT &q_graph,
-                                  block_conn_t &block_conn,
-                                  const AlignedArray<weight_t> &lmax_constraints) {
+                                  block_conn_t &block_conn) {
             bool positive_move_occurred = true;
-            for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
+            for (u64 iteration = 0; iteration < config.max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "pick_vertices_parallel");
                 active_this_round.initialize(m_k, 1);
                 std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
 
-                std::vector<std::pair<partition_t, partition_t>> matching;
+                std::vector<std::pair<partition_t, partition_t> > matching;
                 bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
 
                 while (found_matching) {
@@ -180,16 +177,16 @@ namespace HeiProMap {
                             local_boundary.push_back(bv_manager.get(B, idx));
                         }
 
-                        bool last_level_pair = config->use_edge_cut && d_oracle.last_level_pair(A, B);
+                        bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
                         // Refine vertices sequentially within matched pair (A, B)
-                        for (vertex_t u : local_boundary) {
+                        for (vertex_t u: local_boundary) {
                             partition_t u_id = p_manager[u];
                             if (u_id != A && u_id != B) { continue; }
 
                             partition_t target_id = (u_id == A) ? B : A;
                             weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
 
-                            if (p_manager.get_bweight(target_id) + u_weight > lmax_constraints[target_id]) { continue; }
+                            if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
 
                             weight_t qap_delta;
                             if (last_level_pair) {
@@ -222,12 +219,11 @@ namespace HeiProMap {
                                 bv_manager_t &bv_manager,
                                 p_manager_t &p_manager,
                                 QGraphT &q_graph,
-                                block_conn_t &block_conn,
-                                const AlignedArray<weight_t> &lmax_constraints) {
+                                block_conn_t &block_conn) {
             RandomEngine &random_engine = rnd_engines[0];
 
             bool positive_move_occurred = true;
-            for (u64 iteration = 0; iteration < config->max_iteration && positive_move_occurred; ++iteration) {
+            for (u64 iteration = 0; iteration < config.max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices");
@@ -249,7 +245,7 @@ namespace HeiProMap {
                         weight_t v_id_weight = p_manager.get_bweight(id);
 
                         if (id == u_id) { continue; }
-                        if (v_id_weight + u_weight > lmax_constraints[id]) { continue; }
+                        if (v_id_weight + u_weight > p_manager.lmax[id]) { continue; }
 
                         weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
                         if (qap_delta > best_qap_delta) {

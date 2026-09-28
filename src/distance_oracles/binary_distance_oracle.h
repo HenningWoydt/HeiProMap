@@ -34,16 +34,16 @@
 
 namespace HeiProMap {
     class BinaryDistanceOracle {
-        std::vector<partition_t> m_hierarchy;     // O(l)
-        std::vector<weight_t> m_distance;         // O(l)
+        std::vector<partition_t> m_hierarchy; // O(l)
+        std::vector<weight_t> m_distance; // O(l)
         size_t m_l = 0;
         partition_t m_k = 0;
 
-        std::vector<partition_t> m_system_sizes;  // O(l)
+        std::vector<partition_t> m_system_sizes; // O(l)
 
-        std::vector<u64> identifier;              // O(k)
-        std::vector<weight_t> dist_lookup;        // O(64)
-        std::vector<partition_t> hierarchy_lookup;// O(64)
+        std::vector<u64> identifier; // O(k)
+        std::vector<weight_t> dist_lookup; // O(64)
+        std::vector<partition_t> hierarchy_lookup; // O(64)
 
     public:
         void initialize(const std::vector<partition_t> &t_hierarchy,

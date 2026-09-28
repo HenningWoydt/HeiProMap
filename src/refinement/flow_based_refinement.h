@@ -43,7 +43,7 @@
 #include "../datastructures/block_conn.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/csr_graph.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../utility/aligned_array.h"
@@ -105,7 +105,7 @@ namespace HeiProMap {
 
         const FlowBasedRefinementConfiguration *config = nullptr;
         std::vector<RandomEngine> rnd_engines;
-        
+
         std::atomic<u64> time_build_penalty{0};
         std::atomic<u64> time_solve_penalty{0};
         std::atomic<u64> time_build_no_penalty{0};
@@ -183,12 +183,11 @@ namespace HeiProMap {
                     bv_manager_t &bv_manager,
                     p_manager_t &p_manager,
                     QGraphT &q_graph,
-                    block_conn_t &block_conn,
-                    const AlignedArray<weight_t> &lmax_constraints) {
-            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, lmax_constraints);
+                    block_conn_t &block_conn) {
+            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
@@ -197,8 +196,7 @@ namespace HeiProMap {
                          bv_manager_t &bv_manager,
                          p_manager_t &p_manager,
                          QGraphT &q_graph,
-                         block_conn_t &block_conn,
-                         const AlignedArray<weight_t> &lmax_constraints) {
+                         block_conn_t &block_conn) {
             m_scc_successes = 0;
             m_scc_failures = 0;
 
@@ -230,7 +228,7 @@ namespace HeiProMap {
                         partition_t v_id = matching[i].second;
 
                         u64 thread_id = omp_get_thread_num();
-                        refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, lmax_constraints, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
+                        refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, active_next_round, thread_id, seen_marker_vecs[thread_id], region_marker_vecs[thread_id]);
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
@@ -252,10 +250,10 @@ namespace HeiProMap {
             }
 
             if (config->measure_flow_edge_cut) {
-                std::cout << "[FlowEdgeCutMeasure] time_build_penalty=" << time_build_penalty 
-                          << "us time_solve_penalty=" << time_solve_penalty 
-                          << "us time_build_no_penalty=" << time_build_no_penalty 
-                          << "us time_solve_no_penalty=" << time_solve_no_penalty << "us" << std::endl;
+                std::cout << "[FlowEdgeCutMeasure] time_build_penalty=" << time_build_penalty
+                        << "us time_solve_penalty=" << time_solve_penalty
+                        << "us time_build_no_penalty=" << time_build_no_penalty
+                        << "us time_solve_no_penalty=" << time_solve_no_penalty << "us" << std::endl;
             }
         }
 
@@ -297,8 +295,9 @@ namespace HeiProMap {
                                 int new_v = static_cast<int>(translation_table.get_n(v));
                                 bool v_src = (is_left[new_v] == 1);
                                 if (u_src != v_src) {
-                                    weight_t cap = use_penalties ? (t_uniform_e_weights ? distance : w * distance)
-                                                                 : (t_uniform_e_weights ? 1 : w);
+                                    weight_t cap = use_penalties
+                                                       ? (t_uniform_e_weights ? distance : w * distance)
+                                                       : (t_uniform_e_weights ? 1 : w);
                                     total_cut += cap;
                                 }
                             }
@@ -378,12 +377,12 @@ namespace HeiProMap {
                 }
             };
 
-            for (vertex_t u : left_region) {
+            for (vertex_t u: left_region) {
                 if (is_left[translation_table.get_n(u)] == 0) {
                     process_vertex(u, left_id, right_id);
                 }
             }
-            for (vertex_t u : right_region) {
+            for (vertex_t u: right_region) {
                 if (is_left[translation_table.get_n(u)] == 1) {
                     process_vertex(u, right_id, left_id);
                 }
@@ -401,7 +400,6 @@ namespace HeiProMap {
                            block_conn_t &block_conn,
                            partition_t left_id,
                            partition_t right_id,
-                           const AlignedArray<weight_t> &lmax_constraints,
                            AlignedArray<u8> &active_next_round,
                            u64 thread_id,
                            u32 &seen_mark,
@@ -456,8 +454,8 @@ namespace HeiProMap {
                 determine_boundary_vertices<t_uniform_v_weights>(g, bv_manager, p_manager, block_conn, left_id, right_id, left_boundary, right_boundary, left_boundary_weight, right_boundary_weight, random_engine);
 
                 // calc max weight for each bfs
-                weight_t adapt_lmax_left = (weight_t) std::ceil(avg_weight + alpha * ((f64) lmax_constraints[left_id] - avg_weight));
-                weight_t adapt_lmax_right = (weight_t) std::ceil(avg_weight + alpha * ((f64) lmax_constraints[right_id] - avg_weight));
+                weight_t adapt_lmax_left = (weight_t) std::ceil(avg_weight + alpha * ((f64) p_manager.lmax[left_id] - avg_weight));
+                weight_t adapt_lmax_right = (weight_t) std::ceil(avg_weight + alpha * ((f64) p_manager.lmax[right_id] - avg_weight));
 
                 weight_t left_max_weight = adapt_lmax_left - p_manager.get_bweight(right_id);
                 weight_t right_max_weight = adapt_lmax_right - p_manager.get_bweight(left_id);
@@ -494,19 +492,19 @@ namespace HeiProMap {
                     PushRelabel<weight_t> pr2;
                     MemoryStack pr_mem2;
                     std::vector<u8> s_connected2, t_connected2;
-                    
+
                     auto t1 = std::chrono::high_resolution_clock::now();
                     build_flow_network_with_penalties<t_uniform_e_weights>(g, d_oracle, p_manager, left_id, right_id, left_region, right_region, pr2, pr_mem2, translation_table, region_marker, region_mark, alpha, s_connected2, t_connected2);
                     auto t2 = std::chrono::high_resolution_clock::now();
                     pr2.maxflow();
                     auto t3 = std::chrono::high_resolution_clock::now();
-                    
+
                     auto t4 = std::chrono::high_resolution_clock::now();
                     build_flow_network_no_penalties<t_uniform_e_weights>(g, p_manager, left_id, right_id, left_region, right_region, pr, pr_mem, translation_table, region_marker, region_mark, s_connected, t_connected);
                     auto t5 = std::chrono::high_resolution_clock::now();
                     pr.maxflow();
                     auto t6 = std::chrono::high_resolution_clock::now();
-                    
+
                     time_build_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
                     time_solve_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count();
                     time_build_no_penalty += std::chrono::duration_cast<std::chrono::microseconds>(t5 - t4).count();
@@ -533,7 +531,7 @@ namespace HeiProMap {
 
                 // check if cut is valid
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "cut_is_valid");
-                bool is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, lmax_constraints, left_region, right_region, translation_table);
+                bool is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left, left_region, right_region, translation_table);
 
                 // not valid and no chance for improvement -> cancel
                 if (!is_valid && !config->use_closed_vertex_set) {
@@ -561,14 +559,14 @@ namespace HeiProMap {
                     HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "scc_find");
                     weight_t left_non_region_weight = p_manager.get_bweight(left_id) - left_region_weight;
                     weight_t right_non_region_weight = p_manager.get_bweight(right_id) - right_region_weight;
-                    bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, lmax_constraints[left_id], lmax_constraints[right_id], avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
+                    bool closure_found = scc_graph.find_best_closure(left_non_region_weight, right_non_region_weight, p_manager.get_lmax(left_id), p_manager.get_lmax(right_id), avg_weight, config->closed_vertex_sets_repeats, random_engine, is_left_2);
 
                     if (closure_found) {
                         #pragma omp atomic
                         m_scc_successes++;
 
                         // SANITY CHECK 1: Verify balance constraints
-                        bool closure_is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left_2, lmax_constraints, left_region, right_region, translation_table);
+                        bool closure_is_valid = cut_is_valid<t_uniform_v_weights>(g, p_manager, left_id, right_id, is_left_2, left_region, right_region, translation_table);
                         ASSERT(closure_is_valid);
 
                         weight_t mincut_gain = calculate_gain<t_uniform_e_weights>(g, p_manager, d_oracle, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
@@ -648,15 +646,15 @@ namespace HeiProMap {
 
             right_boundary_weight = 0;
             for (size_t i = 0; i < bv_manager.size(right_id); ++i) {
-                const vertex_t u = bv_manager.get(right_id, i); {
-                    for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) {
-                        const partition_t id = block_conn.get_id(j); {
-                            if (id == left_id) {
-                                right_boundary.push_back(u);
-                                right_boundary_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
-                                break;
-                            }
-                        }
+                const vertex_t u = bv_manager.get(right_id, i);
+
+                for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) {
+                    const partition_t id = block_conn.get_id(j);
+
+                    if (id == left_id) {
+                        right_boundary.push_back(u);
+                        right_boundary_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
+                        break;
                     }
                 }
             }
@@ -847,30 +845,30 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i]; {
-                        if (region_marker[v] == right_mark) {
-                            int new_v = static_cast<int>(translation_table.get_n(v));
-                            weight_t cap = t_uniform_e_weights ? distance : w * distance;
-                            pr.add_edge(new_u, new_v, cap, cap);
-                            continue;
-                        }
+                    const weight_t w = g.edges_w[i];
 
-                        if (region_marker[v] == left_mark) {
-                            if (u < v) { continue; }
-                            int new_v = static_cast<int>(translation_table.get_n(v));
-                            weight_t cap = t_uniform_e_weights ? distance : w * distance;
-                            pr.add_edge(new_u, new_v, cap, cap);
-                            continue;
-                        }
+                    if (region_marker[v] == right_mark) {
+                        int new_v = static_cast<int>(translation_table.get_n(v));
+                        weight_t cap = t_uniform_e_weights ? distance : w * distance;
+                        pr.add_edge(new_u, new_v, cap, cap);
+                        continue;
+                    }
 
-                        partition_t v_id = p_manager[v];
-                        if constexpr (t_uniform_e_weights) {
-                            left_penalty += d_oracle.get(left_id, v_id);
-                            right_penalty += d_oracle.get(right_id, v_id);
-                        } else {
-                            left_penalty += w * d_oracle.get(left_id, v_id);
-                            right_penalty += w * d_oracle.get(right_id, v_id);
-                        }
+                    if (region_marker[v] == left_mark) {
+                        if (u < v) { continue; }
+                        int new_v = static_cast<int>(translation_table.get_n(v));
+                        weight_t cap = t_uniform_e_weights ? distance : w * distance;
+                        pr.add_edge(new_u, new_v, cap, cap);
+                        continue;
+                    }
+
+                    partition_t v_id = p_manager[v];
+                    if constexpr (t_uniform_e_weights) {
+                        left_penalty += d_oracle.get(left_id, v_id);
+                        right_penalty += d_oracle.get(right_id, v_id);
+                    } else {
+                        left_penalty += w * d_oracle.get(left_id, v_id);
+                        right_penalty += w * d_oracle.get(right_id, v_id);
                     }
                 }
 
@@ -893,27 +891,27 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i]; {
-                        if (region_marker[v] == right_mark) {
-                            if (u < v) { continue; }
-                            int new_v = static_cast<int>(translation_table.get_n(v));
-                            weight_t cap = t_uniform_e_weights ? distance : w * distance;
-                            pr.add_edge(new_u, new_v, cap, cap);
-                            continue;
-                        }
+                    const weight_t w = g.edges_w[i];
 
-                        if (region_marker[v] == left_mark) {
-                            continue;
-                        }
+                    if (region_marker[v] == right_mark) {
+                        if (u < v) { continue; }
+                        int new_v = static_cast<int>(translation_table.get_n(v));
+                        weight_t cap = t_uniform_e_weights ? distance : w * distance;
+                        pr.add_edge(new_u, new_v, cap, cap);
+                        continue;
+                    }
 
-                        partition_t v_id = p_manager[v];
-                        if constexpr (t_uniform_e_weights) {
-                            left_penalty += d_oracle.get(left_id, v_id);
-                            right_penalty += d_oracle.get(right_id, v_id);
-                        } else {
-                            left_penalty += w * d_oracle.get(left_id, v_id);
-                            right_penalty += w * d_oracle.get(right_id, v_id);
-                        }
+                    if (region_marker[v] == left_mark) {
+                        continue;
+                    }
+
+                    partition_t v_id = p_manager[v];
+                    if constexpr (t_uniform_e_weights) {
+                        left_penalty += d_oracle.get(left_id, v_id);
+                        right_penalty += d_oracle.get(right_id, v_id);
+                    } else {
+                        left_penalty += w * d_oracle.get(left_id, v_id);
+                        right_penalty += w * d_oracle.get(right_id, v_id);
                     }
                 }
 
@@ -972,18 +970,17 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i]; {
-                        if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
-                            if (u < v) { continue; }
-                            int new_v = static_cast<int>(translation_table.get_n(v));
-                            weight_t cap = t_uniform_e_weights ? 1 : w;
-                            pr.add_edge(new_u, new_v, cap, cap);
-                            continue;
-                        }
-
-                        partition_t v_id = p_manager[v];
-                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : w; } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : w; }
+                    const weight_t w = g.edges_w[i];
+                    if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
+                        if (u < v) { continue; }
+                        int new_v = static_cast<int>(translation_table.get_n(v));
+                        weight_t cap = t_uniform_e_weights ? 1 : w;
+                        pr.add_edge(new_u, new_v, cap, cap);
+                        continue;
                     }
+
+                    partition_t v_id = p_manager[v];
+                    if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : w; } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : w; }
                 }
 
                 if (w_left > 0) {
@@ -1005,18 +1002,17 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i]; {
-                        if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
-                            if (u < v) { continue; }
-                            int new_v = static_cast<int>(translation_table.get_n(v));
-                            weight_t cap = t_uniform_e_weights ? 1 : w;
-                            pr.add_edge(new_u, new_v, cap, cap);
-                            continue;
-                        }
-
-                        partition_t v_id = p_manager[v];
-                        if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : w; } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : w; }
+                    const weight_t w = g.edges_w[i];
+                    if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
+                        if (u < v) { continue; }
+                        int new_v = static_cast<int>(translation_table.get_n(v));
+                        weight_t cap = t_uniform_e_weights ? 1 : w;
+                        pr.add_edge(new_u, new_v, cap, cap);
+                        continue;
                     }
+
+                    partition_t v_id = p_manager[v];
+                    if (v_id == left_id) { w_left += t_uniform_e_weights ? 1 : w; } else if (v_id == right_id) { w_right += t_uniform_e_weights ? 1 : w; }
                 }
 
                 if (w_left > 0) {
@@ -1060,7 +1056,6 @@ namespace HeiProMap {
                           partition_t left_id,
                           partition_t right_id,
                           std::vector<u8> &is_left,
-                          const AlignedArray<weight_t> &lmax_constraints,
                           std::vector<vertex_t> &left_region,
                           std::vector<vertex_t> &right_region,
                           TranslationTable<vertex_t> &translation_table) {
@@ -1088,7 +1083,7 @@ namespace HeiProMap {
                 }
             }
 
-            return left_weight <= lmax_constraints[left_id] && right_weight <= lmax_constraints[right_id];
+            return left_weight <= p_manager.get_lmax(left_id) && right_weight <= p_manager.get_lmax(right_id);
         }
 
         bool cut_changes_partition(std::vector<u8> &is_left,

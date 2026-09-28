@@ -28,7 +28,7 @@
 #define HEIPROMAP_BOUNDARY_VERTEX_MANGER_H
 
 #include "csr_graph.h"
-#include "distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "partition_manager.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
@@ -38,9 +38,9 @@ namespace HeiProMap {
         vertex_t m_n = 0;
         partition_t m_k = 0;
 
-        AlignedArray<vertex_t> m_n_boundary_edges;        // number of boundary edges for each vertex
+        AlignedArray<vertex_t> m_n_boundary_edges; // number of boundary edges for each vertex
         std::vector<std::vector<vertex_t> > m_boundaries; // boundary vertices per partition
-        AlignedArray<size_t> m_vertex_idx;                // index of vertex inside its partition boundary vector
+        AlignedArray<size_t> m_vertex_idx; // index of vertex inside its partition boundary vector
 
     public:
         void initialize(const vertex_t t_n,
@@ -218,13 +218,15 @@ namespace HeiProMap {
                 vertex_t end_u = std::min(m_n, start_u + chunk);
                 std::fill_n(m_n_boundary_edges.get_ptr() + start_u, end_u - start_u, 0);
             }
+            #pragma omp parallel for schedule(static) num_threads(num_threads)
             for (partition_t id = 0; id < m_k; ++id) {
                 m_boundaries[id].clear();
             }
         }
 
-        void parallel_import_boundary_vertices(const std::vector<std::vector<std::vector<vertex_t>>> &thread_boundaries, const u64 num_threads) {
-            std::vector<std::vector<size_t>> offsets(m_k, std::vector<size_t>(num_threads, 0));
+        void parallel_import_boundary_vertices(const std::vector<std::vector<std::vector<vertex_t> > > &thread_boundaries, const u64 num_threads) {
+            std::vector<std::vector<size_t> > offsets(m_k, std::vector<size_t>(num_threads, 0));
+            #pragma omp parallel for schedule(static) num_threads(num_threads)
             for (partition_t id = 0; id < m_k; ++id) {
                 size_t total_bound = 0;
                 for (u64 t = 0; t < num_threads; ++t) {
@@ -251,6 +253,47 @@ namespace HeiProMap {
 
         void set_boundary_edges_count(const vertex_t u, const size_t count) {
             m_n_boundary_edges[u] = count;
+        }
+
+        void compute_from_scratch(const graph_t &g,
+                                  const p_manager_t &p_manager,
+                                  const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BoundaryVertexManager", "compute_from_scratch_par");
+            if (num_threads <= 1) {
+                compute_from_scratch(g, p_manager);
+                return;
+            }
+
+            parallel_reset(num_threads);
+
+            std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries(num_threads, std::vector<std::vector<vertex_t> >(m_k));
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                auto &local_boundaries = thread_boundaries[tid];
+
+                #pragma omp for schedule(guided)
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    size_t n_different = 0;
+                    partition_t u_id = p_manager[u];
+                    ASSERT(u_id < m_k);
+
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g.edges_v[i];
+                        partition_t v_id = p_manager[v];
+                        ASSERT(v_id < m_k);
+                        n_different += (u_id != v_id);
+                    }
+
+                    if (n_different > 0) {
+                        m_n_boundary_edges[u] = n_different;
+                        local_boundaries[u_id].push_back(u);
+                    }
+                }
+            }
+
+            parallel_import_boundary_vertices(thread_boundaries, num_threads);
         }
 
         void copy_from(const BoundaryVertexManager &bm) {

@@ -44,11 +44,11 @@ namespace HeiProMap {
         vertex_t target = 0;
 
         // CSR representation
-        std::vector<vertex_t> offsets;   // size n+3 (n+2 nodes + sentinel)
+        std::vector<vertex_t> offsets; // size n+3 (n+2 nodes + sentinel)
         std::vector<vertex_t> neighbors; // flat neighbor array
 
         // temporary edge buffer used during construction
-        std::vector<std::pair<vertex_t, vertex_t>> edge_buf;
+        std::vector<std::pair<vertex_t, vertex_t> > edge_buf;
         std::vector<vertex_t> write_pos;
 
     public:
@@ -292,7 +292,7 @@ namespace HeiProMap {
             while (qh < q_s.size()) {
                 vertex_t u = q_s[qh++];
                 scc_s_successors.push_back(u);
-                for (vertex_t v : edges[u]) {
+                for (vertex_t v: edges[u]) {
                     if (!visited_s[v]) {
                         visited_s[v] = 1;
                         q_s.push_back(v);
@@ -309,7 +309,7 @@ namespace HeiProMap {
             while (qh < q_t.size()) {
                 vertex_t u = q_t[qh++];
                 scc_t_predecessors.push_back(u);
-                for (vertex_t v : rev_edges[u]) {
+                for (vertex_t v: rev_edges[u]) {
                     if (!visited_t[v]) {
                         visited_t[v] = 1;
                         q_t.push_back(v);
@@ -412,8 +412,8 @@ namespace HeiProMap {
                 }
 
                 if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
-                    f64 left = (f64)(left_non_region_weight + closure_weight);
-                    f64 right = (f64)(right_non_region_weight + complement_weight);
+                    f64 left = (f64) (left_non_region_weight + closure_weight);
+                    f64 right = (f64) (right_non_region_weight + complement_weight);
                     f64 cost = (left - avg_weight) * (left - avg_weight) + (right - avg_weight) * (right - avg_weight);
                     if (cost < best_cost) {
                         closure_found = true;
@@ -430,8 +430,8 @@ namespace HeiProMap {
                     complement_weight += scc_weights[scc_u];
 
                     if (left_non_region_weight + closure_weight <= left_lmax && right_non_region_weight + complement_weight <= right_lmax) {
-                        f64 left = (f64)(left_non_region_weight + closure_weight);
-                        f64 right = (f64)(right_non_region_weight + complement_weight);
+                        f64 left = (f64) (left_non_region_weight + closure_weight);
+                        f64 right = (f64) (right_non_region_weight + complement_weight);
                         f64 cost = (left - avg_weight) * (left - avg_weight) + (right - avg_weight) * (right - avg_weight);
                         if (cost < best_cost) {
                             closure_found = true;
@@ -489,7 +489,7 @@ namespace HeiProMap {
             for (vertex_t i = 0; i < m; ++i) { local_id[active_nodes[i]] = i; }
 
             std::vector<vertex_t> local_in_deg(m, 0);
-            std::vector<std::vector<vertex_t>> local_succs(m);
+            std::vector<std::vector<vertex_t> > local_succs(m);
             for (vertex_t i = 0; i < m; ++i) {
                 vertex_t scc_u = active_nodes[i];
                 for (vertex_t scc_v: edges[scc_u]) {
@@ -510,7 +510,7 @@ namespace HeiProMap {
                 vertex_t i = q.back();
                 q.pop_back();
                 local_topo.push_back(i);
-                for (vertex_t j : local_succs[i]) {
+                for (vertex_t j: local_succs[i]) {
                     if (--local_in_deg[j] == 0) { q.push_back(j); }
                 }
             }
@@ -523,7 +523,7 @@ namespace HeiProMap {
                 }
             }
             // Transitive closure of succ_mask
-            for (int idx = (int)m - 1; idx >= 0; --idx) {
+            for (int idx = (int) m - 1; idx >= 0; --idx) {
                 vertex_t i = local_topo[idx];
                 for (vertex_t s: local_succs[i]) {
                     succ_mask[i] |= succ_mask[s];
@@ -556,8 +556,8 @@ namespace HeiProMap {
                 weight_t left_w = left_non_region_weight + s_weight + w;
                 weight_t right_w = right_non_region_weight + t_weight + (total_active_weight - w);
                 if (left_w <= left_lmax && right_w <= right_lmax) {
-                    f64 dl = (f64)left_w - avg_weight;
-                    f64 dr = (f64)right_w - avg_weight;
+                    f64 dl = (f64) left_w - avg_weight;
+                    f64 dr = (f64) right_w - avg_weight;
                     f64 cost = dl * dl + dr * dr;
                     if (cost < best_cost) {
                         closure_found = true;
@@ -608,8 +608,8 @@ namespace HeiProMap {
                 if (closure[u]) {
                     for (vertex_t v: edges[u]) {
                         if (!closure[v]) {
-                            std::cerr << "[SCC ASSERT FAIL] Edge " << u << " -> " << v 
-                                      << " crosses outside closure! u in closure, v not in closure." << std::endl;
+                            std::cerr << "[SCC ASSERT FAIL] Edge " << u << " -> " << v
+                                    << " crosses outside closure! u in closure, v not in closure." << std::endl;
                             return false;
                         }
                     }

@@ -40,7 +40,7 @@
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/quotient_graph.h"
 #include "../datastructures/block_conn.h"
-#include "../datastructures/distance_oracle.h"
+#include "../distance_oracles/distance_oracle.h"
 #include "kaffpa_partitioner.h"
 #include "greedy_partitioner.h"
 #include "recursive_bisection.h"
@@ -193,10 +193,8 @@ namespace HeiProMap {
             // initialize the translation table of the first graph
             vertex_t temp_new_u = 0;
             for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
-                {
-                    first_graph.tt->add(old_u, temp_new_u);
-                    temp_new_u += 1;
-                }
+                first_graph.tt->add(old_u, temp_new_u);
+                temp_new_u += 1;
             }
 
             // fill in other information
@@ -422,19 +420,19 @@ namespace HeiProMap {
             if (config.label_propagation_config.enabled) {
                 LabelPropagationRefinement lp_refine;
                 lp_refine.initialize(g.n, g.m, k, 1, seed, config.label_propagation_config);
-                lp_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints);
+                lp_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn);
             }
 
             if (config.quotient_graph_refinement_config.enabled) {
                 QuotientGraphRefinement qg_refine;
                 qg_refine.initialize(g.n, g.m, k, 1, seed, config.quotient_graph_refinement_config);
-                qg_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints);
+                qg_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn);
             }
 
             if (config.flow_based_refinement_config.enabled) {
                 FlowBasedRefinement flow_refine;
                 flow_refine.initialize(g.n, g.m, k, 1, seed, config.flow_based_refinement_config);
-                flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn, lmax_constraints);
+                flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn);
             }
         }
 

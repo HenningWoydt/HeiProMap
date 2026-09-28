@@ -38,7 +38,7 @@ namespace HeiProMap {
         std::string s;
     };
 
-#define to_JSON_MACRO(x) (std::string("\"") + (#x) + "\" : " + to_JSON_value(x) + ",\n")
+    #define to_JSON_MACRO(x) (std::string("\"") + (#x) + "\" : " + to_JSON_value(x) + ",\n")
 
     inline std::string to_JSON_value(u8 x) { return std::to_string(x); }
 

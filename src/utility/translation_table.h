@@ -35,10 +35,10 @@ namespace HeiProMap {
         AlignedArray<T> m_translation_o_to_n;
         AlignedArray<T> m_translation_n_to_o;
 
-#if ASSERT_ENABLED
+        #if ASSERT_ENABLED
         AlignedArray<u8> o_to_n_set;
         AlignedArray<u8> n_to_o_set;
-#endif
+        #endif
 
     public:
         /**
@@ -58,20 +58,20 @@ namespace HeiProMap {
             m_translation_o_to_n[o] = n;
             m_translation_n_to_o[n] = o;
 
-#if ASSERT_ENABLED
+            #if ASSERT_ENABLED
             o_to_n_set[o] = 1;
             n_to_o_set[n] = 1;
-#endif
+            #endif
         }
 
         void reserve(size_t n_space, size_t o_space) {
             m_translation_n_to_o.initialize(n_space);
             m_translation_o_to_n.initialize(o_space);
 
-#if ASSERT_ENABLED
+            #if ASSERT_ENABLED
             n_to_o_set.initialize(n_space, 0);
             o_to_n_set.initialize(o_space, 0);
-#endif
+            #endif
         }
 
         /**
@@ -98,10 +98,10 @@ namespace HeiProMap {
             std::swap(m_translation_o_to_n, rhs.m_translation_o_to_n);
             std::swap(m_translation_n_to_o, rhs.m_translation_n_to_o);
 
-#if ASSERT_ENABLED
+            #if ASSERT_ENABLED
             std::swap(o_to_n_set, rhs.o_to_n_set);
             std::swap(n_to_o_set, rhs.n_to_o_set);
-#endif
+            #endif
         }
     };
 }
