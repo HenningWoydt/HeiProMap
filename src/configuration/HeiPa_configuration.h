@@ -42,9 +42,104 @@
 #include "../partitioning/recursive_bisection.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/negative_cycle_detection.h"
-#include "HeiProMap_configuration.h"
 
 namespace HeiProMap {
+    #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
+    #define HEIPROMAP_COARSENING_ALGS_DEFINED
+    enum COARSENING_ALGS {
+        COARSENING_ALG_UNDEFINED,
+        COARSENING_ALG_GLOBAL_PATHS,
+        COARSENING_ALG_SIZE_CONSTRAINED_LP,
+        COARSENING_ALG_HEAVY_EDGE,
+        COARSENING_ALG_HEAVY_MATCHING = COARSENING_ALG_HEAVY_EDGE
+    };
+
+    inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
+        if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
+        if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
+        if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
+        if (str == "heavy-edge" || str == "heavy-matching") return COARSENING_ALG_HEAVY_EDGE;
+        return COARSENING_ALG_UNDEFINED;
+    }
+
+    inline std::string coarsening_algorithm_to_string(COARSENING_ALGS alg) {
+        switch (alg) {
+            case COARSENING_ALG_UNDEFINED:
+                return "UNDEFINED";
+            case COARSENING_ALG_GLOBAL_PATHS:
+                return "global-paths";
+            case COARSENING_ALG_SIZE_CONSTRAINED_LP:
+                return "size-constrained-lp";
+            case COARSENING_ALG_HEAVY_EDGE:
+                return "heavy-edge";
+            default:
+                return "UNDEFINED";
+        }
+    }
+    #endif
+
+    #ifndef HEIPROMAP_PARTITIONING_ALGS_DEFINED
+    #define HEIPROMAP_PARTITIONING_ALGS_DEFINED
+    enum PARTITIONING_ALGS {
+        PARTITIONING_ALG_UNDEFINED,
+        PARTITIONING_ALG_MULTISECTION,
+        PARTITIONING_ALG_RECURSIVE_BISECTION,
+        PARTITIONING_ALG_HEIPA,
+        PARTITIONING_ALG_GREEDY,
+        PARTITIONING_ALG_GREEDY_GRAPH_GROWING,
+        PARTITIONING_ALG_HYBRID,
+    };
+
+    inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
+        if (str == "UNDEFINED") return PARTITIONING_ALG_UNDEFINED;
+        if (str == "multisection") return PARTITIONING_ALG_MULTISECTION;
+        if (str == "recursive-bisection") return PARTITIONING_ALG_RECURSIVE_BISECTION;
+        if (str == "heipa") return PARTITIONING_ALG_HEIPA;
+        if (str == "greedy") return PARTITIONING_ALG_GREEDY;
+        if (str == "greedy-graph-growing") return PARTITIONING_ALG_GREEDY_GRAPH_GROWING;
+        if (str == "hybrid") return PARTITIONING_ALG_HYBRID;
+        return PARTITIONING_ALG_UNDEFINED;
+    }
+
+    inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
+        switch (alg) {
+            case PARTITIONING_ALG_UNDEFINED: return "UNDEFINED";
+            case PARTITIONING_ALG_MULTISECTION: return "multisection";
+            case PARTITIONING_ALG_RECURSIVE_BISECTION: return "recursive-bisection";
+            case PARTITIONING_ALG_HEIPA: return "heipa";
+            case PARTITIONING_ALG_GREEDY: return "greedy";
+            case PARTITIONING_ALG_GREEDY_GRAPH_GROWING: return "greedy-graph-growing";
+            case PARTITIONING_ALG_HYBRID: return "hybrid";
+            default: return "UNDEFINED";
+        }
+    }
+    #endif
+
+    #ifndef HEIPROMAP_REBALANCING_ALGS_DEFINED
+    #define HEIPROMAP_REBALANCING_ALGS_DEFINED
+    enum REBALANCING_ALGS {
+        REBALANCING_ALG_UNDEFINED,
+        REBALANCING_ALG_SIMPLE
+    };
+
+    inline REBALANCING_ALGS string_to_rebalancing_algorithm(const std::string &str) {
+        if (str == "UNDEFINED") return REBALANCING_ALG_UNDEFINED;
+        if (str == "simple") return REBALANCING_ALG_SIMPLE;
+        return REBALANCING_ALG_UNDEFINED;
+    }
+
+    inline std::string rebalancing_algorithm_to_string(REBALANCING_ALGS alg) {
+        switch (alg) {
+            case REBALANCING_ALG_UNDEFINED:
+                return "UNDEFINED";
+            case REBALANCING_ALG_SIMPLE:
+                return "simple";
+            default:
+                return "UNDEFINED";
+        }
+    }
+    #endif
+
     class HeiPaConfiguration {
     private:
         std::vector<CommandLineOption> options = {

@@ -34,18 +34,21 @@
 #include "../refinement/negative_cycle_detection.h"
 
 namespace HeiProMap {
+    #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
+    #define HEIPROMAP_COARSENING_ALGS_DEFINED
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GLOBAL_PATHS,
         COARSENING_ALG_SIZE_CONSTRAINED_LP,
-        COARSENING_ALG_HEAVY_EDGE
+        COARSENING_ALG_HEAVY_EDGE,
+        COARSENING_ALG_HEAVY_MATCHING = COARSENING_ALG_HEAVY_EDGE
     };
 
     inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
         if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
-        if (str == "heavy-edge") return COARSENING_ALG_HEAVY_EDGE;
+        if (str == "heavy-edge" || str == "heavy-matching") return COARSENING_ALG_HEAVY_EDGE;
         return COARSENING_ALG_UNDEFINED;
     }
 
@@ -63,7 +66,10 @@ namespace HeiProMap {
                 return "UNDEFINED";
         }
     }
+    #endif
 
+    #ifndef HEIPROMAP_PARTITIONING_ALGS_DEFINED
+    #define HEIPROMAP_PARTITIONING_ALGS_DEFINED
     enum PARTITIONING_ALGS {
         PARTITIONING_ALG_UNDEFINED,
         PARTITIONING_ALG_MULTISECTION,
@@ -97,7 +103,10 @@ namespace HeiProMap {
             default: return "UNDEFINED";
         }
     }
+    #endif
 
+    #ifndef HEIPROMAP_REBALANCING_ALGS_DEFINED
+    #define HEIPROMAP_REBALANCING_ALGS_DEFINED
     enum REBALANCING_ALGS {
         REBALANCING_ALG_UNDEFINED,
         REBALANCING_ALG_SIMPLE
@@ -119,6 +128,7 @@ namespace HeiProMap {
                 return "UNDEFINED";
         }
     }
+    #endif
 
     enum ORACLE_TYPE {
         ORACLE_AUTOMATIC,

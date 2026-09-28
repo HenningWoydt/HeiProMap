@@ -152,9 +152,8 @@ namespace HeiProMap {
                              const graph_t &g,
                              const p_manager_t &p_manager,
                              Mapping &mapping,
-                             f64 imbalance) {
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-
+                             f64 imbalance,
+                             weight_t lmax) {
             Matching matching;
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "allocate_matching");
             matching.initialize(g.n);
@@ -354,15 +353,15 @@ namespace HeiProMap {
             }
 
             if ((f64) matching.size() * 2 < config->two_hop_threshold * (f64) g.n) {
-                two_hop_degree_one<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, imbalance);
+                two_hop_degree_one<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, lmax);
             }
 
             if ((f64) matching.size() * 2 < config->two_hop_threshold * (f64) g.n) {
-                two_hop_twins<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, imbalance);
+                two_hop_twins<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, lmax);
             }
 
             if ((f64) matching.size() * 2 < config->two_hop_threshold * (f64) g.n) {
-                two_hop_matchmaker<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, imbalance);
+                two_hop_matchmaker<t_uniform_v_weights, t_uniform_e_weights>(level, g, p_manager, matching, lmax);
             }
 
             finalize_matching(g, matching, mapping);
@@ -372,17 +371,18 @@ namespace HeiProMap {
                    const graph_t &g,
                    const p_manager_t &p_manager,
                    Mapping &mapping,
-                   f64 imbalance) {
+                   f64 imbalance,
+                   weight_t lmax) {
             auto dispatch_with_rating = [&](auto rating_func_const) {
                 constexpr EdgeRatingFunction rating_func = rating_func_const;
                 if (g.uniform_v_weights && g.uniform_e_weights) {
-                    match_templated<true, true, rating_func>(level, g, p_manager, mapping, imbalance);
+                    match_templated<true, true, rating_func>(level, g, p_manager, mapping, imbalance, lmax);
                 } else if (g.uniform_v_weights) {
-                    match_templated<true, false, rating_func>(level, g, p_manager, mapping, imbalance);
+                    match_templated<true, false, rating_func>(level, g, p_manager, mapping, imbalance, lmax);
                 } else if (g.uniform_e_weights) {
-                    match_templated<false, true, rating_func>(level, g, p_manager, mapping, imbalance);
+                    match_templated<false, true, rating_func>(level, g, p_manager, mapping, imbalance, lmax);
                 } else {
-                    match_templated<false, false, rating_func>(level, g, p_manager, mapping, imbalance);
+                    match_templated<false, false, rating_func>(level, g, p_manager, mapping, imbalance, lmax);
                 }
             };
 
@@ -403,6 +403,15 @@ namespace HeiProMap {
                     dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::INNEROUTER>{});
                     break;
             }
+        }
+
+        void match(const size_t level,
+                   const graph_t &g,
+                   const p_manager_t &p_manager,
+                   Mapping &mapping,
+                   f64 imbalance) {
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            match(level, g, p_manager, mapping, imbalance, lmax);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
@@ -629,11 +638,10 @@ namespace HeiProMap {
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
-        void two_hop_degree_one(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
+        void two_hop_degree_one(const size_t, const graph_t &g, [[maybe_unused]] const p_manager_t &p_manager, Matching &matching, weight_t lmax) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_degree_one");
             std::vector<vertex_t> preferred(g.n);
             std::iota(preferred.begin(), preferred.end(), 0);
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (g.deg(u) != 1 || matching.is_matched(u)) { continue; }
@@ -706,14 +714,13 @@ namespace HeiProMap {
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
-        void two_hop_twins(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
+        void two_hop_twins(const size_t, const graph_t &g, [[maybe_unused]] const p_manager_t &p_manager, Matching &matching, weight_t lmax) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_twins");
             struct Candidate {
                 uint64_t hash;
                 vertex_t u;
             };
             std::vector<Candidate> candidates(g.n);
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             size_t n_unmatched = 0;
             //
@@ -781,11 +788,10 @@ namespace HeiProMap {
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
-        void two_hop_matchmaker(const size_t, const graph_t &g, const p_manager_t &p_manager, Matching &matching, f64 imbalance) {
+        void two_hop_matchmaker(const size_t, const graph_t &g, [[maybe_unused]] const p_manager_t &p_manager, Matching &matching, weight_t lmax) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "two_hop_matchmaker");
             std::vector<vertex_t> preferred(g.n);
             std::iota(preferred.begin(), preferred.end(), 0);
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) continue;

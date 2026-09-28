@@ -54,17 +54,18 @@ namespace HeiProMap {
                    Mapping &mapping,
                    f64 imbalance,
                    u64 seed,
-                   const HeavyEdgeMatchingConfiguration &config) {
+                   const HeavyEdgeMatchingConfiguration &config,
+                   weight_t lmax) {
             auto dispatch_with_rating = [&](auto rating_func_const) {
                 constexpr EdgeRatingFunction rating_func = rating_func_const;
                 if (g.uniform_v_weights && g.uniform_e_weights) {
-                    match_templated<true, true, rating_func>(g, p_manager, mapping, imbalance, seed);
+                    match_templated<true, true, rating_func>(g, p_manager, mapping, imbalance, seed, lmax);
                 } else if (g.uniform_v_weights) {
-                    match_templated<true, false, rating_func>(g, p_manager, mapping, imbalance, seed);
+                    match_templated<true, false, rating_func>(g, p_manager, mapping, imbalance, seed, lmax);
                 } else if (g.uniform_e_weights) {
-                    match_templated<false, true, rating_func>(g, p_manager, mapping, imbalance, seed);
+                    match_templated<false, true, rating_func>(g, p_manager, mapping, imbalance, seed, lmax);
                 } else {
-                    match_templated<false, false, rating_func>(g, p_manager, mapping, imbalance, seed);
+                    match_templated<false, false, rating_func>(g, p_manager, mapping, imbalance, seed, lmax);
                 }
             };
 
@@ -87,18 +88,27 @@ namespace HeiProMap {
             }
         }
 
+        void match(const graph_t &g,
+                   const p_manager_t &p_manager,
+                   Mapping &mapping,
+                   f64 imbalance,
+                   u64 seed,
+                   const HeavyEdgeMatchingConfiguration &config) {
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            match(g, p_manager, mapping, imbalance, seed, config, lmax);
+        }
+
     private:
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void match_templated(const graph_t &g,
                             const p_manager_t &p_manager,
                             Mapping &mapping,
-                            f64 imbalance,
-                            u64 seed) {
+                            [[maybe_unused]] f64 imbalance,
+                            u64 seed,
+                            weight_t lmax) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "HeavyEdgeMatching", "match");
 
             mapping.initialize(g.n);
-
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             Matching matching;
             matching.initialize(g.n);

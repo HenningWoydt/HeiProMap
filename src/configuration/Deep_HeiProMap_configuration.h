@@ -43,18 +43,21 @@
 #include "../refinement/flow_based_refinement.h"
 
 namespace HeiProMap {
+    #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
+    #define HEIPROMAP_COARSENING_ALGS_DEFINED
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
-        COARSENING_ALG_HEAVY_MATCHING,
         COARSENING_ALG_GLOBAL_PATHS,
-        COARSENING_ALG_SIZE_CONSTRAINED_LP
+        COARSENING_ALG_SIZE_CONSTRAINED_LP,
+        COARSENING_ALG_HEAVY_EDGE,
+        COARSENING_ALG_HEAVY_MATCHING = COARSENING_ALG_HEAVY_EDGE
     };
 
     inline COARSENING_ALGS string_to_coarsening_algorithm(const std::string &str) {
         if (str == "UNDEFINED") return COARSENING_ALG_UNDEFINED;
-        if (str == "heavy-matching") return COARSENING_ALG_HEAVY_MATCHING;
         if (str == "global-paths") return COARSENING_ALG_GLOBAL_PATHS;
         if (str == "size-constrained-lp") return COARSENING_ALG_SIZE_CONSTRAINED_LP;
+        if (str == "heavy-edge" || str == "heavy-matching") return COARSENING_ALG_HEAVY_EDGE;
         return COARSENING_ALG_UNDEFINED;
     }
 
@@ -62,18 +65,20 @@ namespace HeiProMap {
         switch (alg) {
             case COARSENING_ALG_UNDEFINED:
                 return "UNDEFINED";
-            case COARSENING_ALG_HEAVY_MATCHING:
-                return "heavy-matching";
             case COARSENING_ALG_GLOBAL_PATHS:
                 return "global-paths";
             case COARSENING_ALG_SIZE_CONSTRAINED_LP:
                 return "size-constrained-lp";
+            case COARSENING_ALG_HEAVY_EDGE:
+                return "heavy-edge";
             default:
                 return "UNDEFINED";
         }
     }
+    #endif
 
-
+    #ifndef HEIPROMAP_REBALANCING_ALGS_DEFINED
+    #define HEIPROMAP_REBALANCING_ALGS_DEFINED
     enum REBALANCING_ALGS {
         REBALANCING_ALG_UNDEFINED,
         REBALANCING_ALG_SIMPLE
@@ -95,6 +100,7 @@ namespace HeiProMap {
                 return "UNDEFINED";
         }
     }
+    #endif
 
     enum DISTANCE_ORACLE_ALGS {
         DISTANCE_ORACLE_ALGS_UNDEFINED,
@@ -157,6 +163,9 @@ namespace HeiProMap {
         std::string distance_string;
         std::vector<weight_t> distance;
 
+        // configuration
+        std::string config_string;
+
         // balancing information
         f64 imbalance = -1.0;
 
@@ -178,7 +187,7 @@ namespace HeiProMap {
         SizeConstrainedLPConfiguration size_constrained_lp_clustering_configuration;
 
         // hierarchy contraction thresholds
-        vertex_t initial_C = 8;
+        vertex_t initial_C = 32;
         u64 initial_kappa = 10;
         vertex_t intermediate_C = 8;
         u64 intermediate_kappa = 1;
@@ -241,16 +250,17 @@ namespace HeiProMap {
                 seed = std::random_device{}();
             }
 
-            if (get("--config") == "fast") {
+            config_string = get("--config");
+            if (config_string == "fast") {
                 set_fast();
-            } else if (get("--config") == "eco") {
+            } else if (config_string == "eco") {
                 set_eco();
-            } else if (get("--config") == "strong") {
+            } else if (config_string == "strong") {
                 set_strong();
-            } else if (get("--config") == "experimental") {
+            } else if (config_string == "experimental") {
                 set_experimental();
             } else {
-                std::cout << "Config " << get("--config") << " not recognized!" << std::endl;
+                std::cout << "Config " << config_string << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 

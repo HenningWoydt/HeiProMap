@@ -114,6 +114,8 @@ namespace HeiProMap {
             partition[u] = new_id;
         }
 
+        partition_t get_k() const { return k; }
+
         weight_t get_bweight(const partition_t id) const { return bweights[id]; }
 
         size_t size(const partition_t id) const { return n_vertices[id]; }

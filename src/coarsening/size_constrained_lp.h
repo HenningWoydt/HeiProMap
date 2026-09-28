@@ -269,17 +269,18 @@ namespace HeiProMap {
                      const p_manager_t &p_manager,
                      Mapping &mapping,
                      f64 imbalance,
-                     u64 threads) {
+                     u64 threads,
+                     weight_t lmax) {
             auto dispatch_with_rating = [&](auto rating_func_const) {
                 constexpr EdgeRatingFunction rating_func = rating_func_const;
                 if (g.uniform_v_weights && g.uniform_e_weights) {
-                    cluster_templated<true, true, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                    cluster_templated<true, true, rating_func>(level, g, p_manager, mapping, imbalance, threads, lmax);
                 } else if (g.uniform_v_weights) {
-                    cluster_templated<true, false, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                    cluster_templated<true, false, rating_func>(level, g, p_manager, mapping, imbalance, threads, lmax);
                 } else if (g.uniform_e_weights) {
-                    cluster_templated<false, true, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                    cluster_templated<false, true, rating_func>(level, g, p_manager, mapping, imbalance, threads, lmax);
                 } else {
-                    cluster_templated<false, false, rating_func>(level, g, p_manager, mapping, imbalance, threads);
+                    cluster_templated<false, false, rating_func>(level, g, p_manager, mapping, imbalance, threads, lmax);
                 }
             };
 
@@ -302,15 +303,25 @@ namespace HeiProMap {
             }
         }
 
+        void cluster(const size_t level,
+                     const graph_t &g,
+                     const p_manager_t &p_manager,
+                     Mapping &mapping,
+                     f64 imbalance,
+                     u64 threads) {
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            cluster(level, g, p_manager, mapping, imbalance, threads, lmax);
+        }
+
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void cluster_templated([[maybe_unused]] const size_t level,
                      const graph_t &g,
                      [[maybe_unused]] const p_manager_t &p_manager,
                      Mapping &mapping,
-                     f64 imbalance,
-                     u64 threads) {
+                     [[maybe_unused]] f64 imbalance,
+                     u64 threads,
+                     weight_t lmax) {
             mapping.initialize(g.n);
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
             weight_t max_v_w = 0;
             vertex_t max_deg = 0;

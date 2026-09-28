@@ -60,6 +60,7 @@
 #include "../coarsening/size_constrained_lp.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
+#include "HeiPa_solver.h"
 
 namespace HeiProMap {
     /**
@@ -145,13 +146,19 @@ namespace HeiProMap {
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
 
-            std::cout << "Total time        : " << duration << std::endl;
-            std::cout << "#Nodes            : " << graphs.back().n << std::endl;
-            std::cout << "#Edges            : " << graphs.back().m << std::endl;
-            std::cout << "k                 : " << ac.k << std::endl;
-            std::cout << "Lmax              : " << lmax << std::endl;
-            std::cout << "Final QAP         : " << qap << std::endl;
-            std::cout << "max block w       : " << max(p_manager.get_bweights()) << std::endl;
+            std::cout << "Graph                   : " << ac.graph_in << std::endl;
+            std::cout << "Total time (s)          : " << duration << std::endl;
+            std::cout << "#Nodes                  : " << graphs[0].n << std::endl;
+            std::cout << "#Edges                  : " << graphs[0].m << std::endl;
+            std::cout << "k                       : " << ac.k << std::endl;
+            std::cout << "Hierarchy               : " << ac.hierarchy_string << std::endl;
+            std::cout << "Distances               : " << ac.distance_string << std::endl;
+            std::cout << "Distance Oracle         : " << (std::is_same_v<DistanceOracleT, BinaryDistanceOracle> ? "binary" : "matrix") << std::endl;
+            std::cout << "Lmax                    : " << lmax << std::endl;
+            std::cout << "Threads                 : " << ac.threads << std::endl;
+            std::cout << "--------------------------" << std::endl;
+            std::cout << "Final QAP               : " << qap << std::endl;
+            std::cout << "max block w             : " << max(p_manager.get_bweights()) << std::endl;
 
             size_t n_empty_partitions = 0;
             size_t n_overloaded_partitions = 0;
@@ -161,9 +168,9 @@ namespace HeiProMap {
                 n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
                 sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
             }
-            std::cout << "#empty partitions : " << n_empty_partitions << std::endl;
-            std::cout << "#oload partitions : " << n_overloaded_partitions << std::endl;
-            std::cout << "Sum oload weights : " << sum_too_much << std::endl;
+            std::cout << "#empty partitions       : " << n_empty_partitions << std::endl;
+            std::cout << "#oload partitions       : " << n_overloaded_partitions << std::endl;
+            std::cout << "Sum oload weights       : " << sum_too_much << std::endl;
 
             return p;
         }
@@ -177,41 +184,38 @@ namespace HeiProMap {
             auto ep_time = get_time_point();
 
             size_t l = ac.hierarchy.size();
-            std::cout << "[DeepHeiProMap] Starting coarsening across " << l << " hierarchy levels..." << std::endl;
-            for (u64 h_level = 0; h_level < l; ++h_level) {
-                std::cout << "[DeepHeiProMap] Hierarchy level " << h_level << "/" << l 
-                          << ": target n <= " << (k_rem[l - h_level] * ac.initial_C)
-                          << " (current graph n=" << graphs.back().n << ", m=" << graphs.back().m << ")" << std::endl;
+            std::cout << "[DeepHeiProMap] Starting coarsening to " << k_rem[1] * ac.initial_C << " vertices" << std::endl;
 
-                while (graphs.back().n > k_rem[l - h_level] * ac.initial_C) {
-                    std::cout << "[DeepHeiProMap] -> Coarsening level " << level 
-                              << " (n=" << graphs.back().n << ", m=" << graphs.back().m << ", max_w=" << lmax_vec[h_level] << ")..." << std::flush;
-                    sp_time = get_time_point();
-                    coarsening(level, lmax_vec[h_level]);
-                    ep_time = get_time_point();
-                    std::cout << " done in " << get_milli_seconds(sp_time, ep_time) << " ms" << std::endl;
+            print(k_rem);
+            print(lmax_vec);
+            print(ac.hierarchy);
 
-                    std::cout << "[DeepHeiProMap] -> Contracting level " << level << "..." << std::flush;
-                    sp_time = get_time_point();
-                    contraction();
-                    ep_time = get_time_point();
-                    std::cout << " done in " << get_milli_seconds(sp_time, ep_time) << " ms (coarse n=" << graphs.back().n << ", m=" << graphs.back().m << ")" << std::endl;
+            while (graphs.back().n > k_rem[1] * ac.initial_C) {
+                std::cout << "[DeepHeiProMap] -> Coarsening level " << level << " (n=" << graphs.back().n << ", m=" << graphs.back().m << ", max_w=" << lmax_vec[l - 1] << ")..." << std::flush;
+                sp_time = get_time_point();
+                coarsening(level, lmax_vec[l - 1]);
+                ep_time = get_time_point();
+                std::cout << " done in " << get_milli_seconds(sp_time, ep_time) << " ms" << std::endl;
 
-                    if (graphs.back().n == graphs[graphs.size() - 2].n) {
-                        std::cout << "[DeepHeiProMap] Coarsening stagnated (no contraction possible). Popping duplicate level and terminating coarsening." << std::endl;
-                        graphs.pop_back();
-                        mappings.pop_back();
-                        goto coarsening_done;
-                    }
+                std::cout << "[DeepHeiProMap] -> Contracting level " << level << "..." << std::flush;
+                sp_time = get_time_point();
+                contraction();
+                ep_time = get_time_point();
+                std::cout << " done in " << get_milli_seconds(sp_time, ep_time) << " ms (coarse n=" << graphs.back().n << ", m=" << graphs.back().m << ")" << std::endl;
 
-                    level += 1;
+                if (graphs.back().n == graphs[graphs.size() - 2].n) {
+                    std::cout << "[DeepHeiProMap] Coarsening stagnated (no contraction possible). Popping duplicate level and terminating coarsening." << std::endl;
+                    graphs.pop_back();
+                    mappings.pop_back();
+                    break;
                 }
+
+                level += 1;
             }
-        coarsening_done:
 
             max_level = level > 0 ? level - 1 : 0;
-            std::cout << "[DeepHeiProMap] Coarsening finished at level " << level 
-                      << " (coarsest graph: n=" << graphs.back().n << ", m=" << graphs.back().m << ")" << std::endl;
+            std::cout << "[DeepHeiProMap] Coarsening finished at level " << level
+                    << " (coarsest graph: n=" << graphs.back().n << ", m=" << graphs.back().m << ")" << std::endl;
 
             std::cout << "[DeepHeiProMap] Running initial_partitioning (level " << level << ")..." << std::flush;
             sp_time = get_time_point();
@@ -256,9 +260,46 @@ namespace HeiProMap {
         }
 
         void initial_partitioning() {
-            ScopedTimer _t("initial_partition", "misc", "compute_from_scratch");
-            std::cout << "\n  [initial_partitioning] Computing bv_manager from scratch (n=" << graphs.back().n << ")..." << std::flush;
+            ScopedTimer _t("initial_partition", "misc", "initial_partitioning");
+
+            partition_t k_init = ac.hierarchy.back();
+            std::cout << "\n  [initial_partitioning] Partitioning coarsest graph (n=" << graphs.back().n
+                      << ", m=" << graphs.back().m << ") into k=" << k_init << " blocks using HeiPaSolver..." << std::flush;
+
+            HeiPaConfiguration h_ac;
+            h_ac.k = k_init;
+            h_ac.imbalance = ac.imbalance;
+            h_ac.threads = ac.threads;
+            h_ac.seed = random_engine.get_u64();
+
+            if (ac.config_string == "fast") {
+                h_ac.set_fast();
+            } else if (ac.config_string == "eco") {
+                h_ac.set_eco();
+            } else if (ac.config_string == "strong") {
+                h_ac.set_strong();
+            } else if (ac.config_string == "experimental") {
+                h_ac.set_experimental();
+            } else {
+                h_ac.set_fast();
+            }
+            h_ac.k = k_init;
+            h_ac.imbalance = ac.imbalance;
+            h_ac.threads = ac.threads;
+
+            graph_t g_copy = graphs.back();
+            HeiPaSolver heipa_solver(std::move(g_copy), h_ac);
+            const PartitionManager &sub_pm = heipa_solver.solve_subproblem();
+
+            p_manager.reset_weights();
+            for (vertex_t u = 0; u < graphs.back().n; ++u) {
+                p_manager.set(u, graphs.back().v_weights[u], sub_pm[u]);
+            }
+
             bv_manager.compute_from_scratch(graphs.back(), p_manager);
+            q_graph.compute_from_scratch(graphs.back(), p_manager);
+            block_conn.compute_from_scratch(graphs.back(), p_manager);
+
             std::cout << " done." << std::flush;
         }
 
@@ -269,16 +310,16 @@ namespace HeiProMap {
             std::cout << " done." << std::flush;
         }
 
-        void coarsening(const u64 level, [[maybe_unused]] const weight_t max_v_weight) {
+        void coarsening(const u64 level, const weight_t max_v_weight) {
             mappings.emplace_back();
             mappings.back().initialize(graphs.back().n);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_MATCHING) {
-                heavy_edge_matcher.match(graphs.back(), p_manager, mappings.back(), ac.imbalance, random_engine.get_u64(), ac.parallel_heavy_edge_matching_configuration);
+                heavy_edge_matcher.match(graphs.back(), p_manager, mappings.back(), ac.imbalance, random_engine.get_u64(), ac.parallel_heavy_edge_matching_configuration, max_v_weight);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), ac.imbalance);
+                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), ac.imbalance, max_v_weight);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                size_constrained_lp_clustering.cluster(level, graphs.back(), p_manager, mappings.back(), ac.imbalance, ac.threads);
+                size_constrained_lp_clustering.cluster(level, graphs.back(), p_manager, mappings.back(), ac.imbalance, ac.threads, max_v_weight);
             } else {
                 std::cerr << "Coarsening Algorithm not recognized : " << ac.coarsening_algorithm_id << std::endl;
                 abort();

@@ -53,7 +53,8 @@ int main(const int argc, char *argv[]) {
                 {"--config", "fast"},
                 {"--threads", "16"},
                 {"--seed", "5"},
-                {"--distance-oracle", "binary-based"}
+                {"--distance-oracle", "binary-based"},
+                {"--coarsening-alg", "global-paths"}
             };
 
             std::vector<std::string> args = {"DeepHeiProMap"};
