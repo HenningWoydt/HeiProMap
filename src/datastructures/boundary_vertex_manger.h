@@ -159,7 +159,7 @@ namespace HeiProMap {
 
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BoundaryVertexManager", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "BoundaryVertexManager", "compute_from_scratch");
 
             m_n_boundary_edges.initialize(m_n, 0);
 

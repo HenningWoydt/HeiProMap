@@ -369,8 +369,10 @@ namespace HeiProMap {
 
                 structs_up_to_date = false;
 
+                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "subgraph_extractor", "extract");
                 subgraph_extractor.extract(graphs.back(), p_manager, one_hot);
 
+                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "greedy_partitioner", "sub_block_partitioning");
                 #pragma omp parallel for num_threads(ac.threads) schedule(dynamic)
                 for (size_t i = 0; i < ids.size(); ++i) {
                     partition_t block_id = ids[i];
@@ -410,6 +412,7 @@ namespace HeiProMap {
                     }
                 }
 
+                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "datastructures", "compute_from_scratch");
                 bv_manager.compute_from_scratch(graphs.back(), p_manager);
                 q_graph.compute_from_scratch(graphs.back(), p_manager);
                 block_conn.compute_from_scratch(graphs.back(), p_manager);
@@ -417,6 +420,7 @@ namespace HeiProMap {
             }
 
             if (!structs_up_to_date) {
+                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "datastructures", "compute_from_scratch");
                 bv_manager.compute_from_scratch(graphs.back(), p_manager);
                 q_graph.compute_from_scratch(graphs.back(), p_manager);
                 block_conn.compute_from_scratch(graphs.back(), p_manager);

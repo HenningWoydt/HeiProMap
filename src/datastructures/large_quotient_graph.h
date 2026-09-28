@@ -109,7 +109,7 @@ namespace HeiProMap {
 
         template<typename GraphT, typename PartitionManagerT>
         void compute_from_scratch(const GraphT &g, const PartitionManagerT &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("misc", "LargeQuotientGraph", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "LargeQuotientGraph", "compute_from_scratch");
             initialize(p_manager.get_k());
 
             for (vertex_t u = 0; u < g.n; ++u) {

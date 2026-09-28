@@ -68,8 +68,6 @@ namespace HeiProMap {
                                  const f64 imbalance,
                                  const u64 seed,
                                  PartitionManager &p_manager) {
-        HEIPROMAP_PROFILE_SCOPE("partitioning", "greedy_partitioner", "greedy_partition");
-
         const vertex_t n = g.n;
         const partition_t k = d_oracle.get_k();
         const weight_t total_weight = g.g_weight;

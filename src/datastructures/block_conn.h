@@ -158,7 +158,7 @@ namespace HeiProMap {
         }
 
         void compute_from_scratch(const graph_t &g, const p_manager_t &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BlockConn", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "BlockConn", "compute_from_scratch");
 
             m_n = g.n;
             m_m = g.m;
