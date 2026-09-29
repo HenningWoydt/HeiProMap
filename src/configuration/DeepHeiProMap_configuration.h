@@ -289,7 +289,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.use_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = false;
 
             deep_quotient_graph_refinement_config.enabled = false;
             deep_quotient_graph_refinement_config.max_iteration = 2;
@@ -318,7 +318,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.use_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = false;
 
             deep_quotient_graph_refinement_config.enabled = true;
             deep_quotient_graph_refinement_config.max_iteration = 2;
@@ -349,7 +349,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.use_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = false;
 
             deep_quotient_graph_refinement_config.enabled = true;
             deep_quotient_graph_refinement_config.max_iteration = 2;
@@ -380,7 +380,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.use_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = false;
 
             deep_quotient_graph_refinement_config.enabled = true;
             deep_quotient_graph_refinement_config.max_iteration = 2;

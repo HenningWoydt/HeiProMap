@@ -49,15 +49,13 @@
 namespace HeiProMap {
     class LabelPropagationConfiguration {
     public:
-        explicit LabelPropagationConfiguration(const std::string &t_name) {
-            name = t_name;
-        }
+        explicit LabelPropagationConfiguration(std::string t_name) : name(std::move(t_name)) {}
 
         std::string name;
         bool enabled = false;
         u64 max_iteration = 25; // how many iterations to run the algorithm at most
 
-        bool use_parallel_alg = false;
+        bool force_parallel_alg = false;
         bool use_edge_cut = true;
     };
 
@@ -68,18 +66,27 @@ namespace HeiProMap {
         partition_t m_k = 0;
         u64 m_threads = 1;
 
-        AlignedArray<vertex_t> curr_boundary;
-        size_t curr_boundary_size = 0;
-
-        AlignedArray<partition_t> blocks;
-        AlignedArray<weight_t> blocks_qap_delta;
-        size_t blocks_size = 0;
-
         std::vector<RandomEngine> rnd_engines;
         LabelPropagationConfiguration config = LabelPropagationConfiguration("default_label_propagation");
 
         AlignedArray<u8> active_this_round;
         Distance3Matching<LARGE_K> d3_matcher;
+
+        template<typename QGraphT>
+        static inline __attribute__((always_inline)) void apply_move(graph_t &g,
+                                                                     bv_manager_t &bv_manager,
+                                                                     p_manager_t &p_manager,
+                                                                     QGraphT &q_graph,
+                                                                     block_conn_t &block_conn,
+                                                                     const vertex_t u,
+                                                                     const weight_t u_weight,
+                                                                     const partition_t from_id,
+                                                                     const partition_t to_id) {
+            bv_manager.move(g, p_manager, u, from_id, to_id);
+            q_graph.move(g, p_manager, u, from_id, to_id);
+            block_conn.move(g, u, from_id, to_id);
+            p_manager.move_serial(u, u_weight, from_id, to_id);
+        }
 
     public:
         LabelPropagationRefinement() = default;
@@ -90,25 +97,18 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
-                        const u64 seed,
-                        const LabelPropagationConfiguration &i_config) {
+                        const u64 t_seed,
+                        const LabelPropagationConfiguration &t_config) {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
             m_threads = t_threads;
 
-            config = i_config;
-
-            curr_boundary.initialize(m_n);
-            curr_boundary_size = 0;
-
-            blocks.initialize(m_k);
-            blocks_qap_delta.initialize(m_k);
-            blocks_size = 0;
+            config = t_config;
 
             rnd_engines.resize(m_threads);
             for (u64 t = 0; t < m_threads; ++t) {
-                rnd_engines[t] = RandomEngine(seed + t);
+                rnd_engines[t] = RandomEngine(t_seed + t);
             }
 
             active_this_round.initialize(m_k);
@@ -122,10 +122,15 @@ namespace HeiProMap {
                     p_manager_t &p_manager,
                     QGraphT &q_graph,
                     block_conn_t &block_conn) {
-            if (g.uniform_v_weights && g.uniform_e_weights) refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
-            else if (g.uniform_v_weights) refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
-            else if (g.uniform_e_weights) refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
-            else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            if (g.uniform_v_weights && g.uniform_e_weights) {
+                refine_impl<true, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            } else if (g.uniform_v_weights) {
+                refine_impl<true, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            } else if (g.uniform_e_weights) {
+                refine_impl<false, true>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            } else {
+                refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
+            }
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
@@ -135,7 +140,7 @@ namespace HeiProMap {
                          p_manager_t &p_manager,
                          QGraphT &q_graph,
                          block_conn_t &block_conn) {
-            if (config.use_parallel_alg) {
+            if (config.force_parallel_alg || m_threads > 1) {
                 refine_impl_parallel<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
             } else {
                 refine_impl_serial<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
@@ -157,36 +162,42 @@ namespace HeiProMap {
                 active_this_round.initialize(m_k, 1);
                 d3_matcher.reset_used_edges();
 
-                std::vector<std::pair<partition_t, partition_t> > matching;
+                HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "matching");
+                std::vector<std::pair<partition_t, partition_t>> matching;
                 bool found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
 
                 while (found_matching) {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process");
+
                     #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                     for (size_t i = 0; i < matching.size(); ++i) {
-                        partition_t A = matching[i].first;
-                        partition_t B = matching[i].second;
+                        const partition_t A = matching[i].first;
+                        const partition_t B = matching[i].second;
 
-                        u64 tid = omp_get_thread_num();
+                        const u64 tid = omp_get_thread_num();
                         RandomEngine &rng = rnd_engines[tid];
 
-                        // Copy the boundary vertices of A and B to a local vector to avoid modification issues
+                        // Copy boundary vertices of A and B to local vector to avoid modification issues
+                        const size_t size_A = bv_manager.size(A);
+                        const size_t size_B = bv_manager.size(B);
                         std::vector<vertex_t> local_boundary;
-                        local_boundary.reserve(bv_manager.size(A) + bv_manager.size(B));
-                        for (size_t idx = 0; idx < bv_manager.size(A); ++idx) {
+                        local_boundary.reserve(size_A + size_B);
+                        for (size_t idx = 0; idx < size_A; ++idx) {
                             local_boundary.push_back(bv_manager.get(A, idx));
                         }
-                        for (size_t idx = 0; idx < bv_manager.size(B); ++idx) {
+                        for (size_t idx = 0; idx < size_B; ++idx) {
                             local_boundary.push_back(bv_manager.get(B, idx));
                         }
 
-                        bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
+                        const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
+
                         // Refine vertices sequentially within matched pair (A, B)
-                        for (vertex_t u: local_boundary) {
-                            partition_t u_id = p_manager[u];
+                        for (const vertex_t u : local_boundary) {
+                            const partition_t u_id = p_manager[u];
                             if (u_id != A && u_id != B) { continue; }
 
-                            partition_t target_id = (u_id == A) ? B : A;
-                            weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                            const partition_t target_id = (u_id == A) ? B : A;
+                            const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
 
                             if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
 
@@ -197,11 +208,8 @@ namespace HeiProMap {
                                 qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
                             }
 
-                            if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5)) {
-                                bv_manager.move(g, p_manager, u, u_id, target_id);
-                                q_graph.move(g, p_manager, u, u_id, target_id);
-                                block_conn.move(g, u, u_id, target_id);
-                                p_manager.move_serial(u, u_weight, u_id, target_id);
+                            if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
+                                apply_move(g, bv_manager, p_manager, q_graph, block_conn, u, u_weight, u_id, target_id);
                                 if (qap_delta > 0) {
                                     #pragma omp atomic write
                                     positive_move_occurred = true;
@@ -210,6 +218,7 @@ namespace HeiProMap {
                         }
                     }
 
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "matching");
                     found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
                 }
             }
@@ -229,43 +238,38 @@ namespace HeiProMap {
                 positive_move_occurred = false;
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices");
-                // for (size_t j = 0; j < curr_boundary_size; ++j) {
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    // vertex_t u = curr_boundary[j];
-
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
-                    partition_t u_id = p_manager[u];
+                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const partition_t u_id = p_manager[u];
 
                     partition_t best_id = NO_ID;
                     weight_t best_qap_delta = -std::numeric_limits<weight_t>::max();
-                    f32 counter = 0;
+                    f32 counter = 0.0f;
 
                     for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                        partition_t id = block_conn.get_id(i);
-                        weight_t v_id_weight = p_manager.get_bweight(id);
+                        const partition_t id = block_conn.get_id(i);
+                        const weight_t v_id_weight = p_manager.get_bweight(id);
 
-                        if (id == u_id) { continue; }
-                        if (v_id_weight + u_weight > p_manager.lmax[id]) { continue; }
+                        if (id == u_id || v_id_weight + u_weight > p_manager.lmax[id]) { continue; }
 
-                        weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
+                        const weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
                         if (qap_delta > best_qap_delta) {
                             best_id = id;
                             best_qap_delta = qap_delta;
-                            counter = 1.0;
+                            counter = 1.0f;
                         } else if (qap_delta == best_qap_delta) {
-                            counter += 1.0;
-                            if (random_engine.get_f32() < 1.0f / counter) { best_id = id; }
+                            counter += 1.0f;
+                            if (random_engine.get_f32() < 1.0f / counter) {
+                                best_id = id;
+                            }
                         }
                     }
 
-                    if (best_qap_delta > 0 || (best_qap_delta == 0 && random_engine.get_f32() < 0.5)) {
-                        bv_manager.move(g, p_manager, u, u_id, best_id);
-                        q_graph.move(g, p_manager, u, u_id, best_id);
-                        block_conn.move(g, u, u_id, best_id);
-                        p_manager.move_serial(u, u_weight, u_id, best_id);
-                        positive_move_occurred |= best_qap_delta > 0;
+                    if (best_qap_delta > 0 || (best_qap_delta == 0 && random_engine.get_f32() < 0.5f)) {
+                        apply_move(g, bv_manager, p_manager, q_graph, block_conn, u, u_weight, u_id, best_id);
+                        positive_move_occurred |= (best_qap_delta > 0);
                     }
                 }
             }

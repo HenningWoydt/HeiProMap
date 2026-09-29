@@ -317,7 +317,7 @@ namespace HeiProMap {
                 use_parallel_contraction = (val == "true" || val == "1");
             }
 
-            label_propagation_config.use_parallel_alg = (threads > 1);
+            label_propagation_config.force_parallel_alg = (threads > 1);
             if (is_set("--lp-refinement-enabled")) {
                 std::string val = get("--lp-refinement-enabled");
                 label_propagation_config.enabled = (val == "true" || val == "1");
@@ -327,7 +327,7 @@ namespace HeiProMap {
             }
             if (is_set("--lp-refinement-use-parallel-version")) {
                 std::string val = get("--lp-refinement-use-parallel-version");
-                label_propagation_config.use_parallel_alg = (val == "true" || val == "1");
+                label_propagation_config.force_parallel_alg = (val == "true" || val == "1");
             }
             if (is_set("--lp-refinement-use-edge-cut")) {
                 std::string val = get("--lp-refinement-use-edge-cut");
