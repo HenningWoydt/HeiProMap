@@ -29,7 +29,6 @@
 
 #include <algorithm>
 #include <limits>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -45,56 +44,93 @@ namespace HeiProMap {
     class Distance3Matching {
         partition_t m_k = 0;
         u32 m_frozen_epoch = 1;
-        std::vector<u32> m_vertex_frozen_epoch;
+        AlignedArray<u32> m_vertex_frozen_epoch;
+
+        // Used edge tracking
         std::vector<size_t> m_used_edge_indices;
         AlignedArray<u8> m_used_this_round;
         std::vector<std::vector<partition_t> > m_used_neighbors;
-        std::vector<partition_t> m_touched_vertices;
-        std::vector<partition_t> m_candidates;
-        std::vector<partition_t> m_next_candidates;
-        std::vector<u32> m_in_candidates_epoch;
+        AlignedArray<partition_t> m_touched_vertices;
+        size_t m_num_touched = 0;
+
+        // Candidate queues
+        AlignedArray<partition_t> m_candidates;
+        size_t m_num_candidates = 0;
+        AlignedArray<partition_t> m_next_candidates;
+        size_t m_num_next_candidates = 0;
+        AlignedArray<u32> m_in_candidates_epoch;
         u32 m_candidate_epoch = 1;
         bool m_candidates_initialized = false;
+
+        template<typename QGraphT>
+        bool is_edge_used(const QGraphT &q_graph, const partition_t u, const partition_t v) const {
+            if constexpr (!LARGE_K) {
+                const size_t eidx = q_graph.edge_index(u, v);
+                return eidx < m_used_this_round.size() && m_used_this_round[eidx] == 1;
+            } else {
+                const auto &used = m_used_neighbors[u];
+                return std::find(used.begin(), used.end(), v) != used.end();
+            }
+        }
+
+        template<typename QGraphT>
+        void mark_edge_used(const QGraphT &q_graph, const partition_t u, const partition_t v) {
+            if constexpr (!LARGE_K) {
+                const size_t eidx = q_graph.edge_index(u, v);
+                if (eidx < m_used_this_round.size()) {
+                    m_used_this_round[eidx] = 1;
+                    m_used_edge_indices.push_back(eidx);
+                }
+            } else {
+                if (m_used_neighbors[u].empty()) {
+                    m_touched_vertices[m_num_touched++] = u;
+                }
+                m_used_neighbors[u].push_back(v);
+            }
+        }
 
     public:
         Distance3Matching() = default;
 
         void initialize(const partition_t k) {
             m_k = k;
-            m_vertex_frozen_epoch.assign(m_k, 0);
+            m_vertex_frozen_epoch.initialize(m_k, 0);
             m_frozen_epoch = 1;
             m_used_edge_indices.clear();
-            m_candidates.clear();
-            m_next_candidates.clear();
-            m_in_candidates_epoch.assign(m_k, 0);
+            m_candidates.initialize(m_k);
+            m_num_candidates = 0;
+            m_next_candidates.initialize(m_k);
+            m_num_next_candidates = 0;
+            m_in_candidates_epoch.initialize(m_k, 0);
             m_candidate_epoch = 1;
             m_candidates_initialized = false;
 
             if constexpr (!LARGE_K) {
-                m_used_this_round.initialize(static_cast<size_t>(m_k) * static_cast<size_t>(m_k));
+                m_used_this_round.initialize(static_cast<size_t>(m_k) * static_cast<size_t>(m_k), 0);
             } else {
                 m_used_neighbors.clear();
                 m_used_neighbors.resize(m_k);
-                m_touched_vertices.clear();
+                m_touched_vertices.initialize(m_k);
+                m_num_touched = 0;
             }
         }
 
         void reset_used_edges() {
-            m_candidates.clear();
+            m_num_candidates = 0;
             m_candidates_initialized = false;
 
             if constexpr (!LARGE_K) {
-                for (const size_t eidx : m_used_edge_indices) {
+                for (const size_t eidx: m_used_edge_indices) {
                     if (eidx < m_used_this_round.size()) {
                         m_used_this_round[eidx] = 0;
                     }
                 }
                 m_used_edge_indices.clear();
             } else {
-                for (const partition_t u : m_touched_vertices) {
-                    m_used_neighbors[u].clear();
+                for (size_t i = 0; i < m_num_touched; ++i) {
+                    m_used_neighbors[m_touched_vertices[i]].clear();
                 }
-                m_touched_vertices.clear();
+                m_num_touched = 0;
             }
         }
 
@@ -105,7 +141,7 @@ namespace HeiProMap {
             matching.clear();
 
             if (!m_candidates_initialized) {
-                m_candidates.clear();
+                m_num_candidates = 0;
                 for (partition_t u = 0; u < m_k; ++u) {
                     if (q_graph.degree(u) == 0) {
                         continue;
@@ -118,18 +154,18 @@ namespace HeiProMap {
                         }
                     });
                     if (has_valid_edge) {
-                        m_candidates.push_back(u);
+                        m_candidates[m_num_candidates++] = u;
                     }
                 }
                 m_candidates_initialized = true;
             }
 
-            if (m_candidates.empty()) {
+            if (m_num_candidates == 0) {
                 return false;
             }
 
             if (m_frozen_epoch >= std::numeric_limits<u32>::max() - 2) {
-                std::fill(m_vertex_frozen_epoch.begin(), m_vertex_frozen_epoch.end(), 0);
+                m_vertex_frozen_epoch.fill(0);
                 m_frozen_epoch = 1;
             }
             const u32 epoch_dist2 = m_frozen_epoch;
@@ -138,16 +174,16 @@ namespace HeiProMap {
 
             m_candidate_epoch++;
             if (m_candidate_epoch == 0) {
-                std::fill(m_in_candidates_epoch.begin(), m_in_candidates_epoch.end(), 0);
+                m_in_candidates_epoch.fill(0);
                 m_candidate_epoch = 1;
             }
             const u32 cur_candidate_epoch = m_candidate_epoch;
 
-            m_next_candidates.clear();
+            m_num_next_candidates = 0;
             auto add_to_next = [&](const partition_t x) {
                 if (m_in_candidates_epoch[x] != cur_candidate_epoch) {
                     m_in_candidates_epoch[x] = cur_candidate_epoch;
-                    m_next_candidates.push_back(x);
+                    m_next_candidates[m_num_next_candidates++] = x;
                 }
             };
 
@@ -166,7 +202,8 @@ namespace HeiProMap {
                 });
             };
 
-            for (const partition_t u_id : m_candidates) {
+            for (size_t i = 0; i < m_num_candidates; ++i) {
+                const partition_t u_id = m_candidates[i];
                 if (m_vertex_frozen_epoch[u_id] >= epoch_dist2) {
                     add_to_next(u_id);
                     continue;
@@ -186,16 +223,8 @@ namespace HeiProMap {
                         return;
                     }
 
-                    if constexpr (!LARGE_K) {
-                        const size_t eidx = q_graph.edge_index(u_id, v_id);
-                        if (eidx < m_used_this_round.size() && m_used_this_round[eidx] == 1) {
-                            return;
-                        }
-                    } else {
-                        const auto &used = m_used_neighbors[u_id];
-                        if (std::find(used.begin(), used.end(), v_id) != used.end()) {
-                            return;
-                        }
+                    if (is_edge_used(q_graph, u_id, v_id)) {
+                        return;
                     }
 
                     unused_valid_edges++;
@@ -205,18 +234,7 @@ namespace HeiProMap {
                     }
 
                     matching.emplace_back(u_id, v_id);
-                    if constexpr (!LARGE_K) {
-                        const size_t eidx = q_graph.edge_index(u_id, v_id);
-                        if (eidx < m_used_this_round.size()) {
-                            m_used_this_round[eidx] = 1;
-                            m_used_edge_indices.push_back(eidx);
-                        }
-                    } else {
-                        if (m_used_neighbors[u_id].empty()) {
-                            m_touched_vertices.push_back(u_id);
-                        }
-                        m_used_neighbors[u_id].push_back(v_id);
-                    }
+                    mark_edge_used(q_graph, u_id, v_id);
 
                     m_vertex_frozen_epoch[u_id] = epoch_dist1;
                     m_vertex_frozen_epoch[v_id] = epoch_dist1;
@@ -233,7 +251,8 @@ namespace HeiProMap {
                 }
             }
 
-            std::swap(m_candidates, m_next_candidates);
+            swap(m_candidates, m_next_candidates);
+            std::swap(m_num_candidates, m_num_next_candidates);
             return !matching.empty();
         }
     };

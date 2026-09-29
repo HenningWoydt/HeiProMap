@@ -146,13 +146,35 @@ namespace HeiProMap {
         }
 
         size_t size() const { return m_n; }
+
+        T *begin() { return get_ptr(); }
+        const T *begin() const { return get_ptr(); }
+        T *end() { return get_ptr() + m_n; }
+        const T *end() const { return get_ptr() + m_n; }
+
+        void fill(const T value) {
+            if (m_n > 0) {
+                if constexpr (sizeof(T) == 1) {
+                    std::memset(m_ptr, static_cast<int>(value), m_n);
+                } else {
+                    if (value == 0) {
+                        std::memset(m_ptr, 0, m_n * sizeof(T));
+                    } else {
+                        std::fill_n(get_ptr(), m_n, value);
+                    }
+                }
+            }
+        }
+
+        void swap(AlignedArray &other) noexcept {
+            std::swap(m_ptr, other.m_ptr);
+            std::swap(m_n, other.m_n);
+        }
     };
 
     template<typename T>
     void swap(AlignedArray<T> &a, AlignedArray<T> &b) noexcept {
-        using std::swap;
-        swap(a.m_ptr, b.m_ptr);
-        swap(a.m_n, b.m_n);
+        a.swap(b);
     }
 }
 

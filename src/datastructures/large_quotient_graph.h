@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "../definitions.h"
+#include "../utility/aligned_array.h"
 #include "../utility/macros.h"
 #include "../utility/profiler.h"
 
@@ -52,7 +53,7 @@ namespace HeiProMap {
     private:
         partition_t m_k = 0;
         std::vector<std::vector<HalfEdge>> m_adj;
-        std::vector<weight_t> m_self_weights;
+        AlignedArray<weight_t> m_self_weights;
 
         static auto find_edge(std::vector<HalfEdge> &vec, const partition_t target) {
             return std::find_if(vec.begin(), vec.end(), [target](const HalfEdge &e) {
@@ -97,7 +98,7 @@ namespace HeiProMap {
             m_k = t_k;
             m_adj.clear();
             m_adj.resize(m_k);
-            m_self_weights.assign(m_k, 0);
+            m_self_weights.initialize(m_k, 0);
         }
 
         template<typename GraphT, typename PartitionManagerT>
