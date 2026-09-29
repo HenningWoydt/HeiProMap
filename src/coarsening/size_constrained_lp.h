@@ -53,7 +53,7 @@ namespace HeiProMap {
         f64 f = 32;
         EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
         bool use_degree_ordering = true;
-        bool force_parallel_alg = true;
+        bool force_parallel_alg = false;
     };
 
     class SizeConstrainedLP {
