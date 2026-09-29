@@ -75,6 +75,10 @@ namespace HeiProMap {
             return m_boundaries[id][i];
         }
 
+        const std::vector<vertex_t> &boundary(const partition_t id) const {
+            return m_boundaries[id];
+        }
+
         partition_t get_k() const {
             return m_k;
         }
@@ -160,7 +164,9 @@ namespace HeiProMap {
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager) {
             HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "compute_from_scratch");
+            m_n = g.n;
             m_n_boundary_edges.initialize(m_n, 0);
+            m_vertex_idx.initialize(m_n);
 
             for (partition_t id = 0; id < m_k; ++id) {
                 m_boundaries[id].clear();
@@ -196,19 +202,27 @@ namespace HeiProMap {
             m_boundaries[id].push_back(u);
         }
 
-        void reset() {
+        void reset(const vertex_t n) {
             HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "reset");
 
+            m_n = n;
             m_n_boundary_edges.initialize(m_n, 0);
+            m_vertex_idx.initialize(m_n);
             for (partition_t id = 0; id < m_k; ++id) {
                 m_boundaries[id].clear();
             }
         }
 
-        void parallel_reset(const u64 num_threads) {
+        void reset() {
+            reset(m_n);
+        }
+
+        void parallel_reset(const vertex_t n, const u64 num_threads) {
             HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "parallel_reset");
 
+            m_n = n;
             m_n_boundary_edges.initialize(m_n);
+            m_vertex_idx.initialize(m_n);
             #pragma omp parallel num_threads(num_threads)
             {
                 u64 tid = omp_get_thread_num();
@@ -221,6 +235,10 @@ namespace HeiProMap {
             for (partition_t id = 0; id < m_k; ++id) {
                 m_boundaries[id].clear();
             }
+        }
+
+        void parallel_reset(const u64 num_threads) {
+            parallel_reset(m_n, num_threads);
         }
 
         void parallel_import_boundary_vertices(const std::vector<std::vector<std::vector<vertex_t> > > &thread_boundaries, const u64 num_threads) {
@@ -265,7 +283,7 @@ namespace HeiProMap {
                 return;
             }
 
-            parallel_reset(num_threads);
+            parallel_reset(g.n, num_threads);
 
             std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries(num_threads, std::vector<std::vector<vertex_t> >(m_k));
 

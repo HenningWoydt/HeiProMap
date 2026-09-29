@@ -210,6 +210,60 @@ namespace HeiProMap {
             }
         }
 
+        template<typename GraphT, typename PartitionManagerT, typename BoundaryVertexManagerT>
+        void compute_from_scratch(const GraphT &g,
+                                  const PartitionManagerT &p_manager,
+                                  const BoundaryVertexManagerT &bv_manager,
+                                  const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "QuotientGraph", "compute_from_scratch_bv");
+            initialize(p_manager.get_k());
+
+            if (num_threads <= 1 || bv_manager.size() < 1024) {
+                for (partition_t id = 0; id < m_k; ++id) {
+                    for (const vertex_t u : bv_manager.boundary(id)) {
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            const vertex_t v = g.edges_v[i];
+                            if (u < v) {
+                                const partition_t v_id = p_manager[v];
+                                if (id != v_id) {
+                                    add_edge(id, v_id, g.edges_w[i]);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t>>> thread_edges(num_threads);
+
+                #pragma omp parallel num_threads(num_threads)
+                {
+                    const u64 tid = omp_get_thread_num();
+                    auto &local_edges = thread_edges[tid];
+
+                    #pragma omp for schedule(dynamic)
+                    for (partition_t id = 0; id < m_k; ++id) {
+                        for (const vertex_t u : bv_manager.boundary(id)) {
+                            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                                const vertex_t v = g.edges_v[i];
+                                if (u < v) {
+                                    const partition_t v_id = p_manager[v];
+                                    if (id != v_id) {
+                                        local_edges.emplace_back(id, v_id, g.edges_w[i]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (u64 tid = 0; tid < num_threads; ++tid) {
+                    for (const auto &[u_id, v_id, w] : thread_edges[tid]) {
+                        add_edge(u_id, v_id, w);
+                    }
+                }
+            }
+        }
+
         size_t degree(const partition_t x) const {
             return m_head[x] != INVALID_INDEX ? 1 : 0;
         }

@@ -443,71 +443,19 @@ namespace HeiProMap {
         }
 
         void recompute_datastructures() {
-            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "misc");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "all");
             auto p = get_time_point();
 
             const graph_t &g = graphs.back();
 
-            if (ac.threads <= 1 || g.n < 1024) {
-                bv_manager.compute_from_scratch(g, p_manager);
-                q_graph.compute_from_scratch(g, p_manager);
-                block_conn.compute_from_scratch(g, p_manager);
-                return;
-            }
+            // Phase 1: Recompute block connections
+            block_conn.compute_from_scratch(g, p_manager, ac.threads);
 
-            q_graph.initialize(p_manager.get_k());
-            bv_manager.parallel_reset(ac.threads);
-            block_conn.parallel_initialize_offsets(g, ac.threads);
+            // Phase 2: Recompute boundary vertices
+            bv_manager.compute_from_scratch(g, p_manager, ac.threads);
 
-            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "fill");
-            #pragma omp parallel num_threads(ac.threads)
-            {
-                u64 tid = omp_get_thread_num();
-                auto &local_boundaries = thread_boundaries[tid];
-                auto &local_edges = thread_edges[tid];
-                local_edges.clear();
-                for (partition_t id = 0; id < ac.k; ++id) {
-                    local_boundaries[id].clear();
-                }
-
-                vertex_t chunk = (g.n + ac.threads - 1) / ac.threads;
-                vertex_t start_u = std::min(g.n, tid * chunk);
-                vertex_t end_u = std::min(g.n, start_u + chunk);
-
-                for (vertex_t u = start_u; u < end_u; ++u) {
-                    const partition_t u_id = p_manager[u];
-                    size_t n_different = 0;
-
-                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g.edges_v[i];
-                        const weight_t w = g.edges_w[i];
-                        const partition_t v_id = p_manager[v];
-
-                        block_conn.add_connection(u, v_id, w);
-
-                        if (u_id != v_id) {
-                            n_different += 1;
-                            if (u < v) {
-                                local_edges.emplace_back(u_id, v_id, w);
-                            }
-                        }
-                    }
-
-                    if (n_different > 0) {
-                        bv_manager.set_boundary_edges_count(u, n_different);
-                        local_boundaries[u_id].push_back(u);
-                    }
-                }
-            }
-
-            bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
-
-            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "fill_qgraph");
-            for (u64 tid = 0; tid < ac.threads; ++tid) {
-                for (const auto &[u_id, v_id, w]: thread_edges[tid]) {
-                    q_graph.add_edge(u_id, v_id, w);
-                }
-            }
+            // Phase 3: Recompute quotient graph using boundary vertices from Phase 2
+            q_graph.compute_from_scratch(g, p_manager, bv_manager, ac.threads);
 
             recompute_datastructures_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
