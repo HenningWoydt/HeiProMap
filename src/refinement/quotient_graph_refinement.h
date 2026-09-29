@@ -51,13 +51,12 @@
 #include "../utility/qap.h"
 #include "../utility/indexed_max_heap.h"
 #include "../utility/functions.h"
+#include "src/datastructures/active_block_scheduling.h"
 
 namespace HeiProMap {
     class QuotientGraphRefinementConfiguration {
     public:
-        explicit QuotientGraphRefinementConfiguration(const std::string &t_name) {
-            name = t_name;
-        }
+        explicit QuotientGraphRefinementConfiguration(const std::string &t_name) { name = t_name; }
 
         std::string name;
         bool enabled = false;
@@ -79,20 +78,21 @@ namespace HeiProMap {
         u64 m_threads = 1;
 
         // active block scheduling
-        AlignedArray<u8> active_this_round;
-        AlignedArray<u8> active_next_round;
-
-        std::vector<std::vector<vertex_t> > moves_vec;
+        ActiveBlockScheduling active_block_scheduling;
 
         // store which vertices have been moved
         AlignedArray<u32> vertex_used;
         u32 global_vertex_mark = 0;
 
-        std::vector<IndexedMaxHeap<weight_t> > boundary_vertices_u_vec;
-        std::vector<IndexedMaxHeap<weight_t> > boundary_vertices_v_vec;
+        // distance 3 matcher
+        Distance3Matching<LARGE_K> dist_3_matcher;
 
         std::vector<RandomEngine> rnd_engines;
-        Distance3Matching<LARGE_K> dist_3_matcher;
+
+        std::vector<std::vector<vertex_t> > moves_vec;
+
+        std::vector<IndexedMaxHeap<weight_t> > boundary_vertices_u_vec;
+        std::vector<IndexedMaxHeap<weight_t> > boundary_vertices_v_vec;
 
         QuotientGraphRefinementConfiguration config = QuotientGraphRefinementConfiguration("default");
 
@@ -122,25 +122,22 @@ namespace HeiProMap {
 
             config = t_config;
 
+            // active block scheduling
+            active_block_scheduling.initialize(m_k);
+
+            // store which vertices have been moved
             global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
 
-            // active block scheduling
-            active_this_round.initialize(m_k);
-            active_next_round.initialize(m_k);
+            // distance 3 matcher
+            dist_3_matcher.initialize(m_k);
 
             for (size_t i = 0; i < m_threads; ++i) {
+                rnd_engines.emplace_back(seed + i);
                 moves_vec.emplace_back();
                 boundary_vertices_u_vec.emplace_back();
                 boundary_vertices_v_vec.emplace_back();
             }
-
-            rnd_engines.resize(m_threads);
-            for (u64 t = 0; t < m_threads; ++t) {
-                rnd_engines[t] = RandomEngine(seed + t);
-            }
-
-            dist_3_matcher.initialize(m_k);
 
             #pragma omp parallel for num_threads(m_threads)
             for (size_t i = 0; i < m_threads; ++i) {
@@ -170,8 +167,7 @@ namespace HeiProMap {
                          QGraphT &q_graph,
                          block_conn_t &block_conn) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "init_block_scheduling");
-            active_this_round.initialize(m_k, 1);
-            active_next_round.initialize(m_k, 0);
+            active_block_scheduling.reset(m_k);
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
@@ -180,7 +176,7 @@ namespace HeiProMap {
                 dist_3_matcher.reset_used_edges();
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                bool found_matching = dist_3_matcher.find_matching(q_graph, active_this_round, matching);
+                bool found_matching = dist_3_matcher.find_matching(q_graph, active_block_scheduling.active_this_round, matching);
 
                 while (found_matching) {
                     HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "loop");
@@ -205,12 +201,11 @@ namespace HeiProMap {
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                    found_matching = dist_3_matcher.find_matching(q_graph, active_this_round, matching);
+                    found_matching = dist_3_matcher.find_matching(q_graph, active_block_scheduling.active_this_round, matching);
                 }
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
-                std::swap(active_this_round, active_next_round);
-                active_next_round.initialize(m_k, 0);
+                active_block_scheduling.next_round();
             }
 
             if (config.measure_qg_edge_cut) {
@@ -427,8 +422,7 @@ namespace HeiProMap {
             }
 
             if (max_qap_gain > 0) {
-                active_next_round[u_id] = 1;
-                active_next_round[v_id] = 1;
+                active_block_scheduling.activate(u_id, v_id);
             }
         }
 
@@ -686,8 +680,7 @@ namespace HeiProMap {
             }
 
             if (max_qap_gain > 0) {
-                active_next_round[u_id] = 1;
-                active_next_round[v_id] = 1;
+                active_block_scheduling.activate(u_id, v_id);
             }
         }
     };
