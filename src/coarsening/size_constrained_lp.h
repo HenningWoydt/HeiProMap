@@ -53,7 +53,7 @@ namespace HeiProMap {
         f64 f = 32;
         EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
         bool use_degree_ordering = true;
-        bool use_parallel_version = false;
+        bool force_parallel_alg = true;
     };
 
     class SizeConstrainedLP {
@@ -88,33 +88,6 @@ namespace HeiProMap {
 
             config = &i_config;
             random_engine = RandomEngine(seed);
-        }
-
-        void print_weight_distribution(const graph_t &g, const Mapping &mapping, weight_t max_w) const {
-            std::vector<weight_t> weights(mapping.get_coarse_n(), 0);
-            for (vertex_t u = 0; u < g.n; ++u) {
-                weights[mapping.get(u)] += g.v_weights[u];
-            }
-            if (weights.empty()) return;
-
-            weight_t min_w = weights[0];
-            weight_t max_w_observed = weights[0];
-            double sum_w = 0;
-            size_t over_limit_count = 0;
-            for (weight_t w: weights) {
-                min_w = std::min(min_w, w);
-                max_w_observed = std::max(max_w_observed, w);
-                sum_w += w;
-                if (w > max_w) {
-                    over_limit_count++;
-                }
-            }
-            double avg_w = sum_w / weights.size();
-
-            std::cout << "Cluster Weight Distribution (max_w = " << max_w << "):" << std::endl;
-            std::cout << "  Total clusters:                 " << weights.size() << std::endl;
-            std::cout << "  Observed weight (min/avg/max):  " << min_w << " / " << avg_w << " / " << max_w_observed << std::endl;
-            std::cout << "  Total clusters over limit:      " << over_limit_count << std::endl;
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
@@ -403,7 +376,7 @@ namespace HeiProMap {
                 }
 
                 // run clustering
-                if (config->use_parallel_version) {
+                if (config->force_parallel_alg || threads > 1) {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_threaded");
                     #pragma omp parallel num_threads(threads)
                     {
@@ -601,7 +574,6 @@ namespace HeiProMap {
             }
 
             if (ident_mapping) {
-                std::cout << "[merge_when_identity (max_w=" << max_w << ")] " << std::flush;
                 merge_when_identity<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
             }
 
@@ -625,9 +597,6 @@ namespace HeiProMap {
                 const vertex_t map_id = remap[id];
                 mapping.set(u, map_id);
             }
-            std::cout << "[coarse_n=" << new_id << "] " << std::flush;
-
-            // print_weight_distribution(g, mapping, max_w);
         }
     };
 }

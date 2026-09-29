@@ -95,7 +95,7 @@ namespace HeiProMap {
             random_engine = RandomEngine(seed);
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QuotientGraphT>
         RebalancerMove get_best_move(vertex_t u,
                                      const graph_t &g,
                                      const p_manager_t &p_manager,
@@ -166,7 +166,7 @@ namespace HeiProMap {
             return move;
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QuotientGraphT>
         void rebalance(const graph_t &g,
                        p_manager_t &p_manager,
                        bv_manager_t &bv_manager,
@@ -298,7 +298,7 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QuotientGraphT>
         void rebalance_last_layer(const graph_t &g,
                                   p_manager_t &p_manager,
                                   bv_manager_t &bv_manager,
@@ -432,7 +432,7 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QuotientGraphT>
         void fill_empty_blocks(const graph_t &g,
                                p_manager_t &p_manager,
                                bv_manager_t &bv_manager,

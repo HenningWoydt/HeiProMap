@@ -59,17 +59,17 @@ int main(const int argc, char *argv[]) {
     if (argc == 1) {
         HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
         std::vector<std::pair<std::string, std::string> > input = {
-            {"--graph", "../../ProMapRepo/data/mapping/europe_osm.graph"},
+            // {"--graph", "../../ProMapRepo/data/mapping/europe_osm.graph"},
+            {"--graph", "../../ProMapRepo/data/mapping_backup/rgg27.graph"},
             {"--mapping", "../data/out/partition/europe_osm.txt"},
             {"--statistics", "../data/out/statistics/europe_osm.JSON"},
             {"--hierarchy", "32:10:10:32"},
             {"--distance", "1:10:50:100"},
             {"--imbalance", "0.03"},
             {"--config", "fast"},
-            {"--threads", "1"},
+            {"--threads", "2"},
             {"--seed", "5"},
             {"--distance-oracle", "binary-based"},
-            {"--coarsening-alg", "global-paths"}
         };
 
         default_args_storage.push_back("DeepHeiProMap");
@@ -96,11 +96,21 @@ int main(const int argc, char *argv[]) {
     std::vector<HeiProMap::partition_t> partition;
 
     if (ac.use_binary_oracle() || ac.distance_oracle_algorithm_id == HeiProMap::DISTANCE_ORACLE_ALGS_BINARY) {
-        HeiProMap::DeepHeiProMapSolver<HeiProMap::BinaryDistanceOracle> solver(std::move(g), ac);
-        partition = solver.solve();
+        if (ac.k >= 1024) {
+            HeiProMap::DeepHeiProMapSolver<true, HeiProMap::BinaryDistanceOracle, HeiProMap::LargeQuotientGraph> solver(std::move(g), ac);
+            partition = solver.solve();
+        } else {
+            HeiProMap::DeepHeiProMapSolver<false, HeiProMap::BinaryDistanceOracle, HeiProMap::LargeQuotientGraph> solver(std::move(g), ac);
+            partition = solver.solve();
+        }
     } else if (ac.distance_oracle_algorithm_id == HeiProMap::DISTANCE_ORACLE_ALGS_DIVISION || ac.distance_oracle_algorithm_id == HeiProMap::DISTANCE_ORACLE_ALGS_STORE_DIVISION) {
-        HeiProMap::DeepHeiProMapSolver<HeiProMap::DistanceOracle> solver(std::move(g), ac);
-        partition = solver.solve();
+        if (ac.k >= 1024) {
+            HeiProMap::DeepHeiProMapSolver<true, HeiProMap::DistanceOracle, HeiProMap::LargeQuotientGraph> solver(std::move(g), ac);
+            partition = solver.solve();
+        } else {
+            HeiProMap::DeepHeiProMapSolver<false, HeiProMap::DistanceOracle, HeiProMap::LargeQuotientGraph> solver(std::move(g), ac);
+            partition = solver.solve();
+        }
     } else {
         std::cerr << "Distance Oracle Algorithm not recognized : " << ac.coarsening_algorithm_id << " " << ac.distance_oracle_algorithm_string << std::endl;
         std::exit(EXIT_FAILURE);

@@ -140,6 +140,8 @@ namespace HeiProMap {
                                      const TranslationTable<vertex_t> &tt,
                                      const u64 offset,
                                      const partition_t k) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_partial");
+
         // assert csr structure
         ASSERT(assert_csr_structure(g));
 
@@ -235,6 +237,8 @@ namespace HeiProMap {
                                         [[maybe_unused]] const p_manager_t &p_manager,
                                         [[maybe_unused]] const bv_manager_t &bv_manager,
                                         [[maybe_unused]] const partition_t k) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_correct_boundary");
+
         ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager));
         ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k));
         return true;
@@ -324,6 +328,8 @@ namespace HeiProMap {
     }
 
     inline bool assert_graph([[maybe_unused]] const graph_t &g) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_graph");
+
         // assert csr structure
         ASSERT(assert_csr_structure(g));
 
@@ -339,6 +345,8 @@ namespace HeiProMap {
     inline bool assert_state_pre_partitioning([[maybe_unused]] const graph_t &g,
                                               [[maybe_unused]] const p_manager_t &p_manager,
                                               [[maybe_unused]] const partition_t k) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_pre_partitioning");
+
         // assert csr structure
         ASSERT(assert_csr_structure(g));
 
@@ -354,13 +362,15 @@ namespace HeiProMap {
         return true;
     }
 
-    template<typename QGraphT = q_graph_t>
+    template<typename QGraphT>
     inline bool assert_state_after_partitioning([[maybe_unused]] const graph_t &g,
                                                 [[maybe_unused]] const p_manager_t &p_manager,
                                                 [[maybe_unused]] bv_manager_t &bv_manager,
                                                 [[maybe_unused]] const QGraphT &q_graph,
                                                 [[maybe_unused]] const block_conn_t &block_conn,
                                                 [[maybe_unused]] const partition_t k) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_after_partitioning");
+
         // assert csr structure
         ASSERT(assert_csr_structure(g));
 
@@ -393,7 +403,7 @@ namespace HeiProMap {
     inline bool assert_state_after_partitioning([[maybe_unused]] const graph_t &g,
                                                 [[maybe_unused]] const p_manager_t &p_manager,
                                                 [[maybe_unused]] const partition_t k) {
-        std::cout << "asserting" << std::endl;
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_after_partitioning");
 
         // assert csr structure
         ASSERT(assert_csr_structure(g));

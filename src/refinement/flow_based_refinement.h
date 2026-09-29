@@ -46,6 +46,7 @@
 #include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
+#include "../datastructures/distance_3_matching.h"
 #include "../utility/aligned_array.h"
 #include "../utility/memory_stack.h"
 #include "../utility/profiler.h"
@@ -88,7 +89,8 @@ namespace HeiProMap {
         bool measure_flow_edge_cut = false;
     };
 
-    class FlowBasedRefinement final {
+    template<bool LARGE_K>
+    class FlowBasedRefinement {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
@@ -125,6 +127,7 @@ namespace HeiProMap {
         std::vector<MemoryStack> pr_mems;
         std::vector<ResidualFlowNetwork> residual_flow_networks;
         std::vector<SCCGraph> scc_graphs;
+        Distance3Matching<LARGE_K> d3_matcher;
 
     public:
         FlowBasedRefinement() = default;
@@ -175,9 +178,11 @@ namespace HeiProMap {
             pr_mems.resize(m_threads);
             residual_flow_networks.resize(m_threads);
             scc_graphs.resize(m_threads);
+
+            d3_matcher.initialize(m_k);
         }
 
-        template<typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QGraphT>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
@@ -190,7 +195,7 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_impl(graph_t &g,
                          DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
@@ -203,21 +208,19 @@ namespace HeiProMap {
             // active block scheduling
             AlignedArray<u8> active_this_round;
             AlignedArray<u8> active_next_round;
-            AlignedArray<u8> used_this_round;
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "allocate");
             active_this_round.initialize(m_k, 1);
             active_next_round.initialize(m_k, 0);
-            used_this_round.initialize(m_k * m_k);
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
             for (u64 iteration = 0; iteration < config->max_global_iteration; ++iteration) {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "reset_used_edges");
-                std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+                d3_matcher.reset_used_edges();
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-                bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                bool found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
 
                 if (!found_matching) break;
 
@@ -232,7 +235,7 @@ namespace HeiProMap {
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                    found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
                 }
 
                 // swap active
@@ -391,7 +394,7 @@ namespace HeiProMap {
             return gain;
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_blocks(graph_t &g,
                            DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
@@ -1110,11 +1113,11 @@ namespace HeiProMap {
             return false;
         }
 
-        template<bool t_uniform_v_weights>
+        template<bool t_uniform_v_weights, typename QuotientGraphT>
         std::vector<u8> change_boundary(const graph_t &g,
                                         bv_manager_t &bv_manager,
                                         p_manager_t &p_manager,
-                                        q_graph_t &q_graph,
+                                        QuotientGraphT &q_graph,
                                         block_conn_t &block_conn,
                                         std::vector<u8> &is_left,
                                         partition_t left_id,
@@ -1174,11 +1177,11 @@ namespace HeiProMap {
             return changed;
         }
 
-        template<bool t_uniform_v_weights>
+        template<bool t_uniform_v_weights, typename QuotientGraphT>
         void revert_boundary(const graph_t &g,
                              bv_manager_t &bv_manager,
                              p_manager_t &p_manager,
-                             q_graph_t &q_graph,
+                             QuotientGraphT &q_graph,
                              block_conn_t &block_conn,
                              std::vector<u8> &changed,
                              partition_t left_id,

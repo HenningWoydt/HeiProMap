@@ -418,19 +418,19 @@ namespace HeiProMap {
             rebalancer.rebalance(g, pm, bv_manager, q_graph, d_oracle, block_conn, imbalance);
 
             if (config.label_propagation_config.enabled) {
-                LabelPropagationRefinement lp_refine;
+                LabelPropagationRefinement<false> lp_refine;
                 lp_refine.initialize(g.n, g.m, k, 1, seed, config.label_propagation_config);
                 lp_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn);
             }
 
             if (config.quotient_graph_refinement_config.enabled) {
-                QuotientGraphRefinement qg_refine;
+                QuotientGraphRefinement<false> qg_refine;
                 qg_refine.initialize(g.n, g.m, k, 1, seed, config.quotient_graph_refinement_config);
                 qg_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn);
             }
 
             if (config.flow_based_refinement_config.enabled) {
-                FlowBasedRefinement flow_refine;
+                FlowBasedRefinement<false> flow_refine;
                 flow_refine.initialize(g.n, g.m, k, 1, seed, config.flow_based_refinement_config);
                 flow_refine.refine(g, d_oracle, bv_manager, pm, q_graph, block_conn);
             }

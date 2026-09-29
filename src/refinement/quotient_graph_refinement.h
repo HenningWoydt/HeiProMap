@@ -31,6 +31,8 @@
 #include <cmath>
 #include <limits>
 #include <vector>
+#include <atomic>
+#include <chrono>
 
 #include <omp.h>
 
@@ -41,6 +43,7 @@
 #include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
+#include "../datastructures/distance_3_matching.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
 #include "../utility/random_engine.h"
@@ -50,7 +53,7 @@
 #include "../utility/functions.h"
 
 namespace HeiProMap {
-    class QuotientGraphRefinementConfiguration final {
+    class QuotientGraphRefinementConfiguration {
     public:
         explicit QuotientGraphRefinementConfiguration(const std::string &t_name) {
             name = t_name;
@@ -68,7 +71,8 @@ namespace HeiProMap {
         bool measure_qg_edge_cut = false;
     };
 
-    class QuotientGraphRefinement final {
+    template<bool LARGE_K>
+    class QuotientGraphRefinement {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
@@ -88,12 +92,9 @@ namespace HeiProMap {
         std::vector<IndexedMaxHeap<weight_t> > boundary_vertices_v_vec;
 
         std::vector<RandomEngine> rnd_engines;
-        AlignedArray<u8> used_this_round;
+        Distance3Matching<LARGE_K> dist_3_matcher;
 
-        #include <atomic>
-        #include <chrono>
-
-        const QuotientGraphRefinementConfiguration *config = nullptr;
+        QuotientGraphRefinementConfiguration config = QuotientGraphRefinementConfiguration("default");
 
         std::atomic<u64> time_initial_qap{0};
         std::atomic<u64> time_initial_edge_cut{0};
@@ -111,7 +112,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 seed,
-                        const QuotientGraphRefinementConfiguration &i_config) {
+                        const QuotientGraphRefinementConfiguration &t_config) {
             HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraphRefinement", "initialize");
 
             m_n = t_n;
@@ -119,7 +120,7 @@ namespace HeiProMap {
             m_k = t_k;
             m_threads = t_threads;
 
-            config = &i_config;
+            config = t_config;
 
             global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
@@ -139,7 +140,7 @@ namespace HeiProMap {
                 rnd_engines[t] = RandomEngine(seed + t);
             }
 
-            used_this_round.initialize(m_k * m_k);
+            dist_3_matcher.initialize(m_k);
 
             #pragma omp parallel for num_threads(m_threads)
             for (size_t i = 0; i < m_threads; ++i) {
@@ -148,7 +149,7 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QGraphT>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
@@ -161,7 +162,7 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_impl(graph_t &g,
                          DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
@@ -174,13 +175,16 @@ namespace HeiProMap {
 
             std::vector<std::pair<partition_t, partition_t> > matching;
 
-            for (u64 iteration = 0; iteration < config->max_iteration; ++iteration) {
+            for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "reset_used_edges");
-                std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+                dist_3_matcher.reset_used_edges();
 
-                bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
+                bool found_matching = dist_3_matcher.find_matching(q_graph, active_this_round, matching);
 
                 while (found_matching) {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "loop");
+
                     // Pre-assign unique marks for each thread
                     u32 base_mark = global_vertex_mark + 1;
                     global_vertex_mark += static_cast<u32>(matching.size());
@@ -193,7 +197,7 @@ namespace HeiProMap {
                         u64 tid = omp_get_thread_num();
                         u32 mark = base_mark + static_cast<u32>(i);
 
-                        if (config->use_edge_cut && d_oracle.last_level_pair(u_id, v_id)) {
+                        if (config.use_edge_cut && d_oracle.last_level_pair(u_id, v_id)) {
                             refine_blocks_edge_cut<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
                         } else {
                             refine_blocks<t_uniform_v_weights, t_uniform_e_weights>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn, u_id, v_id, moves_vec[tid], boundary_vertices_u_vec[tid], boundary_vertices_v_vec[tid], mark, rnd_engines[tid]);
@@ -201,7 +205,7 @@ namespace HeiProMap {
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                    found_matching = dist_3_matcher.find_matching(q_graph, active_this_round, matching);
                 }
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");
@@ -209,7 +213,7 @@ namespace HeiProMap {
                 active_next_round.initialize(m_k, 0);
             }
 
-            if (config->measure_qg_edge_cut) {
+            if (config.measure_qg_edge_cut) {
                 std::cout << "[QGEdgeCutMeasure] time_initial_qap=" << time_initial_qap
                         << "us time_initial_edge_cut=" << time_initial_edge_cut
                         << "us time_update_qap=" << time_update_qap
@@ -218,7 +222,7 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_blocks(graph_t &g,
                            DistanceOracleT &d_oracle,
                            bv_manager_t &bv_manager,
@@ -232,7 +236,7 @@ namespace HeiProMap {
                            IndexedMaxHeap<weight_t> &boundary_vertices_v,
                            vertex_t vertex_mark,
                            RandomEngine &random_engine) {
-            f64 alpha = config->alpha * (f64) d_oracle.get(u_id, v_id);
+            f64 alpha = config.alpha * (f64) d_oracle.get(u_id, v_id);
             f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_qap");
@@ -358,8 +362,8 @@ namespace HeiProMap {
                 qap_gain_mean = new_qap_gain_mean;
                 qap_gain_var = new_qap_gain_var;
 
-                if (config->use_preemptive_exit) {
-                    if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
+                if (config.use_preemptive_exit) {
+                    if (steps_since_last_improvement > config.min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
                         break;
                     }
                 }
@@ -428,7 +432,7 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_blocks_edge_cut(const graph_t &g,
                                     DistanceOracleT &d_oracle,
                                     bv_manager_t &bv_manager,
@@ -442,7 +446,7 @@ namespace HeiProMap {
                                     IndexedMaxHeap<weight_t> &boundary_vertices_v,
                                     vertex_t vertex_mark,
                                     RandomEngine &random_engine) {
-            f64 alpha = config->alpha * (f64) d_oracle.get(u_id, v_id);
+            f64 alpha = config.alpha * (f64) d_oracle.get(u_id, v_id);
             f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "initial_edge_cut");
@@ -475,7 +479,7 @@ namespace HeiProMap {
                 }
             }
 
-            if (config->measure_qg_edge_cut) {
+            if (config.measure_qg_edge_cut) {
                 u64 local_qap = 0;
                 u64 local_edge = 0;
 
@@ -618,8 +622,8 @@ namespace HeiProMap {
                 qap_gain_mean = new_qap_gain_mean;
                 qap_gain_var = new_qap_gain_var;
 
-                if (config->use_preemptive_exit) {
-                    if (steps_since_last_improvement > config->min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
+                if (config.use_preemptive_exit) {
+                    if (steps_since_last_improvement > config.min_n_steps && (f64) steps_since_last_improvement * qap_gain_mean * qap_gain_mean > alpha * qap_gain_var + beta) {
                         break;
                     }
                 }

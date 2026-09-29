@@ -40,13 +40,14 @@
 #include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
+#include "../datastructures/distance_3_matching.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
 #include "../utility/qap.h"
 #include "../utility/random_engine.h"
 
 namespace HeiProMap {
-    class LabelPropagationConfiguration final {
+    class LabelPropagationConfiguration {
     public:
         explicit LabelPropagationConfiguration(const std::string &t_name) {
             name = t_name;
@@ -60,7 +61,8 @@ namespace HeiProMap {
         bool use_edge_cut = true;
     };
 
-    class LabelPropagationRefinement final {
+    template<bool LARGE_K>
+    class LabelPropagationRefinement {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
@@ -77,7 +79,7 @@ namespace HeiProMap {
         LabelPropagationConfiguration config = LabelPropagationConfiguration("default_label_propagation");
 
         AlignedArray<u8> active_this_round;
-        AlignedArray<u8> used_this_round;
+        Distance3Matching<LARGE_K> d3_matcher;
 
     public:
         LabelPropagationRefinement() = default;
@@ -110,10 +112,10 @@ namespace HeiProMap {
             }
 
             active_this_round.initialize(m_k);
-            used_this_round.initialize(m_k * m_k);
+            d3_matcher.initialize(m_k);
         }
 
-        template<typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<typename DistanceOracleT, typename QGraphT>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
@@ -126,7 +128,7 @@ namespace HeiProMap {
             else refine_impl<false, false>(g, d_oracle, bv_manager, p_manager, q_graph, block_conn);
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_impl(graph_t &g,
                          DistanceOracleT &d_oracle,
                          bv_manager_t &bv_manager,
@@ -140,7 +142,7 @@ namespace HeiProMap {
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_impl_parallel(graph_t &g,
                                   DistanceOracleT &d_oracle,
                                   bv_manager_t &bv_manager,
@@ -153,10 +155,10 @@ namespace HeiProMap {
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "pick_vertices_parallel");
                 active_this_round.initialize(m_k, 1);
-                std::fill_n(used_this_round.get_ptr(), m_k * m_k, 0);
+                d3_matcher.reset_used_edges();
 
                 std::vector<std::pair<partition_t, partition_t> > matching;
-                bool found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                bool found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
 
                 while (found_matching) {
                     #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
@@ -208,12 +210,12 @@ namespace HeiProMap {
                         }
                     }
 
-                    found_matching = q_graph.find_distance_3_matching(active_this_round, used_this_round, matching);
+                    found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
                 }
             }
         }
 
-        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT = q_graph_t>
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
         void refine_impl_serial(graph_t &g,
                                 DistanceOracleT &d_oracle,
                                 bv_manager_t &bv_manager,

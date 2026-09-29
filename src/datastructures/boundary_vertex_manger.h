@@ -159,8 +159,7 @@ namespace HeiProMap {
 
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "BoundaryVertexManager", "compute_from_scratch");
-
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "compute_from_scratch");
             m_n_boundary_edges.initialize(m_n, 0);
 
             for (partition_t id = 0; id < m_k; ++id) {
@@ -207,7 +206,7 @@ namespace HeiProMap {
         }
 
         void parallel_reset(const u64 num_threads) {
-            HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "parallel_reset");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "parallel_reset");
 
             m_n_boundary_edges.initialize(m_n);
             #pragma omp parallel num_threads(num_threads)
@@ -225,6 +224,8 @@ namespace HeiProMap {
         }
 
         void parallel_import_boundary_vertices(const std::vector<std::vector<std::vector<vertex_t> > > &thread_boundaries, const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "parallel_import_boundary_vertices");
+
             std::vector<std::vector<size_t> > offsets(m_k, std::vector<size_t>(num_threads, 0));
             #pragma omp parallel for schedule(static) num_threads(num_threads)
             for (partition_t id = 0; id < m_k; ++id) {

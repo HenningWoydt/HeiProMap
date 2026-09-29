@@ -131,7 +131,6 @@ namespace HeiProMap {
             m_m = t_m;
             m_k = t_k;
             m_threads = t_threads;
-            m_threads = 1;
 
             config = &i_config;
             random_engine = &t_random_engine;

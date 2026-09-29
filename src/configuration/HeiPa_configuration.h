@@ -41,7 +41,6 @@
 #include "../init_partitioning/kaffpa_partitioner.h"
 #include "../init_partitioning/recursive_bisection.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../refinement/negative_cycle_detection.h"
 
 namespace HeiProMap {
     #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
@@ -221,7 +220,6 @@ namespace HeiProMap {
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
-        NegativeCycleConfiguration negative_cycle_refinement_config = NegativeCycleConfiguration("Negative Cycle");
 
         HeiPaConfiguration() = default;
 
@@ -312,7 +310,7 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-            size_constrained_lp_config.use_parallel_version = (threads > 1);
+            size_constrained_lp_config.force_parallel_alg = (threads > 1);
             use_parallel_contraction = (threads > 1);
             if (is_set("--use-parallel-contraction")) {
                 std::string val = get("--use-parallel-contraction");
@@ -404,12 +402,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
-
-            negative_cycle_refinement_config.enabled = false;
-            negative_cycle_refinement_config.max_iterations = 10;
-            negative_cycle_refinement_config.random_tries = 10;
-            negative_cycle_refinement_config.max_path_length = 8;
-            negative_cycle_refinement_config.threshold = 100;
         }
 
         void set_eco() {

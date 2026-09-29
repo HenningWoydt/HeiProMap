@@ -210,6 +210,10 @@ namespace HeiProMap {
             }
         }
 
+        size_t degree(const partition_t x) const {
+            return m_head[x] != INVALID_INDEX ? 1 : 0;
+        }
+
         template<typename F>
         void for_each_neighbor(const partition_t x, F &&f) const {
             size_t idx = m_head[x];

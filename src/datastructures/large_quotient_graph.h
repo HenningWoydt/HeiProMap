@@ -100,7 +100,7 @@ namespace HeiProMap {
         LargeQuotientGraph() = default;
 
         void initialize(const partition_t t_k) {
-            HEIPROMAP_PROFILE_SCOPE("misc", "LargeQuotientGraph", "initialize");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "qgraph", "initialize");
             m_k = t_k;
             m_adj.clear();
             m_adj.resize(m_k);
@@ -109,7 +109,7 @@ namespace HeiProMap {
 
         template<typename GraphT, typename PartitionManagerT>
         void compute_from_scratch(const GraphT &g, const PartitionManagerT &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "LargeQuotientGraph", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "qgraph", "compute_from_scratch");
             initialize(p_manager.get_k());
 
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -190,6 +190,11 @@ namespace HeiProMap {
             }
         }
 
+        const std::vector<HalfEdge> &neighbors(const partition_t x) const {
+            ASSERT(x < m_k);
+            return m_adj[x];
+        }
+
         size_t degree(const partition_t x) const {
             ASSERT(x < m_k);
             return m_adj[x].size();
@@ -221,95 +226,6 @@ namespace HeiProMap {
                     add_edge(new_id, v_id, w);
                 }
             }
-        }
-
-        bool find_distance_3_matching(AlignedArray<u8> &active_this_round,
-                                      AlignedArray<u8> &used_edges_this_round,
-                                      std::vector<std::pair<partition_t, partition_t> > &matching) {
-            matching.clear();
-
-            std::vector<u8> vertex_frozen(m_k, 0);
-
-            auto freeze_distance_2 = [&](const partition_t x) {
-                vertex_frozen[x] = 1;
-
-                for_each_neighbor(x, [&](const partition_t n1, const weight_t) {
-                    vertex_frozen[n1] = 1;
-
-                    for_each_neighbor(n1, [&](const partition_t n2, const weight_t) {
-                        vertex_frozen[n2] = 1;
-                    });
-                });
-            };
-
-            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                if (vertex_frozen[u_id] == 1) {
-                    continue;
-                }
-
-                bool matched_u = false;
-
-                for_each_neighbor(u_id, [&](const partition_t v_id, const weight_t) {
-                    if (matched_u) {
-                        return;
-                    }
-
-                    if (v_id <= u_id) {
-                        return;
-                    }
-                    if (vertex_frozen[v_id] == 1) {
-                        return;
-                    }
-                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) {
-                        return;
-                    }
-
-                    const size_t eidx = edge_index(u_id, v_id);
-                    if (eidx < used_edges_this_round.size() && used_edges_this_round[eidx] == 1) {
-                        return;
-                    }
-
-                    matching.emplace_back(u_id, v_id);
-                    if (eidx < used_edges_this_round.size()) {
-                        used_edges_this_round[eidx] = 1;
-                    }
-
-                    freeze_distance_2(u_id);
-                    freeze_distance_2(v_id);
-                    matched_u = true;
-                });
-            }
-
-            return !matching.empty();
-        }
-
-        bool find_all_pairs(AlignedArray<u8> &active_this_round,
-                            AlignedArray<u8> &used_edges_this_round,
-                            std::vector<std::pair<partition_t, partition_t> > &matching) {
-            matching.clear();
-
-            for (partition_t u_id = 0; u_id < m_k; ++u_id) {
-                for_each_neighbor(u_id, [&](const partition_t v_id, const weight_t) {
-                    if (v_id <= u_id) {
-                        return;
-                    }
-                    if (active_this_round[u_id] == 0 && active_this_round[v_id] == 0) {
-                        return;
-                    }
-
-                    const size_t eidx = edge_index(u_id, v_id);
-                    if (eidx < used_edges_this_round.size() && used_edges_this_round[eidx] == 1) {
-                        return;
-                    }
-
-                    matching.emplace_back(u_id, v_id);
-                    if (eidx < used_edges_this_round.size()) {
-                        used_edges_this_round[eidx] = 1;
-                    }
-                });
-            }
-
-            return !matching.empty();
         }
 
         size_t edge_index(const partition_t u_id, const partition_t v_id) const {

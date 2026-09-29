@@ -29,6 +29,7 @@
 
 #include <vector>
 #include <limits>
+#include <omp.h>
 
 #include "csr_graph.h"
 #include "../utility/translation_table.h"
@@ -117,71 +118,220 @@ namespace HeiProMap {
         u64 threads = 1;
         std::vector<CSRGraph> graphs;
         std::vector<SmallTranslationTable<vertex_t> > tts;
-        std::vector<u64> idxs;
+        // Reusable scratch buffers
+        std::vector<std::vector<vertex_t> > block_vertices;
+        std::vector<weight_t> block_weights;
+        std::vector<size_t> scratch_degs;
+
+        // Reusable buffers for parallel extraction
+        std::vector<std::vector<std::vector<vertex_t> > > par_thread_vertices;
+        std::vector<std::vector<weight_t> > par_thread_weights;
 
         void initialize(partition_t t_k, u64 t_threads) {
             k = t_k;
             threads = t_threads;
             graphs.resize(t_k);
             tts.resize(t_k);
-            idxs.resize(t_k);
+            block_vertices.resize(t_k);
+            block_weights.resize(t_k);
+            par_thread_vertices.resize(t_threads);
+            for (u64 tid = 0; tid < t_threads; ++tid) {
+                par_thread_vertices[tid].resize(t_k);
+            }
+            par_thread_weights.assign(t_threads, std::vector<weight_t>(t_k, 0));
         }
 
         template<typename PartitionManagerT>
         void extract(const CSRGraph &g,
                      PartitionManagerT &p_manager,
-                     const std::vector<u32> &one_hot) {
-            // Reset
-            for (size_t i = 0; i < k; ++i) {
-                if (one_hot[i] == 1) {
-                    graphs[i].clear();
-                    tts[i].clear();
-                }
-            }
-            std::fill(idxs.begin(), idxs.end(), 0);
+                     const std::vector<partition_t> &ids,
+                     const std::vector<partition_t> &id_to_dense) {
+            if (ids.empty()) return;
 
-            // Count
+            if (threads > 1 && g.n >= 1024) {
+                extract_parallel(g, p_manager, ids, id_to_dense);
+            } else {
+                extract_serial(g, p_manager, ids, id_to_dense);
+            }
+        }
+
+        template<typename PartitionManagerT>
+        void extract_serial(const CSRGraph &g,
+                            PartitionManagerT &p_manager,
+                            const std::vector<partition_t> &ids,
+                            const std::vector<partition_t> &id_to_dense) {
+            const size_t num_active = ids.size();
+            if (num_active == 0) return;
+
+            for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
+                tts[dense_idx].clear();
+                block_vertices[dense_idx].clear();
+                block_weights[dense_idx] = 0;
+            }
+
+            // Single pass over g.n
             for (vertex_t u = 0; u < g.n; ++u) {
                 partition_t u_id = p_manager[u];
-                if (one_hot[u_id] == 0) continue;
+                partition_t dense_u = id_to_dense[u_id];
+                if (dense_u == std::numeric_limits<partition_t>::max()) continue;
 
-                tts[u_id].add(u, graphs[u_id].n);
-                graphs[u_id].n += 1;
-                graphs[u_id].g_weight += g.v_weights[u];
+                block_vertices[dense_u].push_back(u);
+                block_weights[dense_u] += g.v_weights[u];
+            }
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    vertex_t v = g.edges_v[i];
-                    if (p_manager[v] == u_id) {
-                        graphs[u_id].m += 1;
+            // Process each active block independently
+            for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
+                const partition_t orig_block_id = ids[dense_idx];
+                const auto &verts = block_vertices[dense_idx];
+                const vertex_t sub_n = static_cast<vertex_t>(verts.size());
+
+                for (vertex_t sub_u = 0; sub_u < sub_n; ++sub_u) {
+                    tts[dense_idx].add(verts[sub_u], sub_u);
+                }
+
+                if (scratch_degs.size() < sub_n) {
+                    scratch_degs.resize(sub_n);
+                }
+                size_t block_m = 0;
+                for (vertex_t sub_u = 0; sub_u < sub_n; ++sub_u) {
+                    const vertex_t orig_u = verts[sub_u];
+                    size_t deg = 0;
+                    for (size_t i = g.neighborhoods[orig_u]; i < g.neighborhoods[orig_u + 1]; ++i) {
+                        const vertex_t orig_v = g.edges_v[i];
+                        if (p_manager[orig_v] == orig_block_id) {
+                            deg++;
+                        }
+                    }
+                    scratch_degs[sub_u] = deg;
+                    block_m += deg;
+                }
+
+                // Allocate CSRGraph
+                graphs[dense_idx].resize(sub_n, static_cast<vertex_t>(block_m), block_weights[dense_idx]);
+
+                // Prefix-sum neighborhoods
+                graphs[dense_idx].neighborhoods[0] = 0;
+                for (vertex_t sub_u = 0; sub_u < sub_n; ++sub_u) {
+                    graphs[dense_idx].neighborhoods[sub_u + 1] = graphs[dense_idx].neighborhoods[sub_u] + scratch_degs[sub_u];
+                }
+
+                // Fill edges and vertex weights
+                for (vertex_t sub_u = 0; sub_u < sub_n; ++sub_u) {
+                    const vertex_t orig_u = verts[sub_u];
+                    graphs[dense_idx].v_weights[sub_u] = g.v_weights[orig_u];
+
+                    size_t edge_cursor = graphs[dense_idx].neighborhoods[sub_u];
+                    for (size_t i = g.neighborhoods[orig_u]; i < g.neighborhoods[orig_u + 1]; ++i) {
+                        const vertex_t orig_v = g.edges_v[i];
+                        if (p_manager[orig_v] == orig_block_id) {
+                            graphs[dense_idx].edges_v[edge_cursor] = tts[dense_idx].get_n(orig_v);
+                            graphs[dense_idx].edges_w[edge_cursor] = g.edges_w[i];
+                            edge_cursor++;
+                        }
                     }
                 }
             }
+        }
 
-            // Allocate
-            for (size_t i = 0; i < k; ++i) {
-                if (one_hot[i] == 1) {
-                    graphs[i].resize(graphs[i].n, graphs[i].m, graphs[i].g_weight);
+        template<typename PartitionManagerT>
+        void extract_parallel(const CSRGraph &g,
+                              PartitionManagerT &p_manager,
+                              const std::vector<partition_t> &ids,
+                              const std::vector<partition_t> &id_to_dense) {
+            const size_t num_active = ids.size();
+            const u64 num_threads = threads;
+
+            #pragma omp parallel for schedule(static) num_threads(num_threads)
+            for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
+                tts[dense_idx].clear();
+            }
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
+                    par_thread_vertices[tid][dense_idx].clear();
+                    par_thread_weights[tid][dense_idx] = 0;
+                }
+
+                vertex_t chunk = (g.n + num_threads - 1) / num_threads;
+                vertex_t start_u = std::min(g.n, tid * chunk);
+                vertex_t end_u = std::min(g.n, start_u + chunk);
+
+                for (vertex_t u = start_u; u < end_u; ++u) {
+                    partition_t u_id = p_manager[u];
+                    partition_t dense_u = id_to_dense[u_id];
+                    if (dense_u == std::numeric_limits<partition_t>::max()) continue;
+
+                    par_thread_vertices[tid][dense_u].push_back(u);
+                    par_thread_weights[tid][dense_u] += g.v_weights[u];
                 }
             }
 
-            // Build
-            for (vertex_t u = 0; u < g.n; ++u) {
-                partition_t u_id = p_manager[u];
-                if (one_hot[u_id] == 0) continue;
+            // Parallel assembly per active block
+            #pragma omp parallel for schedule(dynamic) num_threads(num_threads)
+            for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
+                partition_t orig_block_id = ids[dense_idx];
 
-                vertex_t sub_u = tts[u_id].get_n(u);
-                graphs[u_id].v_weights[sub_u] = g.v_weights[u];
+                // Merge thread-local vertices into single list
+                std::vector<vertex_t> block_vertices;
+                weight_t total_w = 0;
+                size_t total_n = 0;
+                for (u64 tid = 0; tid < num_threads; ++tid) {
+                    total_w += par_thread_weights[tid][dense_idx];
+                    total_n += par_thread_vertices[tid][dense_idx].size();
+                }
 
-                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    vertex_t v = g.edges_v[i];
-                    if (p_manager[v] == u_id) {
-                        vertex_t sub_v = tts[u_id].get_n(v);
-                        graphs[u_id].edges_v[idxs[u_id]] = sub_v;
-                        graphs[u_id].edges_w[idxs[u_id]] = g.edges_w[i];
-                        idxs[u_id] += 1;
+                block_vertices.reserve(total_n);
+                for (u64 tid = 0; tid < num_threads; ++tid) {
+                    block_vertices.insert(block_vertices.end(), par_thread_vertices[tid][dense_idx].begin(), par_thread_vertices[tid][dense_idx].end());
+                }
+
+                // Populate translation table
+                for (vertex_t sub_u = 0; sub_u < (vertex_t) block_vertices.size(); ++sub_u) {
+                    vertex_t orig_u = block_vertices[sub_u];
+                    tts[dense_idx].add(orig_u, sub_u);
+                }
+
+                // Count edges
+                size_t block_m = 0;
+                std::vector<size_t> degs(block_vertices.size(), 0);
+                for (vertex_t sub_u = 0; sub_u < (vertex_t) block_vertices.size(); ++sub_u) {
+                    vertex_t orig_u = block_vertices[sub_u];
+                    for (size_t i = g.neighborhoods[orig_u]; i < g.neighborhoods[orig_u + 1]; ++i) {
+                        vertex_t orig_v = g.edges_v[i];
+                        if (p_manager[orig_v] == orig_block_id) {
+                            degs[sub_u]++;
+                            block_m++;
+                        }
                     }
                 }
-                graphs[u_id].neighborhoods[sub_u + 1] = idxs[u_id];
+
+                // Allocate CSRGraph
+                graphs[dense_idx].resize(static_cast<vertex_t>(block_vertices.size()), static_cast<vertex_t>(block_m), total_w);
+
+                // Build neighborhoods prefix sum
+                graphs[dense_idx].neighborhoods[0] = 0;
+                for (vertex_t sub_u = 0; sub_u < (vertex_t) block_vertices.size(); ++sub_u) {
+                    graphs[dense_idx].neighborhoods[sub_u + 1] = graphs[dense_idx].neighborhoods[sub_u] + degs[sub_u];
+                }
+
+                // Fill edges and vertex weights
+                for (vertex_t sub_u = 0; sub_u < (vertex_t) block_vertices.size(); ++sub_u) {
+                    vertex_t orig_u = block_vertices[sub_u];
+                    graphs[dense_idx].v_weights[sub_u] = g.v_weights[orig_u];
+
+                    size_t edge_cursor = graphs[dense_idx].neighborhoods[sub_u];
+                    for (size_t i = g.neighborhoods[orig_u]; i < g.neighborhoods[orig_u + 1]; ++i) {
+                        vertex_t orig_v = g.edges_v[i];
+                        if (p_manager[orig_v] == orig_block_id) {
+                            vertex_t sub_v = tts[dense_idx].get_n(orig_v);
+                            graphs[dense_idx].edges_v[edge_cursor] = sub_v;
+                            graphs[dense_idx].edges_w[edge_cursor] = g.edges_w[i];
+                            edge_cursor++;
+                        }
+                    }
+                }
             }
         }
     };

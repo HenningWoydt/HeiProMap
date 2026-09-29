@@ -31,7 +31,6 @@
 #include <vector>
 
 #include "../definitions.h"
-#include "../refinement/negative_cycle_detection.h"
 
 namespace HeiProMap {
     #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
@@ -318,7 +317,6 @@ namespace HeiProMap {
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
-        NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
         // distance oracle
         std::string oracle_string = "automatic";
         ORACLE_TYPE oracle_type = ORACLE_AUTOMATIC;
@@ -540,7 +538,7 @@ namespace HeiProMap {
                 global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-coarsening-two-hop-threshold"));
             }
 
-            size_constrained_lp_config.use_parallel_version = (threads > 1);
+            size_constrained_lp_config.force_parallel_alg = (threads > 1);
 
             // Override SCLP configs
             if (is_set("--sclp-coarsening-max-rounds")) {
@@ -561,7 +559,7 @@ namespace HeiProMap {
             }
             if (is_set("--sclp-coarsening-use-parallel-version")) {
                 std::string val = get("--sclp-coarsening-use-parallel-version");
-                size_constrained_lp_config.use_parallel_version = (val == "true" || val == "1");
+                size_constrained_lp_config.force_parallel_alg = (val == "true" || val == "1");
             }
 
             // Override HEM configs
@@ -666,11 +664,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
-            negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
-
             // enable flow based refinement
             flow_based_refinement_config.enabled = false;
             flow_based_refinement_config.max_global_iteration = 1;
@@ -728,11 +721,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
-
-            negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
@@ -794,11 +782,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
 
-            negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
-
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;
             flow_based_refinement_config.use_active_block_scheduling = true;
@@ -849,11 +832,6 @@ namespace HeiProMap {
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;
             quotient_graph_refinement_config.use_preemptive_exit = true;
-
-            negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
 
             // enable flow based refinement
             flow_based_refinement_config.enabled = true;

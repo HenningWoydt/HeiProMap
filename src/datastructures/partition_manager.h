@@ -46,10 +46,18 @@ namespace HeiProMap {
         AlignedArray<weight_t> lmax;
         AlignedArray<partition_t> hierarchy_level;
 
+        PartitionManager() = default;
+
+        PartitionManager(const vertex_t t_n,
+                         const partition_t t_k,
+                         const weight_t g_weight) {
+            initialize(t_n, t_k, g_weight);
+        }
+
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t g_weight) {
-            HEIPROMAP_PROFILE_SCOPE("misc", "PartitionManager", "initialize");
+            // HEIPROMAP_PROFILE_SCOPE("misc", "PartitionManager", "initialize");
 
             n = t_n;
             k = t_k;

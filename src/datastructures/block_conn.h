@@ -64,7 +64,8 @@ namespace HeiProMap {
         }
 
         void parallel_initialize_offsets(const graph_t &g, const u64 num_threads) {
-            HEIPROMAP_PROFILE_SCOPE("misc", "BlockConn", "parallel_initialize_offsets");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "block_conn", "parallel_initialize_offsets");
+
             m_n = g.n;
             m_m = g.m;
 
@@ -158,8 +159,7 @@ namespace HeiProMap {
         }
 
         void compute_from_scratch(const graph_t &g, const p_manager_t &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "BlockConn", "compute_from_scratch");
-
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "block_conn", "compute_from_scratch");
             m_n = g.n;
             m_m = g.m;
             m_k = p_manager.k;

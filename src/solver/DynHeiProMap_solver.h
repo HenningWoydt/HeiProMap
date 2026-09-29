@@ -575,7 +575,7 @@ namespace HeiProMap {
             lp_config.enabled = true;
             lp_config.max_iteration = num_iterations;
 
-            ::HeiProMap::LabelPropagationRefinement lp_refine;
+            ::HeiProMap::LabelPropagationRefinement<false> lp_refine;
             lp_refine.initialize(csr_g.n, csr_g.m, (partition_t) num_blocks, (u32) config.n_threads, (u32) config.seed, lp_config);
 
             AlignedArray<weight_t> lmax_constraints;

@@ -291,7 +291,7 @@ namespace HeiProMap {
             deep_label_propagation_refinement_config.max_iteration = 5;
             deep_label_propagation_refinement_config.use_parallel_alg = false;
 
-            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.enabled = false;
             deep_quotient_graph_refinement_config.max_iteration = 2;
             deep_quotient_graph_refinement_config.alpha = 5.0;
             deep_quotient_graph_refinement_config.min_n_steps = 3;

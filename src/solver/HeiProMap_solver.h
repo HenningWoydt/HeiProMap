@@ -85,22 +85,19 @@ namespace HeiProMap {
         Rebalancer rebalancer;
 
         // refinement
-        LabelPropagationRefinement lp_refine;
-        QuotientGraphRefinement qg_refine;
-        FlowBasedRefinement flow_based_refinement;
-        NegativeCycleRefinement negative_cycle_refinement;
+        LabelPropagationRefinement<false> lp_refine;
+        QuotientGraphRefinement<false> qg_refine;
+        FlowBasedRefinement<false> flow_based_refinement;
 
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
         f64 initial_partitioning_ms = 0.0;
-        f64 intermediate_partitioning_ms = 0.0;
         f64 uncontraction_ms = 0.0;
         f64 rebalance_ms = 0.0;
         f64 refinement_ms = 0.0;
         f64 lp_refine_ms = 0.0;
         f64 qg_refine_ms = 0.0;
-        f64 negative_cycle_refine_ms = 0.0;
         f64 flow_refine_ms = 0.0;
 
 
@@ -206,9 +203,6 @@ namespace HeiProMap {
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
             }
-            if (ac.negative_cycle_config.enabled) {
-                negative_cycle_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.negative_cycle_config);
-            }
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -241,14 +235,13 @@ namespace HeiProMap {
             if (ac.label_propagation_config.enabled) {
                 lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
             }
+
             if (ac.quotient_graph_refinement_config.enabled) {
                 qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
             }
+
             if (ac.flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
-            }
-            if (ac.negative_cycle_config.enabled) {
-                negative_cycle_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.negative_cycle_config);
             }
         }
 
@@ -358,12 +351,14 @@ namespace HeiProMap {
             std::cout << "Coarsening        : " << coarsening_ms << std::endl;
             std::cout << "Contraction       : " << contraction_ms << std::endl;
             std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
-            std::cout << "Inter. Part.      : " << intermediate_partitioning_ms << std::endl;
             std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
             std::cout << "Rebalance         : " << rebalance_ms << std::endl;
             std::cout << "Refinement        : " << refinement_ms << std::endl;
+            std::cout << "  Label Prop.     : " << lp_refine_ms << std::endl;
+            std::cout << "  Quotient Graph  : " << qg_refine_ms << std::endl;
+            std::cout << "  Flow            : " << flow_refine_ms << std::endl;
             std::cout << "Misc              : " << misc_ms << std::endl;
-            std::cout << "ALL               : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
+            std::cout << "ALL               : " << coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
 
             #if ENABLE_PROFILER
             print_all_levels();

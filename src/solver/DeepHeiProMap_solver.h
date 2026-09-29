@@ -66,7 +66,7 @@ namespace HeiProMap {
     /**
      * Solver for Deep Process Mapping.
      */
-    template<typename DistanceOracleT = DistanceOracle, typename QuotientGraphT = LargeQuotientGraph>
+    template<bool LARGE_K, typename DistanceOracleT, typename QuotientGraphT>
     class DeepHeiProMapSolver {
         DeepHeiProMapConfiguration ac;
         RandomEngine random_engine;
@@ -96,20 +96,31 @@ namespace HeiProMap {
         SizeConstrainedLP size_constrained_lp_clustering;
 
         // refinement
-        LabelPropagationRefinement lp_refine;
-        QuotientGraphRefinement qg_refine;
-        FlowBasedRefinement flow_based_refinement;
+        LabelPropagationRefinement<LARGE_K> lp_refine;
+        QuotientGraphRefinement<LARGE_K> qg_refine;
+        FlowBasedRefinement<LARGE_K> flow_based_refinement;
 
         bool structs_up_to_date = true;
+
+        std::vector<partition_t> inter_ids;
+        std::vector<partition_t> inter_id_to_dense;
+        std::vector<PartitionManager> thread_sub_pm;
+
+        std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries;
+        std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t> > > thread_edges;
 
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
         f64 initial_partitioning_ms = 0.0;
         f64 intermediate_partitioning_ms = 0.0;
+        f64 recompute_datastructures_ms = 0.0;
         f64 uncontraction_ms = 0.0;
         f64 rebalance_ms = 0.0;
         f64 refinement_ms = 0.0;
+        f64 lp_refine_ms = 0.0;
+        f64 qg_refine_ms = 0.0;
+        f64 flow_refine_ms = 0.0;
 
     public:
         explicit DeepHeiProMapSolver(const DeepHeiProMapConfiguration &t_ac) {
@@ -141,6 +152,10 @@ namespace HeiProMap {
             p_manager.set_lmax(0, lmax_vec.back());
 
             subgraph_extractor.initialize(ac.k, ac.threads);
+            inter_id_to_dense.assign(ac.k, std::numeric_limits<partition_t>::max());
+            thread_sub_pm.resize(ac.threads);
+            thread_boundaries.assign(ac.threads, std::vector<std::vector<vertex_t> >(ac.k));
+            thread_edges.resize(ac.threads);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.seed);
             bv_manager.initialize(graphs[0].n, ac.k);
@@ -155,8 +170,15 @@ namespace HeiProMap {
             size_constrained_lp_clustering.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.size_constrained_lp_clustering_configuration);
 
             // refinement
-            LabelPropagationConfiguration label_propagation_config("label propy");
-            lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_label_propagation_refinement_config);
+            if (ac.deep_label_propagation_refinement_config.enabled) {
+                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_label_propagation_refinement_config);
+            }
+            if (ac.deep_quotient_graph_refinement_config.enabled) {
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_quotient_graph_refinement_config);
+            }
+            if (ac.deep_flow_based_refinement_config.enabled) {
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config);
+            }
         }
 
         explicit DeepHeiProMapSolver(graph_t &&g, const DeepHeiProMapConfiguration &t_ac) {
@@ -188,6 +210,10 @@ namespace HeiProMap {
             p_manager.set_lmax(0, lmax_vec.back());
 
             subgraph_extractor.initialize(ac.k, ac.threads);
+            inter_id_to_dense.assign(ac.k, std::numeric_limits<partition_t>::max());
+            thread_sub_pm.resize(ac.threads);
+            thread_boundaries.assign(ac.threads, std::vector<std::vector<vertex_t> >(ac.k));
+            thread_edges.resize(ac.threads);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.seed);
             bv_manager.initialize(graphs[0].n, ac.k);
@@ -204,6 +230,12 @@ namespace HeiProMap {
             // refinement
             if (ac.deep_label_propagation_refinement_config.enabled) {
                 lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_label_propagation_refinement_config);
+            }
+            if (ac.deep_quotient_graph_refinement_config.enabled) {
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_quotient_graph_refinement_config);
+            }
+            if (ac.deep_flow_based_refinement_config.enabled) {
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config);
             }
         }
 
@@ -243,17 +275,22 @@ namespace HeiProMap {
             std::cout << "max block w           : " << max(p_manager.get_bweights()) << std::endl;
             std::cout << "#empty partitions     : " << n_empty_partitions << std::endl;
             std::cout << "#oload partitions     : " << n_overloaded_partitions << std::endl;
+            std::cout << "Sum oload weights     : " << sum_too_much << std::endl;
             std::cout << "------- Time -------" << std::endl;
             std::cout << "Total solve time      : " << duration * 1000.0 << std::endl;
             std::cout << "Coarsening            : " << coarsening_ms << std::endl;
             std::cout << "Contraction           : " << contraction_ms << std::endl;
             std::cout << "Init. Part.           : " << initial_partitioning_ms << std::endl;
             std::cout << "Inter. Part.          : " << intermediate_partitioning_ms << std::endl;
+            std::cout << "Recompute             : " << recompute_datastructures_ms << std::endl;
             std::cout << "Uncontraction         : " << uncontraction_ms << std::endl;
             std::cout << "Rebalance             : " << rebalance_ms << std::endl;
             std::cout << "Refinement            : " << refinement_ms << std::endl;
+            std::cout << "  Label Prop.         : " << lp_refine_ms << std::endl;
+            std::cout << "  Quotient Graph      : " << qg_refine_ms << std::endl;
+            std::cout << "  Flow                : " << flow_refine_ms << std::endl;
             std::cout << "Misc                  : " << misc_ms << std::endl;
-            std::cout << "ALL                   : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
+            std::cout << "ALL                   : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + recompute_datastructures_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
 
             return p;
         }
@@ -263,30 +300,26 @@ namespace HeiProMap {
             u64 level = 0;
             [[maybe_unused]] u64 max_level = 0;
 
-            size_t l = ac.hierarchy.size();
+            const partition_t z = ac.hierarchy.back();
+            const weight_t lmax_z = lmax * (ac.k / z);
+            const vertex_t target_n = ac.initial_C * z;
 
-            bool stagnated = false;
-            for (u64 h_level = 0; h_level < l && !stagnated; ++h_level) {
-                while (graphs.back().n > k_rem[l - h_level] * ac.initial_C) {
-                    coarsening(level, lmax_vec[h_level]);
-                    contraction();
+            while (graphs.back().n > target_n) {
+                coarsening(level, lmax_z);
+                contraction();
 
-                    if (graphs.back().n == graphs[graphs.size() - 2].n) {
-                        graphs.pop_back();
-                        mappings.pop_back();
-                        stagnated = true;
-                        break;
-                    }
-
-                    level += 1;
+                if (graphs.back().n == graphs[graphs.size() - 2].n) {
+                    graphs.pop_back();
+                    mappings.pop_back();
+                    break;
                 }
+
+                level += 1;
             }
 
             max_level = level > 0 ? level - 1 : 0;
 
             initial_partitioning();
-
-            rebalance(level);
 
             while (level > 0) {
                 level -= 1;
@@ -294,6 +327,8 @@ namespace HeiProMap {
                 uncoarsening();
 
                 intermediate_partitioning(level);
+
+                recompute_datastructures();
 
                 rebalance(level);
 
@@ -315,8 +350,7 @@ namespace HeiProMap {
 
             graph_t g_copy = graphs.back();
 
-            PartitionManager sub_pm;
-            sub_pm.initialize(g_copy.n, block_k, g_copy.g_weight);
+            PartitionManager sub_pm(g_copy.n, block_k, g_copy.g_weight);
             UniformDistanceOracle temp_d_oracle(block_k);
             greedy_partition(g_copy, temp_d_oracle, imb, 42, sub_pm);
 
@@ -326,7 +360,6 @@ namespace HeiProMap {
                 partition_t move_id = 0 + k_spacing * sub_p;
                 weight_t w = graphs.back().v_weights[u];
                 p_manager.move(u, w, 0, move_id);
-                block_conn.move(graphs.back(), u, 0, move_id);
             }
 
             for (partition_t i = 0; i < block_k; ++i) {
@@ -335,65 +368,61 @@ namespace HeiProMap {
                 p_manager.set_hierarchy_level(move_id, block_level - 1);
             }
 
-            bv_manager.compute_from_scratch(graphs.back(), p_manager);
-            q_graph.compute_from_scratch(graphs.back(), p_manager);
-            block_conn.compute_from_scratch(graphs.back(), p_manager);
-
             initial_partitioning_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
         void intermediate_partitioning(const u64 level) {
-            auto p = get_time_point();
             HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "misc", "intermediate_partitioning");
 
-            std::vector<partition_t> ids = {0};
-            std::vector<u32> one_hot(ac.k);
+            auto p = get_time_point();
+            structs_up_to_date = false;
 
-            while (!ids.empty()) {
-                ids.clear();
-                std::fill(one_hot.begin(), one_hot.end(), 0);
-
+            while (true) {
+                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "misc", "collect");
+                inter_ids.clear();
                 for (partition_t id = 0; id < ac.k; ++id) {
                     if (!p_manager.is_active(id)) continue;
                     if (p_manager.get_hierarchy_level(id) == 0) continue;
 
                     vertex_t threshold = ac.intermediate_C * ac.hierarchy[p_manager.get_hierarchy_level(id) - 1];
                     if (p_manager.size(id) >= threshold || level == 0) {
-                        ids.push_back(id);
-                        one_hot[id] = 1;
+                        inter_id_to_dense[id] = inter_ids.size();
+                        inter_ids.push_back(id);
                     }
                 }
 
-                if (ids.empty()) break;
-
-                structs_up_to_date = false;
+                if (inter_ids.empty()) break;
 
                 HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "subgraph_extractor", "extract");
-                subgraph_extractor.extract(graphs.back(), p_manager, one_hot);
+                subgraph_extractor.extract(graphs.back(), p_manager, inter_ids, inter_id_to_dense);
+
+                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "misc", "reset");
+                // Reset only used entries in inter_id_to_dense
+                for (partition_t id: inter_ids) {
+                    inter_id_to_dense[id] = std::numeric_limits<partition_t>::max();
+                }
 
                 HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "greedy_partitioner", "sub_block_partitioning");
                 #pragma omp parallel for num_threads(ac.threads) schedule(dynamic)
-                for (size_t i = 0; i < ids.size(); ++i) {
-                    partition_t block_id = ids[i];
+                for (size_t i = 0; i < inter_ids.size(); ++i) {
+                    partition_t block_id = inter_ids[i];
                     partition_t block_level = p_manager.get_hierarchy_level(block_id);
                     partition_t block_k = ac.hierarchy[block_level - 1];
                     partition_t k_spacing = k_rem[block_level - 1];
                     weight_t child_lmax = (block_level >= 2) ? lmax_vec[block_level - 1] : lmax_vec[0];
 
-                    CSRGraph &sub_g = subgraph_extractor.graphs[block_id];
-                    auto &tt = subgraph_extractor.tts[block_id];
+                    CSRGraph &sub_g = subgraph_extractor.graphs[i];
+                    auto &tt = subgraph_extractor.tts[i];
 
                     if (sub_g.n > 0) {
                         f64 imb = ((f64) (child_lmax * block_k) / (f64) sub_g.g_weight) - 1.0;
                         if (imb <= 0.0) imb = 0.0001;
 
-                        CSRGraph sub_g_copy = sub_g;
-
-                        PartitionManager sub_pm;
-                        sub_pm.initialize(sub_g_copy.n, block_k, sub_g_copy.g_weight);
+                        u64 tid = omp_get_thread_num();
+                        PartitionManager &sub_pm = thread_sub_pm[tid];
+                        sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight);
                         UniformDistanceOracle temp_d_oracle(block_k);
-                        greedy_partition(sub_g_copy, temp_d_oracle, imb, 42 + block_id, sub_pm);
+                        greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id, sub_pm);
 
                         for (vertex_t u = 0; u < sub_g.n; ++u) {
                             partition_t sub_p = sub_pm[u];
@@ -405,29 +434,85 @@ namespace HeiProMap {
                         }
                     }
 
-                    for (partition_t p = 0; p < block_k; ++p) {
-                        partition_t move_id = block_id + k_spacing * p;
+                    for (partition_t p_id = 0; p_id < block_k; ++p_id) {
+                        partition_t move_id = block_id + k_spacing * p_id;
                         p_manager.set_lmax(move_id, child_lmax);
                         p_manager.set_hierarchy_level(move_id, block_level - 1);
                     }
                 }
-
-                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "datastructures", "compute_from_scratch");
-                bv_manager.compute_from_scratch(graphs.back(), p_manager);
-                q_graph.compute_from_scratch(graphs.back(), p_manager);
-                block_conn.compute_from_scratch(graphs.back(), p_manager);
-                structs_up_to_date = true;
-            }
-
-            if (!structs_up_to_date) {
-                HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "datastructures", "compute_from_scratch");
-                bv_manager.compute_from_scratch(graphs.back(), p_manager);
-                q_graph.compute_from_scratch(graphs.back(), p_manager);
-                block_conn.compute_from_scratch(graphs.back(), p_manager);
-                structs_up_to_date = true;
             }
 
             intermediate_partitioning_ms += get_milli_seconds(p, get_time_point());
+        }
+
+        void recompute_datastructures() {
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "misc");
+            auto p = get_time_point();
+
+            const graph_t &g = graphs.back();
+
+            if (ac.threads <= 1 || g.n < 1024) {
+                bv_manager.compute_from_scratch(g, p_manager);
+                q_graph.compute_from_scratch(g, p_manager);
+                block_conn.compute_from_scratch(g, p_manager);
+                return;
+            }
+
+            q_graph.initialize(p_manager.get_k());
+            bv_manager.parallel_reset(ac.threads);
+            block_conn.parallel_initialize_offsets(g, ac.threads);
+
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "fill");
+            #pragma omp parallel num_threads(ac.threads)
+            {
+                u64 tid = omp_get_thread_num();
+                auto &local_boundaries = thread_boundaries[tid];
+                auto &local_edges = thread_edges[tid];
+                local_edges.clear();
+                for (partition_t id = 0; id < ac.k; ++id) {
+                    local_boundaries[id].clear();
+                }
+
+                vertex_t chunk = (g.n + ac.threads - 1) / ac.threads;
+                vertex_t start_u = std::min(g.n, tid * chunk);
+                vertex_t end_u = std::min(g.n, start_u + chunk);
+
+                for (vertex_t u = start_u; u < end_u; ++u) {
+                    const partition_t u_id = p_manager[u];
+                    size_t n_different = 0;
+
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        const vertex_t v = g.edges_v[i];
+                        const weight_t w = g.edges_w[i];
+                        const partition_t v_id = p_manager[v];
+
+                        block_conn.add_connection(u, v_id, w);
+
+                        if (u_id != v_id) {
+                            n_different += 1;
+                            if (u < v) {
+                                local_edges.emplace_back(u_id, v_id, w);
+                            }
+                        }
+                    }
+
+                    if (n_different > 0) {
+                        bv_manager.set_boundary_edges_count(u, n_different);
+                        local_boundaries[u_id].push_back(u);
+                    }
+                }
+            }
+
+            bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
+
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "datastructures", "fill_qgraph");
+            for (u64 tid = 0; tid < ac.threads; ++tid) {
+                for (const auto &[u_id, v_id, w]: thread_edges[tid]) {
+                    q_graph.add_edge(u_id, v_id, w);
+                }
+            }
+
+            recompute_datastructures_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
@@ -473,8 +558,25 @@ namespace HeiProMap {
         void refinement([[maybe_unused]] const u64 level, [[maybe_unused]] const u64 max_level) {
             auto p = get_time_point();
             if (ac.deep_label_propagation_refinement_config.enabled) {
+                auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
+
+            if (ac.deep_quotient_graph_refinement_config.enabled) {
+                auto sp_local = get_time_point();
+                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            }
+
+            if (ac.deep_flow_based_refinement_config.enabled) {
+                auto sp_local = get_time_point();
+                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            }
+
             refinement_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
