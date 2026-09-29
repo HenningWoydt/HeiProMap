@@ -100,8 +100,6 @@ namespace HeiProMap {
         QuotientGraphRefinement<LARGE_K> qg_refine;
         FlowBasedRefinement<LARGE_K> flow_based_refinement;
 
-        bool structs_up_to_date = true;
-
         std::vector<partition_t> inter_ids;
         std::vector<partition_t> inter_id_to_dense;
         std::vector<PartitionManager> thread_sub_pm;
@@ -375,7 +373,6 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "misc", "intermediate_partitioning");
 
             auto p = get_time_point();
-            structs_up_to_date = false;
 
             while (true) {
                 HEIPROMAP_PROFILE_SCOPE("intermediate_partitioning", "misc", "collect");
@@ -551,7 +548,6 @@ namespace HeiProMap {
             mappings.pop_back();
             graphs.pop_back();
 
-            structs_up_to_date = false;
             uncontraction_ms += get_milli_seconds(p, get_time_point());
         }
 
