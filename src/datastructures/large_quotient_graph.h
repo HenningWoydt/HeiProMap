@@ -28,71 +28,64 @@
 #define HEIPROMAP_LARGE_QUOTIENT_GRAPH_H
 
 #include <algorithm>
-#include <iostream>
-#include <limits>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 #include "../definitions.h"
-#include "../utility/aligned_array.h"
 #include "../utility/macros.h"
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
     /**
      * LargeQuotientGraph represents the quotient graph using sparse adjacency lists
-     * per block with sorted neighbor targets, achieving O(k + |E_Q|) memory instead
-     * of O(k^2) dense matrix storage. Suitable for very large numbers of blocks k.
+     * per block, achieving O(k + |E_Q|) memory instead of O(k^2) dense matrix storage.
+     * Suitable for very large numbers of blocks k.
      */
     class LargeQuotientGraph {
     public:
         struct HalfEdge {
             partition_t target = 0;
             weight_t weight = 0;
-
-            bool operator<(const HalfEdge &other) const {
-                return target < other.target;
-            }
         };
 
     private:
         partition_t m_k = 0;
-        std::vector<std::vector<HalfEdge> > m_adj;
+        std::vector<std::vector<HalfEdge>> m_adj;
         std::vector<weight_t> m_self_weights;
 
         static auto find_edge(std::vector<HalfEdge> &vec, const partition_t target) {
-            return std::lower_bound(
-                vec.begin(), vec.end(), target,
-                [](const HalfEdge &e, const partition_t t) { return e.target < t; }
-            );
+            return std::find_if(vec.begin(), vec.end(), [target](const HalfEdge &e) {
+                return e.target == target;
+            });
         }
 
         static auto find_edge(const std::vector<HalfEdge> &vec, const partition_t target) {
-            return std::lower_bound(
-                vec.begin(), vec.end(), target,
-                [](const HalfEdge &e, const partition_t t) { return e.target < t; }
-            );
+            return std::find_if(vec.begin(), vec.end(), [target](const HalfEdge &e) {
+                return e.target == target;
+            });
         }
 
         void add_half_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
             auto &vec = m_adj[u_id];
             auto it = find_edge(vec, v_id);
-            if (it != vec.end() && it->target == v_id) {
+            if (it != vec.end()) {
                 it->weight += w;
             } else {
-                vec.insert(it, HalfEdge{v_id, w});
+                vec.push_back(HalfEdge{v_id, w});
             }
         }
 
         void remove_half_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
             auto &vec = m_adj[u_id];
             auto it = find_edge(vec, v_id);
-            ASSERT(it != vec.end() && it->target == v_id);
+            ASSERT(it != vec.end());
             ASSERT(it->weight >= w);
 
             it->weight -= w;
             if (it->weight == 0) {
-                vec.erase(it);
+                std::swap(*it, vec.back());
+                vec.pop_back();
             }
         }
 
@@ -217,7 +210,7 @@ namespace HeiProMap {
             }
             const auto &vec = m_adj[u_id];
             auto it = find_edge(vec, v_id);
-            return (it != vec.end() && it->target == v_id && it->weight > 0);
+            return (it != vec.end() && it->weight > 0);
         }
 
         weight_t get_weight(const partition_t u_id, const partition_t v_id) const {
@@ -228,7 +221,7 @@ namespace HeiProMap {
             }
             const auto &vec = m_adj[u_id];
             auto it = find_edge(vec, v_id);
-            if (it != vec.end() && it->target == v_id) {
+            if (it != vec.end()) {
                 return it->weight;
             }
             return 0;
