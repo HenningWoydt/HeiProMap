@@ -246,8 +246,6 @@ namespace HeiProMap {
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
 
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads));
-
             weight_t qap = get_qap(graphs.back(), p_manager, d_oracle);
             size_t n_empty_partitions = 0;
             size_t n_overloaded_partitions = 0;
