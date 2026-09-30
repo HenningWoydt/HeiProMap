@@ -27,6 +27,9 @@
 #ifndef HEIPROMAP_PARTITION_MANAGER_H
 #define HEIPROMAP_PARTITION_MANAGER_H
 
+#include <algorithm>
+#include <vector>
+
 #include "../definitions.h"
 #include "../utility/aligned_array.h"
 #include "../utility/mapping.h"
@@ -45,6 +48,8 @@ namespace HeiProMap {
         AlignedArray<size_t> n_vertices;
         AlignedArray<weight_t> lmax;
         AlignedArray<partition_t> hierarchy_level;
+        AlignedArray<partition_t> active_ids;
+        partition_t n_active = 0;
 
         PartitionManager() = default;
 
@@ -54,11 +59,13 @@ namespace HeiProMap {
             initialize(t_n, t_k, g_weight);
         }
 
+        // ==========================================
+        // Lifecycle & Setup
+        // ==========================================
+
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         const weight_t g_weight) {
-            // HEIPROMAP_PROFILE_SCOPE("misc", "PartitionManager", "initialize");
-
             n = t_n;
             k = t_k;
 
@@ -70,19 +77,59 @@ namespace HeiProMap {
             n_vertices[0] = t_n;
             lmax.initialize(k, 0);
             hierarchy_level.initialize(k, k);
+            active_ids.initialize(k, 0);
+            n_active = 0;
         }
+
+        void copy_from(const PartitionManager &p_manager) {
+            for (vertex_t u = 0; u < p_manager.n; ++u) {
+                partition[u] = p_manager.partition[u];
+            }
+            for (partition_t id = 0; id < k; ++id) {
+                bweights[id] = p_manager.bweights[id];
+                n_vertices[id] = p_manager.n_vertices[id];
+                lmax[id] = p_manager.lmax[id];
+                hierarchy_level[id] = p_manager.hierarchy_level[id];
+            }
+            n_active = p_manager.n_active;
+            for (partition_t i = 0; i < n_active; ++i) {
+                active_ids[i] = p_manager.active_ids[i];
+            }
+        }
+
+        // ==========================================
+        // Accessors & Status Queries
+        // ==========================================
+
+        const partition_t &operator[](const vertex_t u) const { return partition[u]; }
+
+        partition_t get_k() const { return k; }
+
+        size_t size(const partition_t id) const { return n_vertices[id]; }
+
+        weight_t get_bweight(const partition_t id) const { return bweights[id]; }
 
         void set_lmax(const partition_t id, const weight_t new_lmax) { lmax[id] = new_lmax; }
 
         weight_t get_lmax(const partition_t id) const { return lmax[id]; }
 
-        void set_hierarchy_level(const partition_t id, const partition_t level) { hierarchy_level[id] = level; }
-
         partition_t get_hierarchy_level(const partition_t id) const { return hierarchy_level[id]; }
 
         bool is_active(const partition_t id) const { return hierarchy_level[id] != k; }
 
-        const partition_t &operator[](const vertex_t u) const { return partition[u]; }
+        void set_hierarchy_level(const partition_t id, const partition_t level) {
+            if (hierarchy_level[id] == k && level != k) {
+                partition_t idx;
+                #pragma omp atomic capture
+                idx = n_active++;
+                active_ids[idx] = id;
+            }
+            hierarchy_level[id] = level;
+        }
+
+        // ==========================================
+        // Vertex Assignment & Movement
+        // ==========================================
 
         void set(const vertex_t u,
                  const weight_t w,
@@ -93,11 +140,7 @@ namespace HeiProMap {
         }
 
         /**
-         * O(1) operation
-         * @param u
-         * @param w
-         * @param old_id
-         * @param new_id
+         * Move vertex between partitions (thread-safe using atomic operations)
          */
         void move(const vertex_t u,
                   const weight_t w,
@@ -116,11 +159,7 @@ namespace HeiProMap {
         }
 
         /**
-         * O(1) operation
-         * @param u
-         * @param w
-         * @param old_id
-         * @param new_id
+         * Move vertex between partitions (single-threaded, non-atomic)
          */
         void move_serial(const vertex_t u,
                          const weight_t w,
@@ -134,69 +173,9 @@ namespace HeiProMap {
             partition[u] = new_id;
         }
 
-        partition_t get_k() const { return k; }
-
-        weight_t get_bweight(const partition_t id) const { return bweights[id]; }
-
-        size_t size(const partition_t id) const { return n_vertices[id]; }
-
-        std::vector<weight_t> get_bweights() const {
-            std::vector<weight_t> weights(k);
-            for (size_t i = 0; i < k; ++i) {
-                weights[i] = bweights[i];
-            }
-            return weights;
-        }
-
-        weight_t max_weight() const {
-            weight_t m = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i)) {
-                    m = std::max(m, bweights[i]);
-                }
-            }
-            return m;
-        }
-
-        partition_t n_empty_blocks() const {
-            partition_t n = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i)) {
-                    n += bweights[i] == 0;
-                }
-            }
-            return n;
-        }
-
-        partition_t n_oload_blocks(weight_t lmax) const {
-            partition_t n = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i)) {
-                    n += bweights[i] > lmax;
-                }
-            }
-            return n;
-        }
-
-        partition_t n_oload_blocks() const {
-            partition_t n = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i)) {
-                    n += bweights[i] > lmax[i];
-                }
-            }
-            return n;
-        }
-
-        weight_t sum_oload_weight(weight_t lmax) const {
-            weight_t w = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i)) {
-                    w += std::max((weight_t) 0, bweights[i] - lmax);
-                }
-            }
-            return w;
-        }
+        // ==========================================
+        // Coarsening / Contraction
+        // ==========================================
 
         void contract(const Mapping &mapping) {
             HEIPROMAP_PROFILE_SCOPE("contraction", "PartitionManager", "contract");
@@ -215,6 +194,7 @@ namespace HeiProMap {
 
         void uncontract(const Mapping &mapping) {
             HEIPROMAP_PROFILE_SCOPE("uncontraction", "PartitionManager", "uncontract");
+
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                 vertex_t map_u = mapping.get(u);
                 partition_temp[u] = partition[map_u];
@@ -227,35 +207,9 @@ namespace HeiProMap {
             }
         }
 
-        bool is_overloaded(weight_t t_lmax) const {
-            for (size_t i = 0; i < k; ++i) {
-                if (bweights[i] > t_lmax) { return true; }
-            }
-            return false;
-        }
-
-        bool is_overloaded() const {
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i) && bweights[i] > lmax[i]) { return true; }
-            }
-            return false;
-        }
-
-        size_t n_overloaded_blocks() const {
-            size_t count = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i) && bweights[i] > lmax[i]) { count++; }
-            }
-            return count;
-        }
-
-        weight_t sum_overloaded_weight() const {
-            weight_t sum = 0;
-            for (size_t i = 0; i < k; ++i) {
-                if (is_active(i) && bweights[i] > lmax[i]) { sum += bweights[i] - lmax[i]; }
-            }
-            return sum;
-        }
+        // ==========================================
+        // Weight Recalculation
+        // ==========================================
 
         void reset_weights() {
             bweights.initialize(k, 0);
@@ -271,16 +225,148 @@ namespace HeiProMap {
             }
         }
 
-        void copy_from(const PartitionManager &p_manager) {
-            for (vertex_t u = 0; u < p_manager.n; ++u) {
-                partition[u] = p_manager.partition[u];
+        // ==========================================
+        // Balance & Overload Statistics
+        // ==========================================
+
+        std::vector<weight_t> get_bweights() const {
+            std::vector<weight_t> weights(k);
+            for (size_t i = 0; i < k; ++i) {
+                weights[i] = bweights[i];
             }
-            for (partition_t id = 0; id < k; ++id) {
-                bweights[id] = p_manager.bweights[id];
-                n_vertices[id] = p_manager.n_vertices[id];
-                lmax[id] = p_manager.lmax[id];
-                hierarchy_level[id] = p_manager.hierarchy_level[id];
+            return weights;
+        }
+
+        weight_t max_weight() const {
+            weight_t m = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    m = std::max(m, bweights[active_ids[i]]);
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i)) {
+                        m = std::max(m, bweights[i]);
+                    }
+                }
             }
+            return m;
+        }
+
+        partition_t n_empty_blocks() const {
+            partition_t n = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    n += bweights[active_ids[i]] == 0;
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i)) {
+                        n += bweights[i] == 0;
+                    }
+                }
+            }
+            return n;
+        }
+
+        partition_t n_oload_blocks(const weight_t t_lmax) const {
+            partition_t n = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    n += bweights[active_ids[i]] > t_lmax;
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i)) {
+                        n += bweights[i] > t_lmax;
+                    }
+                }
+            }
+            return n;
+        }
+
+        partition_t n_oload_blocks() const {
+            partition_t n = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    const partition_t id = active_ids[i];
+                    n += bweights[id] > lmax[id];
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i)) {
+                        n += bweights[i] > lmax[i];
+                    }
+                }
+            }
+            return n;
+        }
+
+        weight_t sum_oload_weight(const weight_t t_lmax) const {
+            weight_t w = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    w += std::max((weight_t) 0, bweights[active_ids[i]] - t_lmax);
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i)) {
+                        w += std::max((weight_t) 0, bweights[i] - t_lmax);
+                    }
+                }
+            }
+            return w;
+        }
+
+        bool is_overloaded(const weight_t t_lmax) const {
+            for (size_t i = 0; i < k; ++i) {
+                if (bweights[i] > t_lmax) { return true; }
+            }
+            return false;
+        }
+
+        bool is_overloaded() const {
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    const partition_t id = active_ids[i];
+                    if (bweights[id] > lmax[id]) { return true; }
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i) && bweights[i] > lmax[i]) { return true; }
+                }
+            }
+            return false;
+        }
+
+        size_t n_overloaded_blocks() const {
+            size_t count = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    const partition_t id = active_ids[i];
+                    if (bweights[id] > lmax[id]) { count++; }
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i) && bweights[i] > lmax[i]) { count++; }
+                }
+            }
+            return count;
+        }
+
+        weight_t sum_overloaded_weight() const {
+            weight_t sum = 0;
+            if (n_active > 0) {
+                for (partition_t i = 0; i < n_active; ++i) {
+                    const partition_t id = active_ids[i];
+                    if (bweights[id] > lmax[id]) { sum += bweights[id] - lmax[id]; }
+                }
+            } else {
+                for (size_t i = 0; i < k; ++i) {
+                    if (is_active(i) && bweights[i] > lmax[i]) { sum += bweights[i] - lmax[i]; }
+                }
+            }
+            return sum;
         }
     };
 }

@@ -279,7 +279,7 @@ namespace HeiProMap {
             }
         }
 
-        void add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
+        bool add_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
 
@@ -291,10 +291,12 @@ namespace HeiProMap {
 
             if (u_id != v_id && was_inactive && e.weight > 0) {
                 link_edge(idx);
+                return true;
             }
+            return false;
         }
 
-        void remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
+        bool remove_edge(const partition_t u_id, const partition_t v_id, const weight_t w) {
             ASSERT(u_id < m_k);
             ASSERT(v_id < m_k);
 
@@ -307,7 +309,9 @@ namespace HeiProMap {
 
             if (u_id != v_id && e.weight == 0) {
                 unlink_edge(idx);
+                return true;
             }
+            return false;
         }
 
         bool has_edge(const partition_t u_id, const partition_t v_id) const {
@@ -332,7 +336,7 @@ namespace HeiProMap {
          * @param new_id
          */
         template<typename GraphT, typename PartitionManagerT>
-        void move(const GraphT &g,
+        bool move(const GraphT &g,
                   const PartitionManagerT &p_manager,
                   const vertex_t u,
                   const partition_t old_id,
@@ -341,6 +345,7 @@ namespace HeiProMap {
             ASSERT(old_id < m_k);
             ASSERT(new_id != old_id);
 
+            bool structure_changed = false;
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                 const vertex_t v = g.edges_v[i];
                 const weight_t w = g.edges_w[i];
@@ -348,14 +353,19 @@ namespace HeiProMap {
 
                 // remove old edge, if existed
                 if (old_id != v_id) {
-                    remove_edge(old_id, v_id, w);
+                    if (remove_edge(old_id, v_id, w)) {
+                        structure_changed = true;
+                    }
                 }
 
                 // add new edge, if has to exist
                 if (new_id != v_id) {
-                    add_edge(new_id, v_id, w);
+                    if (add_edge(new_id, v_id, w)) {
+                        structure_changed = true;
+                    }
                 }
             }
+            return structure_changed;
         }
 
 

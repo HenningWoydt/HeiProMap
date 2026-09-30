@@ -50,7 +50,7 @@ namespace HeiProMap {
     public:
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
-        f64 f = 32;
+        f64 f = 64;
         EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
         bool use_degree_ordering = true;
         bool force_parallel_alg = false;

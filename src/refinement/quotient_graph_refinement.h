@@ -176,7 +176,7 @@ namespace HeiProMap {
                 dist_3_matcher.reset_used_edges();
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                bool found_matching = dist_3_matcher.find_matching(q_graph, active_block_scheduling.active_this_round, matching);
+                bool found_matching = dist_3_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, matching);
 
                 while (found_matching) {
                     HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "loop");
@@ -201,7 +201,7 @@ namespace HeiProMap {
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "matching");
-                    found_matching = dist_3_matcher.find_matching(q_graph, active_block_scheduling.active_this_round, matching);
+                    found_matching = dist_3_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, matching);
                 }
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "QuotientGraphRefinement", "swap");

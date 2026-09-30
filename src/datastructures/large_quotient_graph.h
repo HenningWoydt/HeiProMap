@@ -48,11 +48,12 @@ namespace HeiProMap {
         struct HalfEdge {
             partition_t target = 0;
             weight_t weight = 0;
+            mutable u32 used_epoch = 0;
         };
 
     private:
         partition_t m_k = 0;
-        std::vector<std::vector<HalfEdge>> m_adj;
+        std::vector<std::vector<HalfEdge> > m_adj;
         AlignedArray<weight_t> m_self_weights;
 
         static auto find_edge(std::vector<HalfEdge> &vec, const partition_t target) {
@@ -132,7 +133,7 @@ namespace HeiProMap {
 
             if (num_threads <= 1 || bv_manager.size() < 1024) {
                 for (partition_t id = 0; id < m_k; ++id) {
-                    for (const vertex_t u : bv_manager.boundary(id)) {
+                    for (const vertex_t u: bv_manager.boundary(id)) {
                         for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                             const vertex_t v = g.edges_v[i];
                             if (u < v) {
@@ -145,7 +146,7 @@ namespace HeiProMap {
                     }
                 }
             } else {
-                std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t>>> thread_edges(num_threads);
+                std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t> > > thread_edges(num_threads);
 
                 #pragma omp parallel num_threads(num_threads)
                 {
@@ -154,7 +155,7 @@ namespace HeiProMap {
 
                     #pragma omp for schedule(dynamic)
                     for (partition_t id = 0; id < m_k; ++id) {
-                        for (const vertex_t u : bv_manager.boundary(id)) {
+                        for (const vertex_t u: bv_manager.boundary(id)) {
                             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                                 const vertex_t v = g.edges_v[i];
                                 if (u < v) {
@@ -169,7 +170,7 @@ namespace HeiProMap {
                 }
 
                 for (u64 tid = 0; tid < num_threads; ++tid) {
-                    for (const auto &[u_id, v_id, w] : thread_edges[tid]) {
+                    for (const auto &[u_id, v_id, w]: thread_edges[tid]) {
                         add_edge(u_id, v_id, w);
                     }
                 }

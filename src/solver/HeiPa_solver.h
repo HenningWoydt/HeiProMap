@@ -201,7 +201,7 @@ namespace HeiProMap {
             gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
             size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
 
-            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
+            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64());
 
             // refinement
             if (ac.label_propagation_config.enabled) {
@@ -239,7 +239,7 @@ namespace HeiProMap {
             gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
             size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
 
-            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
+            rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64());
 
             // refinement
             if (ac.label_propagation_config.enabled) {

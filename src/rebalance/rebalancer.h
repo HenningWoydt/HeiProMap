@@ -79,6 +79,8 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
 
+        u64 m_threads = 1;
+
         RandomEngine random_engine;
 
     public:
@@ -86,11 +88,21 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 seed) {
+            initialize(t_n, t_m, t_k, 1, seed);
+        }
+
+        void initialize(const vertex_t t_n,
+                        const vertex_t t_m,
+                        const partition_t t_k,
+                        const u64 t_threads,
+                        const u64 seed) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "initialize");
 
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
+
+            m_threads = t_threads;
 
             random_engine = RandomEngine(seed);
         }
@@ -366,6 +378,8 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "fill_heaps");
 
                 moves.initialize(boundary_size);
+
+                #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                 for (u64 i = 0; i < boundary_size; ++i) {
                     vertex_t u = boundary[i];
                     state_ids[u] += 1;

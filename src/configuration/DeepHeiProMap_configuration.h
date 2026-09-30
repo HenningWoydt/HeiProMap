@@ -150,6 +150,7 @@ namespace HeiProMap {
             {"--seed", "", "Seed for diversifying results.", "", "", false},
             {"--distance-oracle", "", "Which Distance Oracle to use. {division-based, store-division-based, binary-based}", "binary-based", "", false},
             {"--coarsening-alg", "", "Which coarsening algorithm to use. {global-paths, size-constrained-lp}", "size-constrained-lp", "", false},
+            {"--hierarchical-coarsening", "", "Use staged hierarchical coarsening (true) or aggressive flat coarsening (false).", "true", "", false},
         };
 
         // graph information
@@ -190,6 +191,7 @@ namespace HeiProMap {
         SizeConstrainedLPConfiguration size_constrained_lp_clustering_configuration;
 
         // hierarchy contraction thresholds
+        bool hierarchical_coarsening = true;
         vertex_t initial_C = 32;
         u64 initial_kappa = 10;
         vertex_t intermediate_C = 32;
@@ -277,10 +279,16 @@ namespace HeiProMap {
                 coarsening_algorithm_string = get("--coarsening-alg");
                 coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
             }
+
+            if (is_set("--hierarchical-coarsening")) {
+                std::string val = get("--hierarchical-coarsening");
+                hierarchical_coarsening = (val == "true" || val == "1" || val == "yes");
+            }
         }
 
         void set_fast() {
-            coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "size-constrained-lp";
+            coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             distance_oracle_algorithm_string = "binary-based";

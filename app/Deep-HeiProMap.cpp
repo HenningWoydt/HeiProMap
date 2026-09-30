@@ -59,15 +59,15 @@ int main(const int argc, char *argv[]) {
     if (argc == 1) {
         HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
         std::vector<std::pair<std::string, std::string> > input = {
-            // {"--graph", "../../ProMapRepo/data/mapping/europe_osm.graph"},
-            {"--graph", "../../ProMapRepo/data/mapping_backup/rgg27.graph"},
+            {"--graph", "../../ProMapRepo/data/mapping/europe_osm.graph"},
+            // {"--graph", "../../ProMapRepo/data/mapping_backup/rgg27.graph"},
             {"--mapping", "../data/out/partition/europe_osm.txt"},
             {"--statistics", "../data/out/statistics/europe_osm.JSON"},
             {"--hierarchy", "32:10:10:32"},
             {"--distance", "1:10:50:100"},
             {"--imbalance", "0.03"},
             {"--config", "fast"},
-            {"--threads", "2"},
+            {"--threads", "16"},
             {"--seed", "5"},
             {"--distance-oracle", "binary-based"},
         };

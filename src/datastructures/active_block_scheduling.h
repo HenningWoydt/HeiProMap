@@ -33,7 +33,7 @@ namespace HeiProMap {
 
         void activate(partition_t id1, partition_t id2) {
             active_next_round[id1] = 1;
-            active_this_round[id2] = 1;
+            active_next_round[id2] = 1;
         }
     };
 }

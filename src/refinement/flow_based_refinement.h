@@ -220,7 +220,7 @@ namespace HeiProMap {
                 d3_matcher.reset_used_edges();
 
                 HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-                bool found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
+                bool found_matching = d3_matcher.find_matching(q_graph, p_manager, active_this_round, matching);
 
                 if (!found_matching) break;
 
@@ -235,7 +235,7 @@ namespace HeiProMap {
                     }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "matching");
-                    found_matching = d3_matcher.find_matching(q_graph, active_this_round, matching);
+                    found_matching = d3_matcher.find_matching(q_graph, p_manager, active_this_round, matching);
                 }
 
                 // swap active
