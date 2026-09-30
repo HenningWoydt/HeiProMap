@@ -60,8 +60,10 @@ namespace HeiProMap {
         bool force_parallel_alg = false;
         bool use_edge_cut = true;
         bool use_active_scheduling = true;
-        u64 min_matching_threshold = 8;
         bool use_static_matchings = true;
+
+        u64 max_matching_rounds = 512;
+        u64 min_matching_threshold = 8;
     };
 
     template<bool LARGE_K>
@@ -172,7 +174,7 @@ namespace HeiProMap {
 
                 if (config.use_static_matchings) {
                     HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "matching");
-                    d3_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, 512, config.min_matching_threshold);
+                    d3_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
 
                     if (static_matchings.empty()) {
                         break;
