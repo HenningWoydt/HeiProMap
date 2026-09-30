@@ -66,36 +66,11 @@ namespace HeiProMap {
         u32 m_candidate_epoch = 1;
         bool m_candidates_initialized = false;
 
-        template<typename QGraphT>
-        bool is_edge_used(const QGraphT &q_graph, const partition_t u, const partition_t v) const {
-            if constexpr (!LARGE_K) {
-                const size_t eidx = q_graph.edge_index(u, v);
-                return eidx < m_used_this_round.size() && m_used_this_round[eidx] == 1;
-            } else {
-                const auto &used = m_used_neighbors[u];
-                return std::find(used.begin(), used.end(), v) != used.end();
-            }
-        }
-
-        template<typename QGraphT>
-        void mark_edge_used(const QGraphT &q_graph, const partition_t u, const partition_t v) {
-            if constexpr (!LARGE_K) {
-                const size_t eidx = q_graph.edge_index(u, v);
-                if (eidx < m_used_this_round.size()) {
-                    m_used_this_round[eidx] = 1;
-                    m_used_edge_indices.push_back(eidx);
-                }
-            } else {
-                if (m_used_neighbors[u].empty()) {
-                    m_touched_vertices[m_num_touched++] = u;
-                }
-                m_used_neighbors[u].push_back(v);
-            }
-        }
-
+        // valid checks
         AlignedArray<u32> m_valid_frozen;
         u32 m_valid_epoch = 1;
 
+        // static batches
         BitVectorArray m_matched_batches;
         BitVectorArray m_dist1_batches;
         BitVectorArray m_dist2_batches;
@@ -106,8 +81,10 @@ namespace HeiProMap {
 
         void initialize(const partition_t k) {
             m_k = k;
+
             m_vertex_frozen_epoch.initialize(m_k, 0);
             m_frozen_epoch = 1;
+
             m_edge_round_epoch = 1;
             m_valid_frozen.initialize(m_k, 0);
             m_valid_epoch = 1;
@@ -125,7 +102,7 @@ namespace HeiProMap {
             m_candidates_initialized = false;
 
             if constexpr (!LARGE_K) {
-                m_used_this_round.initialize(static_cast<size_t>(m_k) * static_cast<size_t>(m_k), 0);
+                m_used_this_round.initialize(m_k * m_k, 0);
             } else {
                 m_used_neighbors.clear();
                 m_used_neighbors.resize(m_k);
@@ -158,19 +135,19 @@ namespace HeiProMap {
         }
 
         template<typename QGraphT>
-        bool find_matching(const QGraphT &q_graph,
-                           const PartitionManager &p_manager,
-                           const AlignedArray<u8> &active_this_round,
-                           std::vector<std::pair<partition_t, partition_t> > &matching) {
-            matching.clear();
+        void init_candidates(const QGraphT &q_graph,
+                             const PartitionManager &p_manager,
+                             const AlignedArray<u8> &active_this_round) {
+            HEIPROMAP_PROFILE_SCOPE("d3_matching", "Distance3Matching", "init_candidates");
 
             if (!m_candidates_initialized) {
-                HEIPROMAP_PROFILE_SCOPE("d3_matching", "Distance3Matching", "init_candidates");
                 m_num_candidates = 0;
-                const auto check_candidate = [&](const partition_t u) {
-                    if (q_graph.degree(u) == 0) {
-                        return;
-                    }
+
+                for (partition_t i = 0; i < p_manager.n_active; ++i) {
+                    partition_t u = p_manager.active_ids[i];
+
+                    if (q_graph.degree(u) == 0) { continue ; }
+
                     bool has_valid_edge = false;
                     q_graph.for_each_neighbor(u, [&](const partition_t v, const weight_t) {
                         if (has_valid_edge) return;
@@ -181,26 +158,22 @@ namespace HeiProMap {
                     if (has_valid_edge) {
                         m_candidates[m_num_candidates++] = u;
                     }
-                };
-
-                const partition_t n_active = p_manager.n_active;
-                if (n_active > 0) {
-                    for (partition_t i = 0; i < n_active; ++i) {
-                        check_candidate(p_manager.active_ids[i]);
-                    }
-                } else {
-                    for (partition_t u = 0; u < m_k; ++u) {
-                        if (p_manager.is_active(u)) {
-                            check_candidate(u);
-                        }
-                    }
                 }
+
                 m_candidates_initialized = true;
             }
+        }
 
-            if (m_num_candidates == 0) {
-                return false;
-            }
+        template<typename QGraphT>
+        bool find_matching(const QGraphT &q_graph,
+                           const PartitionManager &p_manager,
+                           const AlignedArray<u8> &active_this_round,
+                           std::vector<std::pair<partition_t, partition_t> > &matching) {
+            matching.clear();
+
+            init_candidates(q_graph, p_manager, active_this_round);
+
+            if (m_num_candidates == 0) { return false; }
 
             if (m_frozen_epoch >= std::numeric_limits<u32>::max() - 2) {
                 m_vertex_frozen_epoch.fill(0);
@@ -228,7 +201,7 @@ namespace HeiProMap {
             auto freeze_from = [&](const partition_t x) {
                 if constexpr (LARGE_K) {
                     const auto &adj_x = q_graph.neighbors(x);
-                    for (const auto &e1 : adj_x) {
+                    for (const auto &e1: adj_x) {
                         const partition_t n1 = e1.target;
                         if (m_vertex_frozen_epoch[n1] >= epoch_dist1) {
                             continue;
@@ -236,7 +209,7 @@ namespace HeiProMap {
                         m_vertex_frozen_epoch[n1] = epoch_dist1;
 
                         const auto &adj_n1 = q_graph.neighbors(n1);
-                        for (const auto &e2 : adj_n1) {
+                        for (const auto &e2: adj_n1) {
                             const partition_t n2 = e2.target;
                             if (m_vertex_frozen_epoch[n2] < epoch_dist2) {
                                 m_vertex_frozen_epoch[n2] = epoch_dist2;
@@ -273,7 +246,7 @@ namespace HeiProMap {
 
                     if constexpr (LARGE_K) {
                         const auto &adj_u = q_graph.neighbors(u_id);
-                        for (const auto &edge : adj_u) {
+                        for (const auto &edge: adj_u) {
                             const partition_t v_id = edge.target;
                             if (v_id <= u_id) {
                                 continue;
@@ -351,11 +324,38 @@ namespace HeiProMap {
 
     private:
         template<typename QGraphT>
+        bool is_edge_used(const QGraphT &q_graph, const partition_t u, const partition_t v) const {
+            if constexpr (!LARGE_K) {
+                const size_t eidx = q_graph.edge_index(u, v);
+                return eidx < m_used_this_round.size() && m_used_this_round[eidx] == 1;
+            } else {
+                const auto &used = m_used_neighbors[u];
+                return std::find(used.begin(), used.end(), v) != used.end();
+            }
+        }
+
+        template<typename QGraphT>
+        void mark_edge_used(const QGraphT &q_graph, const partition_t u, const partition_t v) {
+            if constexpr (!LARGE_K) {
+                const size_t eidx = q_graph.edge_index(u, v);
+                if (eidx < m_used_this_round.size()) {
+                    m_used_this_round[eidx] = 1;
+                    m_used_edge_indices.push_back(eidx);
+                }
+            } else {
+                if (m_used_neighbors[u].empty()) {
+                    m_touched_vertices[m_num_touched++] = u;
+                }
+                m_used_neighbors[u].push_back(v);
+            }
+        }
+
+        template<typename QGraphT>
         void freeze_validation(const QGraphT &q_graph, const partition_t x, const u32 cur_dist1, const u32 cur_dist2) {
             m_valid_frozen[x] = cur_dist1;
             if constexpr (LARGE_K) {
                 const auto &adj_x = q_graph.neighbors(x);
-                for (const auto &e1 : adj_x) {
+                for (const auto &e1: adj_x) {
                     const partition_t n1 = e1.target;
                     if (m_valid_frozen[n1] >= cur_dist1) {
                         continue;
@@ -363,7 +363,7 @@ namespace HeiProMap {
                     m_valid_frozen[n1] = cur_dist1;
 
                     const auto &adj_n1 = q_graph.neighbors(n1);
-                    for (const auto &e2 : adj_n1) {
+                    for (const auto &e2: adj_n1) {
                         const partition_t n2 = e2.target;
                         if (m_valid_frozen[n2] < cur_dist2) {
                             m_valid_frozen[n2] = cur_dist2;
@@ -391,7 +391,7 @@ namespace HeiProMap {
         void compute_static_matchings(const QGraphT &q_graph,
                                       const PartitionManager &p_manager,
                                       const AlignedArray<u8> &active_this_round,
-                                      std::vector<std::vector<std::pair<partition_t, partition_t>>> &matchings,
+                                      std::vector<std::vector<std::pair<partition_t, partition_t> > > &matchings,
                                       const size_t max_rounds = 512,
                                       const u64 min_threshold = 10) {
             HEIPROMAP_PROFILE_SCOPE("d3_matching", "Distance3Matching", "compute_static_matchings");
@@ -420,13 +420,13 @@ namespace HeiProMap {
                 m_dist2_batches.set_bit(x, b);
 
                 if constexpr (LARGE_K) {
-                    for (const auto &e1 : q_graph.neighbors(x)) {
+                    for (const auto &e1: q_graph.neighbors(x)) {
                         const partition_t n1 = e1.target;
                         if (!m_dist1_batches.test_bit(n1, b)) {
                             m_dist1_batches.set_bit(n1, b);
                             m_dist2_batches.set_bit(n1, b);
 
-                            for (const auto &e2 : q_graph.neighbors(n1)) {
+                            for (const auto &e2: q_graph.neighbors(n1)) {
                                 m_dist2_batches.set_bit(e2.target, b);
                             }
                         }
@@ -451,7 +451,7 @@ namespace HeiProMap {
                     const u64 *matched_u = m_matched_batches.get_words(u);
                     const u64 *d2_u = m_dist2_batches.get_words(u);
 
-                    for (const auto &edge : adj_u) {
+                    for (const auto &edge: adj_u) {
                         const partition_t v = edge.target;
                         if (v <= u) continue;
                         if (active_this_round[u] == 0 && active_this_round[v] == 0) continue;
@@ -520,8 +520,8 @@ namespace HeiProMap {
 
         template<typename QGraphT>
         void filter_valid_matching(const QGraphT &q_graph,
-                                   const std::vector<std::pair<partition_t, partition_t>> &input_matching,
-                                   std::vector<std::pair<partition_t, partition_t>> &filtered_matching) {
+                                   const std::vector<std::pair<partition_t, partition_t> > &input_matching,
+                                   std::vector<std::pair<partition_t, partition_t> > &filtered_matching) {
             filtered_matching.clear();
             if (input_matching.empty()) {
                 return;
@@ -535,7 +535,7 @@ namespace HeiProMap {
             const u32 epoch_dist1 = m_valid_epoch + 1;
             m_valid_epoch += 2;
 
-            for (const auto &pair : input_matching) {
+            for (const auto &pair: input_matching) {
                 const partition_t u = pair.first;
                 const partition_t v = pair.second;
 
@@ -561,9 +561,9 @@ namespace HeiProMap {
          */
         template<typename QGraphT>
         void filter_valid_matching_incremental(const QGraphT &q_graph,
-                                               const std::vector<std::pair<partition_t, partition_t>> &input_matching,
+                                               const std::vector<std::pair<partition_t, partition_t> > &input_matching,
                                                const AlignedArray<u8> &dirty_blocks,
-                                               std::vector<std::pair<partition_t, partition_t>> &filtered_matching) {
+                                               std::vector<std::pair<partition_t, partition_t> > &filtered_matching) {
             filtered_matching.clear();
             if (input_matching.empty()) {
                 return;
@@ -579,7 +579,7 @@ namespace HeiProMap {
             m_valid_epoch += 3;
 
             // Pass 1: Accept clean pairs, mark endpoints at epoch_clean
-            for (const auto &pair : input_matching) {
+            for (const auto &pair: input_matching) {
                 const partition_t u = pair.first;
                 const partition_t v = pair.second;
                 if (!dirty_blocks[u] && !dirty_blocks[v]) {
@@ -590,7 +590,7 @@ namespace HeiProMap {
             }
 
             // Pass 2: Validate dirty pairs
-            for (const auto &pair : input_matching) {
+            for (const auto &pair: input_matching) {
                 const partition_t u = pair.first;
                 const partition_t v = pair.second;
                 if (!dirty_blocks[u] && !dirty_blocks[v]) continue;
@@ -619,9 +619,9 @@ namespace HeiProMap {
         bool has_clean_conflict(const QGraphT &q_graph, const partition_t x, const u32 epoch_clean) const {
             if (m_valid_frozen[x] >= epoch_clean) return true;
             if constexpr (LARGE_K) {
-                for (const auto &e1 : q_graph.neighbors(x)) {
+                for (const auto &e1: q_graph.neighbors(x)) {
                     if (m_valid_frozen[e1.target] >= epoch_clean) return true;
-                    for (const auto &e2 : q_graph.neighbors(e1.target)) {
+                    for (const auto &e2: q_graph.neighbors(e1.target)) {
                         if (m_valid_frozen[e2.target] >= epoch_clean) return true;
                     }
                 }
@@ -629,7 +629,10 @@ namespace HeiProMap {
                 bool found = false;
                 q_graph.for_each_neighbor(x, [&](const partition_t n1, const weight_t) {
                     if (found) return;
-                    if (m_valid_frozen[n1] >= epoch_clean) { found = true; return; }
+                    if (m_valid_frozen[n1] >= epoch_clean) {
+                        found = true;
+                        return;
+                    }
                     q_graph.for_each_neighbor(n1, [&](const partition_t n2, const weight_t) {
                         if (found) return;
                         if (m_valid_frozen[n2] >= epoch_clean) { found = true; }
