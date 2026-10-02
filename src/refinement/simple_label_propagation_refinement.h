@@ -203,19 +203,15 @@ namespace HeiProMap {
             std::vector<std::pair<partition_t, partition_t> > matching;
 
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
-                {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_qgraph");
-                    q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
-                }
+                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_qgraph");
+                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
 
                 d1_matcher.reset_used_edges();
                 bool positive_move_occurred = false;
 
                 if (config.use_static_matchings) {
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
-                        d1_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
+                    d1_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
 
                     if (static_matchings.empty()) {
                         break;
@@ -288,10 +284,8 @@ namespace HeiProMap {
                 } else {
                     std::vector<std::pair<partition_t, partition_t> > dyn_matching;
 
-                    {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
-                        d1_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
-                    }
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
+                    d1_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
 
                     if (dyn_matching.empty()) {
                         break;
@@ -299,62 +293,60 @@ namespace HeiProMap {
 
                     bool found_matching = true;
                     while (found_matching) {
-                        {
-                            HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "process");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "process");
 
-                            #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
-                            for (size_t i = 0; i < dyn_matching.size(); ++i) {
-                                const partition_t A = dyn_matching[i].first;
-                                const partition_t B = dyn_matching[i].second;
+                        #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                        for (size_t i = 0; i < dyn_matching.size(); ++i) {
+                            const partition_t A = dyn_matching[i].first;
+                            const partition_t B = dyn_matching[i].second;
 
-                                const u64 tid = omp_get_thread_num();
-                                RandomEngine &rng = rnd_engines[tid];
+                            const u64 tid = omp_get_thread_num();
+                            RandomEngine &rng = rnd_engines[tid];
 
-                                const size_t size_A = bv_manager.size(A);
-                                const size_t size_B = bv_manager.size(B);
-                                std::vector<vertex_t> local_boundary;
-                                local_boundary.reserve(size_A + size_B);
-                                for (size_t idx = 0; idx < size_A; ++idx) {
-                                    local_boundary.push_back(bv_manager.get(A, idx));
+                            const size_t size_A = bv_manager.size(A);
+                            const size_t size_B = bv_manager.size(B);
+                            std::vector<vertex_t> local_boundary;
+                            local_boundary.reserve(size_A + size_B);
+                            for (size_t idx = 0; idx < size_A; ++idx) {
+                                local_boundary.push_back(bv_manager.get(A, idx));
+                            }
+                            for (size_t idx = 0; idx < size_B; ++idx) {
+                                local_boundary.push_back(bv_manager.get(B, idx));
+                            }
+
+                            const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
+                            bool moved_in_pair = false;
+
+                            for (const vertex_t u: local_boundary) {
+                                const partition_t u_id = p_manager[u];
+                                if (u_id != A && u_id != B) { continue; }
+
+                                const partition_t target_id = (u_id == A) ? B : A;
+                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+
+                                if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
+
+                                weight_t qap_delta;
+                                if (last_level_pair) {
+                                    qap_delta = compute_edge_cut_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager);
+                                } else {
+                                    qap_delta = compute_qap_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle);
                                 }
-                                for (size_t idx = 0; idx < size_B; ++idx) {
-                                    local_boundary.push_back(bv_manager.get(B, idx));
-                                }
 
-                                const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
-                                bool moved_in_pair = false;
-
-                                for (const vertex_t u: local_boundary) {
-                                    const partition_t u_id = p_manager[u];
-                                    if (u_id != A && u_id != B) { continue; }
-
-                                    const partition_t target_id = (u_id == A) ? B : A;
-                                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
-
-                                    if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
-
-                                    weight_t qap_delta;
-                                    if (last_level_pair) {
-                                        qap_delta = compute_edge_cut_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager);
-                                    } else {
-                                        qap_delta = compute_qap_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle);
-                                    }
-
-                                    if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
-                                        apply_move(g, bv_manager, p_manager, u, u_weight, u_id, target_id);
-                                        if (qap_delta > 0) {
-                                            moved_in_pair = true;
-                                        }
+                                if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
+                                    apply_move(g, bv_manager, p_manager, u, u_weight, u_id, target_id);
+                                    if (qap_delta > 0) {
+                                        moved_in_pair = true;
                                     }
                                 }
+                            }
 
-                                if (moved_in_pair) {
-                                    if (config.use_active_scheduling) {
-                                        active_block_scheduling.activate(A, B);
-                                    }
-                                    #pragma omp atomic write
-                                    positive_move_occurred = true;
+                            if (moved_in_pair) {
+                                if (config.use_active_scheduling) {
+                                    active_block_scheduling.activate(A, B);
                                 }
+                                #pragma omp atomic write
+                                positive_move_occurred = true;
                             }
                         }
 
@@ -378,11 +370,9 @@ namespace HeiProMap {
                 }
             }
 
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
-                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
-                block_conn.compute_from_scratch(g, p_manager, m_threads);
-            }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
+            q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+            block_conn.compute_from_scratch(g, p_manager, m_threads);
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
@@ -455,11 +445,9 @@ namespace HeiProMap {
                 }
             }
 
-            {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
-                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
-                block_conn.compute_from_scratch(g, p_manager, m_threads);
-            }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
+            q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+            block_conn.compute_from_scratch(g, p_manager, m_threads);
         }
     };
 }
