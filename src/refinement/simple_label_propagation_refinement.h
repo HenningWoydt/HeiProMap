@@ -44,9 +44,26 @@
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
 #include "../utility/random_engine.h"
-#include "label_propagation_refinement.h"
 
 namespace HeiProMap {
+    class SimpleLabelPropagationConfiguration {
+    public:
+        explicit SimpleLabelPropagationConfiguration(std::string t_name) : name(std::move(t_name)) {
+        }
+
+        std::string name;
+        bool enabled = false;
+        u64 max_iteration = 25;
+
+        bool force_parallel_alg = false;
+        bool use_edge_cut = true;
+        bool use_active_scheduling = true;
+        bool use_static_matchings = true;
+
+        u64 max_matching_rounds = 512*512;
+        u64 min_matching_threshold = 8;
+    };
+
     template<bool LARGE_K>
     class SimpleLabelPropagationRefinement {
         vertex_t m_n = 0;
@@ -55,7 +72,7 @@ namespace HeiProMap {
         u64 m_threads = 1;
 
         std::vector<RandomEngine> rnd_engines;
-        LabelPropagationConfiguration config = LabelPropagationConfiguration("simple_label_propagation");
+        SimpleLabelPropagationConfiguration config = SimpleLabelPropagationConfiguration("simple_label_propagation");
 
         ActiveBlockScheduling active_block_scheduling;
         Distance1Matching<LARGE_K> d1_matcher;
@@ -124,7 +141,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 t_seed,
-                        const LabelPropagationConfiguration &t_config) {
+                        const SimpleLabelPropagationConfiguration &t_config) {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
