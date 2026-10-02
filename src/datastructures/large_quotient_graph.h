@@ -152,34 +152,31 @@ namespace HeiProMap {
                     }
                 }
             } else {
-                std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t> > > thread_edges(num_threads);
-
-                #pragma omp parallel num_threads(num_threads)
-                {
-                    const u64 tid = omp_get_thread_num();
-                    auto &local_edges = thread_edges[tid];
-
-                    #pragma omp for schedule(dynamic)
-                    for (partition_t id = 0; id < m_k; ++id) {
-                        for (const vertex_t u: bv_manager.boundary(id)) {
-                            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                                const vertex_t v = g.edges_v[i];
-                                if (u < v) {
-                                    const partition_t v_id = p_manager[v];
-                                    if (id != v_id) {
-                                        local_edges.emplace_back(id, v_id, g.edges_w[i]);
-                                    }
+                #pragma omp parallel for schedule(dynamic) num_threads(num_threads)
+                for (partition_t id = 0; id < m_k; ++id) {
+                    auto &adj = m_adj[id];
+                    for (const vertex_t u: bv_manager.boundary(id)) {
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            const vertex_t v = g.edges_v[i];
+                            const partition_t v_id = p_manager[v];
+                            if (id != v_id) {
+                                const weight_t w = g.edges_w[i];
+                                auto it = find_edge(adj, v_id);
+                                if (it != adj.end()) {
+                                    it->weight += w;
+                                } else {
+                                    adj.push_back(HalfEdge{v_id, w});
                                 }
                             }
                         }
                     }
                 }
 
-                for (u64 tid = 0; tid < num_threads; ++tid) {
-                    for (const auto &[u_id, v_id, w]: thread_edges[tid]) {
-                        add_edge(u_id, v_id, w);
-                    }
+                u64 total = 0;
+                for (partition_t id = 0; id < m_k; ++id) {
+                    total += m_adj[id].size();
                 }
+                m_total_half_edges = total;
             }
         }
 
