@@ -60,6 +60,7 @@
 #include "../coarsening/size_constrained_lp.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/simple_label_propagation_refinement.h"
 #include "HeiPa_solver.h"
 
 namespace HeiProMap {
@@ -96,7 +97,7 @@ namespace HeiProMap {
         SizeConstrainedLP size_constrained_lp_clustering;
 
         // refinement
-        LabelPropagationRefinement<LARGE_K> lp_refine;
+        SimpleLabelPropagationRefinement<LARGE_K> lp_refine;
         QuotientGraphRefinement<LARGE_K> qg_refine;
         FlowBasedRefinement<LARGE_K> flow_based_refinement;
 

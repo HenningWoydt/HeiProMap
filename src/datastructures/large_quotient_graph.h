@@ -55,6 +55,7 @@ namespace HeiProMap {
         partition_t m_k = 0;
         std::vector<std::vector<HalfEdge> > m_adj;
         AlignedArray<weight_t> m_self_weights;
+        u64 m_total_half_edges = 0;
 
         static auto find_edge(std::vector<HalfEdge> &vec, const partition_t target) {
             return std::find_if(vec.begin(), vec.end(), [target](const HalfEdge &e) {
@@ -75,6 +76,8 @@ namespace HeiProMap {
                 it->weight += w;
             } else {
                 vec.push_back(HalfEdge{v_id, w});
+                #pragma omp atomic
+                m_total_half_edges++;
             }
         }
 
@@ -88,6 +91,8 @@ namespace HeiProMap {
             if (it->weight == 0) {
                 std::swap(*it, vec.back());
                 vec.pop_back();
+                #pragma omp atomic
+                m_total_half_edges--;
             }
         }
 
@@ -100,6 +105,7 @@ namespace HeiProMap {
             m_adj.clear();
             m_adj.resize(m_k);
             m_self_weights.initialize(m_k, 0);
+            m_total_half_edges = 0;
         }
 
         template<typename GraphT, typename PartitionManagerT>
@@ -251,6 +257,10 @@ namespace HeiProMap {
 
         partition_t get_k() const {
             return m_k;
+        }
+
+        u64 total_half_edges() const {
+            return m_total_half_edges;
         }
 
         template<typename GraphT, typename PartitionManagerT>

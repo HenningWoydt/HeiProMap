@@ -61,6 +61,7 @@ namespace HeiProMap {
         };
 
         partition_t m_k = 0;
+        u64 m_total_half_edges = 0;
 
         // Canonical edge storage addressed via edge_index(min(u,v), max(u,v)).
         // We keep the same k*k indexing scheme as before for compatibility.
@@ -130,6 +131,7 @@ namespace HeiProMap {
                 prev_for(old_head, e.b) = idx;
             }
             m_head[e.b] = idx;
+            m_total_half_edges += 2;
         }
 
         void unlink_one_endpoint(const size_t idx, const partition_t x) {
@@ -163,6 +165,7 @@ namespace HeiProMap {
 
             unlink_one_endpoint(idx, e.a);
             unlink_one_endpoint(idx, e.b);
+            m_total_half_edges -= 2;
         }
 
     public:
@@ -170,6 +173,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraph", "initialize");
 
             m_k = t_k;
+            m_total_half_edges = 0;
 
             const size_t size = static_cast<size_t>(m_k) * static_cast<size_t>(m_k);
             m_edges.initialize(size);
@@ -262,6 +266,10 @@ namespace HeiProMap {
                     }
                 }
             }
+        }
+
+        u64 total_half_edges() const {
+            return m_total_half_edges;
         }
 
         size_t degree(const partition_t x) const {

@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
-#define HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
+#ifndef HEIPROMAP_SIMPLE_LABEL_PROPAGATION_REFINEMENT_H
+#define HEIPROMAP_SIMPLE_LABEL_PROPAGATION_REFINEMENT_H
 
 #include <cmath>
 #include <limits>
@@ -39,66 +39,85 @@
 #include "../datastructures/csr_graph.h"
 #include "../distance_oracles/distance_oracle.h"
 #include "../datastructures/partition_manager.h"
-#include "../datastructures/quotient_graph.h"
-#include "../datastructures/distance_3_matching.h"
+#include "../datastructures/distance_1_matching.h"
 #include "../datastructures/active_block_scheduling.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
-#include "../utility/qap.h"
 #include "../utility/random_engine.h"
+#include "label_propagation_refinement.h"
 
 namespace HeiProMap {
-    class LabelPropagationConfiguration {
-    public:
-        explicit LabelPropagationConfiguration(std::string t_name) : name(std::move(t_name)) {
-        }
-
-        std::string name;
-        bool enabled = false;
-        u64 max_iteration = 25; // how many iterations to run the algorithm at most
-
-        bool force_parallel_alg = false;
-        bool use_edge_cut = true;
-        bool use_active_scheduling = true;
-        bool use_static_matchings = true;
-
-        u64 max_matching_rounds = 512;
-        u64 min_matching_threshold = 8;
-    };
-
     template<bool LARGE_K>
-    class LabelPropagationRefinement {
+    class SimpleLabelPropagationRefinement {
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
         u64 m_threads = 1;
 
         std::vector<RandomEngine> rnd_engines;
-        LabelPropagationConfiguration config = LabelPropagationConfiguration("default_label_propagation");
+        LabelPropagationConfiguration config = LabelPropagationConfiguration("simple_label_propagation");
 
         ActiveBlockScheduling active_block_scheduling;
-        Distance3Matching<LARGE_K> d3_matcher;
+        Distance1Matching<LARGE_K> d1_matcher;
 
-        template<typename QGraphT>
         static inline __attribute__((always_inline)) void apply_move(graph_t &g,
                                                                      bv_manager_t &bv_manager,
                                                                      p_manager_t &p_manager,
-                                                                     QGraphT &q_graph,
-                                                                     block_conn_t &block_conn,
                                                                      const vertex_t u,
                                                                      const weight_t u_weight,
                                                                      const partition_t from_id,
                                                                      const partition_t to_id) {
             bv_manager.move(g, p_manager, u, from_id, to_id);
-            q_graph.move(g, p_manager, u, from_id, to_id);
-            block_conn.move(g, u, from_id, to_id);
             p_manager.move_serial(u, u_weight, from_id, to_id);
         }
 
-    public:
-        LabelPropagationRefinement() = default;
+        template<bool t_uniform_e_weights, typename DistanceOracleT>
+        static inline __attribute__((always_inline)) weight_t compute_qap_delta(const graph_t &g,
+                                                                                const vertex_t u,
+                                                                                const partition_t old_id,
+                                                                                const partition_t new_id,
+                                                                                const p_manager_t &p_manager,
+                                                                                DistanceOracleT &d_oracle) {
+            weight_t qap_delta = 0;
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const partition_t v_id = p_manager[v];
+                if constexpr (t_uniform_e_weights) {
+                    qap_delta += d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id);
+                } else {
+                    const weight_t w = g.edges_w[i];
+                    qap_delta += (d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id)) * w;
+                }
+            }
+            return qap_delta;
+        }
 
-        ~LabelPropagationRefinement() = default;
+        template<bool t_uniform_e_weights>
+        static inline __attribute__((always_inline)) weight_t compute_edge_cut_delta(const graph_t &g,
+                                                                                     const vertex_t u,
+                                                                                     const partition_t old_id,
+                                                                                     const partition_t new_id,
+                                                                                     const p_manager_t &p_manager) {
+            weight_t delta = 0;
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const partition_t v_id = p_manager[v];
+                if constexpr (t_uniform_e_weights) {
+                    delta -= (v_id != new_id);
+                    delta += (v_id != old_id);
+                } else {
+                    const weight_t w = g.edges_w[i];
+                    delta -= (v_id != new_id) * w;
+                    delta += (v_id != old_id) * w;
+                }
+            }
+            return delta;
+        }
+
+    public:
+        SimpleLabelPropagationRefinement() = default;
+
+        ~SimpleLabelPropagationRefinement() = default;
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
@@ -119,7 +138,7 @@ namespace HeiProMap {
             }
 
             active_block_scheduling.initialize(m_k);
-            d3_matcher.initialize(m_k);
+            d1_matcher.initialize(m_k);
         }
 
         template<typename DistanceOracleT, typename QGraphT>
@@ -167,37 +186,32 @@ namespace HeiProMap {
             std::vector<std::pair<partition_t, partition_t> > matching;
 
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "reset_used_edges");
-                d3_matcher.reset_used_edges();
+                {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_qgraph");
+                    q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+                }
 
+                d1_matcher.reset_used_edges();
                 bool positive_move_occurred = false;
 
                 if (config.use_static_matchings) {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "matching");
-                    d3_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
+                    {
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
+                        d1_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
+                    }
 
                     if (static_matchings.empty()) {
                         break;
                     }
 
-                    const u64 topo_base = q_graph.total_half_edges();
-
                     for (size_t i = 0; i < static_matchings.size(); ++i) {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "filter_matching");
-
-                        const auto &raw_batch = static_matchings[i];
-
-                        if (q_graph.total_half_edges() != topo_base) {
-                            d3_matcher.filter_valid_matching(q_graph, raw_batch, matching);
-                        } else {
-                            matching.assign(raw_batch.begin(), raw_batch.end());
-                        }
+                        matching.assign(static_matchings[i].begin(), static_matchings[i].end());
 
                         if (matching.empty()) {
                             continue;
                         }
 
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process");
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "process");
 
                         #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
                         for (size_t j = 0; j < matching.size(); ++j) {
@@ -232,13 +246,13 @@ namespace HeiProMap {
 
                                 weight_t qap_delta;
                                 if (last_level_pair) {
-                                    qap_delta = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, block_conn);
+                                    qap_delta = compute_edge_cut_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager);
                                 } else {
-                                    qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+                                    qap_delta = compute_qap_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle);
                                 }
 
                                 if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
-                                    apply_move(g, bv_manager, p_manager, q_graph, block_conn, u, u_weight, u_id, target_id);
+                                    apply_move(g, bv_manager, p_manager, u, u_weight, u_id, target_id);
                                     if (qap_delta > 0) {
                                         moved_in_pair = true;
                                     }
@@ -255,71 +269,75 @@ namespace HeiProMap {
                         }
                     }
                 } else {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "matching");
                     std::vector<std::pair<partition_t, partition_t> > dyn_matching;
-                    bool found_matching = d3_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
 
-                    if (!found_matching) {
+                    {
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
+                        d1_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
+                    }
+
+                    if (dyn_matching.empty()) {
                         break;
                     }
 
+                    bool found_matching = true;
                     while (found_matching) {
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process");
+                        {
+                            HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "process");
 
-                        #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
-                        for (size_t i = 0; i < dyn_matching.size(); ++i) {
-                            const partition_t A = dyn_matching[i].first;
-                            const partition_t B = dyn_matching[i].second;
+                            #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                            for (size_t i = 0; i < dyn_matching.size(); ++i) {
+                                const partition_t A = dyn_matching[i].first;
+                                const partition_t B = dyn_matching[i].second;
 
-                            const u64 tid = omp_get_thread_num();
-                            RandomEngine &rng = rnd_engines[tid];
+                                const u64 tid = omp_get_thread_num();
+                                RandomEngine &rng = rnd_engines[tid];
 
-                            // Copy boundary vertices of A and B to local vector to avoid modification issues
-                            const size_t size_A = bv_manager.size(A);
-                            const size_t size_B = bv_manager.size(B);
-                            std::vector<vertex_t> local_boundary;
-                            local_boundary.reserve(size_A + size_B);
-                            for (size_t idx = 0; idx < size_A; ++idx) {
-                                local_boundary.push_back(bv_manager.get(A, idx));
-                            }
-                            for (size_t idx = 0; idx < size_B; ++idx) {
-                                local_boundary.push_back(bv_manager.get(B, idx));
-                            }
-
-                            const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
-                            bool moved_in_pair = false;
-
-                            // Refine vertices sequentially within matched pair (A, B)
-                            for (const vertex_t u: local_boundary) {
-                                const partition_t u_id = p_manager[u];
-                                if (u_id != A && u_id != B) { continue; }
-
-                                const partition_t target_id = (u_id == A) ? B : A;
-                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
-
-                                if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
-
-                                weight_t qap_delta;
-                                if (last_level_pair) {
-                                    qap_delta = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, block_conn);
-                                } else {
-                                    qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+                                const size_t size_A = bv_manager.size(A);
+                                const size_t size_B = bv_manager.size(B);
+                                std::vector<vertex_t> local_boundary;
+                                local_boundary.reserve(size_A + size_B);
+                                for (size_t idx = 0; idx < size_A; ++idx) {
+                                    local_boundary.push_back(bv_manager.get(A, idx));
+                                }
+                                for (size_t idx = 0; idx < size_B; ++idx) {
+                                    local_boundary.push_back(bv_manager.get(B, idx));
                                 }
 
-                                if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
-                                    apply_move(g, bv_manager, p_manager, q_graph, block_conn, u, u_weight, u_id, target_id);
-                                    if (qap_delta > 0) {
-                                        moved_in_pair = true;
+                                const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
+                                bool moved_in_pair = false;
+
+                                for (const vertex_t u: local_boundary) {
+                                    const partition_t u_id = p_manager[u];
+                                    if (u_id != A && u_id != B) { continue; }
+
+                                    const partition_t target_id = (u_id == A) ? B : A;
+                                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+
+                                    if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
+
+                                    weight_t qap_delta;
+                                    if (last_level_pair) {
+                                        qap_delta = compute_edge_cut_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager);
+                                    } else {
+                                        qap_delta = compute_qap_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle);
+                                    }
+
+                                    if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
+                                        apply_move(g, bv_manager, p_manager, u, u_weight, u_id, target_id);
+                                        if (qap_delta > 0) {
+                                            moved_in_pair = true;
+                                        }
                                     }
                                 }
-                            }
 
-                            if (moved_in_pair) {
-                                if (config.use_active_scheduling) {
-                                    active_block_scheduling.activate(A, B);
+                                if (moved_in_pair) {
+                                    if (config.use_active_scheduling) {
+                                        active_block_scheduling.activate(A, B);
+                                    }
+                                    #pragma omp atomic write
+                                    positive_move_occurred = true;
                                 }
-                                #pragma omp atomic write
-                                positive_move_occurred = true;
                             }
                         }
 
@@ -329,8 +347,8 @@ namespace HeiProMap {
                             }
                         }
 
-                        HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "matching");
-                        found_matching = d3_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
+                        HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
+                        found_matching = d1_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
                     }
                 }
 
@@ -341,6 +359,12 @@ namespace HeiProMap {
                 if (config.use_active_scheduling) {
                     active_block_scheduling.next_round();
                 }
+            }
+
+            {
+                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
+                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+                block_conn.compute_from_scratch(g, p_manager, m_threads);
             }
         }
 
@@ -357,7 +381,7 @@ namespace HeiProMap {
             for (u64 iteration = 0; iteration < config.max_iteration && positive_move_occurred; ++iteration) {
                 positive_move_occurred = false;
 
-                HEIPROMAP_PROFILE_SCOPE("refinement", "LabelPropagationRefinement", "process_vertices");
+                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "process_vertices");
                 for (vertex_t u = 0; u < g.n; ++u) {
                     if (!bv_manager.is_boundary(u)) { continue; }
 
@@ -368,13 +392,33 @@ namespace HeiProMap {
                     weight_t best_qap_delta = -std::numeric_limits<weight_t>::max();
                     f32 counter = 0.0f;
 
-                    for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
-                        const partition_t id = block_conn.get_id(i);
+                    // Find neighboring blocks on the fly
+                    partition_t neighbor_blocks[256];
+                    size_t n_neighbor_blocks = 0;
+
+                    for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                        const partition_t v_id = p_manager[g.edges_v[i]];
+                        if (v_id == u_id) { continue; }
+
+                        bool found = false;
+                        for (size_t j = 0; j < n_neighbor_blocks; ++j) {
+                            if (neighbor_blocks[j] == v_id) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found && n_neighbor_blocks < 256) {
+                            neighbor_blocks[n_neighbor_blocks++] = v_id;
+                        }
+                    }
+
+                    for (size_t bi = 0; bi < n_neighbor_blocks; ++bi) {
+                        const partition_t id = neighbor_blocks[bi];
                         const weight_t v_id_weight = p_manager.get_bweight(id);
 
-                        if (id == u_id || v_id_weight + u_weight > p_manager.lmax[id]) { continue; }
+                        if (v_id_weight + u_weight > p_manager.lmax[id]) { continue; }
 
-                        const weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
+                        const weight_t qap_delta = compute_qap_delta<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle);
                         if (qap_delta > best_qap_delta) {
                             best_id = id;
                             best_qap_delta = qap_delta;
@@ -388,13 +432,19 @@ namespace HeiProMap {
                     }
 
                     if (best_qap_delta > 0 || (best_qap_delta == 0 && random_engine.get_f32() < 0.5f)) {
-                        apply_move(g, bv_manager, p_manager, q_graph, block_conn, u, u_weight, u_id, best_id);
+                        apply_move(g, bv_manager, p_manager, u, u_weight, u_id, best_id);
                         positive_move_occurred |= (best_qap_delta > 0);
                     }
                 }
+            }
+
+            {
+                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
+                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+                block_conn.compute_from_scratch(g, p_manager, m_threads);
             }
         }
     };
 }
 
-#endif //HEIPROMAP_LABEL_PROPAGATION_REFINEMENT_H
+#endif //HEIPROMAP_SIMPLE_LABEL_PROPAGATION_REFINEMENT_H
