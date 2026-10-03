@@ -322,6 +322,7 @@ namespace HeiProMap {
 
             size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             size_constrained_lp_clustering_configuration.f = 32;
+            size_constrained_lp_clustering_configuration.max_rounds = 5;
 
             enable_q_graph = false;
             enable_block_conn = false;
@@ -358,6 +359,10 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
+
+            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
+            size_constrained_lp_clustering_configuration.f = 32;
+            size_constrained_lp_clustering_configuration.max_rounds = 10;
         }
 
         void set_strong() {
@@ -389,6 +394,10 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
+
+            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
+            size_constrained_lp_clustering_configuration.f = 32;
+            size_constrained_lp_clustering_configuration.max_rounds = 10;
         }
 
         void set_experimental() {
