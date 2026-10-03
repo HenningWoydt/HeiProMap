@@ -320,6 +320,9 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
 
+            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            size_constrained_lp_clustering_configuration.f = 32;
+
             enable_q_graph = false;
             enable_block_conn = false;
             deep_label_propagation_refinement_config.enable_q_graph = false;
