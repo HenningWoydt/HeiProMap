@@ -186,8 +186,10 @@ namespace HeiProMap {
                        QuotientGraphT &q_graph,
                        DistanceOracleT &d_oracle,
                        block_conn_t &block_conn,
-                       f64 imbalance) {
-            fill_empty_blocks(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
+                       f64 imbalance,
+                       const bool enable_q_graph = true,
+                       const bool enable_block_conn = true) {
+            fill_empty_blocks(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance, enable_q_graph, enable_block_conn);
 
             HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "allocate");
 
@@ -290,8 +292,8 @@ namespace HeiProMap {
 
                     // move
                     bv_manager.move(g, p_manager, u, u_id, best_id);
-                    q_graph.move(g, p_manager, u, u_id, best_id);
-                    block_conn.move(g, u, u_id, best_id);
+                    if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
+                    if (enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
@@ -318,10 +320,12 @@ namespace HeiProMap {
                                   QuotientGraphT &q_graph,
                                   DistanceOracleT &d_oracle,
                                   block_conn_t &block_conn,
-                                  f64 imbalance) {
+                                  f64 imbalance,
+                                  const bool enable_q_graph = true,
+                                  const bool enable_block_conn = true) {
             weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
 
-            rebalance(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
+            rebalance(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance, enable_q_graph, enable_block_conn);
             HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "allocate");
 
             AlignedArray<vertex_t> boundary;
@@ -384,7 +388,9 @@ namespace HeiProMap {
                 for (u64 i = 0; i < boundary_size; ++i) {
                     vertex_t u = boundary[i];
                     state_ids[u] += 1;
-                    RebalancerMove move = get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, state_ids[u], lmax);
+                    RebalancerMove move = enable_block_conn
+                        ? get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, state_ids[u], lmax)
+                        : get_local_best_move(u, g, p_manager, d_oracle, state_ids[u], lmax);
                     moves[i] = move;
                 }
 
@@ -417,7 +423,9 @@ namespace HeiProMap {
                     if (p_manager.get_bweight(best_id) + u_weight > lmax) {
                         // best_id is overloaded, recompute
                         state_ids[u] += 1;
-                        RebalancerMove new_move = get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, state_ids[u], lmax);
+                        RebalancerMove new_move = enable_block_conn
+                            ? get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, state_ids[u], lmax)
+                            : get_local_best_move(u, g, p_manager, d_oracle, state_ids[u], lmax);
                         if (new_move.best_id != m_k) {
                             global_queue.push(new_move);
                         }
@@ -426,8 +434,8 @@ namespace HeiProMap {
 
                     // move
                     bv_manager.move(g, p_manager, u, u_id, best_id);
-                    q_graph.move(g, p_manager, u, u_id, best_id);
-                    block_conn.move(g, u, u_id, best_id);
+                    if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
+                    if (enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
@@ -438,7 +446,9 @@ namespace HeiProMap {
                         if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
 
                         state_ids[v] += 1;
-                        RebalancerMove new_move = get_best_move(v, g, p_manager, q_graph, d_oracle, block_conn, state_ids[v], lmax);
+                        RebalancerMove new_move = enable_block_conn
+                            ? get_best_move(v, g, p_manager, q_graph, d_oracle, block_conn, state_ids[v], lmax)
+                            : get_local_best_move(v, g, p_manager, d_oracle, state_ids[v], lmax);
                         if (new_move.best_id != m_k) {
                             global_queue.push(new_move);
                         }
@@ -454,7 +464,9 @@ namespace HeiProMap {
                                QuotientGraphT &q_graph,
                                DistanceOracleT &d_oracle,
                                block_conn_t &block_conn,
-                               f64 imbalance) {
+                               f64 imbalance,
+                               const bool enable_q_graph = true,
+                               const bool enable_block_conn = true) {
             // return;
             HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "fill_empty_blocks");
 
@@ -487,7 +499,9 @@ namespace HeiProMap {
 
                     for (partition_t move_id: blocks_to_fill) {
                         if (p_manager.get_bweight(move_id) + u_w <= lmax) {
-                            weight_t qap = get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle, block_conn);
+                            weight_t qap = enable_block_conn
+                                ? get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle, block_conn)
+                                : get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle);
 
                             if (qap > best_qap) {
                                 best_qap = qap;
@@ -515,8 +529,8 @@ namespace HeiProMap {
                 if (p_manager.get_bweight(new_id) + u_w > lmax) { continue; }
 
                 bv_manager.move(g, p_manager, u, u_id, new_id);
-                q_graph.move(g, p_manager, u, u_id, new_id);
-                block_conn.move(g, u, u_id, new_id);
+                if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, new_id); }
+                if (enable_block_conn) { block_conn.move(g, u, u_id, new_id); }
                 p_manager.move(u, u_w, u_id, new_id);
 
                 if (p_manager.get_bweight(new_id) >= fill_value) {
@@ -538,7 +552,9 @@ namespace HeiProMap {
                     for (partition_t move_id: blocks_to_fill) {
                         if (blocks_to_fill_lookup[move_id] == false) { continue; }
                         if (p_manager.get_bweight(move_id) + v_w <= lmax) {
-                            weight_t qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn);
+                            weight_t qap = enable_block_conn
+                                ? get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn)
+                                : get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle);
 
                             if (qap > best_qap) {
                                 best_qap = qap;

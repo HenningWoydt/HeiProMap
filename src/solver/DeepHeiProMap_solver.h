@@ -467,16 +467,20 @@ namespace HeiProMap {
             const graph_t &g = graphs.back();
 
             // Phase 1: Recompute block connections
-            block_conn.compute_from_scratch(g, p_manager, ac.threads);
+            if (ac.enable_block_conn) {
+                block_conn.compute_from_scratch(g, p_manager, ac.threads);
+            }
 
             // Phase 2: Recompute boundary vertices
             bv_manager.compute_from_scratch(g, p_manager, ac.threads);
 
             // Phase 3: Recompute quotient graph using boundary vertices from Phase 2
-            q_graph.compute_from_scratch(g, p_manager, bv_manager, ac.threads);
+            if (ac.enable_q_graph) {
+                q_graph.compute_from_scratch(g, p_manager, bv_manager, ac.threads);
+            }
 
             recompute_datastructures_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, ac.enable_q_graph, ac.enable_block_conn));
         }
 
         void coarsening(const u64 level, const weight_t max_v_weight) {
@@ -529,18 +533,18 @@ namespace HeiProMap {
                 auto sp_local = get_time_point();
                 qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads));
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, ac.enable_q_graph, ac.enable_block_conn));
             }
 
             if (ac.deep_flow_based_refinement_config.enabled) {
                 auto sp_local = get_time_point();
                 flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads));
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, ac.enable_q_graph, ac.enable_block_conn));
             }
 
             refinement_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, ac.enable_q_graph, ac.enable_block_conn));
         }
 
         void rebalance(const u64 level) {
@@ -551,13 +555,13 @@ namespace HeiProMap {
             }
 
             if (level == 0) {
-                rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance, ac.enable_q_graph, ac.enable_block_conn);
             } else {
-                rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance, ac.enable_q_graph, ac.enable_block_conn);
             }
 
             rebalance_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, ac.enable_q_graph, ac.enable_block_conn));
         }
     };
 }

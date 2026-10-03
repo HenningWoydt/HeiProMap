@@ -62,6 +62,77 @@ namespace HeiProMap {
 
         u64 max_matching_rounds = 512*512;
         u64 min_matching_threshold = 8;
+
+        bool enable_q_graph = true;
+        bool enable_block_conn = true;
+    };
+
+    class BlockAdjacency {
+    public:
+        struct Entry {
+            partition_t target = 0;
+            mutable u32 used_epoch = 0;
+        };
+
+    private:
+        partition_t m_k = 0;
+        std::vector<std::vector<Entry>> m_adj;
+
+    public:
+        void initialize(const partition_t k) {
+            m_k = k;
+            m_adj.clear();
+            m_adj.resize(m_k);
+        }
+
+        template<typename GraphT, typename PartitionManagerT, typename BoundaryVertexManagerT>
+        void compute(const GraphT &g,
+                     const PartitionManagerT &p_manager,
+                     const BoundaryVertexManagerT &bv_manager,
+                     const u64 num_threads) {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "BlockAdjacency", "compute");
+
+            #pragma omp parallel num_threads(num_threads)
+            {
+                AlignedArray<u32> seen;
+                seen.initialize(m_k, 0);
+                u32 epoch = 0;
+
+                #pragma omp for schedule(dynamic)
+                for (partition_t id = 0; id < m_k; ++id) {
+                    epoch++;
+                    if (epoch == 0) { seen.fill(0); epoch = 1; }
+
+                    auto &adj = m_adj[id];
+                    adj.clear();
+                    for (const vertex_t u : bv_manager.boundary(id)) {
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            const partition_t v_id = p_manager[g.edges_v[i]];
+                            if (id != v_id && seen[v_id] != epoch) {
+                                seen[v_id] = epoch;
+                                adj.push_back(Entry{v_id});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const std::vector<Entry> &neighbors(const partition_t x) const { return m_adj[x]; }
+        size_t degree(const partition_t x) const { return m_adj[x].size(); }
+
+        template<typename F>
+        void for_each_neighbor(const partition_t x, F &&f) const {
+            for (const auto &e : m_adj[x]) {
+                f(e.target, weight_t(1));
+            }
+        }
+
+        size_t edge_index(const partition_t u_id, const partition_t v_id) const {
+            const partition_t min_part = std::min(u_id, v_id);
+            const partition_t max_part = std::max(u_id, v_id);
+            return static_cast<size_t>(min_part) * static_cast<size_t>(m_k) + static_cast<size_t>(max_part);
+        }
     };
 
     template<bool LARGE_K>
@@ -76,6 +147,7 @@ namespace HeiProMap {
 
         ActiveBlockScheduling active_block_scheduling;
         Distance1Matching<LARGE_K> d1_matcher;
+        BlockAdjacency block_adjacency;
 
         static inline __attribute__((always_inline)) void apply_move(graph_t &g,
                                                                      bv_manager_t &bv_manager,
@@ -156,6 +228,7 @@ namespace HeiProMap {
 
             active_block_scheduling.initialize(m_k);
             d1_matcher.initialize(m_k);
+            block_adjacency.initialize(m_k);
         }
 
         template<typename DistanceOracleT, typename QGraphT>
@@ -203,15 +276,15 @@ namespace HeiProMap {
             std::vector<std::pair<partition_t, partition_t> > matching;
 
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_qgraph");
-                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+                HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_adjacency");
+                block_adjacency.compute(g, p_manager, bv_manager, m_threads);
 
                 d1_matcher.reset_used_edges();
                 bool positive_move_occurred = false;
 
                 if (config.use_static_matchings) {
                     HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
-                    d1_matcher.compute_static_matchings(q_graph, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
+                    d1_matcher.compute_static_matchings(block_adjacency, p_manager, active_block_scheduling.active_this_round, static_matchings, config.max_matching_rounds, config.min_matching_threshold);
 
                     if (static_matchings.empty()) {
                         break;
@@ -357,7 +430,7 @@ namespace HeiProMap {
                         }
 
                         HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "matching");
-                        found_matching = d1_matcher.find_matching(q_graph, p_manager, active_block_scheduling.active_this_round, dyn_matching);
+                        found_matching = d1_matcher.find_matching(block_adjacency, p_manager, active_block_scheduling.active_this_round, dyn_matching);
                     }
                 }
 
@@ -371,8 +444,12 @@ namespace HeiProMap {
             }
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
-            q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
-            block_conn.compute_from_scratch(g, p_manager, m_threads);
+            if (config.enable_q_graph) {
+                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+            }
+            if (config.enable_block_conn) {
+                block_conn.compute_from_scratch(g, p_manager, m_threads);
+            }
         }
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, typename DistanceOracleT, typename QGraphT>
@@ -446,8 +523,12 @@ namespace HeiProMap {
             }
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_final");
-            q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
-            block_conn.compute_from_scratch(g, p_manager, m_threads);
+            if (config.enable_q_graph) {
+                q_graph.compute_from_scratch(g, p_manager, bv_manager, m_threads);
+            }
+            if (config.enable_block_conn) {
+                block_conn.compute_from_scratch(g, p_manager, m_threads);
+            }
         }
     };
 }

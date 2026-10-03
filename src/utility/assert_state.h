@@ -454,7 +454,9 @@ namespace HeiProMap {
                                                 const QGraphT &q_graph,
                                                 const block_conn_t &block_conn,
                                                 const partition_t k,
-                                                const u64 num_threads = 1) {
+                                                const u64 num_threads = 1,
+                                                const bool enable_q_graph = true,
+                                                const bool enable_block_conn = true) {
         HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_after_partitioning");
 
         ASSERT(assert_csr_structure(g, num_threads));
@@ -464,8 +466,8 @@ namespace HeiProMap {
         ASSERT(assert_bweights(g, p_manager, k, num_threads));
         ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager, num_threads));
         ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k, num_threads));
-        ASSERT(assert_correct_quotient_graph(g, p_manager, bv_manager, q_graph, k, num_threads));
-        ASSERT(assert_correct_block_conn(g, p_manager, block_conn, k, num_threads));
+        if (enable_q_graph) { ASSERT(assert_correct_quotient_graph(g, p_manager, bv_manager, q_graph, k, num_threads)); }
+        if (enable_block_conn) { ASSERT(assert_correct_block_conn(g, p_manager, block_conn, k, num_threads)); }
 
         return true;
     }

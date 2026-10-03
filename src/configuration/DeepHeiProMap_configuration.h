@@ -198,6 +198,10 @@ namespace HeiProMap {
         vertex_t intermediate_C = 32;
         u64 intermediate_kappa = 1;
 
+        // datastructure flags
+        bool enable_q_graph = true;
+        bool enable_block_conn = true;
+
         // refinement algorithms
         SimpleLabelPropagationConfiguration deep_label_propagation_refinement_config = SimpleLabelPropagationConfiguration("Deep Label Propagation Refinement");
         QuotientGraphRefinementConfiguration deep_quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Deep Quotient Graph Refinement");
@@ -315,6 +319,11 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.use_closed_vertex_set = true;
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+
+            enable_q_graph = false;
+            enable_block_conn = false;
+            deep_label_propagation_refinement_config.enable_q_graph = false;
+            deep_label_propagation_refinement_config.enable_block_conn = false;
         }
 
         void set_eco() {
