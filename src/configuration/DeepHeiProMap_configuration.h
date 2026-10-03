@@ -292,8 +292,8 @@ namespace HeiProMap {
         }
 
         void set_fast() {
-            // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_string = "size-constrained-lp";
+            // coarsening_algorithm_string = "global-paths";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
 
             distance_oracle_algorithm_string = "binary-based";

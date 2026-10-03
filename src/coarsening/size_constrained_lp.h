@@ -245,7 +245,7 @@ namespace HeiProMap {
                 FlatMap<vertex_t, f32> flat_map;
                 flat_map.reserve(128);
 
-                #pragma omp for schedule(dynamic) reduction(+:n_moved)
+                #pragma omp for schedule(static) reduction(+:n_moved)
                 for (size_t i = 0; i < g.n; ++i) {
                     const vertex_t u = flat_vertices[i];
                     if (active[u] == 0) { continue; }
@@ -437,6 +437,7 @@ namespace HeiProMap {
             weight_t max_v_w = 0;
             vertex_t max_deg = 0;
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "max");
+            #pragma omp parallel for num_threads(threads) reduction(max:max_v_w,max_deg)
             for (vertex_t u = 0; u < g.n; ++u) {
                 max_v_w = std::max(max_v_w, g.v_weights[u]);
                 max_deg = std::max(max_deg, g.deg(u));
@@ -479,6 +480,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "cluster_weights");
             cluster_weights.initialize(g.n);
             cluster_count.initialize(g.n);
+            #pragma omp parallel for num_threads(threads)
             for (vertex_t u = 0; u < g.n; ++u) {
                 mapping.set(u, u);
                 cluster_weights[u] = g.v_weights[u];
@@ -487,18 +489,26 @@ namespace HeiProMap {
 
             // Setup active tracking
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "active");
-            active.initialize(g.n, 1);
-            active_next.initialize(g.n, 1);
+            active.initialize(g.n);
+            active_next.initialize(g.n);
+            #pragma omp parallel for num_threads(threads)
+            for (vertex_t u = 0; u < g.n; ++u) {
+                active[u] = 1;
+                active_next[u] = 1;
+            }
 
             for (u64 round = 0; round < config.max_rounds; ++round) {
                 u64 n_moved = 0;
 
                 if (config.use_degree_ordering) {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
+                    u64 shuffle_seed = random_engine.get_u64();
+                    #pragma omp parallel for num_threads(threads) schedule(dynamic, 1)
                     for (size_t i = 0; i < B - 1; ++i) {
                         const size_t beg = bucket_offsets[i];
                         const size_t end = bucket_offsets[i + 1];
-                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, random_engine.generator);
+                        std::mt19937 local_gen(shuffle_seed + i);
+                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, local_gen);
                     }
                 }
 
@@ -515,7 +525,10 @@ namespace HeiProMap {
                 // Swap active buffers for next round
                 HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "swap_active");
                 std::swap(active, active_next);
-                active_next.initialize(g.n, 0);
+                #pragma omp parallel for num_threads(threads)
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    active_next[u] = 0;
+                }
             }
 
             merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
@@ -547,6 +560,7 @@ namespace HeiProMap {
             }
             mapping.set_coarse_n(new_id);
 
+            #pragma omp parallel for num_threads(threads)
             for (vertex_t u = 0; u < g.n; ++u) {
                 mapping.set(u, remap[mapping.get(u)]);
             }
