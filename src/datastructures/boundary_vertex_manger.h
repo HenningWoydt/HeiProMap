@@ -163,7 +163,7 @@ namespace HeiProMap {
 
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager) {
-            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "compute_from_scratch");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "compute_from_scratch_serial");
             m_n = g.n;
             m_n_boundary_edges.initialize(m_n, 0);
             m_vertex_idx.initialize(m_n);
@@ -277,7 +277,7 @@ namespace HeiProMap {
         void compute_from_scratch(const graph_t &g,
                                   const p_manager_t &p_manager,
                                   const u64 num_threads) {
-            HEIPROMAP_PROFILE_SCOPE("uncontraction", "BoundaryVertexManager", "compute_from_scratch_par");
+            HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "bv_manager", "compute_from_scratch");
             if (num_threads <= 1) {
                 compute_from_scratch(g, p_manager);
                 return;
