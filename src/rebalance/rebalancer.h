@@ -311,6 +311,77 @@ namespace HeiProMap {
                     }
                 }
             }
+
+            resolve_residual_overloads(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax, enable_q_graph, enable_block_conn);
+        }
+
+        template<typename DistanceOracleT, typename QuotientGraphT>
+        void resolve_residual_overloads(const graph_t &g,
+                                        p_manager_t &p_manager,
+                                        bv_manager_t &bv_manager,
+                                        QuotientGraphT &q_graph,
+                                        DistanceOracleT &d_oracle,
+                                        block_conn_t &block_conn,
+                                        weight_t lmax,
+                                        const bool enable_q_graph,
+                                        const bool enable_block_conn) {
+            HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "resolve_residual");
+
+            std::vector<vertex_t> candidates;
+            for (partition_t id = 0; id < m_k; ++id) {
+                if (!p_manager.is_active(id)) continue;
+                if (p_manager.get_bweight(id) <= lmax) continue;
+                for (size_t i = 0; i < bv_manager.size(id); ++i) {
+                    candidates.push_back(bv_manager.get(id, i));
+                }
+            }
+
+            if (candidates.empty()) return;
+
+            std::vector<partition_t> underloaded;
+            for (partition_t id = 0; id < m_k; ++id) {
+                if (!p_manager.is_active(id)) continue;
+                if (p_manager.get_bweight(id) < lmax) {
+                    underloaded.push_back(id);
+                }
+            }
+
+            if (underloaded.empty()) return;
+
+            size_t ul_idx = 0;
+            for (vertex_t u : candidates) {
+                partition_t u_id = p_manager[u];
+                weight_t u_w = g.v_weights[u];
+                if (p_manager[u] != u_id) continue;
+                if (p_manager.get_bweight(u_id) <= lmax) continue;
+
+                partition_t best_id = m_k;
+                weight_t best_qap = -std::numeric_limits<weight_t>::max();
+
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                    partition_t v_id = p_manager[g.edges_v[j]];
+                    if (v_id == u_id) continue;
+                    if (p_manager.get_bweight(v_id) + u_w > lmax) continue;
+                    weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
+                    if (qap_delta > best_qap) { best_qap = qap_delta; best_id = v_id; }
+                }
+
+                if (best_id == m_k) {
+                    while (ul_idx < underloaded.size() && p_manager.get_bweight(underloaded[ul_idx]) + u_w > lmax) {
+                        ul_idx++;
+                    }
+                    if (ul_idx < underloaded.size()) {
+                        best_id = underloaded[ul_idx];
+                    }
+                }
+
+                if (best_id == m_k) continue;
+
+                bv_manager.move(g, p_manager, u, u_id, best_id);
+                if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
+                if (enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
+                p_manager.move(u, u_w, u_id, best_id);
+            }
         }
 
         template<typename DistanceOracleT, typename QuotientGraphT>
