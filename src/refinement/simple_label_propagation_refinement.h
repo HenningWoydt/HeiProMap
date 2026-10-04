@@ -98,7 +98,7 @@ namespace HeiProMap {
                 seen.initialize(m_k, 0);
                 u32 epoch = 0;
 
-                #pragma omp for schedule(dynamic)
+                #pragma omp for schedule(static)
                 for (partition_t id = 0; id < m_k; ++id) {
                     epoch++;
                     if (epoch == 0) { seen.fill(0); epoch = 1; }
@@ -275,6 +275,8 @@ namespace HeiProMap {
             std::vector<std::vector<std::pair<partition_t, partition_t> > > static_matchings;
             std::vector<std::pair<partition_t, partition_t> > matching;
 
+            std::vector<std::vector<vertex_t>> thread_local_boundary(m_threads);
+
             for (u64 iteration = 0; iteration < config.max_iteration; ++iteration) {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleLPRefinement", "recompute_adjacency");
                 block_adjacency.compute(g, p_manager, bv_manager, m_threads);
@@ -309,14 +311,10 @@ namespace HeiProMap {
 
                             const size_t size_A = bv_manager.size(A);
                             const size_t size_B = bv_manager.size(B);
-                            std::vector<vertex_t> local_boundary;
-                            local_boundary.reserve(size_A + size_B);
-                            for (size_t idx = 0; idx < size_A; ++idx) {
-                                local_boundary.push_back(bv_manager.get(A, idx));
-                            }
-                            for (size_t idx = 0; idx < size_B; ++idx) {
-                                local_boundary.push_back(bv_manager.get(B, idx));
-                            }
+                            auto &local_boundary = thread_local_boundary[tid];
+                            local_boundary.clear();
+                            local_boundary.insert(local_boundary.end(), bv_manager.boundary(A).begin(), bv_manager.boundary(A).end());
+                            local_boundary.insert(local_boundary.end(), bv_manager.boundary(B).begin(), bv_manager.boundary(B).end());
 
                             const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
                             bool moved_in_pair = false;
@@ -378,14 +376,10 @@ namespace HeiProMap {
 
                             const size_t size_A = bv_manager.size(A);
                             const size_t size_B = bv_manager.size(B);
-                            std::vector<vertex_t> local_boundary;
-                            local_boundary.reserve(size_A + size_B);
-                            for (size_t idx = 0; idx < size_A; ++idx) {
-                                local_boundary.push_back(bv_manager.get(A, idx));
-                            }
-                            for (size_t idx = 0; idx < size_B; ++idx) {
-                                local_boundary.push_back(bv_manager.get(B, idx));
-                            }
+                            auto &local_boundary = thread_local_boundary[tid];
+                            local_boundary.clear();
+                            local_boundary.insert(local_boundary.end(), bv_manager.boundary(A).begin(), bv_manager.boundary(A).end());
+                            local_boundary.insert(local_boundary.end(), bv_manager.boundary(B).begin(), bv_manager.boundary(B).end());
 
                             const bool last_level_pair = config.use_edge_cut && d_oracle.last_level_pair(A, B);
                             bool moved_in_pair = false;
