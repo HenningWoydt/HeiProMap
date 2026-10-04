@@ -77,12 +77,25 @@ namespace HeiProMap {
     private:
         partition_t m_k = 0;
         std::vector<std::vector<Entry>> m_adj;
+        std::vector<AlignedArray<u32>> m_seen;
+        std::vector<u32> m_epoch;
 
     public:
         void initialize(const partition_t k) {
             m_k = k;
             m_adj.clear();
             m_adj.resize(m_k);
+        }
+
+        void initialize(const partition_t k, const u64 num_threads) {
+            m_k = k;
+            m_adj.clear();
+            m_adj.resize(m_k);
+            m_seen.resize(num_threads);
+            m_epoch.assign(num_threads, 0);
+            for (u64 t = 0; t < num_threads; ++t) {
+                m_seen[t].initialize(m_k, 0);
+            }
         }
 
         template<typename GraphT, typename PartitionManagerT, typename BoundaryVertexManagerT>
@@ -92,18 +105,31 @@ namespace HeiProMap {
                      const u64 num_threads) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "BlockAdjacency", "compute");
 
+            if (m_seen.size() < num_threads) {
+                m_seen.resize(num_threads);
+                m_epoch.resize(num_threads, 0);
+                for (u64 t = 0; t < num_threads; ++t) {
+                    if (m_seen[t].size() < m_k) m_seen[t].initialize(m_k, 0);
+                }
+            }
+
             #pragma omp parallel num_threads(num_threads)
             {
-                AlignedArray<u32> seen;
-                seen.initialize(m_k, 0);
-                u32 epoch = 0;
+                const u64 tid = omp_get_thread_num();
+                auto &seen = m_seen[tid];
+                u32 &epoch = m_epoch[tid];
 
                 #pragma omp for schedule(static)
                 for (partition_t id = 0; id < m_k; ++id) {
+                    auto &adj = m_adj[id];
+                    if (bv_manager.size(id) == 0) {
+                        adj.clear();
+                        continue;
+                    }
+
                     epoch++;
                     if (epoch == 0) { seen.fill(0); epoch = 1; }
 
-                    auto &adj = m_adj[id];
                     adj.clear();
                     for (const vertex_t u : bv_manager.boundary(id)) {
                         for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
@@ -228,7 +254,7 @@ namespace HeiProMap {
 
             active_block_scheduling.initialize(m_k);
             d1_matcher.initialize(m_k);
-            block_adjacency.initialize(m_k);
+            block_adjacency.initialize(m_k, m_threads);
         }
 
         template<typename DistanceOracleT, typename QGraphT>
