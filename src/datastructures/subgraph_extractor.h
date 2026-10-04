@@ -200,9 +200,6 @@ namespace HeiProMap {
         void initialize(const partition_t t_k, const u64 t_threads) {
             k = t_k;
             threads = t_threads;
-            graphs.resize(t_k);
-            tts.resize(t_k);
-            block_vertices.resize(t_k);
             block_weights.initialize(t_k, 0);
 
             par_thread_entries.resize(t_threads);
@@ -218,6 +215,13 @@ namespace HeiProMap {
                      const std::vector<partition_t> &ids,
                      const std::vector<partition_t> &id_to_dense) {
             if (ids.empty()) return;
+
+            const size_t num_active = ids.size();
+            if (graphs.size() < num_active) {
+                graphs.resize(num_active);
+                tts.resize(num_active);
+                block_vertices.resize(num_active);
+            }
 
             if (threads > 1 && g.n >= 1024) {
                 extract_parallel(g, p_manager, ids, id_to_dense);

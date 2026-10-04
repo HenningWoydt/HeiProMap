@@ -156,8 +156,8 @@ namespace HeiProMap {
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.seed);
             bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            if (ac.enable_q_graph) { q_graph.initialize(ac.k); }
+            if (ac.enable_block_conn) { block_conn.initialize(graphs[0].n, graphs[0].m, ac.k); }
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k, ac.threads));
@@ -213,8 +213,8 @@ namespace HeiProMap {
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.seed);
             bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            if (ac.enable_q_graph) { q_graph.initialize(ac.k); }
+            if (ac.enable_block_conn) { block_conn.initialize(graphs[0].n, graphs[0].m, ac.k); }
             d_oracle.initialize(ac.hierarchy, ac.distance);
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k, ac.threads));
