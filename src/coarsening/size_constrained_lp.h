@@ -437,6 +437,7 @@ namespace HeiProMap {
             weight_t max_v_w = 0;
             vertex_t max_deg = 0;
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "max");
+
             #pragma omp parallel for num_threads(threads) reduction(max:max_v_w,max_deg)
             for (vertex_t u = 0; u < g.n; ++u) {
                 max_v_w = std::max(max_v_w, g.v_weights[u]);
