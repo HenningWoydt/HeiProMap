@@ -285,34 +285,51 @@ namespace HeiProMap {
 
             parallel_reset(g.n, num_threads);
 
-            std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries(num_threads, std::vector<std::vector<vertex_t> >(m_k));
+            struct BoundaryEntry { vertex_t u; partition_t id; };
+            std::vector<std::vector<BoundaryEntry>> thread_entries(num_threads);
 
             #pragma omp parallel num_threads(num_threads)
             {
                 u64 tid = omp_get_thread_num();
-                auto &local_boundaries = thread_boundaries[tid];
+                auto &entries = thread_entries[tid];
 
                 #pragma omp for schedule(guided)
                 for (vertex_t u = 0; u < g.n; ++u) {
                     size_t n_different = 0;
                     partition_t u_id = p_manager[u];
-                    ASSERT(u_id < m_k);
 
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                        const vertex_t v = g.edges_v[i];
-                        partition_t v_id = p_manager[v];
-                        ASSERT(v_id < m_k);
-                        n_different += (u_id != v_id);
+                        n_different += (u_id != p_manager[g.edges_v[i]]);
                     }
 
                     if (n_different > 0) {
                         m_n_boundary_edges[u] = n_different;
-                        local_boundaries[u_id].push_back(u);
+                        entries.push_back({u, u_id});
                     }
                 }
             }
 
-            parallel_import_boundary_vertices(thread_boundaries, num_threads);
+            // Count per block
+            std::vector<size_t> counts(m_k, 0);
+            for (u64 t = 0; t < num_threads; ++t) {
+                for (const auto &e : thread_entries[t]) {
+                    counts[e.id]++;
+                }
+            }
+
+            #pragma omp parallel for schedule(static) num_threads(num_threads)
+            for (partition_t id = 0; id < m_k; ++id) {
+                m_boundaries[id].resize(counts[id]);
+                counts[id] = 0;
+            }
+
+            for (u64 t = 0; t < num_threads; ++t) {
+                for (const auto &e : thread_entries[t]) {
+                    size_t idx = counts[e.id]++;
+                    m_boundaries[e.id][idx] = e.u;
+                    m_vertex_idx[e.u] = idx;
+                }
+            }
         }
 
         void copy_from(const BoundaryVertexManager &bm) {
