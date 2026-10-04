@@ -105,7 +105,6 @@ namespace HeiProMap {
         std::vector<partition_t> inter_id_to_dense;
         std::vector<PartitionManager> thread_sub_pm;
 
-        std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries;
         std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t> > > thread_edges;
 
         f64 misc_ms = 0.0;
@@ -153,7 +152,6 @@ namespace HeiProMap {
             subgraph_extractor.initialize(ac.k, ac.threads);
             inter_id_to_dense.assign(ac.k, std::numeric_limits<partition_t>::max());
             thread_sub_pm.resize(ac.threads);
-            thread_boundaries.assign(ac.threads, std::vector<std::vector<vertex_t> >(ac.k));
             thread_edges.resize(ac.threads);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.seed);
@@ -211,7 +209,6 @@ namespace HeiProMap {
             subgraph_extractor.initialize(ac.k, ac.threads);
             inter_id_to_dense.assign(ac.k, std::numeric_limits<partition_t>::max());
             thread_sub_pm.resize(ac.threads);
-            thread_boundaries.assign(ac.threads, std::vector<std::vector<vertex_t> >(ac.k));
             thread_edges.resize(ac.threads);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, ac.seed);

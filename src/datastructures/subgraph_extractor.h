@@ -51,7 +51,8 @@ namespace HeiProMap {
         AlignedArray<weight_t> block_weights;
 
         // Reusable buffers for parallel extraction
-        std::vector<std::vector<std::vector<vertex_t>>> par_thread_vertices;
+        struct VertexEntry { vertex_t u; partition_t dense_id; };
+        std::vector<std::vector<VertexEntry>> par_thread_entries;
         std::vector<AlignedArray<weight_t>> par_thread_weights;
 
         /**
@@ -204,10 +205,9 @@ namespace HeiProMap {
             block_vertices.resize(t_k);
             block_weights.initialize(t_k, 0);
 
-            par_thread_vertices.resize(t_threads);
+            par_thread_entries.resize(t_threads);
             par_thread_weights.resize(t_threads);
             for (u64 tid = 0; tid < t_threads; ++tid) {
-                par_thread_vertices[tid].resize(t_k);
                 par_thread_weights[tid].initialize(t_k, 0);
             }
         }
@@ -273,8 +273,9 @@ namespace HeiProMap {
             #pragma omp parallel num_threads(num_threads)
             {
                 const u64 tid = omp_get_thread_num();
+                auto &entries = par_thread_entries[tid];
+                entries.clear();
                 for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
-                    par_thread_vertices[tid][dense_idx].clear();
                     par_thread_weights[tid][dense_idx] = 0;
                 }
 
@@ -287,32 +288,40 @@ namespace HeiProMap {
                     const partition_t dense_u = id_to_dense[u_id];
                     if (dense_u == std::numeric_limits<partition_t>::max()) continue;
 
-                    par_thread_vertices[tid][dense_u].push_back(u);
+                    entries.push_back({u, dense_u});
                     par_thread_weights[tid][dense_u] += g.v_weights[u];
+                }
+            }
+
+            // Count per block and build block_vertices
+            std::vector<size_t> counts(num_active, 0);
+            for (u64 tid = 0; tid < num_threads; ++tid) {
+                for (const auto &e : par_thread_entries[tid]) {
+                    counts[e.dense_id]++;
+                }
+            }
+
+            for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
+                block_vertices[dense_idx].resize(counts[dense_idx]);
+                counts[dense_idx] = 0;
+            }
+
+            for (u64 tid = 0; tid < num_threads; ++tid) {
+                for (const auto &e : par_thread_entries[tid]) {
+                    block_vertices[e.dense_id][counts[e.dense_id]++] = e.u;
                 }
             }
 
             // Parallel assembly per active block
             #pragma omp parallel for schedule(dynamic) num_threads(num_threads)
             for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
-                // Merge thread-local vertices into single list
-                std::vector<vertex_t> merged_block_vertices;
                 weight_t total_w = 0;
-                size_t total_n = 0;
                 for (u64 tid = 0; tid < num_threads; ++tid) {
                     total_w += par_thread_weights[tid][dense_idx];
-                    total_n += par_thread_vertices[tid][dense_idx].size();
-                }
-
-                merged_block_vertices.reserve(total_n);
-                for (u64 tid = 0; tid < num_threads; ++tid) {
-                    merged_block_vertices.insert(merged_block_vertices.end(),
-                                                 par_thread_vertices[tid][dense_idx].begin(),
-                                                 par_thread_vertices[tid][dense_idx].end());
                 }
 
                 build_subgraph_from_vertices(g, p_manager, ids[dense_idx], dense_idx,
-                                            merged_block_vertices, total_w);
+                                            block_vertices[dense_idx], total_w);
             }
         }
     };
