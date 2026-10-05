@@ -510,7 +510,7 @@ namespace HeiProMap {
         void contraction() {
             auto p = get_time_point();
             graphs.emplace_back(); // coarse the graph
-            graphs.back().contract(graphs[graphs.size() - 2], mappings.back(), ac.threads, ac.threads > 1 || ac.force_parallel_contraction);
+            graphs.back().contract(graphs[graphs.size() - 2], mappings.back(), ac.threads, ac.threads > 1 || ac.force_parallel_contraction, ac.use_kaminpar_contraction);
             p_manager.contract(mappings.back());
 
             contraction_ms += get_milli_seconds(p, get_time_point());

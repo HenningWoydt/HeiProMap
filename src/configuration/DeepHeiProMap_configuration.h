@@ -203,6 +203,7 @@ namespace HeiProMap {
         bool enable_q_graph = true;
         bool enable_block_conn = true;
         bool force_parallel_contraction = false;
+        bool use_kaminpar_contraction = false;
 
         // refinement algorithms
         SimpleLabelPropagationConfiguration deep_label_propagation_refinement_config = SimpleLabelPropagationConfiguration("Deep Label Propagation Refinement");

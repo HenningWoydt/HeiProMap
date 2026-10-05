@@ -485,8 +485,175 @@ namespace HeiProMap {
             }
         }
 
-        void contract(const CSRGraph &g, const Mapping &mapping, const u64 threads, const bool use_parallel = false) {
-            if (!use_parallel) {
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void kaminpar_contract(const CSRGraph &g,
+                               const Mapping &mapping,
+                               const u64 threads) {
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate");
+            n = mapping.get_coarse_n();
+            g_weight = g.g_weight;
+            uniform_v_weights = false;
+            uniform_e_weights = false;
+            v_weights.initialize(n, 0);
+
+            AlignedArray<vertex_t> n_mapped;
+            n_mapped.initialize(n, 0);
+            AlignedArray<vertex_t> bucket_offsets;
+            bucket_offsets.initialize(n + 1);
+            AlignedArray<vertex_t> mapped_vertices;
+            mapped_vertices.initialize(g.n);
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_count");
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                __atomic_fetch_add(&n_mapped[mapping.get(u)], (vertex_t)1, __ATOMIC_RELAXED);
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "prefix_sum");
+            bucket_offsets[0] = 0;
+            for (vertex_t i = 0; i < n; ++i) {
+                bucket_offsets[i + 1] = bucket_offsets[i] + n_mapped[i];
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_fill");
+            AlignedArray<vertex_t> bucket_pos;
+            bucket_pos.initialize(n);
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (vertex_t i = 0; i < n; ++i) {
+                bucket_pos[i] = bucket_offsets[i];
+            }
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get(u);
+                vertex_t pos = __atomic_fetch_add(&bucket_pos[map_u], (vertex_t)1, __ATOMIC_RELAXED);
+                mapped_vertices[pos] = u;
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "count_degrees");
+            AlignedArray<vertex_t> sizes;
+            sizes.initialize(n, 0);
+
+            #pragma omp parallel num_threads(threads)
+            {
+                std::vector<vertex_t> ht_keys;
+
+                #pragma omp for schedule(dynamic, 64)
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    vertex_t deg_sum = 0;
+                    weight_t w_sum = 0;
+                    for (vertex_t k = bucket_offsets[map_u]; k < bucket_offsets[map_u + 1]; ++k) {
+                        vertex_t u = mapped_vertices[k];
+                        deg_sum += g.deg(u);
+                        w_sum += t_uniform_v_weights ? 1 : g.v_weights[u];
+                    }
+                    v_weights[map_u] = w_sum;
+                    if (deg_sum == 0) continue;
+
+                    vertex_t ht_size = 1;
+                    while (ht_size < deg_sum * 2) ht_size <<= 1;
+                    vertex_t ht_mask = ht_size - 1;
+                    ht_keys.assign(ht_size, g.n);
+
+                    vertex_t count = 0;
+                    for (vertex_t k = bucket_offsets[map_u]; k < bucket_offsets[map_u + 1]; ++k) {
+                        vertex_t u = mapped_vertices[k];
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            vertex_t map_v = mapping.get(g.edges_v[i]);
+                            if (map_u == map_v) continue;
+                            vertex_t j = map_v & ht_mask;
+                            while (true) {
+                                if (ht_keys[j] == map_v) break;
+                                if (ht_keys[j] == g.n) {
+                                    ht_keys[j] = map_v;
+                                    count++;
+                                    break;
+                                }
+                                j = (j + 1) & ht_mask;
+                            }
+                        }
+                    }
+                    sizes[map_u] = count;
+                }
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "edge_prefix_sum");
+            neighborhoods.initialize(n + 1);
+            neighborhoods[0] = 0;
+            for (vertex_t i = 0; i < n; ++i) {
+                neighborhoods[i + 1] = neighborhoods[i] + sizes[i];
+            }
+            m = neighborhoods[n];
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "write_edges");
+            edges_v.initialize(m);
+            edges_w.initialize(m);
+
+            #pragma omp parallel num_threads(threads)
+            {
+                std::vector<vertex_t> ht_keys;
+                std::vector<weight_t> ht_vals;
+
+                #pragma omp for schedule(dynamic, 64)
+                for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                    if (sizes[map_u] == 0) continue;
+
+                    vertex_t deg_sum = 0;
+                    for (vertex_t k = bucket_offsets[map_u]; k < bucket_offsets[map_u + 1]; ++k) {
+                        deg_sum += g.deg(mapped_vertices[k]);
+                    }
+
+                    vertex_t ht_size = 1;
+                    while (ht_size < deg_sum * 2) ht_size <<= 1;
+                    vertex_t ht_mask = ht_size - 1;
+                    ht_keys.assign(ht_size, g.n);
+                    ht_vals.assign(ht_size, 0);
+
+                    for (vertex_t k = bucket_offsets[map_u]; k < bucket_offsets[map_u + 1]; ++k) {
+                        vertex_t u = mapped_vertices[k];
+                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                            vertex_t map_v = mapping.get(g.edges_v[i]);
+                            if (map_u == map_v) continue;
+                            weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
+                            vertex_t j = map_v & ht_mask;
+                            while (true) {
+                                if (ht_keys[j] == map_v) {
+                                    ht_vals[j] += w;
+                                    break;
+                                }
+                                if (ht_keys[j] == g.n) {
+                                    ht_keys[j] = map_v;
+                                    ht_vals[j] = w;
+                                    break;
+                                }
+                                j = (j + 1) & ht_mask;
+                            }
+                        }
+                    }
+
+                    size_t pos = neighborhoods[map_u];
+                    for (vertex_t j = 0; j < ht_size; ++j) {
+                        if (ht_keys[j] != g.n) {
+                            edges_v[pos] = ht_keys[j];
+                            edges_w[pos] = ht_vals[j];
+                            pos++;
+                        }
+                    }
+                }
+            }
+        }
+
+        void contract(const CSRGraph &g, const Mapping &mapping, const u64 threads, const bool use_parallel = false, const bool use_kaminpar = false) {
+            if (use_kaminpar) {
+                if (g.uniform_v_weights && g.uniform_e_weights) {
+                    kaminpar_contract<true, true>(g, mapping, threads);
+                } else if (g.uniform_v_weights) {
+                    kaminpar_contract<true, false>(g, mapping, threads);
+                } else if (g.uniform_e_weights) {
+                    kaminpar_contract<false, true>(g, mapping, threads);
+                } else {
+                    kaminpar_contract<false, false>(g, mapping, threads);
+                }
+            } else if (!use_parallel) {
                 if (g.uniform_v_weights && g.uniform_e_weights) {
                     contract<true, true>(g, mapping);
                 } else if (g.uniform_v_weights) {
