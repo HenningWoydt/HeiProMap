@@ -29,7 +29,7 @@
 
 #include <omp.h>
 #include "csr_graph.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "partition_manager.h"
 #include "../definitions.h"
 #include "../utility/macros.h"

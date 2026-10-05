@@ -28,7 +28,7 @@
 #define HEIPROMAP_FUNCTIONS_H
 
 #include "../datastructures/csr_graph.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
 

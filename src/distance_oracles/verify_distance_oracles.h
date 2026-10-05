@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "../definitions.h"
-#include "distance_oracle.h"
+#include "matrix_distance_oracle.h"
 #include "binary_distance_oracle.h"
 #include "division_distance_oracle.h"
 #include "stored_division_distance_oracle.h"

@@ -32,7 +32,7 @@
 #include "../src/solver/DeepHeiProMap_solver.h"
 #include "../src/utility/memory_access_benchmark.h"
 #include "../src/configuration/DeepHeiProMap_configuration.h"
-#include "src/distance_oracles/distance_oracle.h"
+#include "src/distance_oracles/matrix_distance_oracle.h"
 #include "../src/distance_oracles/binary_distance_oracle.h"
 #include "../src/distance_oracles/division_distance_oracle.h"
 #include "../src/distance_oracles/stored_division_distance_oracle.h"

@@ -45,7 +45,7 @@
 #include "../refinement/label_propagation_refinement.h"
 #include "../configuration/DynHeiProMap_configuration.h"
 #include "../utility/profiler.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "../utility/hungarian.h"
 #include "../utility/qap.h"
 

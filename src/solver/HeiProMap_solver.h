@@ -47,7 +47,7 @@
 #include "../configuration/HeiProMap_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "../distance_oracles/binary_distance_oracle.h"
 #include "../init_partitioning/kaffpa_partitioner.h"
 #include "../init_partitioning/recursive_bisection.h"

@@ -35,7 +35,7 @@
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "../utility/profiler.h"
 #include "../utility/random_engine.h"
 

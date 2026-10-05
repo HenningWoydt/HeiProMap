@@ -36,7 +36,7 @@
 
 #include "../datastructures/block_conn.h"
 #include "../datastructures/boundary_vertex_manger.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "../distance_oracles/binary_distance_oracle.h"
 #include "../distance_oracles/division_distance_oracle.h"
 #include "../distance_oracles/stored_division_distance_oracle.h"

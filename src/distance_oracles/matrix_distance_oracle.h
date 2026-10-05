@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_DISTANCE_ORACLE_H
-#define HEIPROMAP_DISTANCE_ORACLE_H
+#ifndef HEIPROMAP_MATRIX_DISTANCE_ORACLE_H
+#define HEIPROMAP_MATRIX_DISTANCE_ORACLE_H
 
 #include "../utility/aligned_array.h"
 #include "../definitions.h"
@@ -164,4 +164,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_DISTANCE_ORACLE_H
+#endif //HEIPROMAP_MATRIX_DISTANCE_ORACLE_H

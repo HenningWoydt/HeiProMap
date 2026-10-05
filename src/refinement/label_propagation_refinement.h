@@ -37,7 +37,7 @@
 #include "../datastructures/block_conn.h"
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/csr_graph.h"
-#include "../distance_oracles/distance_oracle.h"
+#include "../distance_oracles/matrix_distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../datastructures/distance_3_matching.h"
