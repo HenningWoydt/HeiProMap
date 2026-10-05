@@ -38,6 +38,8 @@
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../distance_oracles/distance_oracle.h"
 #include "../distance_oracles/binary_distance_oracle.h"
+#include "../distance_oracles/division_distance_oracle.h"
+#include "../distance_oracles/stored_division_distance_oracle.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../datastructures/large_quotient_graph.h"
@@ -269,7 +271,12 @@ namespace HeiProMap {
             std::cout << "k                     : " << ac.k << std::endl;
             std::cout << "Hierarchy             : " << ac.hierarchy_string << std::endl;
             std::cout << "Distances             : " << ac.distance_string << std::endl;
-            std::cout << "Distance Oracle       : " << (std::is_same_v<DistanceOracleT, BinaryDistanceOracle> ? "binary" : "matrix") << std::endl;
+            std::cout << "Distance Oracle       : ";
+            if constexpr (std::is_same_v<DistanceOracleT, BinaryDistanceOracle>) std::cout << "binary";
+            else if constexpr (std::is_same_v<DistanceOracleT, DivisionDistanceOracle>) std::cout << "division";
+            else if constexpr (std::is_same_v<DistanceOracleT, StoredDivisionDistanceOracle>) std::cout << "stored-division";
+            else std::cout << "matrix";
+            std::cout << std::endl;
             std::cout << "Lmax                  : " << lmax << std::endl;
             std::cout << "Threads               : " << ac.threads << std::endl;
             std::cout << "Coarsening Mode       : " << (ac.hierarchical_coarsening ? "hierarchical" : "flat") << std::endl;
