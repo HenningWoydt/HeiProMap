@@ -80,6 +80,8 @@ namespace HeiProMap {
         std::vector<std::vector<vertex_t>> thread_moves;
         std::vector<IndexedMaxHeap<weight_t>> thread_heap_u;
         std::vector<IndexedMaxHeap<weight_t>> thread_heap_v;
+        std::vector<std::vector<std::pair<size_t, weight_t>>> thread_seed_u;
+        std::vector<std::vector<std::pair<size_t, weight_t>>> thread_seed_v;
 
         template<bool t_uniform_e_weights, typename DistanceOracleT>
         static inline __attribute__((always_inline)) weight_t compute_qap_delta(const graph_t &g,
@@ -202,6 +204,8 @@ namespace HeiProMap {
             thread_moves.resize(m_threads);
             thread_heap_u.resize(m_threads);
             thread_heap_v.resize(m_threads);
+            thread_seed_u.resize(m_threads);
+            thread_seed_v.resize(m_threads);
 
             #pragma omp parallel for num_threads(m_threads)
             for (size_t i = 0; i < m_threads; ++i) {
@@ -273,13 +277,13 @@ namespace HeiProMap {
                                 g, d_oracle, bv_manager, p_manager,
                                 u_id, v_id, mark,
                                 thread_moves[tid], thread_heap_u[tid], thread_heap_v[tid],
-                                rnd_engines[tid]);
+                                thread_seed_u[tid], thread_seed_v[tid], rnd_engines[tid]);
                         } else {
                             improved = refine_pair<t_uniform_v_weights, t_uniform_e_weights, false>(
                                 g, d_oracle, bv_manager, p_manager,
                                 u_id, v_id, mark,
                                 thread_moves[tid], thread_heap_u[tid], thread_heap_v[tid],
-                                rnd_engines[tid]);
+                                thread_seed_u[tid], thread_seed_v[tid], rnd_engines[tid]);
                         }
 
                         if (improved) {
@@ -308,22 +312,24 @@ namespace HeiProMap {
                          std::vector<vertex_t> &moves,
                          IndexedMaxHeap<weight_t> &heap_u,
                          IndexedMaxHeap<weight_t> &heap_v,
+                         std::vector<std::pair<size_t, weight_t>> &seed_u,
+                         std::vector<std::pair<size_t, weight_t>> &seed_v,
                          RandomEngine &rng) {
             const f64 alpha = config.alpha * (f64) d_oracle.get(u_id, v_id);
             const f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
             heap_u.clear();
             heap_v.clear();
-            u64 n_init_moves = 0;
 
-            // Seed heaps: single-pass connectivity check + gain computation
+            // Seed heaps: batch insert with O(n) heapify
+            seed_u.clear();
+            seed_v.clear();
             for (const vertex_t u : bv_manager.boundary(u_id)) {
                 bool connected;
                 weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
                     g, u, u_id, v_id, connected, p_manager, d_oracle);
                 if (connected) {
-                    heap_u.push(u, delta);
-                    n_init_moves++;
+                    seed_u.emplace_back(u, delta);
                 }
             }
 
@@ -332,10 +338,13 @@ namespace HeiProMap {
                 weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
                     g, v, v_id, u_id, connected, p_manager, d_oracle);
                 if (connected) {
-                    heap_v.push(v, delta);
-                    n_init_moves++;
+                    seed_v.emplace_back(v, delta);
                 }
             }
+
+            heap_u.push_many_heapify(seed_u);
+            heap_v.push_many_heapify(seed_v);
+            const u64 n_init_moves = seed_u.size() + seed_v.size();
 
             if (n_init_moves == 0) return false;
 
