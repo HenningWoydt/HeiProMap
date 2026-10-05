@@ -46,6 +46,10 @@
 #include "../refinement/flow_based_refinement.h"
 
 namespace HeiProMap {
+    // =========================================================================
+    // Enums
+    // =========================================================================
+
     #ifndef HEIPROMAP_COARSENING_ALGS_DEFINED
     #define HEIPROMAP_COARSENING_ALGS_DEFINED
 
@@ -137,79 +141,100 @@ namespace HeiProMap {
         }
     }
 
+    // =========================================================================
+    // Configuration
+    // =========================================================================
+
     class DeepHeiProMapConfiguration {
     public:
+        // =====================================================================
+        // Command line options
+        // =====================================================================
+
         std::vector<CommandLineOption> options = {
-            {"--help", "", "Produces the help message", "", "", false},
-            {"--graph", "-g", "Filepath to the graph.", "", "", false},
-            {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
-            {"--statistics", "", "Output filepath to the statistics file.", "HeiProMap_stats.JSON", "", false},
-            {"--hierarchy", "-h", "Hierarchy in the form a1:a2:...:al .", "", "", false},
-            {"--distance", "-d", "Distance in the form d1:d2:...:dl .", "", "", false},
-            {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
-            {"--config", "-c", "The configuration.", "", "", false},
-            {"--threads", "-t", "The number of threads.", "1", "", false},
-            {"--seed", "", "Seed for diversifying results.", "", "", false},
-            {"--distance-oracle", "", "Which Distance Oracle to use. {division-based, store-division-based, binary-based}", "binary-based", "", false},
-            {"--coarsening-alg", "", "Which coarsening algorithm to use. {global-paths, size-constrained-lp}", "size-constrained-lp", "", false},
-            {"--hierarchical-coarsening", "", "Use staged hierarchical coarsening (true) or aggressive flat coarsening (false).", "true", "", false},
+            // general
+            {"--help",                    "",   "Produces the help message",                                                         "",                    "", false},
+            {"--graph",                   "-g", "Filepath to the graph.",                                                            "",                    "", false},
+            {"--mapping",                 "-m", "Output filepath to the generated mapping.",                                         "",                    "", false},
+            {"--statistics",              "",   "Output filepath to the statistics file.",                                           "HeiProMap_stats.JSON", "", false},
+            {"--hierarchy",               "-h", "Hierarchy in the form a1:a2:...:al .",                                              "",                    "", false},
+            {"--distance",                "-d", "Distance in the form d1:d2:...:dl .",                                               "",                    "", false},
+            {"--imbalance",               "-e", "Allowed imbalance (for example 0.03).",                                             "0.03",                "", false},
+            {"--config",                  "-c", "The configuration.",                                                                "",                    "", false},
+            {"--threads",                 "-t", "The number of threads.",                                                            "1",                   "", false},
+            {"--seed",                    "",   "Seed for diversifying results.",                                                    "",                    "", false},
+            // algorithm selection
+            {"--distance-oracle",         "",   "Which Distance Oracle to use. {division-based, store-division-based, binary-based}", "binary-based",       "", false},
+            {"--coarsening-alg",          "",   "Which coarsening algorithm to use. {global-paths, size-constrained-lp}",             "size-constrained-lp", "", false},
+            {"--hierarchical-coarsening", "",   "Use staged hierarchical coarsening (true) or aggressive flat coarsening (false).",   "true",                "", false},
+            // SCLP overrides
+            {"--sclp-max-rounds",         "",   "SCLP: maximum number of label propagation rounds.",                                 "",                    "", false},
+            {"--sclp-min-threshold",      "",   "SCLP: minimum fraction of moved vertices to continue.",                             "",                    "", false},
+            {"--sclp-f",                  "",   "SCLP: cluster weight factor (max_w = ceil(lmax / f)).",                             "",                    "", false},
+            {"--sclp-rating",             "",   "SCLP: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "",         "", false},
+            {"--sclp-degree-ordering",    "",   "SCLP: use degree-based vertex ordering (true/false).",                              "",                    "", false},
+            {"--sclp-force-parallel",     "",   "SCLP: force parallel algorithm even with 1 thread (true/false).",                   "",                    "", false},
         };
 
-        // graph information
+        // =====================================================================
+        // Member variables
+        // =====================================================================
+
+        // I/O
         std::string graph_in;
         std::string mapping_out;
         std::string statistics_out;
 
-        // hierarchy information
+        // hierarchy
         std::string hierarchy_string;
         std::vector<partition_t> hierarchy;
         partition_t k = 0;
 
-        // distance information
+        // distance
         std::string distance_string;
         std::vector<weight_t> distance;
 
-        // configuration
+        // general
         std::string config_string;
-
-        // balancing information
         f64 imbalance = -1.0;
-
-        // random initialization
         u64 seed = 0;
-
-        // threads
         u64 threads = 1;
 
+        // distance oracle
         std::string distance_oracle_algorithm_string;
         DISTANCE_ORACLE_ALGS distance_oracle_algorithm_id = DISTANCE_ORACLE_ALGS_UNDEFINED;
 
-        // coarsening algorithm
+        // coarsening
         std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
-
-        GlobalPathAlgorithmConfiguration global_path_algorithm_config;
-        HeavyEdgeMatchingConfiguration parallel_heavy_edge_matching_configuration;
-        SizeConstrainedLPConfiguration size_constrained_lp_clustering_configuration;
-
-        // hierarchy contraction thresholds
         bool hierarchical_coarsening = true;
         vertex_t initial_C = 32;
         u64 initial_kappa = 10;
         vertex_t intermediate_C = 32;
         u64 intermediate_kappa = 1;
 
-        // datastructure flags
-        bool enable_q_graph = true;
-        bool enable_block_conn = true;
+        // coarsening: algorithm configs
+        GlobalPathAlgorithmConfiguration global_path_algorithm_config;
+        HeavyEdgeMatchingConfiguration parallel_heavy_edge_matching_configuration;
+        SizeConstrainedLPConfiguration size_constrained_lp_clustering_configuration;
+
+        // contraction
         bool force_parallel_contraction = false;
         bool use_kaminpar_contraction = false;
 
-        // refinement algorithms
+        // refinement
         SimpleLabelPropagationConfiguration deep_label_propagation_refinement_config = SimpleLabelPropagationConfiguration("Deep Label Propagation Refinement");
         QuotientGraphRefinementConfiguration deep_quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Deep Quotient Graph Refinement");
         SimpleQuotientGraphRefinementConfiguration deep_simple_qg_refinement_config = SimpleQuotientGraphRefinementConfiguration("Deep Simple QG Refinement");
         FlowBasedRefinementConfiguration deep_flow_based_refinement_config = FlowBasedRefinementConfiguration("Deep Flow Based Refinement");
+
+        // datastructure flags
+        bool enable_q_graph = true;
+        bool enable_block_conn = true;
+
+        // =====================================================================
+        // Methods
+        // =====================================================================
 
         bool use_binary_oracle() const {
             return distance_oracle_algorithm_id == DISTANCE_ORACLE_ALGS_BINARY;
@@ -219,10 +244,10 @@ namespace HeiProMap {
 
         DeepHeiProMapConfiguration(int argc, char *argv[]) {
             HEIPROMAP_PROFILE_SCOPE("io", "DeepHeiProMapConfiguration", "parse_command_line");
-            // read command lines into vector
+
             std::vector<std::string> args(argv, argv + argc);
 
-            // check for a help message
+            // check for help
             for (int i = 1; i < argc; ++i) {
                 if (args[i] == "--help") {
                     print_help_message();
@@ -242,6 +267,7 @@ namespace HeiProMap {
                 }
             }
 
+            // --- required arguments ---
             graph_in = get("--graph");
             mapping_out = get("--mapping");
             statistics_out = get("--statistics");
@@ -265,6 +291,7 @@ namespace HeiProMap {
                 seed = std::random_device{}();
             }
 
+            // --- apply config preset ---
             config_string = get("--config");
             if (config_string == "fast") {
                 set_fast();
@@ -278,6 +305,8 @@ namespace HeiProMap {
                 std::cout << "Config " << config_string << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
             }
+
+            // --- optional overrides (applied after preset) ---
 
             if (is_set("--distance-oracle")) {
                 distance_oracle_algorithm_string = get("--distance-oracle");
@@ -293,13 +322,51 @@ namespace HeiProMap {
                 std::string val = get("--hierarchical-coarsening");
                 hierarchical_coarsening = (val == "true" || val == "1" || val == "yes");
             }
+
+            // SCLP overrides
+            if (is_set("--sclp-max-rounds")) {
+                size_constrained_lp_clustering_configuration.max_rounds = std::stoull(get("--sclp-max-rounds"));
+            }
+            if (is_set("--sclp-min-threshold")) {
+                size_constrained_lp_clustering_configuration.min_threshold = std::stod(get("--sclp-min-threshold"));
+            }
+            if (is_set("--sclp-f")) {
+                size_constrained_lp_clustering_configuration.f = std::stod(get("--sclp-f"));
+            }
+            if (is_set("--sclp-rating")) {
+                std::string val = get("--sclp-rating");
+                if (val == "weight") size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::WEIGHT;
+                else if (val == "expansion") size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
+                else if (val == "expansionstar") size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+                else if (val == "expansionstarstar") size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
+                else if (val == "innerouter") size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::INNEROUTER;
+                else { std::cout << "Unknown SCLP rating function: " << val << std::endl; exit(EXIT_FAILURE); }
+            }
+            if (is_set("--sclp-degree-ordering")) {
+                std::string val = get("--sclp-degree-ordering");
+                size_constrained_lp_clustering_configuration.use_degree_ordering = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--sclp-force-parallel")) {
+                std::string val = get("--sclp-force-parallel");
+                size_constrained_lp_clustering_configuration.force_parallel_alg = (val == "true" || val == "1" || val == "yes");
+            }
         }
 
-        void set_fast() {
-            coarsening_algorithm_string = "size-constrained-lp";
-            // coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+        // =====================================================================
+        // Presets
+        // =====================================================================
 
+        void set_fast() {
+            // coarsening
+            coarsening_algorithm_string = "size-constrained-lp";
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            size_constrained_lp_clustering_configuration.f = 32;
+            size_constrained_lp_clustering_configuration.max_rounds = 5;
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
+
+            // distance oracle
             distance_oracle_algorithm_string = "binary-based";
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
@@ -307,6 +374,8 @@ namespace HeiProMap {
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
+            deep_label_propagation_refinement_config.enable_q_graph = false;
+            deep_label_propagation_refinement_config.enable_block_conn = false;
 
             deep_quotient_graph_refinement_config.enabled = false;
             deep_quotient_graph_refinement_config.max_iteration = 2;
@@ -324,22 +393,22 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
 
-            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-            size_constrained_lp_clustering_configuration.f = 32;
-            size_constrained_lp_clustering_configuration.max_rounds = 5;
-            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
-            force_parallel_contraction = true;
-
+            // datastructure flags
             enable_q_graph = false;
             enable_block_conn = false;
-            deep_label_propagation_refinement_config.enable_q_graph = false;
-            deep_label_propagation_refinement_config.enable_block_conn = false;
         }
 
         void set_eco() {
+            // coarsening
             coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
+            size_constrained_lp_clustering_configuration.f = 32;
+            size_constrained_lp_clustering_configuration.max_rounds = 10;
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
 
+            // distance oracle
             distance_oracle_algorithm_string = "binary-based";
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
@@ -347,6 +416,8 @@ namespace HeiProMap {
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
+            deep_label_propagation_refinement_config.enable_q_graph = false;
+            deep_label_propagation_refinement_config.enable_block_conn = false;
 
             deep_quotient_graph_refinement_config.enabled = false;
 
@@ -357,11 +428,6 @@ namespace HeiProMap {
             deep_simple_qg_refinement_config.use_preemptive_exit = true;
 
             deep_flow_based_refinement_config.enabled = false;
-
-            enable_q_graph = false;
-            enable_block_conn = false;
-            deep_label_propagation_refinement_config.enable_q_graph = false;
-            deep_label_propagation_refinement_config.enable_block_conn = false;
             deep_flow_based_refinement_config.use_active_block_scheduling = true;
             deep_flow_based_refinement_config.max_global_iteration = 5;
             deep_flow_based_refinement_config.max_local_iteration = 5;
@@ -373,54 +439,22 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
 
-            size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
-            size_constrained_lp_clustering_configuration.f = 32;
-            size_constrained_lp_clustering_configuration.max_rounds = 10;
-            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
-            force_parallel_contraction = true;
+            // datastructure flags
+            enable_q_graph = false;
+            enable_block_conn = false;
         }
 
         void set_strong() {
+            // coarsening
             coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            distance_oracle_algorithm_string = "binary-based";
-            distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
-
-            // refinement
-            deep_label_propagation_refinement_config.enabled = true;
-            deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.force_parallel_alg = true;
-
-            deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 2;
-            deep_quotient_graph_refinement_config.alpha = 5.0;
-            deep_quotient_graph_refinement_config.min_n_steps = 3;
-            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
-
-            deep_flow_based_refinement_config.enabled = true;
-            deep_flow_based_refinement_config.use_active_block_scheduling = true;
-            deep_flow_based_refinement_config.max_global_iteration = 5;
-            deep_flow_based_refinement_config.max_local_iteration = 5;
-            deep_flow_based_refinement_config.alpha = 2.0;
-            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
-            deep_flow_based_refinement_config.alpha_modifier = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set = false;
-            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
-            deep_flow_based_refinement_config.always_include_boundary = true;
-            deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
-
             size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 10;
             size_constrained_lp_clustering_configuration.force_parallel_alg = true;
             force_parallel_contraction = true;
-        }
 
-        void set_experimental() {
-            coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
+            // distance oracle
             distance_oracle_algorithm_string = "binary-based";
             distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
 
@@ -446,17 +480,47 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
-
-            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
-            force_parallel_contraction = true;
         }
 
-        /**
-         * Gets the entered input as a string.
-         *
-         * @param var The option in interest.
-         * @return The input.
-         */
+        void set_experimental() {
+            // coarsening
+            coarsening_algorithm_string = "size-constrained-lp";
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
+
+            // distance oracle
+            distance_oracle_algorithm_string = "binary-based";
+            distance_oracle_algorithm_id = string_to_distance_oracle_algorithm(distance_oracle_algorithm_string);
+
+            // refinement
+            deep_label_propagation_refinement_config.enabled = true;
+            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.force_parallel_alg = true;
+
+            deep_quotient_graph_refinement_config.enabled = true;
+            deep_quotient_graph_refinement_config.max_iteration = 2;
+            deep_quotient_graph_refinement_config.alpha = 5.0;
+            deep_quotient_graph_refinement_config.min_n_steps = 3;
+            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
+
+            deep_flow_based_refinement_config.enabled = true;
+            deep_flow_based_refinement_config.use_active_block_scheduling = true;
+            deep_flow_based_refinement_config.max_global_iteration = 5;
+            deep_flow_based_refinement_config.max_local_iteration = 5;
+            deep_flow_based_refinement_config.alpha = 2.0;
+            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
+            deep_flow_based_refinement_config.alpha_modifier = 2.0;
+            deep_flow_based_refinement_config.use_closed_vertex_set = false;
+            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
+            deep_flow_based_refinement_config.always_include_boundary = true;
+            deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
+        }
+
+        // =====================================================================
+        // Utility
+        // =====================================================================
+
         std::string get(const std::string &var) {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (large_key == var || small_key == var) {
@@ -473,12 +537,6 @@ namespace HeiProMap {
             exit(EXIT_FAILURE);
         }
 
-        /**
-         * Returns whether the option was entered.
-         *
-         * @param var The option in interest.
-         * @return True if the option was entered, false else.
-         */
         bool is_set(const std::string &var) {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (large_key == var || small_key == var) {
@@ -489,9 +547,6 @@ namespace HeiProMap {
             exit(EXIT_FAILURE);
         }
 
-        /**
-         * Prints the help message.
-         */
         void print_help_message() {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                 if (small_key.empty()) {
