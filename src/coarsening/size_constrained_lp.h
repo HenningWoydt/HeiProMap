@@ -292,10 +292,6 @@ namespace HeiProMap {
                         cluster_weights[best_id] += u_w;
                         #pragma omp atomic
                         cluster_weights[current_id] -= u_w;
-                        #pragma omp atomic
-                        cluster_count[best_id] += 1;
-                        #pragma omp atomic
-                        cluster_count[current_id] -= 1;
 
                         n_moved += 1;
                         if (round > 0) {
@@ -364,8 +360,6 @@ namespace HeiProMap {
                     mapping.set(u, best_id);
                     cluster_weights[best_id] += u_w;
                     cluster_weights[current_id] -= u_w;
-                    cluster_count[best_id] += 1;
-                    cluster_count[current_id] -= 1;
 
                     n_moved += 1;
                     if (round > 0) {
@@ -597,6 +591,17 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < g.n; ++u) {
                     active_next[u] = 0;
                 }
+            }
+
+            // Recompute cluster_count from mapping (not maintained during clustering)
+            #pragma omp parallel for num_threads(threads)
+            for (vertex_t u = 0; u < g.n; ++u) {
+                cluster_count[u] = 0;
+            }
+            #pragma omp parallel for num_threads(threads)
+            for (vertex_t u = 0; u < g.n; ++u) {
+                #pragma omp atomic
+                cluster_count[mapping.get(u)] += 1;
             }
 
             merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
