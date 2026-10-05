@@ -42,6 +42,7 @@
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/simple_label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
+#include "../refinement/simple_quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
 
 namespace HeiProMap {
@@ -205,6 +206,7 @@ namespace HeiProMap {
         // refinement algorithms
         SimpleLabelPropagationConfiguration deep_label_propagation_refinement_config = SimpleLabelPropagationConfiguration("Deep Label Propagation Refinement");
         QuotientGraphRefinementConfiguration deep_quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Deep Quotient Graph Refinement");
+        SimpleQuotientGraphRefinementConfiguration deep_simple_qg_refinement_config = SimpleQuotientGraphRefinementConfiguration("Deep Simple QG Refinement");
         FlowBasedRefinementConfiguration deep_flow_based_refinement_config = FlowBasedRefinementConfiguration("Deep Flow Based Refinement");
 
         bool use_binary_oracle() const {
@@ -342,13 +344,20 @@ namespace HeiProMap {
             deep_label_propagation_refinement_config.max_iteration = 5;
             deep_label_propagation_refinement_config.force_parallel_alg = false;
 
-            deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 2;
-            deep_quotient_graph_refinement_config.alpha = 5.0;
-            deep_quotient_graph_refinement_config.min_n_steps = 3;
-            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
+            deep_quotient_graph_refinement_config.enabled = false;
 
-            deep_flow_based_refinement_config.enabled = true;
+            deep_simple_qg_refinement_config.enabled = true;
+            deep_simple_qg_refinement_config.max_iteration = 1;
+            deep_simple_qg_refinement_config.alpha = 5.0;
+            deep_simple_qg_refinement_config.min_n_steps = 3;
+            deep_simple_qg_refinement_config.use_preemptive_exit = true;
+
+            deep_flow_based_refinement_config.enabled = false;
+
+            enable_q_graph = false;
+            enable_block_conn = false;
+            deep_label_propagation_refinement_config.enable_q_graph = false;
+            deep_label_propagation_refinement_config.enable_block_conn = false;
             deep_flow_based_refinement_config.use_active_block_scheduling = true;
             deep_flow_based_refinement_config.max_global_iteration = 5;
             deep_flow_based_refinement_config.max_local_iteration = 5;
