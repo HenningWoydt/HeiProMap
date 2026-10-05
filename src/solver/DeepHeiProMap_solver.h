@@ -288,6 +288,7 @@ namespace HeiProMap {
 
         std::vector<partition_t> solve() {
             internal_solve();
+            print_memory_report();
 
             std::vector<partition_t> p(graphs.back().n);
             for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_manager[u]; }

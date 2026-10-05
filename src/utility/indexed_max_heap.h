@@ -87,6 +87,36 @@ namespace HeiProMap {
             m_iteration_counter.initialize(m_n, 0);
         }
 
+        void ensure_capacity(const size_t t_n) {
+            if (t_n <= m_n) {
+                clear();
+                return;
+            }
+            initialize(t_n);
+        }
+
+        void grow(const size_t t_n) {
+            if (t_n <= m_n) return;
+            AlignedArray<IndexedMaxHeapEntry<T>> new_heap;
+            AlignedArray<size_t> new_indices;
+            AlignedArray<u64> new_iteration_counter;
+            new_heap.initialize(t_n);
+            new_indices.initialize(t_n);
+            new_iteration_counter.initialize(t_n, 0);
+            std::memcpy(new_heap.get_ptr(), m_heap.get_ptr(), m_heap_size * sizeof(IndexedMaxHeapEntry<T>));
+            for (size_t i = 0; i < m_heap_size; ++i) {
+                size_t key = m_heap[i].key;
+                new_indices[key] = m_indices[key];
+                new_iteration_counter[key] = m_iteration_counter[key];
+            }
+            m_heap = std::move(new_heap);
+            m_indices = std::move(new_indices);
+            m_iteration_counter = std::move(new_iteration_counter);
+            m_n = t_n;
+        }
+
+        size_t capacity() const { return m_n; }
+
         void push(const size_t key, const T val) {
             ASSERT(!entry_exists(key));
             m_indices[key] = m_heap_size;

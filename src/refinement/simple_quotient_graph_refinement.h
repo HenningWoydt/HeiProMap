@@ -77,11 +77,17 @@ namespace HeiProMap {
         AlignedArray<u32> vertex_used;
         u32 global_vertex_mark = 0;
 
+        // Dense ID mapping: shared across threads (matching ensures disjoint vertex sets)
+        AlignedArray<vertex_t> m_dense_id;
+        AlignedArray<u32> m_dense_epoch;
+        u32 m_dense_global_epoch = 0;
+
         std::vector<std::vector<vertex_t>> thread_moves;
         std::vector<IndexedMaxHeap<weight_t>> thread_heap_u;
         std::vector<IndexedMaxHeap<weight_t>> thread_heap_v;
         std::vector<std::vector<std::pair<size_t, weight_t>>> thread_seed_u;
         std::vector<std::vector<std::pair<size_t, weight_t>>> thread_seed_v;
+        std::vector<std::vector<vertex_t>> thread_dense_to_vertex;
 
         template<bool t_uniform_e_weights, typename DistanceOracleT>
         static inline __attribute__((always_inline)) weight_t compute_qap_delta(const graph_t &g,
@@ -177,9 +183,11 @@ namespace HeiProMap {
 
         size_t heap_bytes() const {
             size_t bytes = active_block_scheduling.heap_bytes() + d1_matcher.heap_bytes()
-                         + block_adjacency.heap_bytes() + vertex_used.heap_bytes();
+                         + block_adjacency.heap_bytes() + vertex_used.heap_bytes()
+                         + m_dense_id.heap_bytes() + m_dense_epoch.heap_bytes();
             for (size_t i = 0; i < thread_moves.size(); ++i) {
                 bytes += thread_moves[i].capacity() * sizeof(vertex_t);
+                bytes += thread_dense_to_vertex[i].capacity() * sizeof(vertex_t);
             }
             for (size_t i = 0; i < thread_heap_u.size(); ++i) {
                 bytes += thread_heap_u[i].heap_bytes() + thread_heap_v[i].heap_bytes();
@@ -215,17 +223,16 @@ namespace HeiProMap {
             global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
 
+            m_dense_id.initialize(m_n);
+            m_dense_epoch.initialize(m_n, 0);
+            m_dense_global_epoch = 0;
+
             thread_moves.resize(m_threads);
             thread_heap_u.resize(m_threads);
             thread_heap_v.resize(m_threads);
             thread_seed_u.resize(m_threads);
             thread_seed_v.resize(m_threads);
-
-            #pragma omp parallel for num_threads(m_threads)
-            for (size_t i = 0; i < m_threads; ++i) {
-                thread_heap_u[i].initialize(m_n);
-                thread_heap_v[i].initialize(m_n);
-            }
+            thread_dense_to_vertex.resize(m_threads);
         }
 
         template<typename DistanceOracleT>
@@ -273,6 +280,11 @@ namespace HeiProMap {
 
                     u32 base_mark = global_vertex_mark + 1;
                     global_vertex_mark += static_cast<u32>(matching.size());
+                    m_dense_global_epoch++;
+                    if (m_dense_global_epoch == 0) {
+                        m_dense_epoch.initialize(m_n, 0);
+                        m_dense_global_epoch = 1;
+                    }
 
                     HEIPROMAP_PROFILE_SCOPE("refinement", "SimpleQGRefinement", "fm_pass");
 
@@ -291,13 +303,15 @@ namespace HeiProMap {
                                 g, d_oracle, bv_manager, p_manager,
                                 u_id, v_id, mark,
                                 thread_moves[tid], thread_heap_u[tid], thread_heap_v[tid],
-                                thread_seed_u[tid], thread_seed_v[tid], rnd_engines[tid]);
+                                thread_seed_u[tid], thread_seed_v[tid],
+                                thread_dense_to_vertex[tid], rnd_engines[tid]);
                         } else {
                             improved = refine_pair<t_uniform_v_weights, t_uniform_e_weights, false>(
                                 g, d_oracle, bv_manager, p_manager,
                                 u_id, v_id, mark,
                                 thread_moves[tid], thread_heap_u[tid], thread_heap_v[tid],
-                                thread_seed_u[tid], thread_seed_v[tid], rnd_engines[tid]);
+                                thread_seed_u[tid], thread_seed_v[tid],
+                                thread_dense_to_vertex[tid], rnd_engines[tid]);
                         }
 
                         if (improved) {
@@ -315,6 +329,22 @@ namespace HeiProMap {
         }
 
     private:
+        vertex_t get_or_assign_dense(const vertex_t v, std::vector<vertex_t> &dense_to_vertex,
+                                     vertex_t &dense_counter) {
+            if (m_dense_epoch[v] == m_dense_global_epoch) {
+                return m_dense_id[v];
+            }
+            vertex_t did = dense_counter++;
+            m_dense_id[v] = did;
+            m_dense_epoch[v] = m_dense_global_epoch;
+            if (did >= dense_to_vertex.size()) {
+                dense_to_vertex.push_back(v);
+            } else {
+                dense_to_vertex[did] = v;
+            }
+            return did;
+        }
+
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, bool t_use_edge_cut, typename DistanceOracleT>
         bool refine_pair(graph_t &g,
                          DistanceOracleT &d_oracle,
@@ -328,12 +358,18 @@ namespace HeiProMap {
                          IndexedMaxHeap<weight_t> &heap_v,
                          std::vector<std::pair<size_t, weight_t>> &seed_u,
                          std::vector<std::pair<size_t, weight_t>> &seed_v,
+                         std::vector<vertex_t> &dense_to_vertex,
                          RandomEngine &rng) {
             const f64 alpha = config.alpha * (f64) d_oracle.get(u_id, v_id);
             const f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
 
-            heap_u.clear();
-            heap_v.clear();
+            const size_t estimated_capacity = p_manager.n_vertices[u_id] + p_manager.n_vertices[v_id];
+            heap_u.ensure_capacity(estimated_capacity);
+            heap_v.ensure_capacity(estimated_capacity);
+
+            vertex_t dense_counter = 0;
+            dense_to_vertex.clear();
+            dense_to_vertex.reserve(estimated_capacity);
 
             // Seed heaps: batch insert with O(n) heapify
             seed_u.clear();
@@ -343,7 +379,8 @@ namespace HeiProMap {
                 weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
                     g, u, u_id, v_id, connected, p_manager, d_oracle);
                 if (connected) {
-                    seed_u.emplace_back(u, delta);
+                    vertex_t did = get_or_assign_dense(u, dense_to_vertex, dense_counter);
+                    seed_u.emplace_back(did, delta);
                 }
             }
 
@@ -352,7 +389,8 @@ namespace HeiProMap {
                 weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
                     g, v, v_id, u_id, connected, p_manager, d_oracle);
                 if (connected) {
-                    seed_v.emplace_back(v, delta);
+                    vertex_t did = get_or_assign_dense(v, dense_to_vertex, dense_counter);
+                    seed_v.emplace_back(did, delta);
                 }
             }
 
@@ -378,8 +416,8 @@ namespace HeiProMap {
 
             // FM exploration with lazy connectivity check
             while ((!heap_u.empty() || !heap_v.empty()) && moves.size() < n_init_moves) {
-                while (!heap_u.empty() && !is_connected_to(g, p_manager, heap_u.top_key(), v_id)) { heap_u.pop(); }
-                while (!heap_v.empty() && !is_connected_to(g, p_manager, heap_v.top_key(), u_id)) { heap_v.pop(); }
+                while (!heap_u.empty() && !is_connected_to(g, p_manager, dense_to_vertex[heap_u.top_key()], v_id)) { heap_u.pop(); }
+                while (!heap_v.empty() && !is_connected_to(g, p_manager, dense_to_vertex[heap_v.top_key()], u_id)) { heap_v.pop(); }
                 if (heap_u.empty() && heap_v.empty()) break;
 
                 bool choose_u = true;
@@ -404,7 +442,7 @@ namespace HeiProMap {
 
                 IndexedMaxHeap<weight_t> &heap = choose_u ? heap_u : heap_v;
 
-                const vertex_t vertex = heap.top_key();
+                const vertex_t vertex = dense_to_vertex[heap.top_key()];
                 const weight_t qap_delta = heap.top();
                 const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
                 const partition_t vertex_id = choose_u ? u_id : v_id;
@@ -471,10 +509,16 @@ namespace HeiProMap {
 
                     if (!is_connected) continue;
 
+                    vertex_t ndid = get_or_assign_dense(neighbor, dense_to_vertex, dense_counter);
+                    if (ndid >= heap_u.capacity()) {
+                        heap_u.grow(dense_counter);
+                        heap_v.grow(dense_counter);
+                    }
+
                     if (neighbor_id == u_id) {
-                        heap_u.push_update(neighbor, new_delta);
+                        heap_u.push_update(ndid, new_delta);
                     } else {
-                        heap_v.push_update(neighbor, new_delta);
+                        heap_v.push_update(ndid, new_delta);
                     }
                 }
             }
