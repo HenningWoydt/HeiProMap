@@ -165,71 +165,90 @@ namespace HeiProMap {
                               const graph_t &g,
                               const p_manager_t &p_manager,
                               Mapping &mapping,
-                              const weight_t max_w) {
+                              const weight_t max_w,
+                              const u64 threads) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "merge_singletons");
 
-            vertex_t singletons_size = 0;
-            singletons.initialize(g.n);
-
-            for (vertex_t u = 0; u < g.n; ++u) {
-                const vertex_t id = mapping.get(u);
-                if (cluster_count[id] == 1) {
-                    singletons[singletons_size++] = u;
+            // Parallel singleton collection via thread-local vectors
+            std::vector<std::vector<vertex_t>> thread_singletons(threads);
+            #pragma omp parallel num_threads(threads)
+            {
+                const u64 tid = omp_get_thread_num();
+                auto &local = thread_singletons[tid];
+                local.clear();
+                #pragma omp for schedule(static)
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    if (cluster_count[mapping.get(u)] == 1) {
+                        local.push_back(u);
+                    }
                 }
+            }
+            vertex_t singletons_size = 0;
+            for (u64 t = 0; t < threads; ++t) singletons_size += thread_singletons[t].size();
+
+            singletons.initialize(singletons_size);
+            vertex_t offset = 0;
+            for (u64 t = 0; t < threads; ++t) {
+                std::memcpy(singletons.get_ptr() + offset, thread_singletons[t].data(), thread_singletons[t].size() * sizeof(vertex_t));
+                offset += thread_singletons[t].size();
             }
 
             if (singletons_size == 0) { return; }
 
-            FlatMap<vertex_t, f32> flat_map;
-            flat_map.reserve(128);
+            #pragma omp parallel num_threads(threads)
+            {
+                FlatMap<vertex_t, f32> flat_map;
+                flat_map.reserve(128);
 
-            for (size_t i = 0; i < singletons_size; ++i) {
-                const vertex_t u = singletons[i];
-                const vertex_t cur_id = mapping.get(u);
+                #pragma omp for schedule(static)
+                for (size_t i = 0; i < singletons_size; ++i) {
+                    const vertex_t u = singletons[i];
+                    const vertex_t cur_id = mapping.get(u);
 
-                // Might not be a singleton anymore if merged into earlier in this loop
-                if (cluster_count[cur_id] != 1) { continue; }
+                    if (cluster_count[cur_id] != 1) { continue; }
 
-                const partition_t u_id = p_manager[u];
-                const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
-                f32 current_id_w = 0;
+                    const partition_t u_id = p_manager[u];
+                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    f32 current_id_w = 0;
 
-                flat_map.clear();
-                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                    const vertex_t v = g.edges_v[j];
-                    if (u_id != p_manager[v]) { continue; }
+                    flat_map.clear();
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                        const vertex_t v = g.edges_v[j];
+                        if (u_id != p_manager[v]) { continue; }
 
-                    const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
-                    const weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
-                    const f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew);
+                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                        const weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
+                        const f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew);
 
-                    const vertex_t id = mapping.get(v);
-                    if (id == cur_id) {
-                        current_id_w += edge_rating;
-                    } else if (u_w + cluster_weights[id] <= max_w) {
-                        flat_map.add(id, edge_rating);
+                        const vertex_t id = mapping.get(v);
+                        if (id == cur_id) {
+                            current_id_w += edge_rating;
+                        } else if (u_w + cluster_weights[id] <= max_w) {
+                            flat_map.add(id, edge_rating);
+                        }
                     }
-                }
 
-                vertex_t best_id = cur_id;
-                f32 best_weight = current_id_w;
-                for (const auto &[id, w]: flat_map) {
-                    if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
-                        best_weight = w;
-                        best_id = id;
+                    vertex_t best_id = cur_id;
+                    f32 best_weight = current_id_w;
+                    for (const auto &[id, w]: flat_map) {
+                        if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
+                            best_weight = w;
+                            best_id = id;
+                        }
                     }
+
+                    if (best_id == cur_id) { continue; }
+
+                    mapping.set(u, best_id);
+                    #pragma omp atomic
+                    cluster_weights[best_id] += u_w;
+                    #pragma omp atomic
+                    cluster_weights[cur_id] -= u_w;
+                    #pragma omp atomic
+                    cluster_count[best_id] += 1;
+                    #pragma omp atomic
+                    cluster_count[cur_id] -= 1;
                 }
-
-                if (best_id == cur_id) { continue; }
-
-                // Apply merge: u moves from cur_id -> best_id
-                mapping.set(u, best_id);
-
-                cluster_weights[best_id] += u_w;
-                cluster_count[best_id] += 1;
-
-                cluster_weights[cur_id] -= u_w;
-                cluster_count[cur_id] -= 1; // becomes 0
             }
         }
 
@@ -604,7 +623,7 @@ namespace HeiProMap {
                 cluster_count[mapping.get(u)] += 1;
             }
 
-            merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
+            merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w, threads);
 
             // Check if coarsening resulted in an identity mapping
             bool ident_mapping = true;
