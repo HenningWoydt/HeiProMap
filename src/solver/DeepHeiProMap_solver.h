@@ -575,10 +575,18 @@ namespace HeiProMap {
                 return;
             }
 
-            if (level == 0) {
-                rebalancer.rebalance_last_layer(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance, ac.enable_q_graph, ac.enable_block_conn);
+            if (ac.enable_q_graph && ac.enable_block_conn) {
+                if (level == 0) rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                else            rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+            } else if (ac.enable_q_graph) {
+                if (level == 0) rebalancer.rebalance_last_layer<true, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                else            rebalancer.rebalance<true, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+            } else if (ac.enable_block_conn) {
+                if (level == 0) rebalancer.rebalance_last_layer<false, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                else            rebalancer.rebalance<false, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
             } else {
-                rebalancer.rebalance(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance, ac.enable_q_graph, ac.enable_block_conn);
+                if (level == 0) rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                else            rebalancer.rebalance<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
             }
 
             rebalance_ms += get_milli_seconds(p, get_time_point());

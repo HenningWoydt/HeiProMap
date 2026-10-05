@@ -75,15 +75,21 @@ namespace HeiProMap {
     };
 
     class Rebalancer {
+        // =====================================================================
+        // Member variables
+        // =====================================================================
+
         vertex_t m_n = 0;
         vertex_t m_m = 0;
         partition_t m_k = 0;
-
         u64 m_threads = 1;
-
         RandomEngine random_engine;
 
     public:
+        // =====================================================================
+        // Public API
+        // =====================================================================
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
@@ -101,11 +107,41 @@ namespace HeiProMap {
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
-
             m_threads = t_threads;
-
             random_engine = RandomEngine(seed);
         }
+
+        template<bool t_enable_q_graph, bool t_enable_block_conn, typename DistanceOracleT, typename QuotientGraphT>
+        void rebalance(const graph_t &g,
+                       p_manager_t &p_manager,
+                       bv_manager_t &bv_manager,
+                       QuotientGraphT &q_graph,
+                       DistanceOracleT &d_oracle,
+                       block_conn_t &block_conn,
+                       f64 imbalance) {
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            rebalance_loop<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax, false);
+            resolve_residual_overloads<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax);
+        }
+
+        template<bool t_enable_q_graph, bool t_enable_block_conn, typename DistanceOracleT, typename QuotientGraphT>
+        void rebalance_last_layer(const graph_t &g,
+                                  p_manager_t &p_manager,
+                                  bv_manager_t &bv_manager,
+                                  QuotientGraphT &q_graph,
+                                  DistanceOracleT &d_oracle,
+                                  block_conn_t &block_conn,
+                                  f64 imbalance) {
+            rebalance<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
+
+            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+            rebalance_loop<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax, true);
+        }
+
+    private:
+        // =====================================================================
+        // Move computation
+        // =====================================================================
 
         template<typename DistanceOracleT, typename QuotientGraphT>
         RebalancerMove get_best_move(vertex_t u,
@@ -179,21 +215,21 @@ namespace HeiProMap {
             return move;
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT>
-        void rebalance(const graph_t &g,
-                       p_manager_t &p_manager,
-                       bv_manager_t &bv_manager,
-                       QuotientGraphT &q_graph,
-                       DistanceOracleT &d_oracle,
-                       block_conn_t &block_conn,
-                       f64 imbalance,
-                       const bool enable_q_graph = true,
-                       const bool enable_block_conn = true) {
-            fill_empty_blocks(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance, enable_q_graph, enable_block_conn);
+        // =====================================================================
+        // Core rebalance loop (shared by rebalance and rebalance_last_layer)
+        // =====================================================================
 
-            HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "allocate");
-
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+        template<bool t_enable_q_graph, bool t_enable_block_conn, typename DistanceOracleT, typename QuotientGraphT>
+        void rebalance_loop(const graph_t &g,
+                            p_manager_t &p_manager,
+                            bv_manager_t &bv_manager,
+                            QuotientGraphT &q_graph,
+                            DistanceOracleT &d_oracle,
+                            block_conn_t &block_conn,
+                            weight_t lmax,
+                            const bool last_layer) {
+            const char *tag = last_layer ? "LL-Rebalancer" : "Rebalancer";
+            HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "allocate");
 
             AlignedArray<vertex_t> boundary;
             boundary.initialize(g.n);
@@ -211,11 +247,18 @@ namespace HeiProMap {
             AlignedArray<u64> state_ids;
             state_ids.initialize(g.n, 0);
 
+            auto compute_move = [&](vertex_t u, u64 sid) -> RebalancerMove {
+                if (last_layer && t_enable_block_conn) {
+                    return get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, sid, lmax);
+                }
+                return get_local_best_move(u, g, p_manager, d_oracle, sid, lmax);
+            };
+
             bool move_made = true;
             u64 iter = 0;
             while (move_made && iter < 100) {
                 iter++;
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "get_boundary");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "get_boundary");
                 move_made = false;
 
                 offsets_size = 1;
@@ -245,25 +288,35 @@ namespace HeiProMap {
                     }
                 }
 
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "fill_heaps");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "fill_heaps");
 
                 moves.initialize(boundary_size);
-                for (u64 i = 0; i < boundary_size; ++i) {
-                    vertex_t u = boundary[i];
-                    state_ids[u] += 1;
-                    RebalancerMove move = get_local_best_move(u, g, p_manager, d_oracle, state_ids[u], lmax);
-                    moves[i] = move;
+
+                if (last_layer) {
+                    #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
+                    for (u64 i = 0; i < boundary_size; ++i) {
+                        vertex_t u = boundary[i];
+                        state_ids[u] += 1;
+                        moves[i] = compute_move(u, state_ids[u]);
+                    }
+                } else {
+                    for (u64 i = 0; i < boundary_size; ++i) {
+                        vertex_t u = boundary[i];
+                        state_ids[u] += 1;
+                        moves[i] = compute_move(u, state_ids[u]);
+                    }
                 }
 
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "global_heap");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "global_heap");
 
+                global_queue = std::priority_queue<RebalancerMove>();
                 for (u64 i = 0; i < boundary_size; ++i) {
                     if (moves[i].best_id != m_k) {
                         global_queue.push(moves[i]);
                     }
                 }
 
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "process_heap");
+                HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "process_heap");
 
                 u64 inner_iter = 0;
                 while (!global_queue.empty() && inner_iter < (u64) g.n * 10) {
@@ -275,25 +328,23 @@ namespace HeiProMap {
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
-                    if (move.best_id == m_k) { continue; } // not a valid destination
-                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
-                    if (p_manager.get_bweight(u_id) <= lmax) { continue; } // dont need to move anymore
+                    if (move.best_id == m_k) { continue; }
+                    if (bv_manager.is_boundary(u) == false) { continue; }
+                    if (p_manager.get_bweight(u_id) <= lmax) { continue; }
                     if (state_ids[u] != move.state_id) { continue; }
 
                     if (p_manager.get_bweight(best_id) + u_weight > lmax) {
-                        // best_id is overloaded, recompute
                         state_ids[u] += 1;
-                        RebalancerMove new_move = get_local_best_move(u, g, p_manager, d_oracle, state_ids[u], lmax);
+                        RebalancerMove new_move = compute_move(u, state_ids[u]);
                         if (new_move.best_id != m_k) {
                             global_queue.push(new_move);
                         }
                         continue;
                     }
 
-                    // move
                     bv_manager.move(g, p_manager, u, u_id, best_id);
-                    if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
-                    if (enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
+                    if constexpr (t_enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
+                    if constexpr (t_enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
                     p_manager.move(u, u_weight, u_id, best_id);
                     move_made = true;
 
@@ -304,27 +355,27 @@ namespace HeiProMap {
                         if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
 
                         state_ids[v] += 1;
-                        RebalancerMove new_move = get_local_best_move(v, g, p_manager, d_oracle, state_ids[v], lmax);
+                        RebalancerMove new_move = compute_move(v, state_ids[v]);
                         if (new_move.best_id != m_k) {
                             global_queue.push(new_move);
                         }
                     }
                 }
             }
-
-            resolve_residual_overloads(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax, enable_q_graph, enable_block_conn);
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT>
+        // =====================================================================
+        // Residual overload resolution
+        // =====================================================================
+
+        template<bool t_enable_q_graph, bool t_enable_block_conn, typename DistanceOracleT, typename QuotientGraphT>
         void resolve_residual_overloads(const graph_t &g,
                                         p_manager_t &p_manager,
                                         bv_manager_t &bv_manager,
                                         QuotientGraphT &q_graph,
                                         DistanceOracleT &d_oracle,
                                         block_conn_t &block_conn,
-                                        weight_t lmax,
-                                        const bool enable_q_graph,
-                                        const bool enable_block_conn) {
+                                        weight_t lmax) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "resolve_residual");
 
             std::vector<vertex_t> candidates;
@@ -378,174 +429,30 @@ namespace HeiProMap {
                 if (best_id == m_k) continue;
 
                 bv_manager.move(g, p_manager, u, u_id, best_id);
-                if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
-                if (enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
+                if constexpr (t_enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
+                if constexpr (t_enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
                 p_manager.move(u, u_w, u_id, best_id);
             }
         }
 
-        template<typename DistanceOracleT, typename QuotientGraphT>
-        void rebalance_last_layer(const graph_t &g,
-                                  p_manager_t &p_manager,
-                                  bv_manager_t &bv_manager,
-                                  QuotientGraphT &q_graph,
-                                  DistanceOracleT &d_oracle,
-                                  block_conn_t &block_conn,
-                                  f64 imbalance,
-                                  const bool enable_q_graph = true,
-                                  const bool enable_block_conn = true) {
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
+        // =====================================================================
+        // Empty block filling
+        // =====================================================================
 
-            rebalance(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance, enable_q_graph, enable_block_conn);
-            HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "allocate");
-
-            AlignedArray<vertex_t> boundary;
-            boundary.initialize(g.n);
-            size_t boundary_size = 0;
-
-            AlignedArray<RebalancerMove> moves;
-            std::priority_queue<RebalancerMove> global_queue;
-
-            AlignedArray<u64> offsets;
-            offsets.initialize(m_k + 1);
-            size_t offsets_size = 0;
-
-            AlignedArray<u64> cursor;
-            cursor.initialize(m_k + 1);
-
-            AlignedArray<u64> state_ids;
-            state_ids.initialize(g.n, 0);
-
-            bool move_made = true;
-            u64 iter = 0;
-            while (move_made && iter < 100) {
-                iter++;
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "get_boundary");
-                move_made = false;
-
-                offsets_size = 1;
-                offsets[0] = 0;
-                for (partition_t id = 0; id < m_k; ++id) {
-                    if (p_manager.get_bweight(id) > lmax) {
-                        offsets[offsets_size] = offsets[offsets_size - 1] + bv_manager.size(id);
-                    } else {
-                        offsets[offsets_size] = offsets[offsets_size - 1];
-                    }
-                    offsets_size += 1;
-                }
-
-                for (size_t i = 0; i < offsets_size; ++i) {
-                    cursor[i] = offsets[i];
-                }
-                boundary_size = offsets[offsets_size - 1];
-
-
-                for (partition_t id = 0; id < m_k; ++id) {
-                    if (p_manager.get_bweight(id) > lmax) {
-                        for (size_t i = 0; i < bv_manager.size(id); ++i) {
-                            const vertex_t u = bv_manager.get(id, i);
-
-                            boundary[cursor[id]] = u;
-                            cursor[id] += 1;
-                        }
-                    }
-                }
-
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "fill_heaps");
-
-                moves.initialize(boundary_size);
-
-                #pragma omp parallel for num_threads(m_threads) schedule(dynamic)
-                for (u64 i = 0; i < boundary_size; ++i) {
-                    vertex_t u = boundary[i];
-                    state_ids[u] += 1;
-                    RebalancerMove move = enable_block_conn
-                        ? get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, state_ids[u], lmax)
-                        : get_local_best_move(u, g, p_manager, d_oracle, state_ids[u], lmax);
-                    moves[i] = move;
-                }
-
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "global_heap");
-
-                global_queue = std::priority_queue<RebalancerMove>();
-                for (u64 i = 0; i < boundary_size; ++i) {
-                    if (moves[i].best_id != m_k) {
-                        global_queue.push(moves[i]);
-                    }
-                }
-
-                HEIPROMAP_PROFILE_SCOPE("rebalance", "LL-Rebalancer", "process_heap");
-
-                u64 inner_iter = 0;
-                while (!global_queue.empty() && inner_iter < (u64) g.n * 10) {
-                    inner_iter++;
-                    RebalancerMove move = global_queue.top();
-                    global_queue.pop();
-                    vertex_t u = move.u;
-                    weight_t u_weight = g.v_weights[u];
-                    partition_t u_id = p_manager[u];
-                    partition_t best_id = move.best_id;
-
-                    if (move.best_id == m_k) { continue; } // not a valid destination
-                    if (bv_manager.is_boundary(u) == false) { continue; } // not a boundary vertex
-                    if (p_manager.get_bweight(u_id) <= lmax) { continue; } // dont need to move anymore
-                    if (state_ids[u] != move.state_id) { continue; }
-
-                    if (p_manager.get_bweight(best_id) + u_weight > lmax) {
-                        // best_id is overloaded, recompute
-                        state_ids[u] += 1;
-                        RebalancerMove new_move = enable_block_conn
-                            ? get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, state_ids[u], lmax)
-                            : get_local_best_move(u, g, p_manager, d_oracle, state_ids[u], lmax);
-                        if (new_move.best_id != m_k) {
-                            global_queue.push(new_move);
-                        }
-                        continue;
-                    }
-
-                    // move
-                    bv_manager.move(g, p_manager, u, u_id, best_id);
-                    if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, best_id); }
-                    if (enable_block_conn) { block_conn.move(g, u, u_id, best_id); }
-                    p_manager.move(u, u_weight, u_id, best_id);
-                    move_made = true;
-
-                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                        const vertex_t v = g.edges_v[j];
-
-                        if (bv_manager.is_boundary(v) == false) { continue; }
-                        if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
-
-                        state_ids[v] += 1;
-                        RebalancerMove new_move = enable_block_conn
-                            ? get_best_move(v, g, p_manager, q_graph, d_oracle, block_conn, state_ids[v], lmax)
-                            : get_local_best_move(v, g, p_manager, d_oracle, state_ids[v], lmax);
-                        if (new_move.best_id != m_k) {
-                            global_queue.push(new_move);
-                        }
-                    }
-                }
-            }
-        }
-
-        template<typename DistanceOracleT, typename QuotientGraphT>
+        template<bool t_enable_q_graph, bool t_enable_block_conn, typename DistanceOracleT, typename QuotientGraphT>
         void fill_empty_blocks(const graph_t &g,
                                p_manager_t &p_manager,
                                bv_manager_t &bv_manager,
                                QuotientGraphT &q_graph,
                                DistanceOracleT &d_oracle,
                                block_conn_t &block_conn,
-                               f64 imbalance,
-                               const bool enable_q_graph = true,
-                               const bool enable_block_conn = true) {
-            // return;
+                               f64 imbalance) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "fill_empty_blocks");
 
             std::vector<bool> blocks_to_fill_lookup(m_k, false);
             std::vector<partition_t> blocks_to_fill;
             for (partition_t id = 0; id < m_k; ++id) {
                 if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) {
-                    continue;
                     blocks_to_fill_lookup[id] = true;
                     blocks_to_fill.push_back(id);
                 }
@@ -570,9 +477,12 @@ namespace HeiProMap {
 
                     for (partition_t move_id: blocks_to_fill) {
                         if (p_manager.get_bweight(move_id) + u_w <= lmax) {
-                            weight_t qap = enable_block_conn
-                                ? get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle, block_conn)
-                                : get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle);
+                            weight_t qap;
+                            if constexpr (t_enable_block_conn) {
+                                qap = get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle, block_conn);
+                            } else {
+                                qap = get_u_qap_delta(g, u, id, move_id, p_manager, d_oracle);
+                            }
 
                             if (qap > best_qap) {
                                 best_qap = qap;
@@ -600,8 +510,8 @@ namespace HeiProMap {
                 if (p_manager.get_bweight(new_id) + u_w > lmax) { continue; }
 
                 bv_manager.move(g, p_manager, u, u_id, new_id);
-                if (enable_q_graph) { q_graph.move(g, p_manager, u, u_id, new_id); }
-                if (enable_block_conn) { block_conn.move(g, u, u_id, new_id); }
+                if constexpr (t_enable_q_graph) { q_graph.move(g, p_manager, u, u_id, new_id); }
+                if constexpr (t_enable_block_conn) { block_conn.move(g, u, u_id, new_id); }
                 p_manager.move(u, u_w, u_id, new_id);
 
                 if (p_manager.get_bweight(new_id) >= fill_value) {
@@ -623,9 +533,12 @@ namespace HeiProMap {
                     for (partition_t move_id: blocks_to_fill) {
                         if (blocks_to_fill_lookup[move_id] == false) { continue; }
                         if (p_manager.get_bweight(move_id) + v_w <= lmax) {
-                            weight_t qap = enable_block_conn
-                                ? get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn)
-                                : get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle);
+                            weight_t qap;
+                            if constexpr (t_enable_block_conn) {
+                                qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle, block_conn);
+                            } else {
+                                qap = get_u_qap_delta(g, v, v_id, move_id, p_manager, d_oracle);
+                            }
 
                             if (qap > best_qap) {
                                 best_qap = qap;

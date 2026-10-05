@@ -415,7 +415,7 @@ namespace HeiProMap {
 
             Rebalancer rebalancer;
             rebalancer.initialize(g.n, g.m, k, 1, seed);
-            rebalancer.rebalance(g, pm, bv_manager, q_graph, d_oracle, block_conn, imbalance);
+            rebalancer.rebalance<true, true>(g, pm, bv_manager, q_graph, d_oracle, block_conn, imbalance);
 
             if (config.label_propagation_config.enabled) {
                 LabelPropagationRefinement<false> lp_refine;
