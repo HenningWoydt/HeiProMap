@@ -210,13 +210,11 @@ namespace HeiProMap {
             }
         }
 
-        template<typename DistanceOracleT, typename QGraphT>
+        template<typename DistanceOracleT>
         void refine(graph_t &g,
                     DistanceOracleT &d_oracle,
                     bv_manager_t &bv_manager,
-                    p_manager_t &p_manager,
-                    QGraphT &q_graph,
-                    block_conn_t &block_conn) {
+                    p_manager_t &p_manager) {
             if (g.uniform_v_weights && g.uniform_e_weights) {
                 refine_impl<true, true>(g, d_oracle, bv_manager, p_manager);
             } else if (g.uniform_v_weights) {

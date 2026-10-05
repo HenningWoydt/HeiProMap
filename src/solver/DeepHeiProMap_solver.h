@@ -543,7 +543,7 @@ namespace HeiProMap {
 
             if (ac.deep_simple_qg_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                simple_qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                simple_qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager);
                 qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
