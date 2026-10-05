@@ -571,9 +571,9 @@ namespace HeiProMap {
             auto sp = get_time_point();
 
             if (level == 0) {
-                rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, level_imbalance);
+                rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             } else {
-                rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, level_imbalance);
+                rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             }
 
             auto ep = get_time_point();

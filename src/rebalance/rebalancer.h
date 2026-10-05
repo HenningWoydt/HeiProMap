@@ -117,11 +117,9 @@ namespace HeiProMap {
                        bv_manager_t &bv_manager,
                        QuotientGraphT &q_graph,
                        DistanceOracleT &d_oracle,
-                       block_conn_t &block_conn,
-                       f64 imbalance) {
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-            rebalance_loop<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax, false);
-            resolve_residual_overloads<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax);
+                       block_conn_t &block_conn) {
+            rebalance_loop<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, false);
+            resolve_residual_overloads<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn);
         }
 
         template<bool t_enable_q_graph, bool t_enable_block_conn, typename DistanceOracleT, typename QuotientGraphT>
@@ -130,12 +128,9 @@ namespace HeiProMap {
                                   bv_manager_t &bv_manager,
                                   QuotientGraphT &q_graph,
                                   DistanceOracleT &d_oracle,
-                                  block_conn_t &block_conn,
-                                  f64 imbalance) {
-            rebalance<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, imbalance);
-
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k));
-            rebalance_loop<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, lmax, true);
+                                  block_conn_t &block_conn) {
+            rebalance<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn);
+            rebalance_loop<t_enable_q_graph, t_enable_block_conn>(g, p_manager, bv_manager, q_graph, d_oracle, block_conn, true);
         }
 
     private:
@@ -150,8 +145,7 @@ namespace HeiProMap {
                                      [[maybe_unused]] const QuotientGraphT &q_graph,
                                      const DistanceOracleT &d_oracle,
                                      const block_conn_t &block_conn,
-                                     const u64 state_id,
-                                     weight_t lmax) const {
+                                     const u64 state_id) const {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
@@ -161,7 +155,7 @@ namespace HeiProMap {
                 const vertex_t v = g.edges_v[j];
 
                 partition_t v_id = p_manager[v];
-                if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
+                if (p_manager.get_bweight(v_id) + u_weight > p_manager.get_lmax(v_id)) { continue; }
 
                 weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                 if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
@@ -174,7 +168,7 @@ namespace HeiProMap {
 
             for (partition_t v_id = 0; v_id < m_k; ++v_id) {
                 if (v_id == u_id) { continue; }
-                if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
+                if (p_manager.get_bweight(v_id) + u_weight > p_manager.get_lmax(v_id)) { continue; }
                 if (!p_manager.is_active(v_id)) { continue; }
 
                 weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
@@ -192,8 +186,7 @@ namespace HeiProMap {
                                            const graph_t &g,
                                            const p_manager_t &p_manager,
                                            const DistanceOracleT &d_oracle,
-                                           const u64 state_id,
-                                           weight_t lmax) const {
+                                           const u64 state_id) const {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
@@ -203,7 +196,7 @@ namespace HeiProMap {
                 const vertex_t v = g.edges_v[j];
 
                 partition_t v_id = p_manager[v];
-                if (p_manager.get_bweight(v_id) + u_weight > lmax) { continue; }
+                if (p_manager.get_bweight(v_id) + u_weight > p_manager.get_lmax(v_id)) { continue; }
 
                 weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                 if (qap_delta > move.best_qap || (qap_delta == move.best_qap && p_manager.get_bweight(v_id) < p_manager.get_bweight(move.best_id))) {
@@ -226,7 +219,6 @@ namespace HeiProMap {
                             QuotientGraphT &q_graph,
                             DistanceOracleT &d_oracle,
                             block_conn_t &block_conn,
-                            weight_t lmax,
                             const bool last_layer) {
             const char *tag = last_layer ? "LL-Rebalancer" : "Rebalancer";
             HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "allocate");
@@ -249,22 +241,20 @@ namespace HeiProMap {
 
             auto compute_move = [&](vertex_t u, u64 sid) -> RebalancerMove {
                 if (last_layer && t_enable_block_conn) {
-                    return get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, sid, lmax);
+                    return get_best_move(u, g, p_manager, q_graph, d_oracle, block_conn, sid);
                 }
-                return get_local_best_move(u, g, p_manager, d_oracle, sid, lmax);
+                return get_local_best_move(u, g, p_manager, d_oracle, sid);
             };
 
             bool move_made = true;
-            u64 iter = 0;
-            while (move_made && iter < 100) {
-                iter++;
+            while (move_made) {
                 HEIPROMAP_PROFILE_SCOPE("rebalance", tag, "get_boundary");
                 move_made = false;
 
                 offsets_size = 1;
                 offsets[0] = 0;
                 for (partition_t id = 0; id < m_k; ++id) {
-                    if (p_manager.get_bweight(id) > lmax) {
+                    if (p_manager.get_bweight(id) > p_manager.get_lmax(id)) {
                         offsets[offsets_size] = offsets[offsets_size - 1] + bv_manager.size(id);
                     } else {
                         offsets[offsets_size] = offsets[offsets_size - 1];
@@ -278,7 +268,7 @@ namespace HeiProMap {
                 boundary_size = offsets[offsets_size - 1];
 
                 for (partition_t id = 0; id < m_k; ++id) {
-                    if (p_manager.get_bweight(id) > lmax) {
+                    if (p_manager.get_bweight(id) > p_manager.get_lmax(id)) {
                         for (size_t i = 0; i < bv_manager.size(id); ++i) {
                             const vertex_t u = bv_manager.get(id, i);
 
@@ -330,10 +320,10 @@ namespace HeiProMap {
 
                     if (move.best_id == m_k) { continue; }
                     if (bv_manager.is_boundary(u) == false) { continue; }
-                    if (p_manager.get_bweight(u_id) <= lmax) { continue; }
+                    if (p_manager.get_bweight(u_id) <= p_manager.get_lmax(u_id)) { continue; }
                     if (state_ids[u] != move.state_id) { continue; }
 
-                    if (p_manager.get_bweight(best_id) + u_weight > lmax) {
+                    if (p_manager.get_bweight(best_id) + u_weight > p_manager.get_lmax(best_id)) {
                         state_ids[u] += 1;
                         RebalancerMove new_move = compute_move(u, state_ids[u]);
                         if (new_move.best_id != m_k) {
@@ -352,7 +342,7 @@ namespace HeiProMap {
                         const vertex_t v = g.edges_v[j];
 
                         if (bv_manager.is_boundary(v) == false) { continue; }
-                        if (p_manager.get_bweight(p_manager[v]) <= lmax) { continue; }
+                        if (p_manager.get_bweight(p_manager[v]) <= p_manager.get_lmax(p_manager[v])) { continue; }
 
                         state_ids[v] += 1;
                         RebalancerMove new_move = compute_move(v, state_ids[v]);
@@ -374,14 +364,13 @@ namespace HeiProMap {
                                         bv_manager_t &bv_manager,
                                         QuotientGraphT &q_graph,
                                         DistanceOracleT &d_oracle,
-                                        block_conn_t &block_conn,
-                                        weight_t lmax) {
+                                        block_conn_t &block_conn) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "Rebalancer", "resolve_residual");
 
             std::vector<vertex_t> candidates;
             for (partition_t id = 0; id < m_k; ++id) {
                 if (!p_manager.is_active(id)) continue;
-                if (p_manager.get_bweight(id) <= lmax) continue;
+                if (p_manager.get_bweight(id) <= p_manager.get_lmax(id)) continue;
                 for (size_t i = 0; i < bv_manager.size(id); ++i) {
                     candidates.push_back(bv_manager.get(id, i));
                 }
@@ -392,7 +381,7 @@ namespace HeiProMap {
             std::vector<partition_t> underloaded;
             for (partition_t id = 0; id < m_k; ++id) {
                 if (!p_manager.is_active(id)) continue;
-                if (p_manager.get_bweight(id) < lmax) {
+                if (p_manager.get_bweight(id) < p_manager.get_lmax(id)) {
                     underloaded.push_back(id);
                 }
             }
@@ -404,7 +393,7 @@ namespace HeiProMap {
                 partition_t u_id = p_manager[u];
                 weight_t u_w = g.v_weights[u];
                 if (p_manager[u] != u_id) continue;
-                if (p_manager.get_bweight(u_id) <= lmax) continue;
+                if (p_manager.get_bweight(u_id) <= p_manager.get_lmax(u_id)) continue;
 
                 partition_t best_id = m_k;
                 weight_t best_qap = -std::numeric_limits<weight_t>::max();
@@ -412,13 +401,13 @@ namespace HeiProMap {
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                     partition_t v_id = p_manager[g.edges_v[j]];
                     if (v_id == u_id) continue;
-                    if (p_manager.get_bweight(v_id) + u_w > lmax) continue;
+                    if (p_manager.get_bweight(v_id) + u_w > p_manager.get_lmax(v_id)) continue;
                     weight_t qap_delta = get_u_qap_delta(g, u, u_id, v_id, p_manager, d_oracle);
                     if (qap_delta > best_qap) { best_qap = qap_delta; best_id = v_id; }
                 }
 
                 if (best_id == m_k) {
-                    while (ul_idx < underloaded.size() && p_manager.get_bweight(underloaded[ul_idx]) + u_w > lmax) {
+                    while (ul_idx < underloaded.size() && p_manager.get_bweight(underloaded[ul_idx]) + u_w > p_manager.get_lmax(underloaded[ul_idx])) {
                         ul_idx++;
                     }
                     if (ul_idx < underloaded.size()) {

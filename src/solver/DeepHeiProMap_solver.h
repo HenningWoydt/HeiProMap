@@ -576,17 +576,17 @@ namespace HeiProMap {
             }
 
             if (ac.enable_q_graph && ac.enable_block_conn) {
-                if (level == 0) rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
-                else            rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                if (level == 0) rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                else            rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             } else if (ac.enable_q_graph) {
-                if (level == 0) rebalancer.rebalance_last_layer<true, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
-                else            rebalancer.rebalance<true, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                if (level == 0) rebalancer.rebalance_last_layer<true, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                else            rebalancer.rebalance<true, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             } else if (ac.enable_block_conn) {
-                if (level == 0) rebalancer.rebalance_last_layer<false, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
-                else            rebalancer.rebalance<false, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                if (level == 0) rebalancer.rebalance_last_layer<false, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                else            rebalancer.rebalance<false, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             } else {
-                if (level == 0) rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
-                else            rebalancer.rebalance<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn, ac.imbalance);
+                if (level == 0) rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                else            rebalancer.rebalance<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             }
 
             rebalance_ms += get_milli_seconds(p, get_time_point());
