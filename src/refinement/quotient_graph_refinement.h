@@ -107,6 +107,19 @@ namespace HeiProMap {
 
         ~QuotientGraphRefinement() = default;
 
+        size_t heap_bytes() const {
+            size_t bytes = active_block_scheduling.heap_bytes() + vertex_used.heap_bytes()
+                         + dist_3_matcher.heap_bytes();
+            for (size_t i = 0; i < moves_vec.size(); ++i) {
+                bytes += moves_vec[i].capacity() * sizeof(vertex_t);
+            }
+            for (size_t i = 0; i < boundary_vertices_u_vec.size(); ++i) {
+                bytes += boundary_vertices_u_vec[i].heap_bytes();
+                bytes += boundary_vertices_v_vec[i].heap_bytes();
+            }
+            return bytes;
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,

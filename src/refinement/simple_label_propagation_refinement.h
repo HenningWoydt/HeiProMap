@@ -81,6 +81,17 @@ namespace HeiProMap {
         std::vector<u32> m_epoch;
 
     public:
+        size_t heap_bytes() const {
+            size_t bytes = 0;
+            for (partition_t id = 0; id < m_k; ++id) {
+                bytes += m_adj[id].capacity() * sizeof(Entry);
+            }
+            for (size_t t = 0; t < m_seen.size(); ++t) {
+                bytes += m_seen[t].heap_bytes();
+            }
+            return bytes;
+        }
+
         void initialize(const partition_t k) {
             m_k = k;
             m_adj.clear();
@@ -233,6 +244,11 @@ namespace HeiProMap {
         SimpleLabelPropagationRefinement() = default;
 
         ~SimpleLabelPropagationRefinement() = default;
+
+        size_t heap_bytes() const {
+            return active_block_scheduling.heap_bytes() + d1_matcher.heap_bytes()
+                 + block_adjacency.heap_bytes();
+        }
 
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,

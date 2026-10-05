@@ -43,6 +43,12 @@ namespace HeiProMap {
         AlignedArray<partition_t> m_h_mtx;
 
     public:
+        size_t heap_bytes() const {
+            return m_mtx.heap_bytes() + m_h_mtx.heap_bytes()
+                 + m_hierarchy.capacity() * sizeof(partition_t)
+                 + m_distance.capacity() * sizeof(weight_t);
+        }
+
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance) {
             HEIPROMAP_PROFILE_SCOPE("misc", "DistanceOracle", "initialize");

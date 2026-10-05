@@ -47,6 +47,11 @@ namespace HeiProMap {
         size_t total_size = 0;
 
     public:
+        size_t heap_bytes() const {
+            return m_sizes.heap_bytes() + m_start.heap_bytes()
+                 + m_arr_ids.heap_bytes() + m_arr_weights.heap_bytes();
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k) {

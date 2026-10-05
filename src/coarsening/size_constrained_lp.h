@@ -96,6 +96,14 @@ namespace HeiProMap {
         RandomEngine random_engine;
 
     public:
+        size_t heap_bytes() const {
+            return flat_vertices.heap_bytes() + bucket_sizes.heap_bytes()
+                 + bucket_offsets.heap_bytes() + cluster_weights.heap_bytes()
+                 + cluster_count.heap_bytes() + active.heap_bytes()
+                 + active_next.heap_bytes() + remap.heap_bytes()
+                 + singletons.heap_bytes();
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,

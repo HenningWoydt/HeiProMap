@@ -62,6 +62,11 @@ namespace HeiProMap {
 
         CSRGraph() = default;
 
+        size_t heap_bytes() const {
+            return v_weights.heap_bytes() + neighborhoods.heap_bytes()
+                 + edges_v.heap_bytes() + edges_w.heap_bytes();
+        }
+
         explicit CSRGraph(const std::string &file_path) {
             HEIPROMAP_PROFILE_SCOPE("io", "CSRGraph", "allocate");
             if (!file_exists(file_path)) {

@@ -53,6 +53,13 @@ namespace HeiProMap {
 
         PartitionManager() = default;
 
+        size_t heap_bytes() const {
+            return partition.heap_bytes() + partition_temp.heap_bytes()
+                 + bweights.heap_bytes() + n_vertices.heap_bytes()
+                 + lmax.heap_bytes() + hierarchy_level.heap_bytes()
+                 + active_ids.heap_bytes();
+        }
+
         PartitionManager(const vertex_t t_n,
                          const partition_t t_k,
                          const weight_t g_weight) {

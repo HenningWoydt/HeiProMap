@@ -55,6 +55,21 @@ namespace HeiProMap {
         std::vector<std::vector<VertexEntry>> par_thread_entries;
         std::vector<AlignedArray<weight_t>> par_thread_weights;
 
+        size_t heap_bytes() const {
+            size_t bytes = block_weights.heap_bytes();
+            for (size_t i = 0; i < graphs.size(); ++i) {
+                bytes += graphs[i].heap_bytes();
+            }
+            for (size_t i = 0; i < block_vertices.size(); ++i) {
+                bytes += block_vertices[i].capacity() * sizeof(vertex_t);
+            }
+            for (size_t i = 0; i < par_thread_weights.size(); ++i) {
+                bytes += par_thread_weights[i].heap_bytes();
+                bytes += par_thread_entries[i].capacity() * sizeof(VertexEntry);
+            }
+            return bytes;
+        }
+
         /**
          * Extracts a subgraph from g based on the side array.
          * Only vertices u with side[u] == target_side are included.

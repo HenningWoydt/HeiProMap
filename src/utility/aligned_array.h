@@ -146,6 +146,7 @@ namespace HeiProMap {
         }
 
         size_t size() const { return m_n; }
+        size_t heap_bytes() const { return m_n * sizeof(T); }
 
         T *begin() { return get_ptr(); }
         const T *begin() const { return get_ptr(); }

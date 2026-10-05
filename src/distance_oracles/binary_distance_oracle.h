@@ -46,6 +46,15 @@ namespace HeiProMap {
         std::vector<partition_t> hierarchy_lookup; // O(64)
 
     public:
+        size_t heap_bytes() const {
+            return m_hierarchy.capacity() * sizeof(partition_t)
+                 + m_distance.capacity() * sizeof(weight_t)
+                 + m_system_sizes.capacity() * sizeof(partition_t)
+                 + identifier.capacity() * sizeof(u64)
+                 + dist_lookup.capacity() * sizeof(weight_t)
+                 + hierarchy_lookup.capacity() * sizeof(partition_t);
+        }
+
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance) {
             HEIPROMAP_PROFILE_SCOPE("misc", "BinaryDistanceOracle", "initialize");

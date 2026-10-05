@@ -48,6 +48,8 @@ namespace HeiProMap {
     public:
         BitVectorArray() = default;
 
+        size_t heap_bytes() const { return m_data.heap_bytes(); }
+
         void initialize(const size_t n, const size_t num_bits) {
             m_n = n;
             m_num_bits = num_bits;

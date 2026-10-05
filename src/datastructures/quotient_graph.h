@@ -169,6 +169,10 @@ namespace HeiProMap {
         }
 
     public:
+        size_t heap_bytes() const {
+            return m_edges.heap_bytes() + m_head.heap_bytes();
+        }
+
         void initialize(const partition_t t_k) {
             HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraph", "initialize");
 

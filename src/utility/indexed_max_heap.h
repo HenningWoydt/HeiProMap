@@ -72,6 +72,10 @@ namespace HeiProMap {
     public:
         IndexedMaxHeap() = default;
 
+        size_t heap_bytes() const {
+            return m_heap.heap_bytes() + m_indices.heap_bytes() + m_iteration_counter.heap_bytes();
+        }
+
         ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {

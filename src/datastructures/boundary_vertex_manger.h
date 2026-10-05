@@ -43,6 +43,14 @@ namespace HeiProMap {
         AlignedArray<size_t> m_vertex_idx; // index of vertex inside its partition boundary vector
 
     public:
+        size_t heap_bytes() const {
+            size_t bytes = m_n_boundary_edges.heap_bytes() + m_vertex_idx.heap_bytes();
+            for (partition_t id = 0; id < m_k; ++id) {
+                bytes += m_boundaries[id].capacity() * sizeof(vertex_t);
+            }
+            return bytes;
+        }
+
         void initialize(const vertex_t t_n,
                         const partition_t t_k) {
             HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "initialize");

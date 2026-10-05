@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 #include <omp.h>
@@ -112,6 +113,41 @@ namespace HeiProMap {
 
         std::vector<std::vector<std::tuple<partition_t, partition_t, weight_t> > > thread_edges;
 
+        void print_memory_report() const {
+            auto mb = [](size_t bytes) { return (double) bytes / (1024.0 * 1024.0); };
+            size_t total = 0;
+            size_t g_bytes = 0;
+            for (size_t i = 0; i < graphs.size(); ++i) { g_bytes += graphs[i].heap_bytes(); }
+            size_t pm_bytes = p_manager.heap_bytes();
+            size_t bv_bytes = bv_manager.heap_bytes();
+            size_t qg_bytes = q_graph.heap_bytes();
+            size_t bc_bytes = block_conn.heap_bytes();
+            size_t do_bytes = d_oracle.heap_bytes();
+            size_t se_bytes = subgraph_extractor.heap_bytes();
+            size_t sc_bytes = size_constrained_lp_clustering.heap_bytes();
+            size_t lp_bytes = lp_refine.heap_bytes();
+            size_t qr_bytes = qg_refine.heap_bytes();
+            size_t sqr_bytes = simple_qg_refine.heap_bytes();
+            size_t fb_bytes = flow_based_refinement.heap_bytes();
+            total = g_bytes + pm_bytes + bv_bytes + qg_bytes + bc_bytes + do_bytes
+                  + se_bytes + sc_bytes + lp_bytes + qr_bytes + sqr_bytes + fb_bytes;
+            std::cout << "------- Memory (MB) -------" << std::endl;
+            std::cout << std::fixed << std::setprecision(1);
+            std::cout << "Graph(s)              : " << mb(g_bytes) << std::endl;
+            std::cout << "PartitionManager      : " << mb(pm_bytes) << std::endl;
+            std::cout << "BoundaryVertexManager : " << mb(bv_bytes) << std::endl;
+            std::cout << "QuotientGraph         : " << mb(qg_bytes) << std::endl;
+            std::cout << "BlockConn             : " << mb(bc_bytes) << std::endl;
+            std::cout << "DistanceOracle        : " << mb(do_bytes) << std::endl;
+            std::cout << "SubgraphExtractor     : " << mb(se_bytes) << std::endl;
+            std::cout << "SizeConstrainedLP     : " << mb(sc_bytes) << std::endl;
+            std::cout << "LP Refinement         : " << mb(lp_bytes) << std::endl;
+            std::cout << "QG Refinement         : " << mb(qr_bytes) << std::endl;
+            std::cout << "Simple QG Refinement  : " << mb(sqr_bytes) << std::endl;
+            std::cout << "Flow Refinement       : " << mb(fb_bytes) << std::endl;
+            std::cout << "TOTAL                 : " << mb(total) << std::endl;
+        }
+
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
@@ -185,6 +221,7 @@ namespace HeiProMap {
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config);
             }
+            print_memory_report();
         }
 
         explicit DeepHeiProMapSolver(graph_t &&g, const DeepHeiProMapConfiguration &t_ac) {
@@ -246,6 +283,7 @@ namespace HeiProMap {
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config);
             }
+            print_memory_report();
         }
 
         std::vector<partition_t> solve() {

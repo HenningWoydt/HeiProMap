@@ -46,6 +46,12 @@ namespace HeiProMap {
         std::vector<partition_t> m_groups;
 
     public:
+        size_t heap_bytes() const {
+            return m_hierarchy.capacity() * sizeof(partition_t)
+                 + m_distance.capacity() * sizeof(weight_t)
+                 + m_groups.capacity() * sizeof(partition_t);
+        }
+
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance) {
             HEIPROMAP_PROFILE_SCOPE("misc", "StoredDivisionDistanceOracle", "initialize");

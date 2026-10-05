@@ -99,6 +99,14 @@ namespace HeiProMap {
     public:
         LargeQuotientGraph() = default;
 
+        size_t heap_bytes() const {
+            size_t bytes = m_self_weights.heap_bytes();
+            for (partition_t id = 0; id < m_k; ++id) {
+                bytes += m_adj[id].capacity() * sizeof(HalfEdge);
+            }
+            return bytes;
+        }
+
         void initialize(const partition_t t_k) {
             HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "qgraph", "initialize");
             m_k = t_k;

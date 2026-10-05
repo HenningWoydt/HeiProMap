@@ -134,6 +134,25 @@ namespace HeiProMap {
 
         ~FlowBasedRefinement() = default;
 
+        size_t heap_bytes() const {
+            size_t bytes = d3_matcher.heap_bytes();
+            for (size_t i = 0; i < seen_vecs.size(); ++i) {
+                bytes += seen_vecs[i].heap_bytes() + region_vecs[i].heap_bytes();
+            }
+            for (size_t i = 0; i < left_boundaries.size(); ++i) {
+                bytes += left_boundaries[i].capacity() * sizeof(vertex_t);
+                bytes += right_boundaries[i].capacity() * sizeof(vertex_t);
+                bytes += left_regions[i].capacity() * sizeof(vertex_t);
+                bytes += right_regions[i].capacity() * sizeof(vertex_t);
+                bytes += queues[i].capacity() * sizeof(vertex_t);
+                bytes += is_left_vecs[i].capacity();
+                bytes += is_left_2_vecs[i].capacity();
+                bytes += s_connected_vecs[i].capacity();
+                bytes += t_connected_vecs[i].capacity();
+            }
+            return bytes;
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,

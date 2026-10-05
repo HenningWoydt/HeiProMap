@@ -15,6 +15,10 @@ namespace HeiProMap {
         AlignedArray<u8> active_this_round;
         AlignedArray<u8> active_next_round;
 
+        size_t heap_bytes() const {
+            return active_this_round.heap_bytes() + active_next_round.heap_bytes();
+        }
+
         void initialize(const partition_t t_k) {
             m_k = t_k;
             active_this_round.initialize(t_k);

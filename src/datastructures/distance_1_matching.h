@@ -69,6 +69,19 @@ namespace HeiProMap {
     public:
         Distance1Matching() = default;
 
+        size_t heap_bytes() const {
+            size_t bytes = m_vertex_matched_epoch.heap_bytes() + m_used_this_round.heap_bytes()
+                         + m_touched_vertices.heap_bytes() + m_candidates.heap_bytes()
+                         + m_next_candidates.heap_bytes() + m_in_candidates_epoch.heap_bytes()
+                         + m_matched_batches.heap_bytes()
+                         + m_used_edge_indices.capacity() * sizeof(size_t)
+                         + m_forbidden_buffer.capacity() * sizeof(u64);
+            for (partition_t id = 0; id < m_k; ++id) {
+                bytes += m_used_neighbors[id].capacity() * sizeof(partition_t);
+            }
+            return bytes;
+        }
+
         void initialize(const partition_t k) {
             m_k = k;
 

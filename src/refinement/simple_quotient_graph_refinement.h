@@ -175,6 +175,20 @@ namespace HeiProMap {
         SimpleQuotientGraphRefinement() = default;
         ~SimpleQuotientGraphRefinement() = default;
 
+        size_t heap_bytes() const {
+            size_t bytes = active_block_scheduling.heap_bytes() + d1_matcher.heap_bytes()
+                         + block_adjacency.heap_bytes() + vertex_used.heap_bytes();
+            for (size_t i = 0; i < thread_moves.size(); ++i) {
+                bytes += thread_moves[i].capacity() * sizeof(vertex_t);
+            }
+            for (size_t i = 0; i < thread_heap_u.size(); ++i) {
+                bytes += thread_heap_u[i].heap_bytes() + thread_heap_v[i].heap_bytes();
+                bytes += thread_seed_u[i].capacity() * sizeof(std::pair<size_t, weight_t>);
+                bytes += thread_seed_v[i].capacity() * sizeof(std::pair<size_t, weight_t>);
+            }
+            return bytes;
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
