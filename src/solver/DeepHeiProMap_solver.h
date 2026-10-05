@@ -40,6 +40,7 @@
 #include "../distance_oracles/binary_distance_oracle.h"
 #include "../distance_oracles/division_distance_oracle.h"
 #include "../distance_oracles/stored_division_distance_oracle.h"
+#include "../distance_oracles/verify_distance_oracles.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
 #include "../datastructures/large_quotient_graph.h"
@@ -163,6 +164,7 @@ namespace HeiProMap {
             if (ac.enable_q_graph) { q_graph.initialize(ac.k); }
             if (ac.enable_block_conn) { block_conn.initialize(graphs[0].n, graphs[0].m, ac.k); }
             d_oracle.initialize(ac.hierarchy, ac.distance);
+            HEAVYASSERT(verify_distance_oracles());
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k, ac.threads));
 
@@ -223,6 +225,7 @@ namespace HeiProMap {
             if (ac.enable_q_graph) { q_graph.initialize(ac.k); }
             if (ac.enable_block_conn) { block_conn.initialize(graphs[0].n, graphs[0].m, ac.k); }
             d_oracle.initialize(ac.hierarchy, ac.distance);
+            HEAVYASSERT(verify_distance_oracles());
 
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k, ac.threads));
 
