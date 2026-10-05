@@ -167,6 +167,13 @@ namespace HeiProMap {
             {"--distance-oracle",         "",   "Which Distance Oracle to use. {division-based, store-division-based, binary-based}", "binary-based",       "", false},
             {"--coarsening-alg",          "",   "Which coarsening algorithm to use. {global-paths, size-constrained-lp}",             "size-constrained-lp", "", false},
             {"--hierarchical-coarsening", "",   "Use staged hierarchical coarsening (true) or aggressive flat coarsening (false).",   "true",                "", false},
+            {"--initial-C",               "",   "Initial coarsening contraction threshold C.",                                       "",                    "", false},
+            {"--initial-kappa",           "",   "Initial coarsening contraction threshold kappa.",                                    "",                    "", false},
+            {"--intermediate-C",          "",   "Intermediate coarsening contraction threshold C.",                                   "",                    "", false},
+            {"--intermediate-kappa",      "",   "Intermediate coarsening contraction threshold kappa.",                               "",                    "", false},
+            {"--force-parallel-contraction", "", "Force parallel graph contraction even with 1 thread (true/false).",                "",                    "", false},
+            {"--enable-q-graph",          "",   "Enable quotient graph datastructure (true/false).",                                  "",                    "", false},
+            {"--enable-block-conn",       "",   "Enable block connectivity datastructure (true/false).",                              "",                    "", false},
             // SCLP overrides
             {"--sclp-max-rounds",         "",   "SCLP: maximum number of label propagation rounds.",                                 "",                    "", false},
             {"--sclp-min-threshold",      "",   "SCLP: minimum fraction of moved vertices to continue.",                             "",                    "", false},
@@ -326,6 +333,30 @@ namespace HeiProMap {
             if (is_set("--hierarchical-coarsening")) {
                 std::string val = get("--hierarchical-coarsening");
                 hierarchical_coarsening = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--initial-C")) {
+                initial_C = std::stoul(get("--initial-C"));
+            }
+            if (is_set("--initial-kappa")) {
+                initial_kappa = std::stoull(get("--initial-kappa"));
+            }
+            if (is_set("--intermediate-C")) {
+                intermediate_C = std::stoul(get("--intermediate-C"));
+            }
+            if (is_set("--intermediate-kappa")) {
+                intermediate_kappa = std::stoull(get("--intermediate-kappa"));
+            }
+            if (is_set("--force-parallel-contraction")) {
+                std::string val = get("--force-parallel-contraction");
+                force_parallel_contraction = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--enable-q-graph")) {
+                std::string val = get("--enable-q-graph");
+                enable_q_graph = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--enable-block-conn")) {
+                std::string val = get("--enable-block-conn");
+                enable_block_conn = (val == "true" || val == "1" || val == "yes");
             }
 
             // SCLP overrides
