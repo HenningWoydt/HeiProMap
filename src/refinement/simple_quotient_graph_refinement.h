@@ -353,8 +353,12 @@ namespace HeiProMap {
 
             moves.clear();
 
-            // FM exploration
+            // FM exploration with lazy connectivity check
             while ((!heap_u.empty() || !heap_v.empty()) && moves.size() < n_init_moves) {
+                while (!heap_u.empty() && !is_connected_to(g, p_manager, heap_u.top_key(), v_id)) { heap_u.pop(); }
+                while (!heap_v.empty() && !is_connected_to(g, p_manager, heap_v.top_key(), u_id)) { heap_v.pop(); }
+                if (heap_u.empty() && heap_v.empty()) break;
+
                 bool choose_u = true;
 
                 if (heap_u.empty() || heap_v.empty()) {
@@ -450,9 +454,6 @@ namespace HeiProMap {
                         heap_v.push_update(neighbor, new_delta);
                     }
                 }
-
-                while (!heap_u.empty() && !is_connected_to(g, p_manager, heap_u.top_key(), v_id)) { heap_u.pop(); }
-                while (!heap_v.empty() && !is_connected_to(g, p_manager, heap_v.top_key(), u_id)) { heap_v.pop(); }
             }
 
             // Revert all moves
