@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "../src/solver/DeepHeiProMap_solver.h"
+#include "../src/utility/memory_access_benchmark.h"
 #include "../src/configuration/DeepHeiProMap_configuration.h"
 #include "src/distance_oracles/distance_oracle.h"
 #include "../src/distance_oracles/binary_distance_oracle.h"
@@ -47,6 +48,8 @@ int main(const int argc, char *argv[]) {
     std::signal(SIGINT, signal_handler);
     std::signal(SIGHUP, signal_handler);
     std::signal(SIGABRT, signal_handler);
+
+    // HeiProMap::run_memory_access_benchmark();
 
     auto sp = HeiProMap::get_time_point();
 
@@ -66,7 +69,7 @@ int main(const int argc, char *argv[]) {
             {"--hierarchy", "32:10:10:32"},
             {"--distance", "1:10:50:100"},
             {"--imbalance", "0.03"},
-            {"--config", "fast"},
+            {"--config", "eco"},
             {"--threads", "16"},
             {"--seed", "5"},
             {"--distance-oracle", "binary-based"},

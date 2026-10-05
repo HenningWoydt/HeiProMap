@@ -304,7 +304,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.force_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = true;
 
             deep_quotient_graph_refinement_config.enabled = false;
             deep_quotient_graph_refinement_config.max_iteration = 2;
@@ -325,6 +325,7 @@ namespace HeiProMap {
             size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 5;
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
 
             enable_q_graph = false;
             enable_block_conn = false;
@@ -342,7 +343,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.force_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = true;
 
             deep_quotient_graph_refinement_config.enabled = false;
 
@@ -372,6 +373,7 @@ namespace HeiProMap {
             size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 10;
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
         }
 
         void set_strong() {
@@ -384,7 +386,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.force_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = true;
 
             deep_quotient_graph_refinement_config.enabled = true;
             deep_quotient_graph_refinement_config.max_iteration = 2;
@@ -407,6 +409,7 @@ namespace HeiProMap {
             size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSION;
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 10;
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
         }
 
         void set_experimental() {
@@ -419,7 +422,7 @@ namespace HeiProMap {
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 5;
-            deep_label_propagation_refinement_config.force_parallel_alg = false;
+            deep_label_propagation_refinement_config.force_parallel_alg = true;
 
             deep_quotient_graph_refinement_config.enabled = true;
             deep_quotient_graph_refinement_config.max_iteration = 2;

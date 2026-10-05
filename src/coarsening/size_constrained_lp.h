@@ -71,6 +71,9 @@ namespace HeiProMap {
         AlignedArray<vertex_t> remap;
         AlignedArray<vertex_t> singletons;
 
+        std::vector<std::vector<vertex_t>> thread_bucket_counts;
+        std::vector<std::vector<vertex_t>> thread_bucket_offsets_local;
+
         SizeConstrainedLPConfiguration config;
         RandomEngine random_engine;
 
@@ -455,10 +458,29 @@ namespace HeiProMap {
                 bucket_sizes.initialize(B, 0);
                 bucket_offsets.initialize(B);
 
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    const size_t d = g.deg(u);
-                    const size_t b = (d == 0) ? 0 : floor_log2(d);
-                    bucket_sizes[b]++;
+                // Resize thread-local bucket arrays if needed
+                if (thread_bucket_counts.size() < threads) {
+                    thread_bucket_counts.resize(threads);
+                    thread_bucket_offsets_local.resize(threads);
+                }
+
+                // Parallel bucket count with thread-local counts
+                #pragma omp parallel num_threads(threads)
+                {
+                    const u64 tid = omp_get_thread_num();
+                    thread_bucket_counts[tid].assign(B, 0);
+                    auto &local_counts = thread_bucket_counts[tid];
+                    #pragma omp for schedule(static)
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        const size_t d = g.deg(u);
+                        const size_t b = (d == 0) ? 0 : floor_log2(d);
+                        local_counts[b]++;
+                    }
+                }
+                for (u64 t = 0; t < threads; ++t) {
+                    for (size_t b = 0; b < B; ++b) {
+                        bucket_sizes[b] += thread_bucket_counts[t][b];
+                    }
                 }
 
                 bucket_offsets[0] = 0;
@@ -466,12 +488,35 @@ namespace HeiProMap {
                     bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1];
                 }
 
-                for (vertex_t u = 0; u < g.n; ++u) {
-                    const size_t d = g.deg(u);
-                    const size_t b = (d == 0) ? 0 : floor_log2(d);
-                    flat_vertices[bucket_offsets[b]++] = u;
+                // Parallel scatter: compute per-thread offsets within each bucket
+                for (size_t b = 0; b < B; ++b) {
+                    vertex_t off = bucket_offsets[b];
+                    for (u64 t = 0; t < threads; ++t) {
+                        thread_bucket_offsets_local[t].resize(B);
+                        thread_bucket_offsets_local[t][b] = off;
+                        off += thread_bucket_counts[t][b];
+                    }
+                }
+
+                #pragma omp parallel num_threads(threads)
+                {
+                    const u64 tid = omp_get_thread_num();
+                    auto &local_offsets = thread_bucket_offsets_local[tid];
+                    #pragma omp for schedule(static)
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        const size_t d = g.deg(u);
+                        const size_t b = (d == 0) ? 0 : floor_log2(d);
+                        flat_vertices[local_offsets[b]++] = u;
+                    }
+                }
+
+                // Recompute bucket_offsets for shuffle phase (prefix sum of bucket_sizes)
+                bucket_offsets[0] = 0;
+                for (size_t i = 1; i < B; ++i) {
+                    bucket_offsets[i] = bucket_offsets[i - 1] + bucket_sizes[i - 1];
                 }
             } else {
+                #pragma omp parallel for num_threads(threads)
                 for (vertex_t u = 0; u < g.n; ++u) {
                     flat_vertices[u] = u;
                 }
@@ -504,12 +549,32 @@ namespace HeiProMap {
                 if (config.use_degree_ordering) {
                     HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
                     u64 shuffle_seed = random_engine.get_u64();
-                    #pragma omp parallel for num_threads(threads) schedule(dynamic, 1)
+
+                    // Split each bucket into per-thread chunks for parallel shuffle
+                    constexpr size_t MIN_CHUNK = 1024;
+                    std::vector<std::pair<size_t, size_t>> chunks;
                     for (size_t i = 0; i < B - 1; ++i) {
                         const size_t beg = bucket_offsets[i];
                         const size_t end = bucket_offsets[i + 1];
+                        const size_t bucket_size = end - beg;
+                        if (bucket_size <= MIN_CHUNK) {
+                            chunks.emplace_back(beg, end);
+                        } else {
+                            const size_t n_chunks = std::min(threads, (bucket_size + MIN_CHUNK - 1) / MIN_CHUNK);
+                            const size_t chunk_size = bucket_size / n_chunks;
+                            for (size_t c = 0; c < n_chunks; ++c) {
+                                const size_t c_beg = beg + c * chunk_size;
+                                const size_t c_end = (c + 1 == n_chunks) ? end : c_beg + chunk_size;
+                                chunks.emplace_back(c_beg, c_end);
+                            }
+                        }
+                    }
+
+                    #pragma omp parallel for num_threads(threads) schedule(dynamic, 1)
+                    for (size_t i = 0; i < chunks.size(); ++i) {
                         std::mt19937 local_gen(shuffle_seed + i);
-                        fast_shuffle_unchecked(flat_vertices.get_ptr() + beg, flat_vertices.get_ptr() + end, local_gen);
+                        fast_shuffle_unchecked(flat_vertices.get_ptr() + chunks[i].first,
+                                              flat_vertices.get_ptr() + chunks[i].second, local_gen);
                     }
                 }
 
@@ -551,15 +616,50 @@ namespace HeiProMap {
 
             // Map clusters to a continuous range [0, coarse_n)
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "calc_map");
-            remap.initialize(g.n, m_n);
-            vertex_t new_id = 0;
+            remap.initialize(g.n, 0);
+
+            // Parallel pass: mark used cluster IDs
+            #pragma omp parallel for num_threads(threads)
             for (vertex_t u = 0; u < g.n; ++u) {
-                const vertex_t id = mapping.get(u);
-                if (remap[id] == m_n) {
-                    remap[id] = new_id++;
+                remap[mapping.get(u)] = 1;
+            }
+
+            // Parallel prefix sum: each thread counts, then assigns with offset
+            std::vector<vertex_t> thread_counts(threads, 0);
+            #pragma omp parallel num_threads(threads)
+            {
+                const u64 tid = omp_get_thread_num();
+                const vertex_t chunk = (g.n + threads - 1) / threads;
+                const vertex_t start = std::min(g.n, static_cast<vertex_t>(tid * chunk));
+                const vertex_t end = std::min(g.n, static_cast<vertex_t>(start + chunk));
+                vertex_t local_count = 0;
+                for (vertex_t u = start; u < end; ++u) {
+                    if (remap[u] == 1) local_count++;
+                }
+                thread_counts[tid] = local_count;
+
+                #pragma omp barrier
+
+                #pragma omp single
+                {
+                    vertex_t sum = 0;
+                    for (u64 i = 0; i < threads; ++i) {
+                        vertex_t c = thread_counts[i];
+                        thread_counts[i] = sum;
+                        sum += c;
+                    }
+                    mapping.set_coarse_n(sum);
+                }
+
+                vertex_t local_id = thread_counts[tid];
+                for (vertex_t u = start; u < end; ++u) {
+                    if (remap[u] == 1) {
+                        remap[u] = local_id++;
+                    } else {
+                        remap[u] = m_n;
+                    }
                 }
             }
-            mapping.set_coarse_n(new_id);
 
             #pragma omp parallel for num_threads(threads)
             for (vertex_t u = 0; u < g.n; ++u) {
