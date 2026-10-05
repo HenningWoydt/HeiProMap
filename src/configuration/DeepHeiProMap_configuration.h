@@ -202,6 +202,7 @@ namespace HeiProMap {
         // datastructure flags
         bool enable_q_graph = true;
         bool enable_block_conn = true;
+        bool force_parallel_contraction = false;
 
         // refinement algorithms
         SimpleLabelPropagationConfiguration deep_label_propagation_refinement_config = SimpleLabelPropagationConfiguration("Deep Label Propagation Refinement");
@@ -326,6 +327,7 @@ namespace HeiProMap {
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 5;
             size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
 
             enable_q_graph = false;
             enable_block_conn = false;
@@ -374,6 +376,7 @@ namespace HeiProMap {
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 10;
             size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
         }
 
         void set_strong() {
@@ -410,6 +413,7 @@ namespace HeiProMap {
             size_constrained_lp_clustering_configuration.f = 32;
             size_constrained_lp_clustering_configuration.max_rounds = 10;
             size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
         }
 
         void set_experimental() {
@@ -441,6 +445,9 @@ namespace HeiProMap {
             deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
             deep_flow_based_refinement_config.always_include_boundary = true;
             deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
+
+            size_constrained_lp_clustering_configuration.force_parallel_alg = true;
+            force_parallel_contraction = true;
         }
 
         /**

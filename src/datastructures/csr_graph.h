@@ -325,35 +325,59 @@ namespace HeiProMap {
             AlignedArray<vertex_t> mapped_vertices;
             mapped_vertices.initialize(g.n);
 
-            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "overest_sizes");
-            // overestimate neighborhood sizes, collect weights, and count n_mapped
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_count");
+            #pragma omp parallel for schedule(static) num_threads(threads)
             for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
                 vertex_t map_u = mapping.get(u);
-                n_mapped[map_u] += 1;
-                overest_sizes[map_u] += g.deg(u);
-                v_weights[map_u] += t_uniform_v_weights ? 1 : g.v_weights[u];
+                __atomic_fetch_add(&n_mapped[map_u], (vertex_t)1, __ATOMIC_RELAXED);
             }
 
-
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "prefix_sum");
-            overest_neighborhood[0] = 0;
             cursor[0] = 0;
             for (vertex_t map_u = 0; map_u < n; ++map_u) {
-                overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
                 cursor[map_u + 1] = cursor[map_u] + n_mapped[map_u];
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_fill");
+            AlignedArray<vertex_t> bucket_pos;
+            bucket_pos.initialize(n);
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (vertex_t i = 0; i < n; ++i) {
+                bucket_pos[i] = cursor[i];
+            }
+
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
+                vertex_t map_u = mapping.get(u);
+                vertex_t pos = __atomic_fetch_add(&bucket_pos[map_u], (vertex_t)1, __ATOMIC_RELAXED);
+                mapped_vertices[pos] = u;
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "overest_sizes");
+            #pragma omp parallel for schedule(static) num_threads(threads)
+            for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                weight_t w_sum = 0;
+                vertex_t deg_sum = 0;
+                for (vertex_t k = cursor[map_u]; k < cursor[map_u + 1]; ++k) {
+                    vertex_t u = mapped_vertices[k];
+                    deg_sum += g.deg(u);
+                    w_sum += t_uniform_v_weights ? 1 : g.v_weights[u];
+                }
+                overest_sizes[map_u] = deg_sum;
+                v_weights[map_u] = w_sum;
+            }
+
+            HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "overest_prefix_sum");
+            overest_neighborhood[0] = 0;
+            for (vertex_t map_u = 0; map_u < n; ++map_u) {
+                overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
             }
 
             AlignedArray<vertex_t> cursor_start;
             cursor_start.initialize(n + 1);
+            #pragma omp parallel for schedule(static) num_threads(threads)
             for (vertex_t map_u = 0; map_u <= n; ++map_u) {
                 cursor_start[map_u] = cursor[map_u];
-            }
-
-            // populate mapped_vertices
-            for (vertex_t u = 0; u < mapping.get_old_n(); ++u) {
-                vertex_t map_u = mapping.get(u);
-                mapped_vertices[cursor[map_u]] = u;
-                cursor[map_u] += 1;
             }
 
 
