@@ -126,10 +126,13 @@ namespace HeiProMap {
                                  const graph_t &g,
                                  const p_manager_t &p_manager,
                                  Mapping &mapping,
-                                 const weight_t max_w) {
+                                 const weight_t max_w,
+                                 const u64 threads) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "merge_when_identity");
 
             std::vector<u8> used(g.n, 0);
+
+            #pragma omp parallel for num_threads(threads) schedule(static)
             for (vertex_t a = 0; a < g.n; ++a) {
                 if (used[a] == 1) { continue; }
                 const partition_t a_id = p_manager[a];
@@ -153,9 +156,15 @@ namespace HeiProMap {
                 }
 
                 if (best_b != static_cast<vertex_t>(-1)) {
-                    used[a] = 1;
-                    used[best_b] = 1;
-                    mapping.set(a, best_b);
+                    u8 expected_a = 0;
+                    if (__atomic_compare_exchange_n(&used[a], &expected_a, 1, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                        u8 expected_b = 0;
+                        if (__atomic_compare_exchange_n(&used[best_b], &expected_b, 1, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+                            mapping.set(a, best_b);
+                        } else {
+                            __atomic_store_n(&used[a], 0, __ATOMIC_RELEASE);
+                        }
+                    }
                 }
             }
         }
@@ -637,7 +646,7 @@ namespace HeiProMap {
             }
 
             if (ident_mapping) {
-                merge_when_identity<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w);
+                merge_when_identity<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w, threads);
             }
 
             // Map clusters to a continuous range [0, coarse_n)
