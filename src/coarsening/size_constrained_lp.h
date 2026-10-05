@@ -258,6 +258,9 @@ namespace HeiProMap {
                     const vertex_t current_id = mapping.get(u);
                     f32 current_id_w = 0;
 
+                    vertex_t best_id = current_id;
+                    f32 best_weight = 0;
+
                     flat_map.clear();
                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                         const vertex_t v = g.edges_v[j];
@@ -271,17 +274,16 @@ namespace HeiProMap {
                         if (id == current_id) {
                             current_id_w += edge_rating;
                         } else if (u_w + cluster_weights[id] <= max_w) {
-                            flat_map.add(id, edge_rating);
+                            const f32 new_w = flat_map.add_and_ret(id, edge_rating);
+                            if (new_w > best_weight) {
+                                best_weight = new_w;
+                                best_id = id;
+                            }
                         }
                     }
 
-                    vertex_t best_id = current_id;
-                    f32 best_weight = current_id_w;
-                    for (const auto &[id, w]: flat_map) {
-                        if (w > best_weight) {
-                            best_weight = w;
-                            best_id = id;
-                        }
+                    if (current_id_w >= best_weight) {
+                        best_id = current_id;
                     }
 
                     if (best_id != current_id) {
