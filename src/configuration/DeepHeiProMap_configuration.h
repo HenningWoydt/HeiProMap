@@ -174,6 +174,11 @@ namespace HeiProMap {
             {"--sclp-rating",             "",   "SCLP: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "",         "", false},
             {"--sclp-degree-ordering",    "",   "SCLP: use degree-based vertex ordering (true/false).",                              "",                    "", false},
             {"--sclp-force-parallel",     "",   "SCLP: force parallel algorithm even with 1 thread (true/false).",                   "",                    "", false},
+            // GPA overrides
+            {"--gpa-random-level",        "",   "GPA: levels using random matching instead of rated matching.",                       "",                    "", false},
+            {"--gpa-rating",              "",   "GPA: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "",          "", false},
+            {"--gpa-tiebreaking",         "",   "GPA: use edge rating tiebreaking via shuffle (true/false).",                        "",                    "", false},
+            {"--gpa-two-hop-threshold",   "",   "GPA: matching fraction below which two-hop fallbacks activate.",                    "",                    "", false},
         };
 
         // =====================================================================
@@ -349,6 +354,27 @@ namespace HeiProMap {
             if (is_set("--sclp-force-parallel")) {
                 std::string val = get("--sclp-force-parallel");
                 size_constrained_lp_clustering_configuration.force_parallel_alg = (val == "true" || val == "1" || val == "yes");
+            }
+
+            // GPA overrides
+            if (is_set("--gpa-random-level")) {
+                global_path_algorithm_config.random_level = std::stoull(get("--gpa-random-level"));
+            }
+            if (is_set("--gpa-rating")) {
+                std::string val = get("--gpa-rating");
+                if (val == "weight") global_path_algorithm_config.rating_function = EdgeRatingFunction::WEIGHT;
+                else if (val == "expansion") global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSION;
+                else if (val == "expansionstar") global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+                else if (val == "expansionstarstar") global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTARSTAR;
+                else if (val == "innerouter") global_path_algorithm_config.rating_function = EdgeRatingFunction::INNEROUTER;
+                else { std::cout << "Unknown GPA rating function: " << val << std::endl; exit(EXIT_FAILURE); }
+            }
+            if (is_set("--gpa-tiebreaking")) {
+                std::string val = get("--gpa-tiebreaking");
+                global_path_algorithm_config.use_edge_rating_tiebreaking = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--gpa-two-hop-threshold")) {
+                global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-two-hop-threshold"));
             }
         }
 
