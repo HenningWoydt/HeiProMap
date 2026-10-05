@@ -347,7 +347,7 @@ namespace HeiProMap {
             deep_quotient_graph_refinement_config.enabled = false;
 
             deep_simple_qg_refinement_config.enabled = true;
-            deep_simple_qg_refinement_config.max_iteration = 1;
+            deep_simple_qg_refinement_config.max_iteration = 3;
             deep_simple_qg_refinement_config.alpha = 5.0;
             deep_simple_qg_refinement_config.min_n_steps = 3;
             deep_simple_qg_refinement_config.use_preemptive_exit = true;

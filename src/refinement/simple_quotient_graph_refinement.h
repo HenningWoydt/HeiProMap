@@ -316,28 +316,22 @@ namespace HeiProMap {
             heap_v.clear();
             u64 n_init_moves = 0;
 
-            // Seed heaps with boundary vertices connected to the partner block
+            // Seed heaps: single-pass connectivity check + gain computation
             for (const vertex_t u : bv_manager.boundary(u_id)) {
-                if (is_connected_to(g, p_manager, u, v_id)) {
-                    weight_t delta;
-                    if constexpr (t_use_edge_cut) {
-                        delta = compute_edge_cut_delta<t_uniform_e_weights>(g, u, u_id, v_id, p_manager);
-                    } else {
-                        delta = compute_qap_delta<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle);
-                    }
+                bool connected;
+                weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
+                    g, u, u_id, v_id, connected, p_manager, d_oracle);
+                if (connected) {
                     heap_u.push(u, delta);
                     n_init_moves++;
                 }
             }
 
             for (const vertex_t v : bv_manager.boundary(v_id)) {
-                if (is_connected_to(g, p_manager, v, u_id)) {
-                    weight_t delta;
-                    if constexpr (t_use_edge_cut) {
-                        delta = compute_edge_cut_delta<t_uniform_e_weights>(g, v, v_id, u_id, p_manager);
-                    } else {
-                        delta = compute_qap_delta<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle);
-                    }
+                bool connected;
+                weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
+                    g, v, v_id, u_id, connected, p_manager, d_oracle);
+                if (connected) {
                     heap_v.push(v, delta);
                     n_init_moves++;
                 }
