@@ -186,6 +186,7 @@ namespace HeiProMap {
 
                 // Reset managers if hierarchy changes
                 p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.activate_all_blocks();
                 bv_manager.initialize(g.n, (partition_t) num_blocks);
                 b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
                 q.initialize((partition_t) num_blocks);
@@ -375,6 +376,7 @@ namespace HeiProMap {
         void rebuild_managers() {
             u64 num_blocks = p_manager.k;
             p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+            p_manager.activate_all_blocks();
             bv_manager.initialize(g.n, (partition_t) num_blocks);
             b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
             q.initialize((partition_t) num_blocks);
@@ -464,6 +466,8 @@ namespace HeiProMap {
             if (initial_partition.empty()) {
                 // First partition
                 p_manager.initialize(g.n, num_blocks, g.g_weight);
+                p_manager.activate_all_blocks();
+                p_manager.reset_weights();
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }
@@ -488,6 +492,8 @@ namespace HeiProMap {
                 previous_partition = reference;
 
                 p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.activate_all_blocks();
+                p_manager.reset_weights();
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }

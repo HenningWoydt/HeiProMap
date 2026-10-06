@@ -157,6 +157,14 @@ namespace HeiProMap {
             hierarchy_level[id] = level;
         }
 
+        void activate_all_blocks(const partition_t level = 0) {
+            n_active = k;
+            for (partition_t id = 0; id < k; ++id) {
+                hierarchy_level[id] = level;
+                active_ids[id] = id;
+            }
+        }
+
         // ==========================================
         // Vertex Assignment & Movement
         // ==========================================
