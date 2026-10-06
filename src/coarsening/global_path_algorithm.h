@@ -207,6 +207,10 @@ namespace HeiProMap {
                 }
             };
 
+            m_neighbors.initialize(g.n);
+            path_id.initialize(g.n);
+            path_length.initialize(g.n);
+
             switch (config->rating_function) {
                 case EdgeRatingFunction::WEIGHT:            dispatch.template operator()<EdgeRatingFunction::WEIGHT>(); break;
                 case EdgeRatingFunction::EXPANSION:         dispatch.template operator()<EdgeRatingFunction::EXPANSION>(); break;
@@ -214,7 +218,6 @@ namespace HeiProMap {
                 case EdgeRatingFunction::EXPANSIONSTARSTAR: dispatch.template operator()<EdgeRatingFunction::EXPANSIONSTARSTAR>(); break;
                 case EdgeRatingFunction::INNEROUTER:        dispatch.template operator()<EdgeRatingFunction::INNEROUTER>(); break;
             }
-            release_memory();
         }
 
         void match(const size_t level,

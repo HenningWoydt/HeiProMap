@@ -593,7 +593,7 @@ namespace HeiProMap {
             level_infos[level].t_contraction += get_milli_seconds(sp, ep);
             #endif
 
-            HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
+            HEAVYASSERT(assert_graph(graphs.back(), ac.threads));
         }
 
         void uncontraction([[maybe_unused]] const u64 level) {

@@ -113,6 +113,10 @@ namespace HeiProMap {
             for (u64 t = 0; t < num_threads; ++t) {
                 sizes[id] += thread_sizes[t][id];
             }
+            if (sizes[id] != p_manager.size(id)) {
+                std::cerr << "Partition size mismatch for block " << id << ": counted " << sizes[id] 
+                          << " vs manager " << p_manager.size(id) << ", total g.n=" << g.n << ", p_manager.n=" << p_manager.n << ", k=" << k << std::endl;
+            }
             ASSERT(sizes[id] == p_manager.size(id));
         }
 

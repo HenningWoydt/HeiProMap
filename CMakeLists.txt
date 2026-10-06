@@ -32,7 +32,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(ENABLE_EXCEPTIONS "Enable C++ exceptions" OFF)
 
 if(NOT ENABLE_EXCEPTIONS)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -rdynamic")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
 endif()
 
 if(POLICY CMP0144)

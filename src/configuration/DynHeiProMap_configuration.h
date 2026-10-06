@@ -35,28 +35,65 @@
 #include <iomanip>
 
 #include "../definitions.h"
-#include "HeiProMap_configuration.h"
+#include "../utility/utils.h"
 
 namespace HeiProMap {
     class DynConfiguration {
     public:
-        std::vector<partition_t> hierarchy;
-        std::vector<weight_t> distance;
+        std::vector<partition_t> hierarchy = {2, 2, 2};
+        std::vector<weight_t> distance = {1, 10, 100};
         f64 imbalance = 0.03;
         u64 n_threads = 1;
         u64 seed = 0;
 
-        AlgorithmConfiguration ac;
+        struct DynOption {
+            std::string large_key;
+            std::string small_key;
+            std::string description;
+            std::string default_val;
+            std::string input;
+            bool is_set = false;
+        };
+
+        std::vector<DynOption> options = {
+            {"--hierarchy", "-h", "Hierarchy specification (e.g. 2:2:2)", "2:2:2", "", false},
+            {"--distance", "-d", "Hierarchy distances (e.g. 1:10:100)", "1:10:100", "", false},
+            {"--imbalance", "-e", "Imbalance factor", "0.03", "", false},
+            {"--threads", "-t", "Number of threads", "1", "", false},
+            {"--seed", "-s", "Random seed", "0", "", false}
+        };
 
         DynConfiguration() = default;
 
-        DynConfiguration(int argc, char *argv[]) : ac(argc, argv) {
+        DynConfiguration(int argc, char *argv[]) {
             std::vector<std::string> args(argv, argv + argc);
 
             for (size_t i = 1; i < (size_t) argc; ++i) {
                 if (args[i] == "--help") {
                     print_help_message();
                     exit(EXIT_SUCCESS);
+                }
+            }
+
+            for (size_t i = 1; i < (size_t) argc; ++i) {
+                bool found = false;
+                for (auto &o: options) {
+                    if (o.large_key == args[i] || (!o.small_key.empty() && o.small_key == args[i])) {
+                        if (i + 1 < (size_t) argc) {
+                            o.input = args[i + 1];
+                            o.is_set = true;
+                            i += 1;
+                            found = true;
+                            break;
+                        } else {
+                            std::cout << "Error: Value missing for parameter " << args[i] << std::endl;
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+                }
+                if (!found) {
+                    std::cout << "Error: Unknown parameter " << args[i] << std::endl;
+                    exit(EXIT_FAILURE);
                 }
             }
 
@@ -77,9 +114,6 @@ namespace HeiProMap {
             } else {
                 hierarchy = {2, 2, 2};
             }
-            ac.hierarchy = hierarchy;
-            ac.k = 1;
-            for (auto h: hierarchy) ac.k *= h;
         }
 
         void set_distance() {
@@ -92,35 +126,31 @@ namespace HeiProMap {
             } else {
                 distance = {1, 10, 100};
             }
-            ac.distance = distance;
         }
 
         void set_imbalance() {
             if (is_set("--imbalance")) {
                 imbalance = std::stod(get("--imbalance"));
             }
-            ac.imbalance = imbalance;
         }
 
         void set_threads() {
             if (is_set("--threads")) {
                 n_threads = std::stoull(get("--threads"));
             }
-            ac.threads = (u32) n_threads;
         }
 
         void set_seed() {
             if (is_set("--seed")) {
                 seed = std::stoull(get("--seed"));
             }
-            ac.seed = (u32) seed;
         }
 
         /**
          * Returns whether the option was entered.
          */
         bool is_set(const std::string &var) {
-            for (const auto &o: ac.options) {
+            for (const auto &o: options) {
                 if (o.large_key == var || o.small_key == var) {
                     return o.is_set;
                 }
@@ -132,7 +162,7 @@ namespace HeiProMap {
          * Gets the entered input as a string.
          */
         std::string get(const std::string &var) {
-            for (const auto &o: ac.options) {
+            for (const auto &o: options) {
                 if (o.large_key == var || o.small_key == var) {
                     if (o.input.empty()) return o.default_val;
                     return o.input;
@@ -145,10 +175,10 @@ namespace HeiProMap {
          * Prints the help message.
          */
         void print_help_message() {
-            std::cout << "Dyn-HeiProMap - Dynamic Graph Partitioning Tool\n\n";
+            std::cout << "Dyn-HeiProMap - Dynamic Heidelberg Process Mapping\n\n";
             std::cout << "Usage: Dyn-HeiProMap [options]\n\n";
             std::cout << "Options:\n";
-            for (const auto &o: ac.options) {
+            for (const auto &o: options) {
                 if (o.small_key.empty()) {
                     std::cout << "  " << std::left << std::setw(30) << o.large_key << " - " << o.description;
                 } else {

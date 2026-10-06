@@ -23,24 +23,26 @@
  * SOFTWARE.
  ******************************************************************************/
 
- #include <csignal>
- #include <iostream>
- #include <string>
- #include <vector>
+#include <csignal>
+#include <iostream>
+#include <string>
+#include <vector>
 
- #include "../src/solver/DynHeiProMap_solver.h"
+#include "../src/solver/DynHeiProMap_solver.h"
 #include "../src/configuration/DynHeiProMap_configuration.h"
 
 static void signal_handler(int sig) {
-    std::cout << "\n[Dyn-HeiProMap] Caught signal " << sig << ", printing profiler before exit:\n";
+    std::cout << "\n[Dyn-HeiProMap] Caught signal " << sig << ", printing stack trace before exit:\n";
+    HeiProMap::print_stack_trace();
     HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
     std::exit(128 + sig);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
+    std::signal(SIGSEGV, signal_handler);
     std::signal(SIGTERM, signal_handler);
-    std::signal(SIGINT,  signal_handler);
-    std::signal(SIGHUP,  signal_handler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGHUP, signal_handler);
     std::signal(SIGABRT, signal_handler);
 
     std::ios::sync_with_stdio(false);
