@@ -41,6 +41,7 @@
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/distance_1_matching.h"
 #include "../datastructures/active_block_scheduling.h"
+#include "../datastructures/block_adjacency.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
 #include "../utility/random_engine.h"
@@ -65,111 +66,6 @@ namespace HeiProMap {
 
         bool enable_q_graph = true;
         bool enable_block_conn = true;
-    };
-
-    class BlockAdjacency {
-    public:
-        struct Entry {
-            partition_t target = 0;
-            mutable u32 used_epoch = 0;
-        };
-
-    private:
-        partition_t m_k = 0;
-        std::vector<std::vector<Entry>> m_adj;
-        std::vector<AlignedArray<u32>> m_seen;
-        std::vector<u32> m_epoch;
-
-    public:
-        size_t heap_bytes() const {
-            size_t bytes = 0;
-            for (partition_t id = 0; id < m_k; ++id) {
-                bytes += m_adj[id].capacity() * sizeof(Entry);
-            }
-            for (size_t t = 0; t < m_seen.size(); ++t) {
-                bytes += m_seen[t].heap_bytes();
-            }
-            return bytes;
-        }
-
-        void initialize(const partition_t k) {
-            m_k = k;
-            m_adj.clear();
-            m_adj.resize(m_k);
-        }
-
-        void initialize(const partition_t k, const u64 num_threads) {
-            m_k = k;
-            m_adj.clear();
-            m_adj.resize(m_k);
-            m_seen.resize(num_threads);
-            m_epoch.assign(num_threads, 0);
-            for (u64 t = 0; t < num_threads; ++t) {
-                m_seen[t].initialize(m_k, 0);
-            }
-        }
-
-        template<typename GraphT, typename PartitionManagerT, typename BoundaryVertexManagerT>
-        void compute(const GraphT &g,
-                     const PartitionManagerT &p_manager,
-                     const BoundaryVertexManagerT &bv_manager,
-                     const u64 num_threads) {
-            HEIPROMAP_PROFILE_SCOPE("refinement", "BlockAdjacency", "compute");
-
-            if (m_seen.size() < num_threads) {
-                m_seen.resize(num_threads);
-                m_epoch.resize(num_threads, 0);
-                for (u64 t = 0; t < num_threads; ++t) {
-                    if (m_seen[t].size() < m_k) m_seen[t].initialize(m_k, 0);
-                }
-            }
-
-            #pragma omp parallel num_threads(num_threads)
-            {
-                const u64 tid = omp_get_thread_num();
-                auto &seen = m_seen[tid];
-                u32 &epoch = m_epoch[tid];
-
-                #pragma omp for schedule(static)
-                for (partition_t id = 0; id < m_k; ++id) {
-                    auto &adj = m_adj[id];
-                    if (bv_manager.size(id) == 0) {
-                        adj.clear();
-                        continue;
-                    }
-
-                    epoch++;
-                    if (epoch == 0) { seen.fill(0); epoch = 1; }
-
-                    adj.clear();
-                    for (const vertex_t u : bv_manager.boundary(id)) {
-                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                            const partition_t v_id = p_manager[g.edges_v[i]];
-                            if (id != v_id && seen[v_id] != epoch) {
-                                seen[v_id] = epoch;
-                                adj.push_back(Entry{v_id});
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        const std::vector<Entry> &neighbors(const partition_t x) const { return m_adj[x]; }
-        size_t degree(const partition_t x) const { return m_adj[x].size(); }
-
-        template<typename F>
-        void for_each_neighbor(const partition_t x, F &&f) const {
-            for (const auto &e : m_adj[x]) {
-                f(e.target, weight_t(1));
-            }
-        }
-
-        size_t edge_index(const partition_t u_id, const partition_t v_id) const {
-            const partition_t min_part = std::min(u_id, v_id);
-            const partition_t max_part = std::max(u_id, v_id);
-            return static_cast<size_t>(min_part) * static_cast<size_t>(m_k) + static_cast<size_t>(max_part);
-        }
     };
 
     template<bool LARGE_K>
@@ -250,12 +146,20 @@ namespace HeiProMap {
                  + block_adjacency.heap_bytes();
         }
 
+        void set_pool(MemoryPool *pool) {
+            active_block_scheduling.set_pool(pool);
+            d1_matcher.set_pool(pool);
+            block_adjacency.set_pool(pool);
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 t_seed,
-                        const SimpleLabelPropagationConfiguration &t_config) {
+                        const SimpleLabelPropagationConfiguration &t_config,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             m_n = t_n;
             m_m = t_m;
             m_k = t_k;
@@ -268,9 +172,9 @@ namespace HeiProMap {
                 rnd_engines[t] = RandomEngine(t_seed + t);
             }
 
-            active_block_scheduling.initialize(m_k);
-            d1_matcher.initialize(m_k);
-            block_adjacency.initialize(m_k, m_threads);
+            active_block_scheduling.initialize(m_k, pool);
+            d1_matcher.initialize(m_k, pool);
+            block_adjacency.initialize(m_k, m_threads, pool);
         }
 
         template<typename DistanceOracleT, typename QGraphT>

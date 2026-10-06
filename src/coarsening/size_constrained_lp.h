@@ -104,11 +104,37 @@ namespace HeiProMap {
                  + singletons.heap_bytes();
         }
 
+        void release_memory() {
+            flat_vertices.free_memory();
+            bucket_sizes.free_memory();
+            bucket_offsets.free_memory();
+            cluster_weights.free_memory();
+            cluster_count.free_memory();
+            active.free_memory();
+            active_next.free_memory();
+            remap.free_memory();
+            singletons.free_memory();
+        }
+
+        void set_pool(MemoryPool *pool) {
+            flat_vertices.set_pool(pool);
+            bucket_sizes.set_pool(pool);
+            bucket_offsets.set_pool(pool);
+            cluster_weights.set_pool(pool);
+            cluster_count.set_pool(pool);
+            active.set_pool(pool);
+            active_next.set_pool(pool);
+            remap.set_pool(pool);
+            singletons.set_pool(pool);
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_seed,
-                        const SizeConstrainedLPConfiguration &t_config) {
+                        const SizeConstrainedLPConfiguration &t_config,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "initialize");
 
             m_n = t_n;
@@ -131,6 +157,7 @@ namespace HeiProMap {
                      const u64 threads,
                      const weight_t lmax) {
             dispatch_with_templates(level, g, p_manager, mapping, imbalance, threads, lmax);
+            release_memory();
         }
 
         void cluster(const size_t level,

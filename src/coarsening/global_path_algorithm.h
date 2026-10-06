@@ -140,12 +140,29 @@ namespace HeiProMap {
         // Initialization
         // =====================================================================
 
+        void set_pool(MemoryPool *pool) {
+            m_neighbors.set_pool(pool);
+            path_id.set_pool(pool);
+            path_length.set_pool(pool);
+        }
+
+        void release_memory() {
+            m_neighbors.free_memory();
+            path_id.free_memory();
+            path_length.free_memory();
+            for (auto &ti : m_thread_infos) {
+                ti.dp.free_memory();
+            }
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         RandomEngine &t_random_engine,
-                        const GlobalPathAlgorithmConfiguration &i_config) {
+                        const GlobalPathAlgorithmConfiguration &i_config,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "initialize");
 
             m_n = t_n;
@@ -197,6 +214,7 @@ namespace HeiProMap {
                 case EdgeRatingFunction::EXPANSIONSTARSTAR: dispatch.template operator()<EdgeRatingFunction::EXPANSIONSTARSTAR>(); break;
                 case EdgeRatingFunction::INNEROUTER:        dispatch.template operator()<EdgeRatingFunction::INNEROUTER>(); break;
             }
+            release_memory();
         }
 
         void match(const size_t level,

@@ -52,9 +52,18 @@ namespace HeiProMap {
                  + m_arr_ids.heap_bytes() + m_arr_weights.heap_bytes();
         }
 
+        void set_pool(MemoryPool *pool) {
+            m_sizes.set_pool(pool);
+            m_start.set_pool(pool);
+            m_arr_ids.set_pool(pool);
+            m_arr_weights.set_pool(pool);
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
-                        const partition_t t_k) {
+                        const partition_t t_k,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "BlockConn", "initialize");
             m_n = t_n;
             m_m = t_m;

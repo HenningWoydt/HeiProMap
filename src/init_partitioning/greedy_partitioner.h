@@ -67,7 +67,8 @@ namespace HeiProMap {
                                  const DistanceOracleT &d_oracle,
                                  const f64 imbalance,
                                  const u64 seed,
-                                 PartitionManager &p_manager) {
+                                 PartitionManager &p_manager,
+                                 AlignedArray<vertex_t> &vertices) {
         const vertex_t n = g.n;
         const partition_t k = d_oracle.get_k();
         const weight_t total_weight = g.g_weight;
@@ -78,15 +79,17 @@ namespace HeiProMap {
             p_manager.partition[u] = NO_ID;
         }
 
-        std::vector<vertex_t> vertices(n);
-        std::iota(vertices.begin(), vertices.end(), 0);
+        for (vertex_t u = 0; u < n; ++u) {
+            vertices[u] = u;
+        }
 
         if (seed != 0) {
             RandomEngine re(seed);
-            std::shuffle(vertices.begin(), vertices.end(), re.generator);
+            std::shuffle(vertices.get_ptr(), vertices.get_ptr() + n, re.generator);
         }
 
-        for (const vertex_t u: vertices) {
+        for (vertex_t i = 0; i < n; ++i) {
+            const vertex_t u = vertices[i];
             const weight_t u_weight = g.v_weights[u];
 
             partition_t best_block = NO_ID;

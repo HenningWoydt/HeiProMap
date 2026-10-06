@@ -35,6 +35,7 @@
 #include "../datastructures/quotient_graph.h"
 #include "../datastructures/block_conn.h"
 #include "../definitions.h"
+#include "../utility/aligned_array.h"
 #include "../utility/macros.h"
 #include "../utility/random_engine.h"
 #include "../utility/utils.h"
@@ -477,12 +478,17 @@ namespace HeiProMap {
                         local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
                     }
 
+                    std::vector<AlignedArray<vertex_t>> thread_vertices(ac.threads);
+                    for (u64 t = 0; t < ac.threads; ++t) {
+                        thread_vertices[t].initialize(graphs.back().n);
+                    }
+
                     #pragma omp parallel for schedule(static) num_threads(ac.threads)
                     for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
                         if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                             GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
                         } else {
-                            greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, local_p_managers[thread_id]);
+                            greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, local_p_managers[thread_id], thread_vertices[thread_id]);
                         }
 
                         local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
@@ -500,7 +506,9 @@ namespace HeiProMap {
                     if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                         GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
                     } else {
-                        greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, p_manager);
+                        AlignedArray<vertex_t> vertices;
+                        vertices.initialize(graphs.back().n);
+                        greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, p_manager, vertices);
                     }
                 }
 

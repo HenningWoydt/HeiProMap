@@ -153,12 +153,20 @@ namespace HeiProMap {
             return bytes;
         }
 
+        void set_pool(MemoryPool *pool) {
+            d3_matcher.set_pool(pool);
+            for (auto &v : seen_vecs) { v.set_pool(pool); }
+            for (auto &v : region_vecs) { v.set_pool(pool); }
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 seed,
-                        const FlowBasedRefinementConfiguration &i_config) {
+                        const FlowBasedRefinementConfiguration &i_config,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("refinement", "FlowBasedRefinement", "initialize");
 
             m_n = t_n;
@@ -198,7 +206,7 @@ namespace HeiProMap {
             residual_flow_networks.resize(m_threads);
             scc_graphs.resize(m_threads);
 
-            d3_matcher.initialize(m_k);
+            d3_matcher.initialize(m_k, pool);
         }
 
         template<typename DistanceOracleT, typename QGraphT>

@@ -120,12 +120,20 @@ namespace HeiProMap {
             return bytes;
         }
 
+        void set_pool(MemoryPool *pool) {
+            active_block_scheduling.set_pool(pool);
+            vertex_used.set_pool(pool);
+            dist_3_matcher.set_pool(pool);
+        }
+
         void initialize(const vertex_t t_n,
                         const vertex_t t_m,
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 seed,
-                        const QuotientGraphRefinementConfiguration &t_config) {
+                        const QuotientGraphRefinementConfiguration &t_config,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraphRefinement", "initialize");
 
             m_n = t_n;
@@ -136,14 +144,14 @@ namespace HeiProMap {
             config = t_config;
 
             // active block scheduling
-            active_block_scheduling.initialize(m_k);
+            active_block_scheduling.initialize(m_k, pool);
 
             // store which vertices have been moved
             global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
 
             // distance 3 matcher
-            dist_3_matcher.initialize(m_k);
+            dist_3_matcher.initialize(m_k, pool);
 
             for (size_t i = 0; i < m_threads; ++i) {
                 rnd_engines.emplace_back(seed + i);

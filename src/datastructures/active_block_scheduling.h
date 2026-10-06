@@ -19,7 +19,13 @@ namespace HeiProMap {
             return active_this_round.heap_bytes() + active_next_round.heap_bytes();
         }
 
-        void initialize(const partition_t t_k) {
+        void set_pool(MemoryPool *pool) {
+            active_this_round.set_pool(pool);
+            active_next_round.set_pool(pool);
+        }
+
+        void initialize(const partition_t t_k, MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             m_k = t_k;
             active_this_round.initialize(t_k);
             active_next_round.initialize(t_k);

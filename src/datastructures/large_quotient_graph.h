@@ -107,7 +107,12 @@ namespace HeiProMap {
             return bytes;
         }
 
-        void initialize(const partition_t t_k) {
+        void set_pool(MemoryPool *pool) {
+            m_self_weights.set_pool(pool);
+        }
+
+        void initialize(const partition_t t_k, MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("recompute_datastructures", "qgraph", "initialize");
             m_k = t_k;
             m_adj.clear();

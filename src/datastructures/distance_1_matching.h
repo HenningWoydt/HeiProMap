@@ -48,7 +48,9 @@ namespace HeiProMap {
         // Used edge tracking
         std::vector<size_t> m_used_edge_indices;
         AlignedArray<u8> m_used_this_round;
-        std::vector<std::vector<partition_t> > m_used_neighbors;
+        AlignedArray<partition_t> m_used_partner;
+        AlignedArray<u32> m_used_partner_epoch;
+        u32 m_used_partner_global_epoch = 0;
         AlignedArray<partition_t> m_touched_vertices;
         size_t m_num_touched = 0;
         u32 m_edge_round_epoch = 1;
@@ -74,15 +76,26 @@ namespace HeiProMap {
                          + m_touched_vertices.heap_bytes() + m_candidates.heap_bytes()
                          + m_next_candidates.heap_bytes() + m_in_candidates_epoch.heap_bytes()
                          + m_matched_batches.heap_bytes()
+                         + m_used_partner.heap_bytes() + m_used_partner_epoch.heap_bytes()
                          + m_used_edge_indices.capacity() * sizeof(size_t)
                          + m_forbidden_buffer.capacity() * sizeof(u64);
-            for (partition_t id = 0; id < m_k; ++id) {
-                bytes += m_used_neighbors[id].capacity() * sizeof(partition_t);
-            }
             return bytes;
         }
 
-        void initialize(const partition_t k) {
+        void set_pool(MemoryPool *pool) {
+            m_vertex_matched_epoch.set_pool(pool);
+            m_used_this_round.set_pool(pool);
+            m_touched_vertices.set_pool(pool);
+            m_candidates.set_pool(pool);
+            m_next_candidates.set_pool(pool);
+            m_in_candidates_epoch.set_pool(pool);
+            m_matched_batches.set_pool(pool);
+            m_used_partner.set_pool(pool);
+            m_used_partner_epoch.set_pool(pool);
+        }
+
+        void initialize(const partition_t k, MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             m_k = k;
 
             m_vertex_matched_epoch.initialize(m_k, 0);
@@ -103,8 +116,9 @@ namespace HeiProMap {
             if constexpr (!LARGE_K) {
                 m_used_this_round.initialize(m_k * m_k, 0);
             } else {
-                m_used_neighbors.clear();
-                m_used_neighbors.resize(m_k);
+                m_used_partner.initialize(m_k);
+                m_used_partner_epoch.initialize(m_k, 0);
+                m_used_partner_global_epoch = 0;
                 m_touched_vertices.initialize(m_k);
                 m_num_touched = 0;
             }
@@ -126,8 +140,10 @@ namespace HeiProMap {
                 }
                 m_used_edge_indices.clear();
             } else {
-                for (size_t i = 0; i < m_num_touched; ++i) {
-                    m_used_neighbors[m_touched_vertices[i]].clear();
+                m_used_partner_global_epoch++;
+                if (m_used_partner_global_epoch == 0) {
+                    m_used_partner_epoch.fill(0);
+                    m_used_partner_global_epoch = 1;
                 }
                 m_num_touched = 0;
             }
@@ -355,8 +371,7 @@ namespace HeiProMap {
                 const size_t eidx = q_graph.edge_index(u, v);
                 return eidx < m_used_this_round.size() && m_used_this_round[eidx] == 1;
             } else {
-                const auto &used = m_used_neighbors[u];
-                return std::find(used.begin(), used.end(), v) != used.end();
+                return m_used_partner_epoch[u] == m_used_partner_global_epoch && m_used_partner[u] == v;
             }
         }
 
@@ -369,10 +384,8 @@ namespace HeiProMap {
                     m_used_edge_indices.push_back(eidx);
                 }
             } else {
-                if (m_used_neighbors[u].empty()) {
-                    m_touched_vertices[m_num_touched++] = u;
-                }
-                m_used_neighbors[u].push_back(v);
+                m_used_partner[u] = v;
+                m_used_partner_epoch[u] = m_used_partner_global_epoch;
             }
         }
     };

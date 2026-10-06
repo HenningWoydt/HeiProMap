@@ -173,7 +173,13 @@ namespace HeiProMap {
             return m_edges.heap_bytes() + m_head.heap_bytes();
         }
 
-        void initialize(const partition_t t_k) {
+        void set_pool(MemoryPool *pool) {
+            m_edges.set_pool(pool);
+            m_head.set_pool(pool);
+        }
+
+        void initialize(const partition_t t_k, MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "QuotientGraph", "initialize");
 
             m_k = t_k;

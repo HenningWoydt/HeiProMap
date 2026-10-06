@@ -50,7 +50,12 @@ namespace HeiProMap {
 
         size_t heap_bytes() const { return m_data.heap_bytes(); }
 
-        void initialize(const size_t n, const size_t num_bits) {
+        void set_pool(MemoryPool *pool) {
+            m_data.set_pool(pool);
+        }
+
+        void initialize(const size_t n, const size_t num_bits, MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             m_n = n;
             m_num_bits = num_bits;
             m_words_per_element = (num_bits + 63) / 64;

@@ -94,7 +94,21 @@ namespace HeiProMap {
             return bytes;
         }
 
-        void initialize(const partition_t k) {
+        void set_pool(MemoryPool *pool) {
+            m_vertex_frozen_epoch.set_pool(pool);
+            m_used_this_round.set_pool(pool);
+            m_touched_vertices.set_pool(pool);
+            m_candidates.set_pool(pool);
+            m_next_candidates.set_pool(pool);
+            m_in_candidates_epoch.set_pool(pool);
+            m_valid_frozen.set_pool(pool);
+            m_matched_batches.set_pool(pool);
+            m_dist1_batches.set_pool(pool);
+            m_dist2_batches.set_pool(pool);
+        }
+
+        void initialize(const partition_t k, MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             m_k = k;
 
             m_vertex_frozen_epoch.initialize(m_k, 0);

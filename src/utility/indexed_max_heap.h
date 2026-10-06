@@ -76,6 +76,12 @@ namespace HeiProMap {
             return m_heap.heap_bytes() + m_indices.heap_bytes() + m_iteration_counter.heap_bytes();
         }
 
+        void set_pool(MemoryPool *pool) {
+            m_heap.set_pool(pool);
+            m_indices.set_pool(pool);
+            m_iteration_counter.set_pool(pool);
+        }
+
         ~IndexedMaxHeap() = default;
 
         void initialize(const size_t t_n) {
@@ -97,9 +103,9 @@ namespace HeiProMap {
 
         void grow(const size_t t_n) {
             if (t_n <= m_n) return;
-            AlignedArray<IndexedMaxHeapEntry<T>> new_heap;
-            AlignedArray<size_t> new_indices;
-            AlignedArray<u64> new_iteration_counter;
+            AlignedArray<IndexedMaxHeapEntry<T>> new_heap(m_heap.get_pool());
+            AlignedArray<size_t> new_indices(m_indices.get_pool());
+            AlignedArray<u64> new_iteration_counter(m_iteration_counter.get_pool());
             new_heap.initialize(t_n);
             new_indices.initialize(t_n);
             new_iteration_counter.initialize(t_n, 0);
@@ -127,9 +133,13 @@ namespace HeiProMap {
         }
 
         void push_many_heapify(const std::vector<std::pair<size_t, T> > &entries) {
-            for (const auto &e: entries) {
-                const size_t key = e.first;
-                const T &val = e.second;
+            push_many_heapify(entries.data(), entries.size());
+        }
+
+        void push_many_heapify(const std::pair<size_t, T> *entries, const size_t count) {
+            for (size_t i = 0; i < count; ++i) {
+                const size_t key = entries[i].first;
+                const T &val = entries[i].second;
                 ASSERT(!entry_exists(key));
                 m_indices[key] = m_heap_size;
                 m_iteration_counter[key] = m_iteration;

@@ -60,10 +60,31 @@ namespace HeiProMap {
                  + active_ids.heap_bytes();
         }
 
+        void set_pool(MemoryPool *pool) {
+            partition.set_pool(pool);
+            partition_temp.set_pool(pool);
+            bweights.set_pool(pool);
+            n_vertices.set_pool(pool);
+            lmax.set_pool(pool);
+            hierarchy_level.set_pool(pool);
+            active_ids.set_pool(pool);
+        }
+
+        void release_memory() {
+            partition.free_memory();
+            partition_temp.free_memory();
+            bweights.free_memory();
+            n_vertices.free_memory();
+            lmax.free_memory();
+            hierarchy_level.free_memory();
+            active_ids.free_memory();
+        }
+
         PartitionManager(const vertex_t t_n,
                          const partition_t t_k,
-                         const weight_t g_weight) {
-            initialize(t_n, t_k, g_weight);
+                         const weight_t g_weight,
+                         MemoryPool *pool = nullptr) {
+            initialize(t_n, t_k, g_weight, pool);
         }
 
         // ==========================================
@@ -72,7 +93,9 @@ namespace HeiProMap {
 
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
-                        const weight_t g_weight) {
+                        const weight_t g_weight,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             n = t_n;
             k = t_k;
 

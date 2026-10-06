@@ -40,6 +40,7 @@
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/distance_1_matching.h"
 #include "../datastructures/active_block_scheduling.h"
+#include "../datastructures/block_adjacency.h"
 #include "../utility/aligned_array.h"
 #include "../utility/profiler.h"
 #include "../utility/random_engine.h"
@@ -82,12 +83,12 @@ namespace HeiProMap {
         AlignedArray<u32> m_dense_epoch;
         u32 m_dense_global_epoch = 0;
 
-        std::vector<std::vector<vertex_t>> thread_moves;
+        std::vector<AlignedArray<vertex_t>> thread_moves;
         std::vector<IndexedMaxHeap<weight_t>> thread_heap_u;
         std::vector<IndexedMaxHeap<weight_t>> thread_heap_v;
-        std::vector<std::vector<std::pair<size_t, weight_t>>> thread_seed_u;
-        std::vector<std::vector<std::pair<size_t, weight_t>>> thread_seed_v;
-        std::vector<std::vector<vertex_t>> thread_dense_to_vertex;
+        std::vector<AlignedArray<std::pair<size_t, weight_t>>> thread_seed_u;
+        std::vector<AlignedArray<std::pair<size_t, weight_t>>> thread_seed_v;
+        std::vector<AlignedArray<vertex_t>> thread_dense_to_vertex;
 
         template<bool t_uniform_e_weights, typename DistanceOracleT>
         static inline __attribute__((always_inline)) weight_t compute_qap_delta(const graph_t &g,
@@ -186,15 +187,24 @@ namespace HeiProMap {
                          + block_adjacency.heap_bytes() + vertex_used.heap_bytes()
                          + m_dense_id.heap_bytes() + m_dense_epoch.heap_bytes();
             for (size_t i = 0; i < thread_moves.size(); ++i) {
-                bytes += thread_moves[i].capacity() * sizeof(vertex_t);
-                bytes += thread_dense_to_vertex[i].capacity() * sizeof(vertex_t);
+                bytes += thread_moves[i].heap_bytes();
+                bytes += thread_dense_to_vertex[i].heap_bytes();
             }
             for (size_t i = 0; i < thread_heap_u.size(); ++i) {
                 bytes += thread_heap_u[i].heap_bytes() + thread_heap_v[i].heap_bytes();
-                bytes += thread_seed_u[i].capacity() * sizeof(std::pair<size_t, weight_t>);
-                bytes += thread_seed_v[i].capacity() * sizeof(std::pair<size_t, weight_t>);
+                bytes += thread_seed_u[i].heap_bytes();
+                bytes += thread_seed_v[i].heap_bytes();
             }
             return bytes;
+        }
+
+        void set_pool(MemoryPool *pool) {
+            active_block_scheduling.set_pool(pool);
+            d1_matcher.set_pool(pool);
+            block_adjacency.set_pool(pool);
+            vertex_used.set_pool(pool);
+            m_dense_id.set_pool(pool);
+            m_dense_epoch.set_pool(pool);
         }
 
         void initialize(const vertex_t t_n,
@@ -202,7 +212,9 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const u64 t_threads,
                         const u64 t_seed,
-                        const SimpleQuotientGraphRefinementConfiguration &t_config) {
+                        const SimpleQuotientGraphRefinementConfiguration &t_config,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "SimpleQGRefinement", "initialize");
 
             m_n = t_n;
@@ -216,9 +228,9 @@ namespace HeiProMap {
                 rnd_engines[t] = RandomEngine(t_seed + t);
             }
 
-            active_block_scheduling.initialize(m_k);
-            d1_matcher.initialize(m_k);
-            block_adjacency.initialize(m_k, m_threads);
+            active_block_scheduling.initialize(m_k, pool);
+            d1_matcher.initialize(m_k, pool);
+            block_adjacency.initialize(m_k, m_threads, pool);
 
             global_vertex_mark = 0;
             vertex_used.initialize(m_n, 0);
@@ -230,9 +242,19 @@ namespace HeiProMap {
             thread_moves.resize(m_threads);
             thread_heap_u.resize(m_threads);
             thread_heap_v.resize(m_threads);
+            for (u64 t = 0; t < m_threads; ++t) {
+                thread_moves[t].set_pool(pool);
+                thread_heap_u[t].set_pool(pool);
+                thread_heap_v[t].set_pool(pool);
+            }
             thread_seed_u.resize(m_threads);
             thread_seed_v.resize(m_threads);
             thread_dense_to_vertex.resize(m_threads);
+            for (u64 t = 0; t < m_threads; ++t) {
+                thread_seed_u[t].set_pool(pool);
+                thread_seed_v[t].set_pool(pool);
+                thread_dense_to_vertex[t].set_pool(pool);
+            }
         }
 
         template<typename DistanceOracleT>
@@ -329,7 +351,7 @@ namespace HeiProMap {
         }
 
     private:
-        vertex_t get_or_assign_dense(const vertex_t v, std::vector<vertex_t> &dense_to_vertex,
+        vertex_t get_or_assign_dense(const vertex_t v, AlignedArray<vertex_t> &dense_to_vertex,
                                      vertex_t &dense_counter) {
             if (m_dense_epoch[v] == m_dense_global_epoch) {
                 return m_dense_id[v];
@@ -337,11 +359,7 @@ namespace HeiProMap {
             vertex_t did = dense_counter++;
             m_dense_id[v] = did;
             m_dense_epoch[v] = m_dense_global_epoch;
-            if (did >= dense_to_vertex.size()) {
-                dense_to_vertex.push_back(v);
-            } else {
-                dense_to_vertex[did] = v;
-            }
+            dense_to_vertex[did] = v;
             return did;
         }
 
@@ -353,12 +371,12 @@ namespace HeiProMap {
                          const partition_t u_id,
                          const partition_t v_id,
                          const u32 mark,
-                         std::vector<vertex_t> &moves,
+                         AlignedArray<vertex_t> &moves,
                          IndexedMaxHeap<weight_t> &heap_u,
                          IndexedMaxHeap<weight_t> &heap_v,
-                         std::vector<std::pair<size_t, weight_t>> &seed_u,
-                         std::vector<std::pair<size_t, weight_t>> &seed_v,
-                         std::vector<vertex_t> &dense_to_vertex,
+                         AlignedArray<std::pair<size_t, weight_t>> &seed_u,
+                         AlignedArray<std::pair<size_t, weight_t>> &seed_v,
+                         AlignedArray<vertex_t> &dense_to_vertex,
                          RandomEngine &rng) {
             const f64 alpha = config.alpha * (f64) d_oracle.get(u_id, v_id);
             const f64 beta = std::log(g.n) * (f64) d_oracle.get(u_id, v_id);
@@ -368,19 +386,26 @@ namespace HeiProMap {
             heap_v.ensure_capacity(estimated_capacity);
 
             vertex_t dense_counter = 0;
-            dense_to_vertex.clear();
-            dense_to_vertex.reserve(estimated_capacity);
+            if (dense_to_vertex.size() < estimated_capacity) {
+                dense_to_vertex.initialize(estimated_capacity);
+            }
+            if (seed_u.size() < estimated_capacity) {
+                seed_u.initialize(estimated_capacity);
+            }
+            if (seed_v.size() < estimated_capacity) {
+                seed_v.initialize(estimated_capacity);
+            }
 
             // Seed heaps: batch insert with O(n) heapify
-            seed_u.clear();
-            seed_v.clear();
+            vertex_t seed_u_size = 0;
+            vertex_t seed_v_size = 0;
             for (const vertex_t u : bv_manager.boundary(u_id)) {
                 bool connected;
                 weight_t delta = compute_gain_and_connected<t_uniform_e_weights, t_use_edge_cut>(
                     g, u, u_id, v_id, connected, p_manager, d_oracle);
                 if (connected) {
                     vertex_t did = get_or_assign_dense(u, dense_to_vertex, dense_counter);
-                    seed_u.emplace_back(did, delta);
+                    seed_u[seed_u_size++] = {did, delta};
                 }
             }
 
@@ -390,13 +415,13 @@ namespace HeiProMap {
                     g, v, v_id, u_id, connected, p_manager, d_oracle);
                 if (connected) {
                     vertex_t did = get_or_assign_dense(v, dense_to_vertex, dense_counter);
-                    seed_v.emplace_back(did, delta);
+                    seed_v[seed_v_size++] = {did, delta};
                 }
             }
 
-            heap_u.push_many_heapify(seed_u);
-            heap_v.push_many_heapify(seed_v);
-            const u64 n_init_moves = seed_u.size() + seed_v.size();
+            heap_u.push_many_heapify(seed_u.get_ptr(), seed_u_size);
+            heap_v.push_many_heapify(seed_v.get_ptr(), seed_v_size);
+            const u64 n_init_moves = seed_u_size + seed_v_size;
 
             if (n_init_moves == 0) return false;
 
@@ -412,10 +437,13 @@ namespace HeiProMap {
             const weight_t v_id_weight_initial = p_manager.get_bweight(v_id);
             bool best_is_balanced = (u_id_weight_initial <= p_manager.lmax[u_id] && v_id_weight_initial <= p_manager.lmax[v_id]);
 
-            moves.clear();
+            vertex_t moves_size = 0;
+            if (moves.size() < estimated_capacity) {
+                moves.initialize(estimated_capacity);
+            }
 
             // FM exploration with lazy connectivity check
-            while ((!heap_u.empty() || !heap_v.empty()) && moves.size() < n_init_moves) {
+            while ((!heap_u.empty() || !heap_v.empty()) && moves_size < n_init_moves) {
                 while (!heap_u.empty() && !is_connected_to(g, p_manager, dense_to_vertex[heap_u.top_key()], v_id)) { heap_u.pop(); }
                 while (!heap_v.empty() && !is_connected_to(g, p_manager, dense_to_vertex[heap_v.top_key()], u_id)) { heap_v.pop(); }
                 if (heap_u.empty() && heap_v.empty()) break;
@@ -449,7 +477,7 @@ namespace HeiProMap {
                 const partition_t move_id = choose_u ? v_id : u_id;
                 heap.pop();
 
-                moves.push_back(vertex);
+                moves[moves_size++] = vertex;
                 curr_qap_gain += qap_delta;
 
                 const weight_t current_move_w = p_manager.get_bweight(move_id) + vertex_weight;
@@ -469,7 +497,7 @@ namespace HeiProMap {
                 }
 
                 if (update_best) {
-                    best_idx = moves.size();
+                    best_idx = moves_size;
                     max_qap_gain = curr_qap_gain;
                     best_is_balanced = current_is_balanced;
                     steps_since_last_improvement = 0;
@@ -509,6 +537,12 @@ namespace HeiProMap {
 
                     if (!is_connected) continue;
 
+                    if (dense_counter >= dense_to_vertex.size()) {
+                        AlignedArray<vertex_t> new_dtv(dense_to_vertex.get_pool());
+                        new_dtv.initialize(dense_counter * 2);
+                        std::memcpy(new_dtv.get_ptr(), dense_to_vertex.get_ptr(), dense_counter * sizeof(vertex_t));
+                        dense_to_vertex = std::move(new_dtv);
+                    }
                     vertex_t ndid = get_or_assign_dense(neighbor, dense_to_vertex, dense_counter);
                     if (ndid >= heap_u.capacity()) {
                         heap_u.grow(dense_counter);
@@ -524,8 +558,8 @@ namespace HeiProMap {
             }
 
             // Revert all moves
-            for (size_t i = 0; i < moves.size(); i++) {
-                const vertex_t vertex = moves[moves.size() - 1 - i];
+            for (size_t i = 0; i < moves_size; i++) {
+                const vertex_t vertex = moves[moves_size - 1 - i];
                 const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
                 const partition_t vertex_id = p_manager[vertex];
                 const partition_t move_id = u_id == vertex_id ? v_id : u_id;

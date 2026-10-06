@@ -59,12 +59,21 @@ namespace HeiProMap {
         AlignedArray<size_t> neighborhoods;
         AlignedArray<vertex_t> edges_v;
         AlignedArray<weight_t> edges_w;
+        MemoryPool *m_pool = nullptr;
 
         CSRGraph() = default;
 
         size_t heap_bytes() const {
             return v_weights.heap_bytes() + neighborhoods.heap_bytes()
                  + edges_v.heap_bytes() + edges_w.heap_bytes();
+        }
+
+        void set_pool(MemoryPool *pool) {
+            m_pool = pool;
+            v_weights.set_pool(pool);
+            neighborhoods.set_pool(pool);
+            edges_v.set_pool(pool);
+            edges_w.set_pool(pool);
         }
 
         explicit CSRGraph(const std::string &file_path) {
@@ -180,7 +189,9 @@ namespace HeiProMap {
                         const weight_t *t_v_weights,
                         const size_t *t_neighborhoods,
                         const weight_t *t_edges_w,
-                        const vertex_t *t_edges_v) {
+                        const vertex_t *t_edges_v,
+                        MemoryPool *pool = nullptr) {
+            set_pool(pool);
             n = t_n;
             m = t_m;
             g_weight = 0;
@@ -207,16 +218,16 @@ namespace HeiProMap {
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void contract(const CSRGraph &g,
                       const Mapping &mapping) {
-            AlignedArray<vertex_t> n_mapped;
-            AlignedArray<vertex_t> n_mapped_prefix;
-            AlignedArray<vertex_t> cursor;
-            AlignedArray<vertex_t> mapped_vertices;
+            AlignedArray<vertex_t> n_mapped(m_pool);
+            AlignedArray<vertex_t> n_mapped_prefix(m_pool);
+            AlignedArray<vertex_t> cursor(m_pool);
+            AlignedArray<vertex_t> mapped_vertices(m_pool);
 
             struct SeenEntry {
                 u32 epoch;
                 size_t idx;
             };
-            AlignedArray<SeenEntry> seen_idx; // one cache miss instead of two
+            AlignedArray<SeenEntry> seen_idx(m_pool);
             u32 epoch = 0;
 
             // allocate
@@ -307,12 +318,12 @@ namespace HeiProMap {
         void parallel_contract(const CSRGraph &g,
                                const Mapping &mapping,
                                const u64 threads) {
-            AlignedArray<vertex_t> overest_sizes;
-            AlignedArray<vertex_t> overest_neighborhood;
-            AlignedArray<vertex_t> m_per_thread;
-            AlignedArray<vertex_t> temp_edges_v;
-            AlignedArray<weight_t> temp_edges_w;
-            AlignedArray<vertex_t> sizes;
+            AlignedArray<vertex_t> overest_sizes(m_pool);
+            AlignedArray<vertex_t> overest_neighborhood(m_pool);
+            AlignedArray<vertex_t> m_per_thread(m_pool);
+            AlignedArray<vertex_t> temp_edges_v(m_pool);
+            AlignedArray<weight_t> temp_edges_w(m_pool);
+            AlignedArray<vertex_t> sizes(m_pool);
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "allocate");
             n = mapping.get_coarse_n();
@@ -323,11 +334,11 @@ namespace HeiProMap {
             overest_sizes.initialize(n, 0);
             overest_neighborhood.initialize(n + 1);
 
-            AlignedArray<vertex_t> n_mapped;
+            AlignedArray<vertex_t> n_mapped(m_pool);
             n_mapped.initialize(n, 0);
-            AlignedArray<vertex_t> cursor;
+            AlignedArray<vertex_t> cursor(m_pool);
             cursor.initialize(n + 1);
-            AlignedArray<vertex_t> mapped_vertices;
+            AlignedArray<vertex_t> mapped_vertices(m_pool);
             mapped_vertices.initialize(g.n);
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_count");
@@ -344,7 +355,7 @@ namespace HeiProMap {
             }
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_fill");
-            AlignedArray<vertex_t> bucket_pos;
+            AlignedArray<vertex_t> bucket_pos(m_pool);
             bucket_pos.initialize(n);
             #pragma omp parallel for schedule(static) num_threads(threads)
             for (vertex_t i = 0; i < n; ++i) {
@@ -378,7 +389,7 @@ namespace HeiProMap {
                 overest_neighborhood[map_u + 1] = overest_neighborhood[map_u] + overest_sizes[map_u];
             }
 
-            AlignedArray<vertex_t> cursor_start;
+            AlignedArray<vertex_t> cursor_start(m_pool);
             cursor_start.initialize(n + 1);
             #pragma omp parallel for schedule(static) num_threads(threads)
             for (vertex_t map_u = 0; map_u <= n; ++map_u) {
@@ -501,11 +512,11 @@ namespace HeiProMap {
             uniform_e_weights = false;
             v_weights.initialize(n, 0);
 
-            AlignedArray<vertex_t> n_mapped;
+            AlignedArray<vertex_t> n_mapped(m_pool);
             n_mapped.initialize(n, 0);
-            AlignedArray<vertex_t> bucket_offsets;
+            AlignedArray<vertex_t> bucket_offsets(m_pool);
             bucket_offsets.initialize(n + 1);
-            AlignedArray<vertex_t> mapped_vertices;
+            AlignedArray<vertex_t> mapped_vertices(m_pool);
             mapped_vertices.initialize(g.n);
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_count");
@@ -521,7 +532,7 @@ namespace HeiProMap {
             }
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "bucket_fill");
-            AlignedArray<vertex_t> bucket_pos;
+            AlignedArray<vertex_t> bucket_pos(m_pool);
             bucket_pos.initialize(n);
             #pragma omp parallel for schedule(static) num_threads(threads)
             for (vertex_t i = 0; i < n; ++i) {
@@ -535,7 +546,7 @@ namespace HeiProMap {
             }
 
             HEIPROMAP_PROFILE_SCOPE("contraction", "CSRGraph", "count_degrees");
-            AlignedArray<vertex_t> sizes;
+            AlignedArray<vertex_t> sizes(m_pool);
             sizes.initialize(n, 0);
 
             #pragma omp parallel num_threads(threads)
@@ -648,6 +659,7 @@ namespace HeiProMap {
         }
 
         void contract(const CSRGraph &g, const Mapping &mapping, const u64 threads, const bool use_parallel = false, const bool use_kaminpar = false) {
+            if (g.m_pool && !m_pool) { set_pool(g.m_pool); }
             if (use_kaminpar) {
                 if (g.uniform_v_weights && g.uniform_e_weights) {
                     kaminpar_contract<true, true>(g, mapping, threads);

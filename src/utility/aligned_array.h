@@ -32,26 +32,56 @@
 #include <vector>
 #include "macros.h"
 #include "utils.h"
+#include "memory_pool.h"
 
 namespace HeiProMap {
     template<typename T>
     class AlignedArray {
         T *m_ptr = nullptr;
         size_t m_n = 0;
+        MemoryPool *m_pool = nullptr;
+        bool m_own_memory = true;
 
         static_assert(std::is_trivially_destructible<T>::value,
                       "AlignedArray requires trivially destructible types");
 
+        void do_alloc(size_t size) {
+            m_n = size;
+            if (m_pool) {
+                m_ptr = (T *) m_pool->borrow(size * sizeof(T));
+                m_own_memory = false;
+            } else {
+                m_ptr = (T *) aligned_alloc(64, size * sizeof(T));
+                m_own_memory = true;
+            }
+        }
+
+        void do_free() {
+            if (m_ptr) {
+                if (m_own_memory) {
+                    free(m_ptr);
+                } else {
+                    m_pool->give_back(m_ptr, m_n * sizeof(T));
+                }
+                m_ptr = nullptr;
+                m_n = 0;
+            }
+        }
+
     public:
         AlignedArray() = default;
+
+        explicit AlignedArray(MemoryPool *pool) : m_pool(pool), m_own_memory(true) {}
+
+        void set_pool(MemoryPool *pool) { m_pool = pool; }
+        MemoryPool *get_pool() const { return m_pool; }
 
         void initialize(const size_t n) {
             size_t size = round_up_64(n);
 
             if (size > m_n) {
-                m_n = size;
-                free(m_ptr);
-                m_ptr = (T *) aligned_alloc(64, size * sizeof(T));
+                do_free();
+                do_alloc(size);
             }
         }
 
@@ -59,37 +89,36 @@ namespace HeiProMap {
             size_t size = round_up_64(n);
 
             if (size > m_n) {
-                m_n = size;
-                free(m_ptr);
-                m_ptr = (T *) aligned_alloc(64, size * sizeof(T));
+                do_free();
+                do_alloc(size);
             }
             std::fill_n(m_ptr, size, fill_value);
         }
 
         void free_memory() {
-            free(m_ptr);
-            m_ptr = nullptr;
-            m_n = 0;
+            do_free();
         }
 
-        ~AlignedArray() { free(m_ptr); }
+        ~AlignedArray() { do_free(); }
 
-        // Copy constructor
         AlignedArray(const AlignedArray &other) {
+            m_pool = other.m_pool;
             m_n = other.m_n;
             if (m_n > 0) {
-                m_ptr = (T *) aligned_alloc(64, m_n * sizeof(T));
+                do_alloc(m_n);
                 std::memcpy(m_ptr, other.m_ptr, m_n * sizeof(T));
             }
         }
 
-        // Copy assignment
         AlignedArray &operator=(const AlignedArray &other) {
             if (this != &other) {
                 if (m_n != other.m_n) {
-                    free(m_ptr);
-                    m_n = other.m_n;
-                    m_ptr = m_n > 0 ? (T *) aligned_alloc(64, m_n * sizeof(T)) : nullptr;
+                    do_free();
+                    m_pool = other.m_pool;
+                    m_n = 0;
+                    if (other.m_n > 0) {
+                        do_alloc(other.m_n);
+                    }
                 }
                 if (m_n > 0) {
                     std::memcpy(m_ptr, other.m_ptr, m_n * sizeof(T));
@@ -98,10 +127,11 @@ namespace HeiProMap {
             return *this;
         }
 
-
         AlignedArray(AlignedArray &&other) noexcept {
             m_ptr = other.m_ptr;
             m_n = other.m_n;
+            m_pool = other.m_pool;
+            m_own_memory = other.m_own_memory;
 
             other.m_ptr = nullptr;
             other.m_n = 0;
@@ -109,9 +139,11 @@ namespace HeiProMap {
 
         AlignedArray &operator=(AlignedArray &&other) noexcept {
             if (this != &other) {
-                free(m_ptr);
+                do_free();
                 m_ptr = other.m_ptr;
                 m_n = other.m_n;
+                m_pool = other.m_pool;
+                m_own_memory = other.m_own_memory;
 
                 other.m_ptr = nullptr;
                 other.m_n = 0;
@@ -146,7 +178,7 @@ namespace HeiProMap {
         }
 
         size_t size() const { return m_n; }
-        size_t heap_bytes() const { return m_n * sizeof(T); }
+        size_t heap_bytes() const { return m_own_memory ? m_n * sizeof(T) : 0; }
 
         T *begin() { return get_ptr(); }
         const T *begin() const { return get_ptr(); }
@@ -170,6 +202,8 @@ namespace HeiProMap {
         void swap(AlignedArray &other) noexcept {
             std::swap(m_ptr, other.m_ptr);
             std::swap(m_n, other.m_n);
+            std::swap(m_pool, other.m_pool);
+            std::swap(m_own_memory, other.m_own_memory);
         }
     };
 
