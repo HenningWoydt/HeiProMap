@@ -102,7 +102,8 @@ namespace HeiProMap {
                           const std::vector<partition_t> &previous_partition,
                           const std::vector<partition_t> &initial_partition,
                           weight_t total_migration_cost_from_start,
-                          const std::map<std::string, KTStat> &command_stats) {
+                          const std::map<std::string, KTStat> &command_stats,
+                          f64 imbalance = 0.03) {
             std::cout << "--------------------------------------------------" << std::endl;
             std::cout << "Graph Statistics:" << std::endl;
             std::cout << "  Nodes (n):      " << g.n << std::endl;
@@ -112,6 +113,9 @@ namespace HeiProMap {
             if (p_manager.n > 0) {
                 weight_t edge_cut = calculate_edge_cut(g, p_manager);
                 weight_t max_block_weight = p_manager.max_weight();
+                weight_t lmax = (p_manager.k > 0)
+                    ? (weight_t) std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k))
+                    : 0;
                 double balance = (p_manager.k > 0 && g.g_weight > 0)
                     ? (double) max_block_weight / ((double) g.g_weight / (double) p_manager.k)
                     : 0.0;
@@ -119,14 +123,15 @@ namespace HeiProMap {
                 std::cout << "Partition Statistics:" << std::endl;
                 std::cout << "  Edge Cut:       " << edge_cut << std::endl;
                 std::cout << "  Comm Cost:      " << get_qap(g, p_manager.partition.get_vector(), oracle) << std::endl;
-                std::cout << "  Max Block (LMax): " << max_block_weight << std::endl;
+                std::cout << "  Max Block Weight: " << max_block_weight << std::endl;
+                std::cout << "  LMax (Allowed):   " << lmax << std::endl;
                 std::cout << "  Balance (max/avg): " << balance << std::endl;
 
-                if (!previous_partition.empty() && previous_partition.size() == p_manager.n) {
+                if (!previous_partition.empty()) {
                     std::cout << "  Migration Cost (prev): " << calculate_migration_cost(g, oracle, previous_partition, p_manager.partition.get_vector()) << std::endl;
                     std::cout << "  Moved Vertices (prev): " << count_moved_vertices(previous_partition, p_manager.partition.get_vector()) << std::endl;
                 }
-                if (!initial_partition.empty() && initial_partition.size() <= p_manager.n) {
+                if (!initial_partition.empty()) {
                     std::cout << "  Migration Cost (init): " << calculate_migration_cost(g, oracle, initial_partition, p_manager.partition.get_vector()) << std::endl;
                     std::cout << "  Moved Vertices (init): " << count_moved_vertices(initial_partition, p_manager.partition.get_vector()) << std::endl;
                 }

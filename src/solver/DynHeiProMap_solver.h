@@ -251,7 +251,7 @@ namespace HeiProMap {
         void print_stats() {
             DynPartitionStats::print(g, p_manager, oracle, previous_partition,
                                      initial_partition, total_migration_cost_from_start,
-                                     command_stats);
+                                     command_stats, config.imbalance);
         }
 
         explicit DynHeiProMapSolver(DynConfiguration &t_config) : config(t_config) {
@@ -457,7 +457,9 @@ namespace HeiProMap {
 
             lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn);
 
-            total_migration_cost_from_start += calculate_migration_cost(partition_before, p_manager.partition.get_vector());
+            weight_t step_migration = calculate_migration_cost(partition_before, p_manager.partition.get_vector());
+            total_migration_cost_from_start += step_migration;
+            previous_partition = partition_before;
 
             g.clear_dirty_status();
             g.clear_new_vertices();
@@ -470,6 +472,7 @@ namespace HeiProMap {
             std::cout << "  Comm Cost: Before=" << comm_cost_before << " After=" << comm_cost_after << " (Diff=" << (
                 s64) comm_cost_before - (s64) comm_cost_after << ")" << std::endl;
             std::cout << "  Balance:   Before=" << balance_before << " After=" << balance_after << std::endl;
+            std::cout << "  Migration: Step=" << step_migration << " Total=" << total_migration_cost_from_start << std::endl;
         }
     };
 
