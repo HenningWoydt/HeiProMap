@@ -203,6 +203,7 @@ namespace HeiProMap {
             // optional
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
             {"--initial-c", "", "Initial contracting limit.", "64", "", false},
+            {"--verbose", "-v", "Verbose output (true/false).", "true", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
 
             // Coarsening options
@@ -283,6 +284,8 @@ namespace HeiProMap {
 
         bool collect_dataset = false;
         std::string data_dir = std::string(HEIPROMAP_SOURCE_DIR) + "/data";
+
+        bool verbose = true;
 
         u64 hm_level = 0;
 
@@ -375,6 +378,15 @@ namespace HeiProMap {
             }
         }
 
+        void set_verbose() {
+            if (is_set("--verbose")) {
+                std::string val = get("--verbose");
+                verbose = (val == "true" || val == "1");
+            } else {
+                verbose = true;
+            }
+        }
+
 
         AlgorithmConfiguration(int argc, char *argv[]) {
             // read command lines into vector
@@ -423,6 +435,7 @@ namespace HeiProMap {
             set_seed();
             set_threads();
             set_hm_level();
+            set_verbose();
 
             if (!is_set("--config")) {
                 std::cout << "Error: --config (or -c) must be specified." << std::endl;

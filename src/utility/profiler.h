@@ -40,6 +40,7 @@
 #include <shared_mutex>
 #include <cstdlib>
 
+#include "macros.h"
 #include "utils.h"
 
 namespace HeiProMap {

@@ -42,7 +42,8 @@ namespace HeiProMap {
                                     u64 seed,
                                     u64 n_threads,
                                     const std::string &mode_str,
-                                    std::vector<partition_t> &partition) {
+                                    std::vector<partition_t> &partition,
+                                    bool verbose = false) {
         const vertex_t invalid_v = std::numeric_limits<vertex_t>::max();
         std::vector<vertex_t> sparse_to_dense(g.n, invalid_v);
         std::vector<vertex_t> dense_to_sparse;
@@ -103,6 +104,7 @@ namespace HeiProMap {
         else ac.set_strong();
 
         ac.mapping_out = ""; // Avoid writing to file unless explicitly requested
+        ac.verbose = verbose;
 
         std::vector<vertex_t> result;
         if (ac.use_binary_oracle()) {

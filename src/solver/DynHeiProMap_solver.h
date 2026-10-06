@@ -196,6 +196,7 @@ namespace HeiProMap {
                 std::string config_str;
                 iss >> config_str;
                 run_partition(config_str);
+                print_stats();
             } else if (cmd == "save-partition") {
                 std::string file_path;
                 iss >> file_path;
@@ -219,79 +220,29 @@ namespace HeiProMap {
                 u32 num_iterations = 5;
                 iss >> num_iterations;
                 run_refine_fast(num_iterations);
+                print_stats();
             } else if (cmd == "autorefine") {
                 double threshold_percent = 10.0;
                 std::string config_str = "fast";
                 iss >> threshold_percent >> config_str;
 
-                double current_dirty_percent = (g.n > 0) ? (100.0 * g.dirty_list_partition.size() / g.n) : 0.0;
+                double current_dirty_percent = (g.n > 0) ? (100.0 * (f64) g.dirty_list_partition.size() / (f64) g.n) : 0.0;
                 if (current_dirty_percent >= threshold_percent) {
-                    std::cout << "Autorefine: " << current_dirty_percent << "% dirty (>= " << threshold_percent <<
-                            "%), partitioning (" << config_str << ")..." << std::endl;
+                    std::cout << "Autorefine: " << current_dirty_percent << "% dirty (>= " << threshold_percent << "%), partitioning (" << config_str << ")..." << std::endl;
                     run_partition(config_str);
                 } else {
                     u32 iters = 5;
                     if (config_str == "eco") iters = 10;
                     else if (config_str == "strong") iters = 20;
 
-                    std::cout << "Autorefine: " << current_dirty_percent << "% dirty (< " << threshold_percent <<
-                            "%), refining (" << iters << " iterations)..." << std::endl;
+                    std::cout << "Autorefine: " << current_dirty_percent << "% dirty (< " << threshold_percent << "%), refining (" << iters << " iterations)..." << std::endl;
                     run_refine_fast(iters);
                 }
+                print_stats();
             } else if (cmd == "no-refinement") {
                 // Dummy command, does nothing.
             } else if (cmd == "stats") {
-                std::cout << "--------------------------------------------------" << std::endl;
-                std::cout << "Graph Statistics:" << std::endl;
-                std::cout << "  Nodes (n):      " << g.n << std::endl;
-                std::cout << "  Edges (m):      " << g.m << std::endl;
-                std::cout << "  Total Weight:   " << g.g_weight << std::endl;
-                if (p_manager.n > 0) {
-                    weight_t edge_cut = 0;
-                    for (vertex_t u = 0; u < g.n; ++u) {
-                        for (const auto &edge: g.neighbors[u]) {
-                            if (p_manager[u] != p_manager[edge.u]) {
-                                edge_cut += edge.w;
-                            }
-                        }
-                    }
-                    edge_cut /= 2;
-                    weight_t max_block_weight = p_manager.max_weight();
-                    double balance = (double) max_block_weight / ((double) g.g_weight / (double) p_manager.k);
-
-                    std::cout << "Partition Statistics:" << std::endl;
-                    std::cout << "  Edge Cut:       " << edge_cut << std::endl;
-                    std::cout << "  Comm Cost:      " << get_qap(g, p_manager.partition.get_vector(), oracle) << std::endl;
-                    std::cout << "  Max Block (LMax): " << max_block_weight << std::endl;
-                    std::cout << "  Balance (max/avg): " << balance << std::endl;
-
-                    if (!previous_partition.empty() && previous_partition.size() == p_manager.n) {
-                        std::cout << "  Migration Cost (prev): " << calculate_migration_cost(
-                            previous_partition, p_manager.partition.get_vector()) << std::endl;
-                        std::cout << "  Moved Vertices (prev): " << count_moved_vertices(previous_partition, p_manager.partition.get_vector())
-                                << std::endl;
-                    }
-                    if (!initial_partition.empty() && initial_partition.size() <= p_manager.n) {
-                        std::cout << "  Migration Cost (init): " << calculate_migration_cost(
-                            initial_partition, p_manager.partition.get_vector()) << std::endl;
-                        std::cout << "  Moved Vertices (init): " << count_moved_vertices(initial_partition, p_manager.partition.get_vector())
-                                << std::endl;
-                    }
-                    std::cout << "  Cumulative Migration Cost: " << total_migration_cost_from_start << std::endl;
-                }
-                std::cout << "--------------------------------------------------" << std::endl;
-                std::cout << "Command Timings (User):" << std::endl;
-                std::cout << "  " << std::left << std::setw(20) << "Command"
-                        << std::right << std::setw(8) << "Calls"
-                        << std::setw(15) << "Total (ms)"
-                        << std::setw(15) << "Avg (ms)" << std::endl;
-                for (const auto &[name, stat]: command_stats) {
-                    std::cout << "  " << std::left << std::setw(20) << name
-                            << std::right << std::setw(8) << stat.calls
-                            << std::setw(15) << std::fixed << std::setprecision(3) << stat.total_ms
-                            << std::setw(15) << stat.avg() << std::endl;
-                }
-                std::cout << "--------------------------------------------------" << std::endl;
+                print_stats();
             }
 
             auto end = std::chrono::steady_clock::now();
@@ -299,6 +250,52 @@ namespace HeiProMap {
 
             // Only measure significant commands for the user
             command_stats[cmd].add(ms);
+        }
+
+        void print_stats() {
+            std::cout << "--------------------------------------------------" << std::endl;
+            std::cout << "Graph Statistics:" << std::endl;
+            std::cout << "  Nodes (n):      " << g.n << std::endl;
+            std::cout << "  Edges (m):      " << g.m << std::endl;
+            std::cout << "  Total Weight:   " << g.g_weight << std::endl;
+            if (p_manager.n > 0) {
+                weight_t edge_cut = 0;
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    for (const auto &edge: g.neighbors[u]) {
+                        if (p_manager[u] != p_manager[edge.u]) {
+                            edge_cut += edge.w;
+                        }
+                    }
+                }
+                edge_cut /= 2;
+                weight_t max_block_weight = p_manager.max_weight();
+                double balance = (p_manager.k > 0 && g.g_weight > 0)
+                    ? (double) max_block_weight / ((double) g.g_weight / (double) p_manager.k)
+                    : 0.0;
+
+                std::cout << "Partition Statistics:" << std::endl;
+                std::cout << "  Edge Cut:       " << edge_cut << std::endl;
+                std::cout << "  Comm Cost:      " << get_qap(g, p_manager.partition.get_vector(), oracle) << std::endl;
+                std::cout << "  Max Block (LMax): " << max_block_weight << std::endl;
+                std::cout << "  Balance (max/avg): " << balance << std::endl;
+
+                if (!previous_partition.empty() && previous_partition.size() == p_manager.n) {
+                    std::cout << "  Migration Cost (prev): " << calculate_migration_cost(previous_partition, p_manager.partition.get_vector()) << std::endl;
+                    std::cout << "  Moved Vertices (prev): " << count_moved_vertices(previous_partition, p_manager.partition.get_vector()) << std::endl;
+                }
+                if (!initial_partition.empty() && initial_partition.size() <= p_manager.n) {
+                    std::cout << "  Migration Cost (init): " << calculate_migration_cost(initial_partition, p_manager.partition.get_vector()) << std::endl;
+                    std::cout << "  Moved Vertices (init): " << count_moved_vertices(initial_partition, p_manager.partition.get_vector()) << std::endl;
+                }
+                std::cout << "  Cumulative Migration Cost: " << total_migration_cost_from_start << std::endl;
+            }
+            std::cout << "--------------------------------------------------" << std::endl;
+            std::cout << "Command Timings (User):" << std::endl;
+            std::cout << "  " << std::left << std::setw(20) << "Command" << std::right << std::setw(8) << "Calls" << std::setw(15) << "Total (ms)" << std::setw(15) << "Avg (ms)" << std::endl;
+            for (const auto &[name, stat]: command_stats) {
+                std::cout << "  " << std::left << std::setw(20) << name << std::right << std::setw(8) << stat.calls << std::setw(15) << std::fixed << std::setprecision(3) << stat.total_ms << std::setw(15) << stat.avg() << std::endl;
+            }
+            std::cout << "--------------------------------------------------" << std::endl;
         }
 
         explicit DynHeiProMapSolver(DynConfiguration &t_config) : config(t_config) {
@@ -466,7 +463,7 @@ namespace HeiProMap {
 
             if (initial_partition.empty()) {
                 // First partition
-                p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.initialize(g.n, num_blocks, g.g_weight);
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }
@@ -500,8 +497,7 @@ namespace HeiProMap {
                 rebuild_q(q);
 
                 std::cout << "Comm Cost: " << get_qap(g, p_manager.partition.get_vector(), oracle) << "\n";
-                std::cout << "Migration Cost: Before=" << migration_before << " After=" << migration_after <<
-                        " Improvement=" << (migration_before - migration_after) << "\n";
+                std::cout << "Migration Cost: Before=" << migration_before << " After=" << migration_after << " Improvement=" << (migration_before - migration_after) << "\n";
             }
 
             g.clear_dirty_status();

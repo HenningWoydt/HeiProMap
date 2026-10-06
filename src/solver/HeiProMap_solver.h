@@ -297,9 +297,13 @@ namespace HeiProMap {
                     for (partition_t i = 0; i < ac.k; ++i) {
                         p_manager.set_lmax(i, lmax);
                     }
-                    std::cout << "QAP before flow refinement: " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    if (ac.verbose) {
+                        std::cout << "QAP before flow refinement: " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    }
                     flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn);
-                    std::cout << "QAP after flow refinement : " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    if (ac.verbose) {
+                        std::cout << "QAP after flow refinement : " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    }
                 }
             } else {
                 internal_solve();
@@ -315,55 +319,57 @@ namespace HeiProMap {
 
             weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-            std::cout << "Graph                   : " << ac.graph_in << std::endl;
-            std::cout << "Total time (s)          : " << duration + init_time << std::endl;
-            std::cout << "#Nodes                  : " << graphs[0].n << std::endl;
-            std::cout << "#Edges                  : " << graphs[0].m << std::endl;
-            std::cout << "k                       : " << ac.k << std::endl;
-            std::cout << "Hierarchy               : " << ac.hierarchy_string << std::endl;
-            std::cout << "Distances               : " << ac.distance_string << std::endl;
-            std::cout << "Distance Oracle         : " << (std::is_same_v<DistanceOracleT, BinaryDistanceOracle> ? "binary" : "matrix") << std::endl;
-            std::cout << "Lmax                    : " << lmax << std::endl;
-            std::cout << "Threads                 : " << ac.threads << std::endl;
-            std::cout << "--------------------------" << std::endl;
-            std::cout << "Init. QAP               : " << initial_qap << std::endl;
-            std::cout << "Init. max block w       : " << initial_max_block_weight << std::endl;
-            std::cout << "Init. #empty partitions : " << initial_n_empty_partitions << std::endl;
-            std::cout << "Init. #oload partitions : " << initial_n_overloaded_partitions << std::endl;
-            std::cout << "Init. Sum oload weights : " << initial_sum_too_much << std::endl;
-            std::cout << "--------------------------" << std::endl;
-            std::cout << "Final QAP               : " << qap << std::endl;
-            std::cout << "max block w             : " << max(p_manager.get_bweights()) << std::endl;
+            if (ac.verbose) {
+                std::cout << "Graph                   : " << ac.graph_in << std::endl;
+                std::cout << "Total time (s)          : " << duration + init_time << std::endl;
+                std::cout << "#Nodes                  : " << graphs[0].n << std::endl;
+                std::cout << "#Edges                  : " << graphs[0].m << std::endl;
+                std::cout << "k                       : " << ac.k << std::endl;
+                std::cout << "Hierarchy               : " << ac.hierarchy_string << std::endl;
+                std::cout << "Distances               : " << ac.distance_string << std::endl;
+                std::cout << "Distance Oracle         : " << (std::is_same_v<DistanceOracleT, BinaryDistanceOracle> ? "binary" : "matrix") << std::endl;
+                std::cout << "Lmax                    : " << lmax << std::endl;
+                std::cout << "Threads                 : " << ac.threads << std::endl;
+                std::cout << "--------------------------" << std::endl;
+                std::cout << "Init. QAP               : " << initial_qap << std::endl;
+                std::cout << "Init. max block w       : " << initial_max_block_weight << std::endl;
+                std::cout << "Init. #empty partitions : " << initial_n_empty_partitions << std::endl;
+                std::cout << "Init. #oload partitions : " << initial_n_overloaded_partitions << std::endl;
+                std::cout << "Init. Sum oload weights : " << initial_sum_too_much << std::endl;
+                std::cout << "--------------------------" << std::endl;
+                std::cout << "Final QAP               : " << qap << std::endl;
+                std::cout << "max block w             : " << max(p_manager.get_bweights()) << std::endl;
 
-            size_t n_empty_partitions = 0;
-            size_t n_overloaded_partitions = 0;
-            weight_t sum_too_much = 0;
-            for (partition_t id = 0; id < ac.k; ++id) {
-                n_empty_partitions += p_manager.get_bweight(id) == 0;
-                n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
-                sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
+                size_t n_empty_partitions = 0;
+                size_t n_overloaded_partitions = 0;
+                weight_t sum_too_much = 0;
+                for (partition_t id = 0; id < ac.k; ++id) {
+                    n_empty_partitions += p_manager.get_bweight(id) == 0;
+                    n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
+                    sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
+                }
+                std::cout << "#empty partitions       : " << n_empty_partitions << std::endl;
+                std::cout << "#oload partitions       : " << n_overloaded_partitions << std::endl;
+                std::cout << "Sum oload weights       : " << sum_too_much << std::endl;
+
+                std::cout << "------- Time -------" << std::endl;
+                std::cout << "Total solve time  : " << (duration + init_time) * 1000.0 << std::endl;
+                std::cout << "Coarsening        : " << coarsening_ms << std::endl;
+                std::cout << "Contraction       : " << contraction_ms << std::endl;
+                std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
+                std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
+                std::cout << "Rebalance         : " << rebalance_ms << std::endl;
+                std::cout << "Refinement        : " << refinement_ms << std::endl;
+                std::cout << "  Label Prop.     : " << lp_refine_ms << std::endl;
+                std::cout << "  Quotient Graph  : " << qg_refine_ms << std::endl;
+                std::cout << "  Flow            : " << flow_refine_ms << std::endl;
+                std::cout << "Misc              : " << misc_ms << std::endl;
+                std::cout << "ALL               : " << coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
+
+                #if ENABLE_PROFILER
+                print_all_levels();
+                #endif
             }
-            std::cout << "#empty partitions       : " << n_empty_partitions << std::endl;
-            std::cout << "#oload partitions       : " << n_overloaded_partitions << std::endl;
-            std::cout << "Sum oload weights       : " << sum_too_much << std::endl;
-
-            std::cout << "------- Time -------" << std::endl;
-            std::cout << "Total solve time  : " << (duration + init_time) * 1000.0 << std::endl;
-            std::cout << "Coarsening        : " << coarsening_ms << std::endl;
-            std::cout << "Contraction       : " << contraction_ms << std::endl;
-            std::cout << "Init. Part.       : " << initial_partitioning_ms << std::endl;
-            std::cout << "Uncontraction     : " << uncontraction_ms << std::endl;
-            std::cout << "Rebalance         : " << rebalance_ms << std::endl;
-            std::cout << "Refinement        : " << refinement_ms << std::endl;
-            std::cout << "  Label Prop.     : " << lp_refine_ms << std::endl;
-            std::cout << "  Quotient Graph  : " << qg_refine_ms << std::endl;
-            std::cout << "  Flow            : " << flow_refine_ms << std::endl;
-            std::cout << "Misc              : " << misc_ms << std::endl;
-            std::cout << "ALL               : " << coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
-
-            #if ENABLE_PROFILER
-            print_all_levels();
-            #endif
 
             return p;
         }
