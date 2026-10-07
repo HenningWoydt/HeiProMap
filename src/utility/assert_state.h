@@ -134,7 +134,7 @@ namespace HeiProMap {
             #pragma omp for schedule(static)
             for (vertex_t u = 0; u < g.n; ++u) {
                 const partition_t u_id = p_manager[u];
-                local_weights[u_id] += g.uniform_v_weights ? 1 : g.v_weights[u];
+                local_weights[u_id] += g.uniform_v_weights ? 1 : g.v_weight(u);
             }
         }
 
@@ -347,7 +347,7 @@ namespace HeiProMap {
                         if (u_id != v_id) {
                             const partition_t lo = std::min(u_id, v_id);
                             const partition_t hi = std::max(u_id, v_id);
-                            local_map[{lo, hi}] += g.edges_w[i];
+                            local_map[{lo, hi}] += g.edge_w(i);
                         }
                     }
                 }
@@ -384,7 +384,7 @@ namespace HeiProMap {
                 manual.clear();
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     const partition_t v_id = p_manager[v];
                     manual.emplace_back(v_id, w);
                 }

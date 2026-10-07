@@ -104,7 +104,7 @@ namespace HeiProMap {
                 if constexpr (t_uniform_e_weights) {
                     qap_delta += d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id);
                 } else {
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     qap_delta += (d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id)) * w;
                 }
             }
@@ -125,7 +125,7 @@ namespace HeiProMap {
                     delta -= (v_id != new_id);
                     delta += (v_id != old_id);
                 } else {
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     delta -= (v_id != new_id) * w;
                     delta += (v_id != old_id) * w;
                 }
@@ -152,7 +152,7 @@ namespace HeiProMap {
                         delta -= (v_id != new_id);
                         delta += (v_id != old_id);
                     } else {
-                        const weight_t w = g.edges_w[i];
+                        const weight_t w = g.edge_w(i);
                         delta -= (v_id != new_id) * w;
                         delta += (v_id != old_id) * w;
                     }
@@ -160,7 +160,7 @@ namespace HeiProMap {
                     if constexpr (t_uniform_e_weights) {
                         delta += d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id);
                     } else {
-                        const weight_t w = g.edges_w[i];
+                        const weight_t w = g.edge_w(i);
                         delta += (d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id)) * w;
                     }
                 }
@@ -472,7 +472,7 @@ namespace HeiProMap {
 
                 const vertex_t vertex = dense_to_vertex[heap.top_key()];
                 const weight_t qap_delta = heap.top();
-                const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 const partition_t vertex_id = choose_u ? u_id : v_id;
                 const partition_t move_id = choose_u ? v_id : u_id;
                 heap.pop();
@@ -560,7 +560,7 @@ namespace HeiProMap {
             // Revert all moves
             for (size_t i = 0; i < moves_size; i++) {
                 const vertex_t vertex = moves[moves_size - 1 - i];
-                const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 const partition_t vertex_id = p_manager[vertex];
                 const partition_t move_id = u_id == vertex_id ? v_id : u_id;
                 vertex_used[vertex] = global_vertex_mark - 1;
@@ -570,7 +570,7 @@ namespace HeiProMap {
             // Apply moves up to best_idx
             for (size_t i = 0; i < best_idx; ++i) {
                 const vertex_t vertex = moves[i];
-                const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                const weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 const partition_t vertex_id = p_manager[vertex];
                 const partition_t move_id = u_id == vertex_id ? v_id : u_id;
                 vertex_used[vertex] = mark;

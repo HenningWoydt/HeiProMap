@@ -439,7 +439,7 @@ namespace HeiProMap {
                 partition_t sub_p = sub_pm[u];
                 if (sub_p == 0) continue;
                 partition_t move_id = 0 + k_spacing * sub_p;
-                weight_t w = graphs.back().v_weights[u];
+                weight_t w = graphs.back().v_weight(u);
                 p_manager.move(u, w, 0, move_id);
             }
 
@@ -518,7 +518,7 @@ namespace HeiProMap {
                             if (sub_p == 0) continue;
                             partition_t move_id = block_id + k_spacing * sub_p;
                             vertex_t orig_u = tt.get_o(u);
-                            weight_t w = sub_g.v_weights[u];
+                            weight_t w = sub_g.v_weight(u);
                             p_manager.move(orig_u, w, block_id, move_id);
                         }
                     }

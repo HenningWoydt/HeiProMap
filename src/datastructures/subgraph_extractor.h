@@ -132,8 +132,8 @@ namespace HeiProMap {
                 if (side[u] == target_side) {
                     tt.add(u, sub_u);
                     old_to_new[u] = sub_u;
-                    sub_g.v_weights[sub_u] = g.v_weights[u];
-                    sub_g.g_weight += g.v_weights[u];
+                    sub_g.v_weights[sub_u] = g.v_weight(u);
+                    sub_g.g_weight += g.v_weight(u);
                     sub_u++;
                 }
             }
@@ -164,7 +164,7 @@ namespace HeiProMap {
                     const vertex_t sub_v = old_to_new[v];
                     if (sub_v != std::numeric_limits<vertex_t>::max()) {
                         sub_g.edges_v[edge_cursor] = sub_v;
-                        sub_g.edges_w[edge_cursor] = g.edges_w[j];
+                        sub_g.edges_w[edge_cursor] = g.edge_w(j);
                         edge_cursor++;
                     }
                 }
@@ -222,14 +222,14 @@ namespace HeiProMap {
             // Pass 2: fill edges and vertex weights
             for (vertex_t sub_u = 0; sub_u < sub_n; ++sub_u) {
                 const vertex_t orig_u = verts[sub_u];
-                sub_g.v_weights[sub_u] = g.v_weights[orig_u];
+                sub_g.v_weights[sub_u] = g.v_weight(orig_u);
 
                 size_t edge_cursor = sub_g.neighborhoods[sub_u];
                 for (size_t i = g.neighborhoods[orig_u]; i < g.neighborhoods[orig_u + 1]; ++i) {
                     const vertex_t orig_v = g.edges_v[i];
                     if (p_manager[orig_v] == orig_block_id) {
                         sub_g.edges_v[edge_cursor] = cur_tt.get_n(orig_v);
-                        sub_g.edges_w[edge_cursor] = g.edges_w[i];
+                        sub_g.edges_w[edge_cursor] = g.edge_w(i);
                         edge_cursor++;
                     }
                 }
@@ -310,7 +310,7 @@ namespace HeiProMap {
 
                 bv_data[bv_offsets[dense_u] + counters[dense_u]] = u;
                 counters[dense_u]++;
-                block_weights[dense_u] += g.v_weights[u];
+                block_weights[dense_u] += g.v_weight(u);
             }
         }
 
@@ -368,7 +368,7 @@ namespace HeiProMap {
                     if (dense_u == std::numeric_limits<partition_t>::max()) continue;
 
                     entries.push_back({u, dense_u});
-                    par_thread_weights[tid][dense_u] += g.v_weights[u];
+                    par_thread_weights[tid][dense_u] += g.v_weight(u);
                 }
             }
 

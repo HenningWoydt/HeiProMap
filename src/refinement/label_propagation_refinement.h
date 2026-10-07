@@ -226,15 +226,15 @@ namespace HeiProMap {
                                 if (u_id != A && u_id != B) { continue; }
 
                                 const partition_t target_id = (u_id == A) ? B : A;
-                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                                 if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
 
                                 weight_t qap_delta;
                                 if (last_level_pair) {
-                                    qap_delta = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, block_conn);
+                                    qap_delta = get_u_edge_cut_delta_t(g, u, u_id, target_id, p_manager, block_conn);
                                 } else {
-                                    qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+                                    qap_delta = get_u_qap_delta_t(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
                                 }
 
                                 if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
@@ -295,15 +295,15 @@ namespace HeiProMap {
                                 if (u_id != A && u_id != B) { continue; }
 
                                 const partition_t target_id = (u_id == A) ? B : A;
-                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                                 if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
 
                                 weight_t qap_delta;
                                 if (last_level_pair) {
-                                    qap_delta = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, block_conn);
+                                    qap_delta = get_u_edge_cut_delta_t(g, u, u_id, target_id, p_manager, block_conn);
                                 } else {
-                                    qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
+                                    qap_delta = get_u_qap_delta_t(g, u, u_id, target_id, p_manager, d_oracle, block_conn);
                                 }
 
                                 if (qap_delta > 0 || (qap_delta == 0 && rng.get_f32() < 0.5f)) {
@@ -361,7 +361,7 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < g.n; ++u) {
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
                     const partition_t u_id = p_manager[u];
 
                     partition_t best_id = NO_ID;
@@ -374,7 +374,7 @@ namespace HeiProMap {
 
                         if (id == u_id || v_id_weight + u_weight > p_manager.lmax[id]) { continue; }
 
-                        const weight_t qap_delta = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, id, p_manager, d_oracle, block_conn);
+                        const weight_t qap_delta = get_u_qap_delta_t(g, u, u_id, id, p_manager, d_oracle, block_conn);
                         if (qap_delta > best_qap_delta) {
                             best_id = id;
                             best_qap_delta = qap_delta;

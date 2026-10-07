@@ -90,7 +90,7 @@ namespace HeiProMap {
 
         for (vertex_t i = 0; i < n; ++i) {
             const vertex_t u = vertices[i];
-            const weight_t u_weight = g.v_weights[u];
+            const weight_t u_weight = g.v_weight(u);
 
             partition_t best_block = NO_ID;
             weight_t min_cost = std::numeric_limits<weight_t>::max();
@@ -105,7 +105,7 @@ namespace HeiProMap {
                     const vertex_t v = g.edges_v[i];
                     const partition_t v_block = p_manager.partition[v];
                     if (v_block != NO_ID) {
-                        current_cost += g.edges_w[i] * d_oracle.get(block, v_block);
+                        current_cost += g.edge_w(i) * d_oracle.get(block, v_block);
                     }
                 }
 

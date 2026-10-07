@@ -286,7 +286,7 @@ namespace HeiProMap {
                             if (u_id != v_id) {
                                 bv_manager.add(u, u_id);
                                 if (u < v) {
-                                    q_graph.add_edge(u_id, v_id, graphs[0].edges_w[i]);
+                                    q_graph.add_edge(u_id, v_id, graphs[0].edge_w(i));
                                 }
                             }
                         }
@@ -524,12 +524,12 @@ namespace HeiProMap {
                     block_conn.begin_vertex(graphs.back(), u);
 
                     const partition_t u_id = p_manager[u];
-                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weights[u];
+                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weight(u);
                     p_manager.set(u, u_w, u_id);
 
                     for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
                         const vertex_t v = graphs.back().edges_v[i];
-                        const weight_t w = graphs.back().edges_w[i];
+                        const weight_t w = graphs.back().edge_w(i);
                         const partition_t v_id = p_manager[v];
 
                         // build block_conns directly here
@@ -624,7 +624,7 @@ namespace HeiProMap {
 
                         for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                             const vertex_t v = g_uncontracted.edges_v[i];
-                            const weight_t w = g_uncontracted.edges_w[i];
+                            const weight_t w = g_uncontracted.edge_w(i);
                             const partition_t v_id = p_manager[v];
 
                             // rebuild block connections
@@ -663,7 +663,7 @@ namespace HeiProMap {
 
                     for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                         const vertex_t v = g_uncontracted.edges_v[i];
-                        const weight_t w = g_uncontracted.edges_w[i];
+                        const weight_t w = g_uncontracted.edge_w(i);
                         const partition_t v_id = p_manager[v];
 
                         // rebuild block connections
@@ -781,7 +781,7 @@ namespace HeiProMap {
                              const weight_t total_weight) {
             if (hierarchy.empty()) {
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    p_manager.set(tt.get_o(u), g.v_weights[u], offset);
+                    p_manager.set(tt.get_o(u), g.v_weight(u), offset);
                 }
                 return;
             }
@@ -863,7 +863,7 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < g.n; ++u) {
                 partition_t u_id = partition[u];
                 new_ns[u_id] += 1;
-                new_ws[u_id] += g.v_weights[u];
+                new_ws[u_id] += g.v_weight(u);
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
                     partition_t v_id = partition[v];
@@ -909,7 +909,7 @@ namespace HeiProMap {
                 for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
                     if (partition[old_u] == i) {
                         vertex_t new_u = sub_tt.get_n(tt.get_o(old_u));
-                        sub_g.v_weights[new_u] = g.v_weights[old_u];
+                        sub_g.v_weights[new_u] = g.v_weight(old_u);
 
                         for (size_t j = g.neighborhoods[old_u]; j < g.neighborhoods[old_u + 1]; ++j) {
                             vertex_t old_v = g.edges_v[j];
@@ -917,7 +917,7 @@ namespace HeiProMap {
                                 vertex_t new_v = sub_tt.get_n(tt.get_o(old_v));
                                 size_t pos = sub_g.neighborhoods[new_u] + cursor[new_u];
                                 sub_g.edges_v[pos] = new_v;
-                                sub_g.edges_w[pos] = g.edges_w[j];
+                                sub_g.edges_w[pos] = g.edge_w(j);
                                 cursor[new_u]++;
                             }
                         }

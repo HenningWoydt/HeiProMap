@@ -318,7 +318,7 @@ namespace HeiProMap {
 
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                         const vertex_t v = g.edges_v[i];
-                        const weight_t w = g.edges_w[i];
+                        const weight_t w = g.edge_w(i);
 
                         if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                             if (u < v) {
@@ -382,7 +382,7 @@ namespace HeiProMap {
             auto process_vertex = [&](vertex_t u, partition_t old_id, partition_t new_id) {
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
-                    weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
+                    weight_t w = t_uniform_e_weights ? 1 : g.edge_w(i);
                     partition_t v_id = p_manager[v];
                     partition_t v_new_id = v_id;
 
@@ -667,7 +667,7 @@ namespace HeiProMap {
                     const partition_t id = block_conn.get_id(j);
                     if (id == right_id) {
                         left_boundary.push_back(u);
-                        left_boundary_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
+                        left_boundary_weight += t_uniform_v_weights ? 1 : g.v_weight(u);
                         break;
                     }
                 }
@@ -683,7 +683,7 @@ namespace HeiProMap {
 
                     if (id == left_id) {
                         right_boundary.push_back(u);
-                        right_boundary_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
+                        right_boundary_weight += t_uniform_v_weights ? 1 : g.v_weight(u);
                         break;
                     }
                 }
@@ -729,7 +729,7 @@ namespace HeiProMap {
                     vertex_t u = queue[queue_idx++];
                     if (seen[u] == seen_mark) { continue; }
 
-                    weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                     bool include = (curr_weight + u_w <= max_weight);
                     if (config->always_include_boundary && queue_idx <= boundary_size) {
                         include = true;
@@ -754,13 +754,13 @@ namespace HeiProMap {
                 }
             } else {
                 auto heavy_cmp = [&](vertex_t lhs, vertex_t rhs) {
-                    weight_t wl = t_uniform_v_weights ? 1 : g.v_weights[lhs];
-                    weight_t wr = t_uniform_v_weights ? 1 : g.v_weights[rhs];
+                    weight_t wl = t_uniform_v_weights ? 1 : g.v_weight(lhs);
+                    weight_t wr = t_uniform_v_weights ? 1 : g.v_weight(rhs);
                     return wl < wr;
                 };
                 auto light_cmp = [&](vertex_t lhs, vertex_t rhs) {
-                    weight_t wl = t_uniform_v_weights ? 1 : g.v_weights[lhs];
-                    weight_t wr = t_uniform_v_weights ? 1 : g.v_weights[rhs];
+                    weight_t wl = t_uniform_v_weights ? 1 : g.v_weight(lhs);
+                    weight_t wr = t_uniform_v_weights ? 1 : g.v_weight(rhs);
                     return wl > wr;
                 };
 
@@ -772,7 +772,7 @@ namespace HeiProMap {
 
                         region.push_back(u);
                         region_marker[u] = mark;
-                        curr_weight += t_uniform_v_weights ? 1 : g.v_weights[u];
+                        curr_weight += t_uniform_v_weights ? 1 : g.v_weight(u);
 
                         for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                             vertex_t v = g.edges_v[i];
@@ -803,7 +803,7 @@ namespace HeiProMap {
 
                     if (seen[u] == seen_mark) continue;
 
-                    weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                     if (curr_weight + u_w <= max_weight) {
                         region.push_back(u);
                         region_marker[u] = mark;
@@ -875,7 +875,7 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
 
                     if (region_marker[v] == right_mark) {
                         int new_v = static_cast<int>(translation_table.get_n(v));
@@ -921,7 +921,7 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
 
                     if (region_marker[v] == right_mark) {
                         if (u < v) { continue; }
@@ -1000,7 +1000,7 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                         if (u < v) { continue; }
                         int new_v = static_cast<int>(translation_table.get_n(v));
@@ -1032,7 +1032,7 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
                         if (u < v) { continue; }
                         int new_v = static_cast<int>(translation_table.get_n(v));
@@ -1095,7 +1095,7 @@ namespace HeiProMap {
             weight_t right_weight = p_manager.get_bweight(right_id);
             for (size_t j = 0; j < left_region.size(); ++j) {
                 vertex_t u = left_region[j];
-                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
                 vertex_t new_u = translation_table.get_n(u);
                 if (is_left[new_u] == 0) {
                     left_weight -= u_weight;
@@ -1105,7 +1105,7 @@ namespace HeiProMap {
 
             for (size_t j = 0; j < right_region.size(); ++j) {
                 vertex_t u = right_region[j];
-                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
                 vertex_t new_u = translation_table.get_n(u);
                 if (is_left[new_u] == 1) {
                     right_weight -= u_weight;
@@ -1178,7 +1178,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, u, left_id, right_id);
                     block_conn.move(g, u, left_id, right_id);
-                    p_manager.move(u, t_uniform_v_weights ? 1 : g.v_weights[u], left_id, right_id);
+                    p_manager.move(u, t_uniform_v_weights ? 1 : g.v_weight(u), left_id, right_id);
                 }
             }
             for (size_t j = 0; j < right_region.size(); ++j) {
@@ -1198,7 +1198,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, u, right_id, left_id);
                     block_conn.move(g, u, right_id, left_id);
-                    p_manager.move(u, t_uniform_v_weights ? 1 : g.v_weights[u], right_id, left_id);
+                    p_manager.move(u, t_uniform_v_weights ? 1 : g.v_weight(u), right_id, left_id);
                 }
             }
             return changed;
@@ -1231,7 +1231,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, old_u, left_id, right_id);
                     block_conn.move(g, old_u, left_id, right_id);
-                    p_manager.move(old_u, t_uniform_v_weights ? 1 : g.v_weights[old_u], left_id, right_id);
+                    p_manager.move(old_u, t_uniform_v_weights ? 1 : g.v_weight(old_u), left_id, right_id);
                 } else {
                     if (bv_manager.is_boundary(old_u)) {
                         bv_manager.move(g, p_manager, old_u, right_id, left_id);
@@ -1241,7 +1241,7 @@ namespace HeiProMap {
 
                     q_graph.move(g, p_manager, old_u, right_id, left_id);
                     block_conn.move(g, old_u, right_id, left_id);
-                    p_manager.move(old_u, t_uniform_v_weights ? 1 : g.v_weights[old_u], right_id, left_id);
+                    p_manager.move(old_u, t_uniform_v_weights ? 1 : g.v_weight(old_u), right_id, left_id);
                 }
             }
         }

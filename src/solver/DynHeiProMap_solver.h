@@ -560,7 +560,7 @@ namespace HeiProMap {
                 partition_t u_id = p_manager[u];
                 for (size_t i = csr_g.neighborhoods[u]; i < csr_g.neighborhoods[u + 1]; ++i) {
                     vertex_t v = csr_g.edges_v[i];
-                    weight_t w = csr_g.edges_w[i];
+                    weight_t w = csr_g.edge_w(i);
                     partition_t v_id = p_manager[v];
                     b_conn.add_connection(u, v_id, w);
                     if (u_id != v_id) {

@@ -123,7 +123,7 @@ namespace HeiProMap {
                 if (matching.is_matched(u)) continue;
 
                 partition_t u_id = p_manager[u];
-                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                 vertex_t best_v = u;
                 f32 best_rating = -1.0f;
@@ -134,10 +134,10 @@ namespace HeiProMap {
 
                     if (u_id != p_manager[v]) continue;
 
-                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                     if (u_w + v_w > lmax) continue;
 
-                    weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
+                    weight_t ew = t_uniform_e_weights ? 1 : g.edge_w(j);
 
                     f32 edge_rating;
                     if constexpr (t_uniform_v_weights && t_uniform_e_weights) {
@@ -154,11 +154,11 @@ namespace HeiProMap {
                         } else if constexpr (t_rating_function == EdgeRatingFunction::INNEROUTER) {
                             weight_t out_v = 0;
                             for (u64 i = g.neighborhoods[v]; i < g.neighborhoods[v + 1]; ++i) {
-                                out_v += g.edges_w[i];
+                                out_v += g.edge_w(i);
                             }
                             weight_t out_u = 0;
                             for (u64 i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                                out_u += g.edges_w[i];
+                                out_u += g.edge_w(i);
                             }
                             edge_rating = (f32) ew / ((f32) (out_v + out_u - (2 * ew)));
                         }

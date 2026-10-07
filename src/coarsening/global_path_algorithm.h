@@ -308,7 +308,7 @@ namespace HeiProMap {
             #pragma omp parallel for num_threads(m_threads) schedule(guided)
             for (vertex_t u = 0; u < g.n; ++u) {
                 u64 thread_id = omp_get_thread_num();
-                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                 partition_t u_id = p_manager[u];
 
                 f32 local_min = m_thread_infos[thread_id].min_rating;
@@ -318,7 +318,7 @@ namespace HeiProMap {
                     const vertex_t v = g.edges_v[j];
                     if (u >= v) { continue; }
                     if (u_id != p_manager[v]) { continue; }
-                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
 
                     if (u_w + v_w > lmax) { continue; }
 
@@ -646,11 +646,11 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "GlobalPathAlgorithmMatcher", "random_matching");
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) { continue; }
-                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                     const vertex_t v = g.edges_v[j];
                     if (matching.is_matched(v)) { continue; }
-                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                     if (u_w + v_w > lmax) { continue; }
                     matching.add(u, v);
                     break;
@@ -739,13 +739,13 @@ namespace HeiProMap {
                 if (g.deg(u) != 1 || matching.is_matched(u)) { continue; }
                 vertex_t mid = g.edges_v[g.neighborhoods[u]];
                 weight_t mid_w = t_uniform_e_weights ? 1 : g.edges_w[g.neighborhoods[u]];
-                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                 f64 best_rating = -1e18;
 
                 for (size_t i = g.neighborhoods[mid]; i < g.neighborhoods[mid + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
                     if (u == v || g.deg(v) != 1 || matching.is_matched(v)) { continue; }
-                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                     if (u_w + v_w > lmax) { continue; }
 
                     weight_t mw = t_uniform_e_weights ? 1 : g.edges_w[i];
@@ -824,7 +824,7 @@ namespace HeiProMap {
                 for (auto &group: groups) {
                     if constexpr (!t_uniform_v_weights) {
                         std::sort(group.begin(), group.end(), [&](vertex_t a, vertex_t b) {
-                            return (g.v_weights[a] != g.v_weights[b]) ? g.v_weights[a] < g.v_weights[b] : a < b;
+                            return (g.v_weight(a) != g.v_weight(b)) ? g.v_weight(a) < g.v_weight(b) : a < b;
                         });
                     }
                     for (size_t i = 0; i + 1 < group.size(); ++i) {
@@ -850,7 +850,7 @@ namespace HeiProMap {
 
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (matching.is_matched(u)) continue;
-                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                 f64 best_rating = -1e18;
 
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
@@ -860,7 +860,7 @@ namespace HeiProMap {
                     for (size_t i = g.neighborhoods[mid]; i < g.neighborhoods[mid + 1]; ++i) {
                         const vertex_t v = g.edges_v[i];
                         if (u == v || matching.is_matched(v)) continue;
-                        weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                        weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                         if (u_w + v_w > lmax) continue;
 
                         weight_t mw = t_uniform_e_weights ? 1 : g.edges_w[i];

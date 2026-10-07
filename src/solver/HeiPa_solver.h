@@ -446,12 +446,12 @@ namespace HeiProMap {
                     block_conn.begin_vertex(graphs.back(), u);
 
                     const partition_t u_id = p_manager[u];
-                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weights[u];
+                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weight(u);
                     p_manager.set(u, u_w, u_id);
 
                     for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
                         const vertex_t v = graphs.back().edges_v[i];
-                        const weight_t w = graphs.back().edges_w[i];
+                        const weight_t w = graphs.back().edge_w(i);
 
                         const partition_t v_id = p_manager[v];
 
@@ -539,7 +539,7 @@ namespace HeiProMap {
 
                 for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g_uncontracted.edges_v[i];
-                    const weight_t w = g_uncontracted.edges_w[i];
+                    const weight_t w = g_uncontracted.edge_w(i);
                     const partition_t v_id = p_manager[v];
 
                     // rebuild block connections

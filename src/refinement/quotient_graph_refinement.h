@@ -264,7 +264,7 @@ namespace HeiProMap {
                 const vertex_t u = bv_manager.get(u_id, j);
                 for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
                     if (block_conn.get_id(i) == v_id) {
-                        weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
+                        weight_t qap_delta_u = get_u_qap_delta_t(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                         boundary_vertices_u.push(u, qap_delta_u);
                         n_init_moves += 1;
                         break;
@@ -276,7 +276,7 @@ namespace HeiProMap {
                 const vertex_t v = bv_manager.get(v_id, j);
                 for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
                     if (block_conn.get_id(i) == u_id) {
-                        weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
+                        weight_t qap_delta_v = get_u_qap_delta_t(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
                         boundary_vertices_v.push(v, qap_delta_v);
                         n_init_moves += 1;
                         break;
@@ -330,7 +330,7 @@ namespace HeiProMap {
 
                 vertex_t vertex = boundary_vertices.top_key();
                 weight_t qap_delta = boundary_vertices.top();
-                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 partition_t vertex_id = choose_u ? u_id : v_id;
                 partition_t move_id = choose_u ? v_id : u_id;
                 boundary_vertices.pop();
@@ -420,7 +420,7 @@ namespace HeiProMap {
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves.size(); i++) {
                 vertex_t vertex = moves[moves.size() - 1 - i];
-                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
                 vertex_used[vertex] = global_vertex_mark - 1;
@@ -431,7 +431,7 @@ namespace HeiProMap {
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex = moves[i];
-                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
                 vertex_used[vertex] = vertex_mark;
@@ -474,7 +474,7 @@ namespace HeiProMap {
                 const vertex_t u = bv_manager.get(u_id, j);
                 for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
                     if (block_conn.get_id(i) == v_id) {
-                        weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
+                        weight_t qap_delta_u = get_u_edge_cut_delta_t(g, u, u_id, v_id, p_manager, block_conn);
                         boundary_vertices_u.push(u, qap_delta_u);
                         n_init_moves += 1;
                         break;
@@ -486,7 +486,7 @@ namespace HeiProMap {
                 const vertex_t v = bv_manager.get(v_id, j);
                 for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
                     if (block_conn.get_id(i) == u_id) {
-                        weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
+                        weight_t qap_delta_v = get_u_edge_cut_delta_t(g, v, v_id, u_id, p_manager, block_conn);
                         boundary_vertices_v.push(v, qap_delta_v);
                         n_init_moves += 1;
                         break;
@@ -503,7 +503,7 @@ namespace HeiProMap {
                     const vertex_t u = bv_manager.get(u_id, j);
                     for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
                         if (block_conn.get_id(i) == v_id) {
-                            volatile weight_t qap_delta_u = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, block_conn);
+                            volatile weight_t qap_delta_u = get_u_edge_cut_delta_t(g, u, u_id, v_id, p_manager, block_conn);
                             break;
                         }
                     }
@@ -512,7 +512,7 @@ namespace HeiProMap {
                     const vertex_t v = bv_manager.get(v_id, j);
                     for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
                         if (block_conn.get_id(i) == u_id) {
-                            volatile weight_t qap_delta_v = get_u_edge_cut_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, block_conn);
+                            volatile weight_t qap_delta_v = get_u_edge_cut_delta_t(g, v, v_id, u_id, p_manager, block_conn);
                             break;
                         }
                     }
@@ -524,7 +524,7 @@ namespace HeiProMap {
                     const vertex_t u = bv_manager.get(u_id, j);
                     for (size_t i = block_conn.start(u); i < block_conn.end(u); ++i) {
                         if (block_conn.get_id(i) == v_id) {
-                            volatile weight_t qap_delta_u = get_u_qap_delta_t<t_uniform_e_weights>(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
+                            volatile weight_t qap_delta_u = get_u_qap_delta_t(g, u, u_id, v_id, p_manager, d_oracle, block_conn);
                             break;
                         }
                     }
@@ -533,7 +533,7 @@ namespace HeiProMap {
                     const vertex_t v = bv_manager.get(v_id, j);
                     for (size_t i = block_conn.start(v); i < block_conn.end(v); ++i) {
                         if (block_conn.get_id(i) == u_id) {
-                            volatile weight_t qap_delta_v = get_u_qap_delta_t<t_uniform_e_weights>(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
+                            volatile weight_t qap_delta_v = get_u_qap_delta_t(g, v, v_id, u_id, p_manager, d_oracle, block_conn);
                             break;
                         }
                     }
@@ -589,7 +589,7 @@ namespace HeiProMap {
 
                 vertex_t vertex = boundary_vertices.top_key();
                 weight_t qap_delta = boundary_vertices.top();
-                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 partition_t vertex_id = choose_u ? u_id : v_id;
                 partition_t move_id = choose_u ? v_id : u_id;
                 boundary_vertices.pop();
@@ -678,7 +678,7 @@ namespace HeiProMap {
             // revert all moves in partitioning manager
             for (size_t i = 0; i < moves.size(); i++) {
                 vertex_t vertex = moves[moves.size() - 1 - i];
-                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
                 vertex_used[vertex] = global_vertex_mark - 1;
@@ -689,7 +689,7 @@ namespace HeiProMap {
             // make all moves to best index
             for (size_t i = 0; i < best_idx; ++i) {
                 vertex_t vertex = moves[i];
-                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weights[vertex];
+                weight_t vertex_weight = t_uniform_v_weights ? 1 : g.v_weight(vertex);
                 partition_t vertex_id = p_manager[vertex];
                 partition_t move_id = u_id == vertex_id ? v_id : u_id;
                 vertex_used[vertex] = vertex_mark;
