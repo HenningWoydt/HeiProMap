@@ -59,7 +59,7 @@ namespace HeiProMap {
         void initialize(const vertex_t t_n,
                         const partition_t t_k,
                         MemoryPool *pool = nullptr) {
-            set_pool(pool);
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "BoundaryVertexManager", "initialize");
 
             m_n = t_n;
