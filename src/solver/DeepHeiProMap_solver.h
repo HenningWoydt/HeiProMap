@@ -117,37 +117,14 @@ namespace HeiProMap {
 
         void print_memory_report() const {
             auto mb = [](size_t bytes) { return (double) bytes / (1024.0 * 1024.0); };
-            size_t total = 0;
             size_t g_bytes = 0;
             for (size_t i = 0; i < graphs.size(); ++i) { g_bytes += graphs[i].heap_bytes(); }
-            size_t pm_bytes = p_manager.heap_bytes();
             size_t bv_bytes = bv_manager.heap_bytes();
-            size_t qg_bytes = q_graph.heap_bytes();
-            size_t bc_bytes = block_conn.heap_bytes();
-            size_t do_bytes = d_oracle.heap_bytes();
-            size_t se_bytes = subgraph_extractor.heap_bytes();
-            size_t sc_bytes = size_constrained_lp_clustering.heap_bytes();
-            size_t lp_bytes = lp_refine.heap_bytes();
-            size_t qr_bytes = qg_refine.heap_bytes();
-            size_t sqr_bytes = simple_qg_refine.heap_bytes();
-            size_t fb_bytes = flow_based_refinement.heap_bytes();
-            total = g_bytes + pm_bytes + bv_bytes + qg_bytes + bc_bytes + do_bytes
-                  + se_bytes + sc_bytes + lp_bytes + qr_bytes + sqr_bytes + fb_bytes;
             std::cout << "------- Memory (MB) -------" << std::endl;
             std::cout << std::fixed << std::setprecision(1);
             std::cout << "Graph(s)              : " << mb(g_bytes) << std::endl;
-            std::cout << "PartitionManager      : " << mb(pm_bytes) << std::endl;
-            std::cout << "BoundaryVertexManager : " << mb(bv_bytes) << std::endl;
-            std::cout << "QuotientGraph         : " << mb(qg_bytes) << std::endl;
-            std::cout << "BlockConn             : " << mb(bc_bytes) << std::endl;
-            std::cout << "DistanceOracle        : " << mb(do_bytes) << std::endl;
-            std::cout << "SubgraphExtractor     : " << mb(se_bytes) << std::endl;
-            std::cout << "SizeConstrainedLP     : " << mb(sc_bytes) << std::endl;
-            std::cout << "LP Refinement         : " << mb(lp_bytes) << std::endl;
-            std::cout << "QG Refinement         : " << mb(qr_bytes) << std::endl;
-            std::cout << "Simple QG Refinement  : " << mb(sqr_bytes) << std::endl;
-            std::cout << "Flow Refinement       : " << mb(fb_bytes) << std::endl;
-            std::cout << "TOTAL                 : " << mb(total) << std::endl;
+            std::cout << "BoundaryVertexMgr     : " << mb(bv_bytes) << std::endl;
+            std::cout << "Pool peak             : " << mb(m_pool.peak_in_use()) << std::endl;
         }
 
         f64 misc_ms = 0.0;
@@ -225,8 +202,6 @@ namespace HeiProMap {
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config, &m_pool);
             }
-            print_memory_report();
-            m_pool.print_stats();
         }
 
         explicit DeepHeiProMapSolver(graph_t &&g, const DeepHeiProMapConfiguration &t_ac) {
@@ -290,14 +265,10 @@ namespace HeiProMap {
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config, &m_pool);
             }
-            print_memory_report();
-            m_pool.print_stats();
         }
 
         std::vector<partition_t> solve() {
             internal_solve();
-            print_memory_report();
-            m_pool.print_stats();
 
             std::vector<partition_t> p(graphs.back().n);
             for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_manager[u]; }
@@ -352,6 +323,7 @@ namespace HeiProMap {
             std::cout << "  Flow                : " << flow_refine_ms << std::endl;
             std::cout << "Misc                  : " << misc_ms << std::endl;
             std::cout << "ALL                   : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + recompute_datastructures_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
+            print_memory_report();
 
             return p;
         }

@@ -104,9 +104,6 @@ namespace HeiProMap {
             }
         }
 
-        if (ok) {
-            std::cout << "Distance oracle verification passed for all test cases." << std::endl;
-        }
         return ok;
     }
 
