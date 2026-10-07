@@ -535,6 +535,7 @@ namespace HeiProMap {
                 thread_sub_pm[t].release_memory();
                 thread_greedy_vertices[t].free_memory();
             }
+            subgraph_extractor.release_memory();
 
             intermediate_partitioning_ms += get_milli_seconds(p, get_time_point());
         }
