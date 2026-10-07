@@ -136,6 +136,114 @@ namespace HeiProMap {
             p_manager.set(u, u_weight, best_block);
         }
     }
+
+    template<typename DistanceOracleT>
+    inline void compute_best_move(const graph_t &g,
+                                  const DistanceOracleT &d_oracle,
+                                  const PartitionManager &p_manager,
+                                  const weight_t max_block_weight,
+                                  const vertex_t u,
+                                  weight_t &gain,
+                                  partition_t &target) {
+        const weight_t u_weight = g.v_weight(u);
+        const partition_t old_block = p_manager[u];
+
+        weight_t old_cost = 0;
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+            old_cost += g.edge_w(i) * d_oracle.get(old_block, p_manager[g.edges_v[i]]);
+        }
+
+        gain = 0;
+        target = old_block;
+
+        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+            const partition_t cand = p_manager[g.edges_v[i]];
+            if (cand == old_block) continue;
+            if (p_manager.bweights[cand] + u_weight > max_block_weight) continue;
+
+            weight_t cand_cost = 0;
+            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                cand_cost += g.edge_w(j) * d_oracle.get(cand, p_manager[g.edges_v[j]]);
+            }
+
+            weight_t cand_gain = old_cost - cand_cost;
+            if (cand_gain > gain || (cand_gain == gain && cand_gain > 0 && p_manager.bweights[cand] < p_manager.bweights[target])) {
+                gain = cand_gain;
+                target = cand;
+            }
+        }
+    }
+
+    template<typename DistanceOracleT>
+    inline void greedy_refine(const graph_t &g,
+                              const DistanceOracleT &d_oracle,
+                              const f64 imbalance,
+                              PartitionManager &p_manager) {
+        const vertex_t n = g.n;
+        const weight_t max_block_weight = (weight_t) ((1.0 + imbalance) * (g.g_weight / d_oracle.get_k()));
+
+        struct PQEntry {
+            weight_t gain;
+            vertex_t vertex;
+            bool operator<(const PQEntry &o) const { return gain < o.gain; }
+        };
+
+        std::priority_queue<PQEntry> pq;
+        std::vector<weight_t> cached_gain(n, 0);
+        std::vector<partition_t> cached_target(n);
+        std::vector<bool> in_queue(n, false);
+
+        for (vertex_t u = 0; u < n; ++u) {
+            weight_t gain; partition_t target;
+            compute_best_move(g, d_oracle, p_manager, max_block_weight, u, gain, target);
+            cached_gain[u] = gain;
+            cached_target[u] = target;
+            if (gain > 0) {
+                pq.push({gain, u});
+                in_queue[u] = true;
+            }
+        }
+
+        while (!pq.empty()) {
+            auto [gain, u] = pq.top();
+            pq.pop();
+            in_queue[u] = false;
+
+            if (gain != cached_gain[u]) continue;
+
+            weight_t fresh_gain; partition_t fresh_target;
+            compute_best_move(g, d_oracle, p_manager, max_block_weight, u, fresh_gain, fresh_target);
+            cached_gain[u] = fresh_gain;
+            cached_target[u] = fresh_target;
+
+            if (fresh_gain != gain) {
+                if (fresh_gain > 0) {
+                    pq.push({fresh_gain, u});
+                    in_queue[u] = true;
+                }
+                continue;
+            }
+
+            if (fresh_gain <= 0) continue;
+
+            const partition_t old_block = p_manager[u];
+            const weight_t u_weight = g.v_weight(u);
+            if (p_manager.bweights[fresh_target] + u_weight > max_block_weight) continue;
+            p_manager.move(u, u_weight, old_block, fresh_target);
+
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                weight_t v_gain; partition_t v_target;
+                compute_best_move(g, d_oracle, p_manager, max_block_weight, v, v_gain, v_target);
+                cached_gain[v] = v_gain;
+                cached_target[v] = v_target;
+                if (v_gain > 0 && !in_queue[v]) {
+                    pq.push({v_gain, v});
+                    in_queue[v] = true;
+                }
+            }
+        }
+    }
 }
 
 #endif // HEIPROMAP_GREEDY_PARTITIONER_H

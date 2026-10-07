@@ -434,6 +434,7 @@ namespace HeiProMap {
 
                 for (u64 trial = 0; trial < kappa; ++trial) {
                     greedy_partition(g, temp_d_oracle, imb, 42 + tid * kappa + trial, cur_pm, vertices);
+                    greedy_refine(g, temp_d_oracle, imb, cur_pm);
                     weight_t cur_qap = get_qap(g, cur_pm, temp_d_oracle);
 
                     if (trial == 0 || is_better_partition(cur_pm, cur_qap, best_pm, thread_best_qap[tid], block_k, child_lmax)) {
@@ -543,6 +544,7 @@ namespace HeiProMap {
                         for (u64 trial = 0; trial < ac.intermediate_kappa; ++trial) {
                             sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
                             greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id + trial, sub_pm, thread_greedy_vertices[tid]);
+                            greedy_refine(sub_g, temp_d_oracle, imb, sub_pm);
                             weight_t cur_qap = get_qap(sub_g, sub_pm, temp_d_oracle);
 
                             if (trial == 0 || is_better_partition(sub_pm, cur_qap, best_pm, best_qap, block_k, child_lmax)) {
