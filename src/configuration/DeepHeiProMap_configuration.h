@@ -156,7 +156,6 @@ namespace HeiProMap {
             {"--help",                    "",   "Produces the help message",                                                         "",                    "", false},
             {"--graph",                   "-g", "Filepath to the graph.",                                                            "",                    "", false},
             {"--mapping",                 "-m", "Output filepath to the generated mapping.",                                         "",                    "", false},
-            {"--statistics",              "",   "Output filepath to the statistics file.",                                           "HeiProMap_stats.JSON", "", false},
             {"--hierarchy",               "-h", "Hierarchy in the form a1:a2:...:al .",                                              "",                    "", false},
             {"--distance",                "-d", "Distance in the form d1:d2:...:dl .",                                               "",                    "", false},
             {"--imbalance",               "-e", "Allowed imbalance (for example 0.03).",                                             "0.03",                "", false},
@@ -166,26 +165,26 @@ namespace HeiProMap {
             // algorithm selection
             {"--distance-oracle",         "",   "Which Distance Oracle to use. {division-based, store-division-based, binary-based}", "binary-based",       "", false},
             {"--coarsening-alg",          "",   "Which coarsening algorithm to use. {global-paths, size-constrained-lp}",             "size-constrained-lp", "", false},
-            {"--hierarchical-coarsening", "",   "Use staged hierarchical coarsening (true) or aggressive flat coarsening (false).",   "true",                "", false},
-            {"--initial-C",               "",   "Initial coarsening contraction threshold C.",                                       "",                    "", false},
-            {"--initial-kappa",           "",   "Initial coarsening contraction threshold kappa.",                                    "",                    "", false},
-            {"--intermediate-C",          "",   "Intermediate coarsening contraction threshold C.",                                   "",                    "", false},
-            {"--intermediate-kappa",      "",   "Intermediate coarsening contraction threshold kappa.",                               "",                    "", false},
+            {"--hierarchical-coarsening", "",   "Coarsening mode. {hierarchical, flat}",                                             "hierarchical",        "", false},
+            {"--initial-C",               "",   "Initial coarsening: stop when n <= k * C.",                                         "32",                  "", false},
+            {"--initial-kappa",           "",   "Initial partitioning: number of attempts, best is kept.",                            "10",                  "", false},
+            {"--intermediate-C",          "",   "Intermediate coarsening: stop when block size < C * h_i.",                           "32",                  "", false},
+            {"--intermediate-kappa",      "",   "Intermediate partitioning: number of attempts, best is kept.",                       "10",                   "", false},
             {"--force-parallel-contraction", "", "Force parallel graph contraction even with 1 thread (true/false).",                "false",                    "", false},
             {"--enable-q-graph",          "",   "Enable quotient graph datastructure (true/false).",                                  "false",                    "", false},
             {"--enable-block-conn",       "",   "Enable block connectivity datastructure (true/false).",                              "false",                    "", false},
             // SCLP overrides
-            {"--sclp-max-rounds",         "",   "SCLP: maximum number of label propagation rounds.",                                 "",                    "", false},
-            {"--sclp-min-threshold",      "",   "SCLP: minimum fraction of moved vertices to continue.",                             "",                    "", false},
-            {"--sclp-f",                  "",   "SCLP: cluster weight factor (max_w = ceil(lmax / f)).",                             "",                    "", false},
-            {"--sclp-rating",             "",   "SCLP: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "",         "", false},
-            {"--sclp-degree-ordering",    "",   "SCLP: use degree-based vertex ordering (true/false).",                              "",                    "", false},
+            {"--sclp-max-rounds",         "",   "SCLP: maximum number of label propagation rounds.",                                 "5",                   "", false},
+            {"--sclp-min-threshold",      "",   "SCLP: minimum fraction of moved vertices to continue.",                             "0.05",                "", false},
+            {"--sclp-f",                  "",   "SCLP: cluster weight factor (max_w = ceil(lmax / f)).",                             "64",                  "", false},
+            {"--sclp-rating",             "",   "SCLP: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "weight",   "", false},
+            {"--sclp-degree-ordering",    "",   "SCLP: use degree-based vertex ordering (true/false).",                              "true",                "", false},
             {"--sclp-force-parallel",     "",   "SCLP: force parallel algorithm even with 1 thread (true/false).",                   "false",                    "", false},
             // GPA overrides
-            {"--gpa-random-level",        "",   "GPA: levels using random matching instead of rated matching.",                       "",                    "", false},
-            {"--gpa-rating",              "",   "GPA: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "",          "", false},
-            {"--gpa-tiebreaking",         "",   "GPA: use edge rating tiebreaking via shuffle (true/false).",                        "",                    "", false},
-            {"--gpa-two-hop-threshold",   "",   "GPA: matching fraction below which two-hop fallbacks activate.",                    "",                    "", false},
+            {"--gpa-random-level",        "",   "GPA: levels using random matching instead of rated matching.",                       "0",                   "", false},
+            {"--gpa-rating",              "",   "GPA: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "expansionstar", "", false},
+            {"--gpa-tiebreaking",         "",   "GPA: use edge rating tiebreaking via shuffle (true/false).",                        "true",                "", false},
+            {"--gpa-two-hop-threshold",   "",   "GPA: matching fraction below which two-hop fallbacks activate.",                    "0.75",                "", false},
         };
 
         // =====================================================================
@@ -195,7 +194,6 @@ namespace HeiProMap {
         // I/O
         std::string graph_in;
         std::string mapping_out;
-        std::string statistics_out;
 
         // hierarchy
         std::string hierarchy_string;
@@ -282,7 +280,6 @@ namespace HeiProMap {
             // --- required arguments ---
             graph_in = get("--graph");
             mapping_out = get("--mapping");
-            statistics_out = get("--statistics");
 
             hierarchy_string = get("--hierarchy");
             hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
@@ -332,7 +329,7 @@ namespace HeiProMap {
 
             if (is_set("--hierarchical-coarsening")) {
                 std::string val = get("--hierarchical-coarsening");
-                hierarchical_coarsening = (val == "true" || val == "1" || val == "yes");
+                hierarchical_coarsening = (val == "hierarchical");
             }
             if (is_set("--initial-C")) {
                 initial_C = std::stoul(get("--initial-C"));

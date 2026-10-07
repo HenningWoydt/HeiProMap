@@ -387,6 +387,22 @@ namespace HeiProMap {
             }
         }
 
+        static bool is_better_partition(const PartitionManager &a, weight_t qap_a,
+                                        const PartitionManager &b, weight_t qap_b,
+                                        partition_t k, weight_t child_lmax) {
+            weight_t max_over_a = 0, max_over_b = 0;
+            bool balanced_a = true, balanced_b = true;
+            for (partition_t i = 0; i < k; ++i) {
+                weight_t over_a = a.bweights[i] - child_lmax;
+                weight_t over_b = b.bweights[i] - child_lmax;
+                if (over_a > 0) { balanced_a = false; max_over_a = std::max(max_over_a, over_a); }
+                if (over_b > 0) { balanced_b = false; max_over_b = std::max(max_over_b, over_b); }
+            }
+            if (balanced_a != balanced_b) return balanced_a;
+            if (!balanced_a && !balanced_b) return max_over_a < max_over_b;
+            return qap_a < qap_b;
+        }
+
         void initial_partitioning() {
             auto p = get_time_point();
             HEIPROMAP_PROFILE_SCOPE("initial_partition", "misc", "initial_partitioning");
@@ -399,19 +415,53 @@ namespace HeiProMap {
             f64 imb = ((f64) (child_lmax * block_k) / (f64) graphs.back().g_weight) - 1.0;
             if (imb <= 0.0) imb = 0.0001;
 
-            graph_t g_copy = graphs.back();
+            const graph_t &g = graphs.back();
+            const u64 n_threads = ac.threads;
+            const u64 kappa = ac.initial_kappa;
 
-            PartitionManager sub_pm(g_copy.n, block_k, g_copy.g_weight, &m_pool);
-            UniformDistanceOracle temp_d_oracle(block_k);
-            AlignedArray<vertex_t> vertices(&m_pool);
-            vertices.initialize(g_copy.n);
-            greedy_partition(g_copy, temp_d_oracle, imb, 42, sub_pm, vertices);
+            std::vector<PartitionManager> thread_best_pm(n_threads);
+            std::vector<weight_t> thread_best_qap(n_threads, std::numeric_limits<weight_t>::max());
 
-            for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                partition_t sub_p = sub_pm[u];
+            #pragma omp parallel num_threads(n_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                PartitionManager cur_pm(g.n, block_k, g.g_weight, &m_pool);
+                PartitionManager &best_pm = thread_best_pm[tid];
+                best_pm.initialize(g.n, block_k, g.g_weight, &m_pool);
+                UniformDistanceOracle temp_d_oracle(block_k);
+                AlignedArray<vertex_t> vertices(&m_pool);
+                vertices.initialize(g.n);
+
+                for (u64 trial = 0; trial < kappa; ++trial) {
+                    greedy_partition(g, temp_d_oracle, imb, 42 + tid * kappa + trial, cur_pm, vertices);
+                    weight_t cur_qap = get_qap(g, cur_pm, temp_d_oracle);
+
+                    if (trial == 0 || is_better_partition(cur_pm, cur_qap, best_pm, thread_best_qap[tid], block_k, child_lmax)) {
+                        thread_best_qap[tid] = cur_qap;
+                        for (vertex_t u = 0; u < g.n; ++u) { best_pm.partition[u] = cur_pm.partition[u]; }
+                        for (partition_t i = 0; i < block_k; ++i) { best_pm.bweights[i] = cur_pm.bweights[i]; }
+                    }
+                }
+
+                cur_pm.release_memory();
+                vertices.free_memory();
+            }
+
+            u64 best_tid = 0;
+            for (u64 t = 1; t < n_threads; ++t) {
+                if (is_better_partition(thread_best_pm[t], thread_best_qap[t],
+                                        thread_best_pm[best_tid], thread_best_qap[best_tid],
+                                        block_k, child_lmax)) {
+                    best_tid = t;
+                }
+            }
+
+            PartitionManager &best_pm = thread_best_pm[best_tid];
+            for (vertex_t u = 0; u < g.n; ++u) {
+                partition_t sub_p = best_pm[u];
                 if (sub_p == 0) continue;
                 partition_t move_id = 0 + k_spacing * sub_p;
-                weight_t w = graphs.back().v_weight(u);
+                weight_t w = g.v_weight(u);
                 p_manager.move(u, w, 0, move_id);
             }
 
@@ -419,6 +469,10 @@ namespace HeiProMap {
                 partition_t move_id = 0 + k_spacing * i;
                 p_manager.set_lmax(move_id, child_lmax);
                 p_manager.set_hierarchy_level(move_id, block_level - 1);
+            }
+
+            for (u64 t = 0; t < n_threads; ++t) {
+                thread_best_pm[t].release_memory();
             }
 
             initial_partitioning_ms += get_milli_seconds(p, get_time_point());
@@ -481,18 +535,32 @@ namespace HeiProMap {
 
                         u64 tid = omp_get_thread_num();
                         PartitionManager &sub_pm = thread_sub_pm[tid];
-                        sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
                         UniformDistanceOracle temp_d_oracle(block_k);
-                        greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id, sub_pm, thread_greedy_vertices[tid]);
+
+                        PartitionManager best_pm(sub_g.n, block_k, sub_g.g_weight, &m_pool);
+                        weight_t best_qap = std::numeric_limits<weight_t>::max();
+
+                        for (u64 trial = 0; trial < ac.intermediate_kappa; ++trial) {
+                            sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
+                            greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id + trial, sub_pm, thread_greedy_vertices[tid]);
+                            weight_t cur_qap = get_qap(sub_g, sub_pm, temp_d_oracle);
+
+                            if (trial == 0 || is_better_partition(sub_pm, cur_qap, best_pm, best_qap, block_k, child_lmax)) {
+                                best_qap = cur_qap;
+                                for (vertex_t u = 0; u < sub_g.n; ++u) { best_pm.partition[u] = sub_pm.partition[u]; }
+                                for (partition_t bi = 0; bi < block_k; ++bi) { best_pm.bweights[bi] = sub_pm.bweights[bi]; }
+                            }
+                        }
 
                         for (vertex_t u = 0; u < sub_g.n; ++u) {
-                            partition_t sub_p = sub_pm[u];
+                            partition_t sub_p = best_pm[u];
                             if (sub_p == 0) continue;
                             partition_t move_id = block_id + k_spacing * sub_p;
                             vertex_t orig_u = tt.get_o(u);
                             weight_t w = sub_g.v_weight(u);
                             p_manager.move(orig_u, w, block_id, move_id);
                         }
+                        best_pm.release_memory();
                     }
 
                     for (partition_t p_id = 0; p_id < block_k; ++p_id) {
