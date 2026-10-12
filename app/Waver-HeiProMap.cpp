@@ -37,10 +37,10 @@ int main(const int argc, char *argv[]) {
             std::vector<std::pair<std::string, std::string> > input = {
                 // {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"},
                 // {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
-                // {"--topology", "../data/topologies/256_PEs.graph"},
+                {"--topology", "../data/topologies/256_PEs.graph"},
                 {"--graph", "../data/heipromap_input.graph"},
                 {"--mapping", "../data/out/heipromap_input.txt"},
-                {"--topology", "../data/heipromap_topology.graph"},
+                // {"--topology", "../data/heipromap_topology.graph"},
                 {"--imbalance", "0.03"},
                 {"--config", "fast"},
                 {"--seed", "0"},
