@@ -45,7 +45,7 @@ namespace HeiProMap {
     //
     // Compares 1 thread vs 2 threads to show hardware-level parallel efficiency
     // without memory bandwidth saturation effects at higher thread counts.
-    static void run_memory_access_benchmark() {
+    [[maybe_unused]] static void run_memory_access_benchmark() {
         constexpr size_t N = 500'000'000;
         constexpr int ROUNDS = 10;
 
@@ -95,6 +95,7 @@ namespace HeiProMap {
                     local_sum1 += data[i];
                 }
                 sum1 = local_sum1;
+                (void) sum1;
                 auto t1 = std::chrono::high_resolution_clock::now();
                 total_ms1 += std::chrono::duration<double, std::milli>(t1 - t0).count();
 
@@ -107,6 +108,7 @@ namespace HeiProMap {
                     local_sum2 += data[indices[i]];
                 }
                 sum2 = local_sum2;
+                (void) sum2;
                 auto t3 = std::chrono::high_resolution_clock::now();
                 total_ms2 += std::chrono::duration<double, std::milli>(t3 - t2).count();
 
@@ -122,6 +124,7 @@ namespace HeiProMap {
                     }
                 }
                 sum3 = local_sum3;
+                (void) sum3;
                 auto t5 = std::chrono::high_resolution_clock::now();
                 total_ms3 += std::chrono::duration<double, std::milli>(t5 - t4).count();
             }
