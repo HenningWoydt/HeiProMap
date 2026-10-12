@@ -60,6 +60,7 @@ namespace HeiProMap {
     class HeiProMapSolver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
+        MemoryPool m_pool;
         f64 init_time = 0.0;
 
         // statistics
@@ -173,24 +174,25 @@ namespace HeiProMap {
         explicit HeiProMapSolver(const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(t_ac.graph_in);
+            graphs[0].set_pool(&m_pool);
 
             auto sp = get_time_point();
             ac = t_ac;
             random_engine = RandomEngine(ac.seed);
 
             // manager
-            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight, &m_pool);
+            bv_manager.initialize(graphs[0].n, ac.k, &m_pool);
+            q_graph.initialize(ac.k, &m_pool);
+            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
-            d_oracle.initialize(ac.hierarchy, ac.distance);
+            d_oracle.initialize(ac.hierarchy, ac.distance, &m_pool);
 
             // matching
-            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
-            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config, &m_pool);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config, &m_pool);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
@@ -199,10 +201,10 @@ namespace HeiProMap {
                 lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
             }
             if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
             }
             if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
             }
 
             auto ep = get_time_point();
@@ -212,23 +214,24 @@ namespace HeiProMap {
         explicit HeiProMapSolver(graph_t &&g, const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(std::move(g));
+            graphs[0].set_pool(&m_pool);
 
             ac = t_ac;
             random_engine = RandomEngine(ac.seed);
 
             // manager
-            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight, &m_pool);
+            bv_manager.initialize(graphs[0].n, ac.k, &m_pool);
+            q_graph.initialize(ac.k, &m_pool);
+            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
-            d_oracle.initialize(ac.hierarchy, ac.distance);
+            d_oracle.initialize(ac.hierarchy, ac.distance, &m_pool);
 
             // matching
-            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
-            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config, &m_pool);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config, &m_pool);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
@@ -238,11 +241,11 @@ namespace HeiProMap {
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
             }
 
             if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
             }
         }
 

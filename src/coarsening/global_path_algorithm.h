@@ -207,6 +207,13 @@ namespace HeiProMap {
                 }
             };
 
+            m_neighbors.initialize(g.n);
+            path_id.initialize(g.n);
+            path_length.initialize(g.n);
+            for (u64 i = 0; i < m_threads; ++i) {
+                m_thread_infos[i].dp.initialize(g.n);
+            }
+
             switch (config->rating_function) {
                 case EdgeRatingFunction::WEIGHT:            dispatch.template operator()<EdgeRatingFunction::WEIGHT>(); break;
                 case EdgeRatingFunction::EXPANSION:         dispatch.template operator()<EdgeRatingFunction::EXPANSION>(); break;
