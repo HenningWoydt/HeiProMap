@@ -33,9 +33,20 @@
 
 #include "definitions.h"
 #include "refinement/flow_based_refinement.h"
-#include "refinement/negative_cycle_detection.h"
-
 namespace HeiProMap {
+
+    class NegativeCycleConfiguration final {
+    public:
+        NegativeCycleConfiguration() = default;
+        explicit NegativeCycleConfiguration(const std::string &t_name) { name = t_name; }
+        std::string name = "Negative Cycle Refinement";
+        bool enabled = false;
+        u64 random_tries = 10;
+        u64 max_iterations = 10;
+        u64 max_path_length = 8;
+        u64 threshold = 10;
+    };
+
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GLOBAL_PATHS,
@@ -140,7 +151,7 @@ namespace HeiProMap {
 #include "coarsening/global_path_algorithm.h"
 #include "coarsening/size_constrained_lp.h"
 #include "coarsening/heavy_edge_matching.h"
-#include "partitioning/kaffpa_partitioner.h"
+#include "init_partitioning/kaffpa_partitioner.h"
 
 
 namespace HeiProMap {
@@ -422,7 +433,7 @@ namespace HeiProMap {
             }
             if (is_set("--flow-refinement-enabled-edge-cut-optimization")) {
                 std::string val = get("--flow-refinement-enabled-edge-cut-optimization");
-                flow_based_refinement_config.enabled_edge_cut_optimization = (val == "true" || val == "1");
+                flow_based_refinement_config.use_edge_cut = (val == "true" || val == "1");
             }
         }
 
@@ -459,7 +470,7 @@ namespace HeiProMap {
             // enable label propagation
             label_propagation_config.enabled = true;
             label_propagation_config.max_iteration = 5;
-            label_propagation_config.use_parallel_alg = false;
+            label_propagation_config.force_parallel_alg = false;
 
             // enable quotient graph refinement
             quotient_graph_refinement_config.enabled = true;

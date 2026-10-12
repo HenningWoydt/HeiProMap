@@ -83,7 +83,7 @@ namespace HeiProMap {
         vertex_t m_m = 0;
         partition_t m_k = 0;
         u64 m_threads = 1;
-        RandomEngine random_engine;
+        mutable RandomEngine random_engine;
 
     public:
         // =====================================================================
