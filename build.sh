@@ -192,4 +192,4 @@ CMAKE_EXTRA_ARGS="-DCMAKE_PREFIX_PATH=${TBB_LOCAL} -DENABLE_PROFILER=${ENABLE_PR
   execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target Dyn-HeiProMap
   execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target HeiPa
   execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target Deep-HeiProMap
-  execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target waver_map
+  execute cmake --build "${BUILD_DIR}" --parallel "$JOBS" --target Waver-HeiProMap

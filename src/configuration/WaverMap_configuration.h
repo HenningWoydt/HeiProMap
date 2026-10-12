@@ -7,7 +7,6 @@
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
-#include "refinement/flow_based_refinement.h"
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
@@ -25,14 +24,14 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ALGORITHMCONFIGURATION_H
-#define HEIPROMAP_ALGORITHMCONFIGURATION_H
+#ifndef HEIPROMAP_WAVER_MAP_CONFIGURATION_H
+#define HEIPROMAP_WAVER_MAP_CONFIGURATION_H
 
 #include <string>
 #include <vector>
 
-#include "definitions.h"
-#include "refinement/flow_based_refinement.h"
+#include "../definitions.h"
+#include "../refinement/flow_based_refinement.h"
 namespace HeiProMap {
 
     class NegativeCycleConfiguration final {
@@ -144,14 +143,14 @@ namespace HeiProMap {
     }
 }
 
-#include "utility/utils.h"
-// #include "partitioning/global_multisection.h"
-#include "refinement/label_propagation_refinement.h"
-#include "refinement/quotient_graph_refinement.h"
-#include "coarsening/global_path_algorithm.h"
-#include "coarsening/size_constrained_lp.h"
-#include "coarsening/heavy_edge_matching.h"
-#include "init_partitioning/kaffpa_partitioner.h"
+#include "../utility/utils.h"
+// #include "../init_partitioning/global_multisection.h"
+#include "../refinement/label_propagation_refinement.h"
+#include "../refinement/quotient_graph_refinement.h"
+#include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/size_constrained_lp.h"
+#include "../coarsening/heavy_edge_matching.h"
+#include "../init_partitioning/kaffpa_partitioner.h"
 
 
 namespace HeiProMap {
@@ -723,4 +722,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_ALGORITHMCONFIGURATION_H
+#endif //HEIPROMAP_WAVER_MAP_CONFIGURATION_H

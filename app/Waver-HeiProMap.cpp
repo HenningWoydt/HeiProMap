@@ -25,8 +25,8 @@
  ******************************************************************************/
 
 #define USE_GRID_DISTANCE_ORACLE
-#include "src/WaverMap_configuration.h"
-#include "src/datastructures/WaverMap_solver.h"
+#include "src/configuration/WaverMap_configuration.h"
+#include "src/solver/WaverMap_solver.h"
 
 int main(const int argc, char *argv[]) {
     auto sp = HeiProMap::get_time_point();

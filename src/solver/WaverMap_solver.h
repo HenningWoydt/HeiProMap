@@ -24,16 +24,16 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_SOLVER_H
-#define HEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_WAVER_MAP_SOLVER_H
+#define HEIPROMAP_WAVER_MAP_SOLVER_H
 
 #include <omp.h>
 #include <cmath>
 
-#include "boundary_vertex_manger.h"
-#include "partition_manager.h"
-#include "large_quotient_graph.h"
-#include "block_conn.h"
+#include "../datastructures/boundary_vertex_manger.h"
+#include "../datastructures/partition_manager.h"
+#include "../datastructures/large_quotient_graph.h"
+#include "../datastructures/block_conn.h"
 #include "../definitions.h"
 #include "../utility/macros.h"
 #include "../utility/random_engine.h"
@@ -44,7 +44,7 @@
 #include "../rebalance/rebalancer.h"
 #include "../init_partitioning/greedy_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../WaverMap_configuration.h"
+#include "../configuration/WaverMap_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../distance_oracles/matrix_distance_oracle.h"
@@ -338,7 +338,7 @@ namespace HeiProMap {
                 f64 topo_total_w = topology_graphs.back().g_weight;
                 if (topo_total_w == 0) topo_total_w = ac.k; // fallback
                 for (partition_t i = 0; i < ac.k; ++i) {
-                    double fair_share = (double)topology_graphs.back().v_weights[i] / topo_total_w;
+                    double fair_share = (double)topology_graphs.back().v_weight(i) / topo_total_w;
                     lmax_vec[i] = std::ceil((1.0 + current_imbalance) * graphs[0].g_weight * fair_share);
                 }
             }
@@ -381,7 +381,7 @@ namespace HeiProMap {
                 sum_edge_weights = graphs[0].m / 2;
             } else {
                 for (size_t i = 0; i < graphs[0].m; ++i) {
-                    sum_edge_weights += graphs[0].edges_w[i];
+                    sum_edge_weights += graphs[0].edge_w(i);
                 }
                 sum_edge_weights /= 2;
             }
@@ -614,7 +614,7 @@ namespace HeiProMap {
                         const auto& fine_blocks = coarse_to_fine[coarse_id];
                         
                         // Weight-aware greedy assignment
-                        weight_t u_weight = graphs[graphs.size() - 1].uniform_v_weights ? 1 : graphs[graphs.size() - 1].v_weights[u];
+                        weight_t u_weight = graphs[graphs.size() - 1].v_weight(u);
                         if (!fine_blocks.empty()) {
                             partition_t best_fine_id = fine_blocks[0];
                             weight_t min_w = p_manager.get_bweight(best_fine_id);
@@ -751,12 +751,12 @@ namespace HeiProMap {
                     block_conn.begin_vertex(graphs.back(), u);
 
                     const partition_t u_id = p_manager[u];
-                    const weight_t u_w = graphs.back().v_weights[u];
+                    const weight_t u_w = graphs.back().v_weight(u);
                     p_manager.set(u, u_w, u_id);
 
                     for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
                         const vertex_t v = graphs.back().edges_v[i];
-                        const weight_t w = graphs.back().uniform_e_weights ? 1 : graphs.back().edges_w[i];
+                        const weight_t w = graphs.back().edge_w(i);
                         const partition_t v_id = p_manager[v];
 
                         // build block_conns directly here
@@ -851,7 +851,7 @@ namespace HeiProMap {
 
                         for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                             const vertex_t v = g_uncontracted.edges_v[i];
-                            const weight_t w = g_uncontracted.uniform_e_weights ? 1 : g_uncontracted.edges_w[i];
+                            const weight_t w = g_uncontracted.edge_w(i);
                             const partition_t v_id = p_manager[v];
 
                             // rebuild block connections
@@ -983,4 +983,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_SOLVER_H
+#endif //HEIPROMAP_WAVER_MAP_SOLVER_H
