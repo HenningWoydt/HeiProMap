@@ -15,3 +15,4 @@ data/
 
 extern/*
 !extern/*.patch
+run_waver.sh

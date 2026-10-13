@@ -166,11 +166,11 @@ namespace HeiProMap {
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
 
-            {"--alpha-send", "", "Fixed send-side overhead per message (alpha_send).", "0.0", "", false},
-            {"--alpha-recv", "", "Fixed receive-side overhead per message (alpha_recv).", "0.0", "", false},
-            {"--alpha-link", "", "Fixed per-hop router overhead per message (alpha_link).", "0.0", "", false},
+            {"--alpha-send", "", "Fixed send-side overhead per message (alpha_send).", "100.0", "", false},
+            {"--alpha-recv", "", "Fixed receive-side overhead per message (alpha_recv).", "100.0", "", false},
+            {"--alpha-link", "", "Fixed per-hop router overhead per message (alpha_link).", "2.0", "", false},
             {"--beta-send", "", "Volume-dependent send overhead per byte (beta_send).", "0.0", "", false},
-            {"--beta-recv", "", "Volume-dependent receive overhead per byte (beta_recv).", "0.0", "", false},
+            {"--beta-recv", "", "Volume-dependent receive overhead per byte (beta_recv).", "8.0", "", false},
             {"--beta-link", "", "Volume-dependent per-hop link cost per byte (beta_link).", "1.0", "", false},
 
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
@@ -230,12 +230,12 @@ namespace HeiProMap {
 
         // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
         //                                    + h(m) * alpha_link + h(m) * beta_link * S(m)
-        f64 alpha_send = 0.0;
-        f64 alpha_recv = 0.0;
-        f64 alpha_link = 0.0;
-        f64 beta_send  = 0.0;
-        f64 beta_recv  = 0.0;
-        f64 beta_link  = 1.0;  // default: pure hop-byte QAP
+        f64 alpha_send = 100.0;
+        f64 alpha_recv = 100.0;
+        f64 alpha_link =   2.0;
+        f64 beta_send  =   0.0;
+        f64 beta_recv  =   8.0;
+        f64 beta_link  =   1.0;
 
         // derived convenience accessors
         f64 alpha_end() const { return alpha_send + alpha_recv; }
@@ -496,7 +496,7 @@ namespace HeiProMap {
             label_propagation_config.force_parallel_alg = false;
 
             // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
+            quotient_graph_refinement_config.enabled = false;
             quotient_graph_refinement_config.max_iteration = 2;
             quotient_graph_refinement_config.alpha = 5.0;
             quotient_graph_refinement_config.min_n_steps = 3;

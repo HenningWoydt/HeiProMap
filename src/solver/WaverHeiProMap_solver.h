@@ -201,7 +201,6 @@ namespace HeiProMap {
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
 
-            weight_t qap = get_qap(graphs[0], p_manager, d_oracle);
             MessageCostBreakdown cost = get_message_cost(q_graph, ac.k, d_oracle,
                                                          ac.alpha_end(), ac.beta_end(),
                                                          ac.alpha_link, ac.beta_link);
@@ -224,7 +223,6 @@ namespace HeiProMap {
             std::cout << "Lmax                  : " << lmax << std::endl;
             std::cout << "Threads               : " << ac.threads << std::endl;
             std::cout << "-----------------------" << std::endl;
-            std::cout << "Final QAP             : " << qap << std::endl;
             cost.print(std::cout);
             std::cout << "max block w           : " << max(p_manager.get_bweights()) << std::endl;
             std::cout << "#empty partitions     : " << n_empty_partitions << std::endl;

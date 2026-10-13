@@ -27,6 +27,8 @@
 #ifndef HEIPROMAP_QAP_H
 #define HEIPROMAP_QAP_H
 
+#include <iomanip>
+
 #include "../definitions.h"
 #include "macros.h"
 #include "aligned_array.h"
@@ -596,18 +598,33 @@ namespace HeiProMap {
     }
 
     struct MessageCostBreakdown {
-        f64 term_cardinality = 0.0;  // alpha_end  * |E_pi|
-        f64 term_cut_volume  = 0.0;  // beta_end   * sum S(m)
-        f64 term_hop_count   = 0.0;  // alpha_link * sum h(m)
-        f64 term_hop_bytes   = 0.0;  // beta_link  * sum h(m)*S(m)
+        // raw sums (independent of alpha/beta)
+        f64 message_count    = 0.0;  // |E_pi|: number of directed messages
+        f64 halo_transfers   = 0.0;  // sum S(m): total words crossing partition boundary
+        f64 hop_count        = 0.0;  // sum h(m): total hops across all messages
+        f64 hop_volume       = 0.0;  // sum h(m)*S(m): hop-weighted volume
+
+        // weighted terms
+        f64 term_cardinality = 0.0;  // alpha_end  * message_count
+        f64 term_cut_volume  = 0.0;  // beta_end   * halo_transfers
+        f64 term_hop_count   = 0.0;  // alpha_link * hop_count
+        f64 term_hop_bytes   = 0.0;  // beta_link  * hop_volume
         f64 total            = 0.0;
 
         void print(std::ostream &os) const {
-            os << "  Cardinality (alpha_end * |E_pi|)  : " << term_cardinality << "\n"
-               << "  Cut volume  (beta_end  * sum S)   : " << term_cut_volume  << "\n"
-               << "  Hop count   (alpha_link * sum h)  : " << term_hop_count   << "\n"
-               << "  Hop-bytes   (beta_link * sum h*S) : " << term_hop_bytes   << "\n"
-               << "  Total message cost                : " << total            << "\n";
+            auto row = [&](const char *label, f64 val) {
+                os << std::left << std::setw(36) << label
+                   << ": " << std::right << std::setw(16) << static_cast<u64>(val) << "\n";
+            };
+            row("Message count (|E_pi|)",           message_count);
+            row("Halo transfers (sum S)",            halo_transfers);
+            row("Hop count (sum h)",                 hop_count);
+            row("Hop volume (sum h*S)",              hop_volume);
+            row("Cardinality (alpha_end * |E_pi|)",  term_cardinality);
+            row("Cut volume  (beta_end  * sum S)",   term_cut_volume);
+            row("Hop count   (alpha_link * sum h)",  term_hop_count);
+            row("Hop-bytes   (beta_link * sum h*S)", term_hop_bytes);
+            row("Total message cost",                total);
         }
     };
 
@@ -644,6 +661,10 @@ namespace HeiProMap {
         }
 
         MessageCostBreakdown result;
+        result.message_count    = sum_cardinality;
+        result.halo_transfers   = sum_S;
+        result.hop_count        = sum_h;
+        result.hop_volume       = sum_hS;
         result.term_cardinality = alpha_end  * sum_cardinality;
         result.term_cut_volume  = beta_end   * sum_S;
         result.term_hop_count   = alpha_link * sum_h;
