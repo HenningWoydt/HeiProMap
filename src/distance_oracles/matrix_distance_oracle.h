@@ -33,11 +33,6 @@
 #include "../utility/utils.h"
 #include "../utility/profiler.h"
 
-#if defined(USE_GRID_DISTANCE_ORACLE)
-#include "../datastructures/grid_distance_oracle.h"
-#elif defined(USE_GRAPH_DISTANCE_ORACLE)
-#include "graph_distance_oracle.h"
-#else
 
 namespace HeiProMap {
     class DistanceOracle {
@@ -182,7 +177,5 @@ namespace HeiProMap {
         }
     };
 }
-
-#endif
 
 #endif //HEIPROMAP_MATRIX_DISTANCE_ORACLE_H

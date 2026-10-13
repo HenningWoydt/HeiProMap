@@ -9,7 +9,7 @@
 #include "../utility/macros.h"
 #include "../utility/utils.h"
 #include "../utility/profiler.h"
-#include "csr_graph.h"
+#include "../datastructures/csr_graph.h"
 
 namespace HeiProMap {
     class GridDistanceOracle {

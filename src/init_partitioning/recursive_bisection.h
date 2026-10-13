@@ -104,7 +104,7 @@ namespace HeiProMap {
         partition_t original_k = 0;
         std::vector<partition_t> k_vec;
         std::vector<weight_t> dist_vec;
-        d_oracle_t d_oracle;
+        DistanceOracle d_oracle;
 
         void refine_pm(const CSRGraph &g,
                        PartitionManager &pm,

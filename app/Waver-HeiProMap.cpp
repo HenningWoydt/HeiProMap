@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#define USE_GRID_DISTANCE_ORACLE
 #include "src/configuration/WaverMap_configuration.h"
+#include "src/distance_oracles/grid_distance_oracle.h"
 #include "src/solver/WaverMap_solver.h"
 
 int main(const int argc, char *argv[]) {
@@ -68,7 +68,7 @@ int main(const int argc, char *argv[]) {
 
             HeiProMap::WaverMapConfiguration ac(temp_argc, temp_argv);
 
-            HeiProMap::WaverMapSolver solver(ac);
+            HeiProMap::WaverMapSolver<HeiProMap::GridDistanceOracle> solver(ac);
             solver.solve();
 
             for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
@@ -79,7 +79,7 @@ int main(const int argc, char *argv[]) {
     } else {
         HeiProMap::WaverMapConfiguration ac(argc, argv);
 
-        HeiProMap::WaverMapSolver solver(ac);
+        HeiProMap::WaverMapSolver<HeiProMap::GridDistanceOracle> solver(ac);
         solver.solve();
     }
 

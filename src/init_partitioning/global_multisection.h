@@ -378,7 +378,7 @@ namespace HeiProMap {
                                         u64 seed,
                                         PartitionManager &pm,
                                         const GlobalMultisectionConfiguration &config) {
-            d_oracle_t d_oracle;
+            DistanceOracle d_oracle;
             d_oracle.initialize({k}, {1});
 
             BoundaryVertexManager bv_manager;

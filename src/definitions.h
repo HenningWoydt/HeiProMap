@@ -36,19 +36,6 @@ namespace HeiProMap {
     class CSRGraph;
     typedef CSRGraph graph_t;
 
-#if defined(USE_GRID_DISTANCE_ORACLE)
-    class GridDistanceOracle;
-    typedef GridDistanceOracle d_oracle_t;
-#elif defined(USE_GRAPH_DISTANCE_ORACLE)
-    class GraphDistanceOracle;
-    typedef GraphDistanceOracle d_oracle_t;
-#else
-    class DistanceOracle;
-    typedef DistanceOracle d_oracle_t;
-    class BinaryDistanceOracle;
-    typedef BinaryDistanceOracle binary_d_oracle_t;
-#endif
-
     class PartitionManager;
     typedef PartitionManager p_manager_t;
     class BoundaryVertexManager;

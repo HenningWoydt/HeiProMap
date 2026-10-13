@@ -76,7 +76,7 @@ namespace HeiProMap {
         }
 
         void refine(graph_t &g,
-                    d_oracle_t &d_oracle,
+                    DistanceOracle &d_oracle,
                     p_manager_t &p_manager) {
             HEIPROMAP_PROFILE_SCOPE("refinement", "SwapRefinement", "refine");
 
@@ -89,7 +89,7 @@ namespace HeiProMap {
 
         template<bool t_uniform_v_weights, bool t_uniform_e_weights>
         void refine_impl(graph_t &g,
-                         d_oracle_t &d_oracle,
+                         DistanceOracle &d_oracle,
                          p_manager_t &p_manager) {
             if (m_rnd_engines.empty()) return;
             RandomEngine &random_engine = m_rnd_engines[0];

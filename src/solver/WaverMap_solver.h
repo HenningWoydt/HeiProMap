@@ -54,6 +54,7 @@
 // #include "HeiPa_solver.h"
 
 namespace HeiProMap {
+    template<typename DistanceOracleT = DistanceOracle>
     class WaverMapSolver {
         WaverMapConfiguration ac;
         RandomEngine random_engine;
@@ -76,7 +77,7 @@ namespace HeiProMap {
         BoundaryVertexManager bv_manager;
         LargeQuotientGraph q_graph;
         BlockConn block_conn;
-        d_oracle_t d_oracle;
+        DistanceOracleT d_oracle;
 
         // matching
         std::vector<Mapping> mappings;
