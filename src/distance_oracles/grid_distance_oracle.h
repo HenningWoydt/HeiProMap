@@ -47,6 +47,9 @@ namespace HeiProMap {
         // Current number of partitions (= topology nodes at current level).
         partition_t current_k() const { return m_levels.back().topology.n; }
 
+        // Width of the current grid level (number of columns).
+        partition_t current_W() const { return static_cast<partition_t>(m_levels.back().W); }
+
         // k at the next finer level (valid only when depth() > 0).
         partition_t fine_k() const { return m_levels[m_levels.size() - 2].topology.n; }
 

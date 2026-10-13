@@ -27,7 +27,9 @@
 #ifndef HEIPROMAP_QAP_H
 #define HEIPROMAP_QAP_H
 
+#include <algorithm>
 #include <iomanip>
+#include <vector>
 
 #include "../definitions.h"
 #include "macros.h"
@@ -672,6 +674,63 @@ namespace HeiProMap {
         result.total            = result.term_cardinality + result.term_cut_volume
                                 + result.term_hop_count   + result.term_hop_bytes;
         return result;
+    }
+
+    // Computes the maximum load on any directed link under strict XY routing.
+    // For each directed message (u->v), the load contribution to each link on its
+    // route is (alpha_link + beta_link * S(m)). Returns the max over all directed links.
+    template<typename QuotientGraphT>
+    inline f64 get_max_link_load(const QuotientGraphT &q_graph,
+                                 const partition_t k,
+                                 const partition_t W,
+                                 f64 alpha_link,
+                                 f64 beta_link) {
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_max_link_load");
+
+        const partition_t H = (k + W - 1) / W;
+
+        // Directed link id encoding (strict-XY routing):
+        //   East  [0,              H*(W-1)):  east_id(r,c)  = r*(W-1) + c,           c in [0, W-2]
+        //   West  [H*(W-1),      2*H*(W-1)):  west_id(r,c)  = H*(W-1)+r*(W-1)+(c-1), c in [1, W-1]
+        //   South [2*H*(W-1),    2*H*(W-1)+W*(H-1)):  south_id(c,r) = 2*H*(W-1)+c*(H-1)+r,       r in [0, H-2]
+        //   North [2*H*(W-1)+W*(H-1), ...):  north_id(c,r) = 2*H*(W-1)+W*(H-1)+c*(H-1)+(r-1), r in [1, H-1]
+        const size_t n_links = 2 * H * (W - 1) + 2 * W * (H - 1);
+        std::vector<f64> load(n_links, 0.0);
+
+        auto east_id  = [&](partition_t r, partition_t c) -> size_t {
+            return static_cast<size_t>(r) * (W - 1) + c;
+        };
+        auto west_id  = [&](partition_t r, partition_t c) -> size_t {
+            return static_cast<size_t>(H) * (W - 1) + static_cast<size_t>(r) * (W - 1) + (c - 1);
+        };
+        auto south_id = [&](partition_t c, partition_t r) -> size_t {
+            return 2 * static_cast<size_t>(H) * (W - 1) + static_cast<size_t>(c) * (H - 1) + r;
+        };
+        auto north_id = [&](partition_t c, partition_t r) -> size_t {
+            return 2 * static_cast<size_t>(H) * (W - 1) + static_cast<size_t>(W) * (H - 1)
+                 + static_cast<size_t>(c) * (H - 1) + (r - 1);
+        };
+
+        auto route_and_add = [&](partition_t src, partition_t dst, f64 cost) {
+            partition_t sx = src % W, sy = src / W;
+            partition_t dx = dst % W, dy = dst / W;
+            for (partition_t c = sx; c < dx; ++c) load[east_id(sy, c)]  += cost;
+            for (partition_t c = sx; c > dx; --c) load[west_id(sy, c)]  += cost;
+            for (partition_t r = sy; r < dy; ++r) load[south_id(dx, r)] += cost;
+            for (partition_t r = sy; r > dy; --r) load[north_id(dx, r)] += cost;
+        };
+
+        for (partition_t u = 0; u < k; ++u) {
+            q_graph.for_each_neighbor(u, [&](const partition_t v, const weight_t w) {
+                if (u < v) {
+                    f64 cost = alpha_link + beta_link * static_cast<f64>(w);
+                    route_and_add(u, v, cost);
+                    route_and_add(v, u, cost);
+                }
+            });
+        }
+
+        return load.empty() ? 0.0 : *std::max_element(load.begin(), load.end());
     }
 
 }
