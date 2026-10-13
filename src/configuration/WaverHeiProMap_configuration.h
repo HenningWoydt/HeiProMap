@@ -164,8 +164,14 @@ namespace HeiProMap {
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
-            {"--use-grid-oracle", "", "Use the GridDistanceOracle instead of the default GraphDistanceOracle.", "true", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
+
+            {"--alpha-send", "", "Fixed send-side overhead per message (alpha_send).", "0.0", "", false},
+            {"--alpha-recv", "", "Fixed receive-side overhead per message (alpha_recv).", "0.0", "", false},
+            {"--alpha-link", "", "Fixed per-hop router overhead per message (alpha_link).", "0.0", "", false},
+            {"--beta-send", "", "Volume-dependent send overhead per byte (beta_send).", "0.0", "", false},
+            {"--beta-recv", "", "Volume-dependent receive overhead per byte (beta_recv).", "0.0", "", false},
+            {"--beta-link", "", "Volume-dependent per-hop link cost per byte (beta_link).", "1.0", "", false},
 
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
             {"--gpa-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
@@ -221,6 +227,19 @@ namespace HeiProMap {
         u64 hm_level = 0;
 
         u64 initial_c = 8;
+
+        // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
+        //                                    + h(m) * alpha_link + h(m) * beta_link * S(m)
+        f64 alpha_send = 0.0;
+        f64 alpha_recv = 0.0;
+        f64 alpha_link = 0.0;
+        f64 beta_send  = 0.0;
+        f64 beta_recv  = 0.0;
+        f64 beta_link  = 1.0;  // default: pure hop-byte QAP
+
+        // derived convenience accessors
+        f64 alpha_end() const { return alpha_send + alpha_recv; }
+        f64 beta_end()  const { return beta_send  + beta_recv;  }
 
         std::string config_name = "undefined";
 
@@ -319,6 +338,12 @@ namespace HeiProMap {
             set_seed();
             set_threads();
 
+            if (is_set("--alpha-send")) alpha_send = std::stod(get("--alpha-send"));
+            if (is_set("--alpha-recv")) alpha_recv = std::stod(get("--alpha-recv"));
+            if (is_set("--alpha-link")) alpha_link = std::stod(get("--alpha-link"));
+            if (is_set("--beta-send"))  beta_send  = std::stod(get("--beta-send"));
+            if (is_set("--beta-recv"))  beta_recv  = std::stod(get("--beta-recv"));
+            if (is_set("--beta-link"))  beta_link  = std::stod(get("--beta-link"));
 
             if (!is_set("--config")) {
                 std::cout << "Error: --config (or -c) must be specified." << std::endl;
