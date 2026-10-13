@@ -33,6 +33,7 @@
 #include "../definitions.h"
 #include "../refinement/simple_label_propagation_refinement.h"
 #include "../refinement/waver_label_propagation_refinement.h"
+#include "../refinement/waver_message_refinement.h"
 namespace HeiProMap {
 
     class NegativeCycleConfiguration final {
@@ -194,6 +195,8 @@ namespace HeiProMap {
             {"--flow-refinement-use-closed-vertex-set", "", "Use closed vertex set in flow based refinement (true/false).", "", "", false},
             {"--flow-refinement-closed-vertex-set-repeats", "", "Number of closed vertex set repeats for flow based refinement.", "", "", false},
             {"--flow-refinement-enabled-edge-cut-optimization", "", "Enable lowest level edge cut optimization (true/false).", "true", "", false},
+
+            {"--initial-kappa", "", "Initial partitioning: number of attempts per thread, best is kept.", "10", "", false},
         };
 
     public:
@@ -254,6 +257,7 @@ namespace HeiProMap {
         std::string partitioning_algorithm_string;
         PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
 
+        u64 initial_kappa = 100;
         u64 rb_kappa = 1;
         bool rb_use_full_refine = false;
 
@@ -265,7 +269,8 @@ namespace HeiProMap {
 
         // refinement algorithms
         SimpleLabelPropagationConfiguration simple_label_propagation_config = SimpleLabelPropagationConfiguration("Label Propagation");
-        WaverLabelPropagationConfiguration  waver_label_propagation_config  = WaverLabelPropagationConfiguration("Waver Label Propagation");
+        WaverLabelPropagationConfiguration   waver_label_propagation_config   = WaverLabelPropagationConfiguration("Waver Label Propagation");
+        WaverMessageRefinementConfiguration  waver_message_refinement_config  = WaverMessageRefinementConfiguration("Waver Message Refinement");
         NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
 
         WaverHeiProMapConfiguration() = default;
@@ -336,6 +341,8 @@ namespace HeiProMap {
             set_seed();
             set_threads();
 
+            if (is_set("--initial-kappa")) initial_kappa = std::stoull(get("--initial-kappa"));
+
             if (is_set("--alpha-send")) alpha_send = std::stod(get("--alpha-send"));
             if (is_set("--alpha-recv")) alpha_recv = std::stod(get("--alpha-recv"));
             if (is_set("--alpha-link")) alpha_link = std::stod(get("--alpha-link"));
@@ -377,7 +384,7 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-            // Propagate cost-model parameters into the refinement config
+            // Propagate cost-model parameters into the refinement configs
             waver_label_propagation_config.alpha_end  = alpha_end();
             waver_label_propagation_config.beta_end   = beta_end();
             waver_label_propagation_config.alpha_link = alpha_link;
@@ -462,8 +469,11 @@ namespace HeiProMap {
             simple_label_propagation_config.enabled = false;
 
             waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
+            waver_label_propagation_config.max_iteration = 25;
             waver_label_propagation_config.force_parallel_alg = false;
+
+            waver_message_refinement_config.enabled   = true;
+            waver_message_refinement_config.max_iters = 5;
 
             negative_cycle_config.enabled = false;
         }

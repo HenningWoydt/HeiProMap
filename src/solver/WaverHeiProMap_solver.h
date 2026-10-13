@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -56,6 +57,7 @@
 #include "../init_partitioning/waver_greedy_partitioner.h"
 #include "../refinement/simple_label_propagation_refinement.h"
 #include "../refinement/waver_label_propagation_refinement.h"
+#include "../refinement/waver_message_refinement.h"
 #include "../distance_oracles/grid_distance_oracle.h"
 
 namespace HeiProMap {
@@ -85,6 +87,7 @@ namespace HeiProMap {
         WaverLabelPropagationRefinement<false> lp_refine;
 
         f64 io_ms = 0.0;
+        f64 msg_refine_ms = 0.0;
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
@@ -117,6 +120,158 @@ namespace HeiProMap {
             }
             for (partition_t i = 0; i < ac.k; ++i) {
                 p_manager.set_lmax(i, lmax_vec[i]);
+            }
+        }
+
+        void dump_heatmap(const std::string &tag) {
+            const size_t W = static_cast<size_t>(d_oracle.current_W());
+            const size_t H = (ac.k + W - 1) / W;
+            const size_t scale = std::max(size_t(1), 512 / std::max(W, H));
+            const size_t pw = W * scale, ph = H * scale;
+
+            weight_t max_bw = 1;
+            for (partition_t b = 0; b < ac.k; ++b) {
+                max_bw = std::max(max_bw, p_manager.bweights[b]);
+            }
+
+            auto heat_color = [](double t, uint8_t &r, uint8_t &g, uint8_t &b) {
+                if (t <= 0.0) { r = 0; g = 0; b = 0; return; }
+                t = std::min(t, 1.0);
+                if (t < 0.25)      { r = 0;                          g = uint8_t(255*t*4);        b = 255; }
+                else if (t < 0.50) { r = 0;                          g = 255;                     b = uint8_t(255*(2-t*4)); }
+                else if (t < 0.75) { r = uint8_t(255*(t*4-2));       g = 255;                     b = 0; }
+                else               { r = 255;                        g = uint8_t(255*(4-t*4));     b = 0; }
+            };
+
+            std::string fname = "/tmp/heatmap_" + tag + ".ppm";
+            std::ofstream out(fname, std::ios::binary);
+            out << "P6\n" << pw << " " << ph << "\n255\n";
+            for (size_t py = 0; py < ph; ++py) {
+                for (size_t px = 0; px < pw; ++px) {
+                    partition_t b = static_cast<partition_t>((py / scale) * W + (px / scale));
+                    double t = (b < ac.k) ? static_cast<double>(p_manager.bweights[b]) / max_bw : 0.0;
+                    uint8_t r, g, bl;
+                    heat_color(t, r, g, bl);
+                    out.put(r); out.put(g); out.put(bl);
+                }
+            }
+        }
+
+        void diffuse_into_empties() {
+            const size_t W = static_cast<size_t>(d_oracle.current_W());
+            const partition_t k = ac.k;
+            const auto &g = graphs.back();
+
+            auto get_neighbors = [&](partition_t b, partition_t *nbrs) -> size_t {
+                size_t cnt = 0;
+                const size_t c = b % W;
+                if (b >= static_cast<partition_t>(W))        nbrs[cnt++] = b - static_cast<partition_t>(W);
+                if (b + static_cast<partition_t>(W) < k)     nbrs[cnt++] = b + static_cast<partition_t>(W);
+                if (c > 0)                                   nbrs[cnt++] = b - 1;
+                if (c + 1 < W && b + 1 < k)                 nbrs[cnt++] = b + 1;
+                return cnt;
+            };
+
+            // Target weight: fair share per PE
+            const weight_t avg_bw = g.g_weight / k;
+
+            // Build per-block vertex lists
+            std::vector<std::vector<vertex_t>> blk_v(k);
+            for (vertex_t u = 0; u < g.n; ++u) {
+                const partition_t b = p_manager.partition[u];
+                if (b != NO_ID && b < k) { blk_v[b].push_back(u); }
+            }
+
+            // Phase 1: aggressively fill empties.
+            // Pull from ANY non-empty neighbor, allow donor to go as low
+            // as 1 (just don't empty it).  Repeat until no empties touch
+            // a non-empty neighbor.
+            size_t round = 0;
+            bool progress = true;
+            while (progress) {
+                progress = false;
+                size_t filled_this_round = 0;
+                size_t still_empty_count = 0;
+                size_t skipped_cap = 0, skipped_floor = 0, skipped_no_donor = 0;
+                for (partition_t e = 0; e < k; ++e) {
+                    if (p_manager.bweights[e] > 0) { continue; }
+                    still_empty_count++;
+
+                    partition_t nbrs[4];
+                    const size_t n_nbrs = get_neighbors(e, nbrs);
+
+                    partition_t donor = NO_ID;
+                    weight_t donor_bw = 0;
+                    for (size_t i = 0; i < n_nbrs; ++i) {
+                        if (p_manager.bweights[nbrs[i]] > donor_bw) {
+                            donor_bw = p_manager.bweights[nbrs[i]];
+                            donor = nbrs[i];
+                        }
+                    }
+                    if (donor == NO_ID || donor_bw <= 1) { skipped_no_donor++; continue; }
+
+                    const weight_t e_cap = p_manager.get_lmax(e);
+                    const weight_t donor_floor = std::max(weight_t(1), donor_bw / 2);
+                    bool moved_any = false;
+                    for (const vertex_t u : blk_v[donor]) {
+                        if (p_manager.partition[u] != donor) { continue; }
+                        const weight_t uw = g.v_weight(u);
+                        if (p_manager.bweights[e] + uw > e_cap) { skipped_cap++; continue; }
+                        if (p_manager.bweights[donor] - uw < donor_floor) { skipped_floor++; continue; }
+
+                        p_manager.bweights[donor] -= uw;
+                        p_manager.partition[u] = e;
+                        p_manager.bweights[e] += uw;
+                        blk_v[e].push_back(u);
+                        progress = true;
+                        moved_any = true;
+                    }
+                    if (moved_any) { filled_this_round++; }
+                }
+                std::cout << "  [diffuse-P1] round=" << round << " empty=" << still_empty_count
+                          << " filled=" << filled_this_round << " skip_no_donor=" << skipped_no_donor
+                          << " skip_cap=" << skipped_cap << " skip_floor=" << skipped_floor << std::endl;
+                round++;
+            }
+
+            // Phase 2: equalize — pull from above-average neighbors into
+            // below-average blocks.
+            progress = true;
+            while (progress) {
+                progress = false;
+                for (partition_t e = 0; e < k; ++e) {
+                    if (p_manager.bweights[e] >= avg_bw) { continue; }
+
+                    const weight_t e_cap = p_manager.get_lmax(e);
+
+                    partition_t nbrs[4];
+                    const size_t n_nbrs = get_neighbors(e, nbrs);
+
+                    partition_t donor = NO_ID;
+                    weight_t donor_bw = avg_bw;
+                    for (size_t i = 0; i < n_nbrs; ++i) {
+                        if (p_manager.bweights[nbrs[i]] > donor_bw) {
+                            donor_bw = p_manager.bweights[nbrs[i]];
+                            donor = nbrs[i];
+                        }
+                    }
+                    if (donor == NO_ID) { continue; }
+
+                    for (const vertex_t u : blk_v[donor]) {
+                        if (p_manager.partition[u] != donor) { continue; }
+                        const weight_t uw = g.v_weight(u);
+                        if (p_manager.bweights[e] + uw > e_cap) { continue; }
+                        if (p_manager.bweights[donor] - uw < avg_bw) { continue; }
+
+                        p_manager.bweights[donor] -= uw;
+                        p_manager.partition[u] = e;
+                        p_manager.bweights[e] += uw;
+                        blk_v[e].push_back(u);
+                        progress = true;
+
+                        if (p_manager.bweights[e] >= avg_bw) { break; }
+                    }
+                }
             }
         }
 
@@ -236,6 +391,7 @@ namespace HeiProMap {
             std::cout << "Rebalance             : " << rebalance_ms << std::endl;
             std::cout << "Refinement            : " << refinement_ms << std::endl;
             std::cout << "  Label Prop.         : " << lp_refine_ms << std::endl;
+            std::cout << "  Msg Refinement      : " << msg_refine_ms << std::endl;
             std::cout << "Misc                  : " << misc_ms << std::endl;
             std::cout << "ALL                   : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
@@ -271,17 +427,69 @@ namespace HeiProMap {
             rebalance(level);
             refinement();
 
+            {
+                const graph_t &g = graphs.back();
+                partition_t n_empty = 0;
+                for (partition_t id = 0; id < ac.k; ++id) {
+                    if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) { ++n_empty; }
+                }
+                u64 n_pairs = 0;
+                for (partition_t id = 0; id < ac.k; ++id) { n_pairs += q_graph.neighbors(id).size(); }
+                weight_t max_bw = 0, lmax_val = p_manager.get_lmax(0);
+                for (partition_t id = 0; id < ac.k; ++id) { max_bw = std::max(max_bw, p_manager.get_bweight(id)); }
+                std::cout << "[init  ] n=" << g.n << " k=" << ac.k
+                          << " |E_pi|=" << n_pairs << " empty=" << n_empty
+                          << " lmax=" << lmax_val << " max_bw=" << max_bw << std::endl;
+            }
+
             while (!mappings.empty()) {
                 level -= 1;
 
                 // If oracle was coarsened at this graph level, uncoarsen it first
                 if (d_oracle.depth() == mappings.size()) {
                     uncoarsen_topology();
+                    dump_heatmap("L" + std::to_string(level) + "_1_uncoarsen_topo");
                 }
 
                 uncoarsening();
+                dump_heatmap("L" + std::to_string(level) + "_2_uncoarsening");
                 rebalance(level);
+                diffuse_into_empties();
+                // Recompute data structures after diffusion moved vertices
+                {
+                    const auto &g_cur = graphs.back();
+                    bv_manager.reset();
+                    for (vertex_t u = 0; u < g_cur.n; ++u) {
+                        const partition_t u_id = p_manager[u];
+                        size_t n_different = 0;
+                        for (size_t i = g_cur.neighborhoods[u]; i < g_cur.neighborhoods[u + 1]; ++i) {
+                            n_different += (u_id != p_manager[g_cur.edges_v[i]]);
+                        }
+                        bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+                    }
+                    q_graph.compute_from_scratch(g_cur, p_manager);
+                    block_conn.compute_from_scratch(g_cur, p_manager);
+                }
+                dump_heatmap("L" + std::to_string(level) + "_3_rebalance");
                 refinement();
+                dump_heatmap("L" + std::to_string(level) + "_4_refinement");
+
+                {
+                    const graph_t &g = graphs.back();
+                    partition_t n_empty = 0;
+                    for (partition_t id = 0; id < ac.k; ++id) {
+                        if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) { ++n_empty; }
+                    }
+                    u64 n_pairs = 0;
+                    for (partition_t id = 0; id < ac.k; ++id) {
+                        n_pairs += q_graph.neighbors(id).size();
+                    }
+                    weight_t max_bw = 0, lmax_val = p_manager.get_lmax(0);
+                    for (partition_t id = 0; id < ac.k; ++id) { max_bw = std::max(max_bw, p_manager.get_bweight(id)); }
+                    std::cout << "[level " << level << "] n=" << g.n << " k=" << ac.k
+                              << " |E_pi|=" << n_pairs << " empty=" << n_empty
+                              << " lmax=" << lmax_val << " max_bw=" << max_bw << std::endl;
+                }
             }
         }
 
@@ -289,39 +497,65 @@ namespace HeiProMap {
             auto p = get_time_point();
             HEIPROMAP_PROFILE_SCOPE("partition", "partition", "partition");
 
+            const u64 kappa = ac.initial_kappa;
+
             if (ac.threads > 1) {
-                std::vector<PartitionManager> local_p_managers;
-                std::vector<weight_t> local_qaps;
+                std::vector<PartitionManager> local_best_pm(ac.threads);
+                std::vector<f64>              local_best_cost(ac.threads, std::numeric_limits<f64>::max());
 
-                local_p_managers.reserve(ac.threads);
-                local_qaps.reserve(ac.threads);
-
-                for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                    local_p_managers.emplace_back();
-                    local_p_managers.back().initialize(graphs.back().n, ac.k, graphs.back().g_weight);
-                    local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
+                for (u64 t = 0; t < ac.threads; ++t) {
+                    local_best_pm[t].initialize(graphs.back().n, ac.k, graphs.back().g_weight);
                 }
 
-                #pragma omp parallel for schedule(static) num_threads(ac.threads)
-                for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
+                #pragma omp parallel num_threads(ac.threads)
+                {
+                    u64 tid = omp_get_thread_num();
+                    PartitionManager cur_pm;
+                    cur_pm.initialize(graphs.back().n, ac.k, graphs.back().g_weight);
                     AlignedArray<vertex_t> vertices;
                     vertices.initialize(graphs.back().n);
-                    waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, ac.seed + thread_id, local_p_managers[thread_id], vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                    local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
-                }
 
-                size_t best_idx = 0;
-                for (u64 thread_id = 1; thread_id < ac.threads; ++thread_id) {
-                    if (local_qaps[thread_id] < local_qaps[best_idx]) {
-                        best_idx = thread_id;
+                    for (u64 trial = 0; trial < kappa; ++trial) {
+                        // tid=0, trial=0 → seed=0 (natural vertex order, no shuffle)
+                        const u64 trial_seed = (tid == 0 && trial == 0) ? 0 : (1 + ac.seed + tid * kappa + trial);
+                        waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, trial_seed, cur_pm, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                        f64 cur_cost = get_waver_cost(graphs.back(), cur_pm, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+
+                        if (trial == 0 || cur_cost < local_best_cost[tid]) {
+                            local_best_cost[tid] = cur_cost;
+                            local_best_pm[tid].copy_from(cur_pm);
+                        }
                     }
                 }
 
-                p_manager.copy_from(local_p_managers[best_idx]);
+                size_t best_idx = 0;
+                for (u64 t = 1; t < ac.threads; ++t) {
+                    if (local_best_cost[t] < local_best_cost[best_idx]) {
+                        best_idx = t;
+                    }
+                }
+
+                p_manager.copy_from(local_best_pm[best_idx]);
             } else {
+                PartitionManager best_pm;
+                best_pm.initialize(p_manager.n, ac.k, graphs.back().g_weight);
+                f64 best_cost = std::numeric_limits<f64>::max();
                 AlignedArray<vertex_t> vertices;
                 vertices.initialize(graphs.back().n);
-                waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, ac.seed, p_manager, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+
+                for (u64 trial = 0; trial < kappa; ++trial) {
+                    // trial=0 → seed=0 (natural vertex order, no shuffle)
+                    const u64 trial_seed = (trial == 0) ? 0 : (1 + ac.seed + trial);
+                    waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, trial_seed, p_manager, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                    f64 cur_cost = get_waver_cost(graphs.back(), p_manager, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+
+                    if (trial == 0 || cur_cost < best_cost) {
+                        best_cost = cur_cost;
+                        best_pm.copy_from(p_manager);
+                    }
+                }
+
+                p_manager.copy_from(best_pm);
             }
 
             HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
@@ -404,20 +638,322 @@ namespace HeiProMap {
             reinit_structures_for_new_k();
             p_manager.reset_weights();
 
+            // mark all unassigned so cost computation can skip them
             for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                const auto &fine_blocks = coarse_to_fine[old_partition[u]];
-                weight_t u_weight = graphs.back().v_weight(u);
+                p_manager.partition[u] = NO_ID;
+            }
 
-                partition_t best = fine_blocks[0];
-                weight_t min_w = p_manager.get_bweight(best);
-                for (size_t i = 1; i < fine_blocks.size(); ++i) {
-                    if (p_manager.get_bweight(fine_blocks[i]) < min_w) {
-                        min_w = p_manager.get_bweight(fine_blocks[i]);
-                        best = fine_blocks[i];
+            // blk_verts[b] = vertices assigned to fine block b; used by second pass
+            std::vector<std::vector<vertex_t>> blk_verts(fine_k);
+
+            for (vertex_t u = 0; u < graphs.back().n; ++u) {
+                const auto   &fine_blocks = coarse_to_fine[old_partition[u]];
+                const weight_t u_weight   = graphs.back().v_weight(u);
+
+                // collect distinct assigned neighbor fine blocks (for alpha_end)
+                partition_t neighbor_blocks[256];
+                size_t      n_neighbor_blocks = 0;
+                for (size_t j = graphs.back().neighborhoods[u]; j < graphs.back().neighborhoods[u + 1]; ++j) {
+                    const partition_t v_block = p_manager.partition[graphs.back().edges_v[j]];
+                    if (v_block == NO_ID) { continue; }
+                    bool found = false;
+                    for (size_t x = 0; x < n_neighbor_blocks; ++x) {
+                        if (neighbor_blocks[x] == v_block) { found = true; break; }
+                    }
+                    if (!found && n_neighbor_blocks < 256) { neighbor_blocks[n_neighbor_blocks++] = v_block; }
+                }
+
+                partition_t best   = NO_ID;
+                f64         min_cost = std::numeric_limits<f64>::max();
+
+                for (const partition_t block : fine_blocks) {
+                    if (p_manager.bweights[block] + u_weight > p_manager.get_lmax(block)) { continue; }
+
+                    f64 cost = 0.0;
+                    for (size_t x = 0; x < n_neighbor_blocks; ++x) {
+                        if (neighbor_blocks[x] != block) { cost += ac.alpha_end(); }
+                    }
+                    for (size_t j = graphs.back().neighborhoods[u]; j < graphs.back().neighborhoods[u + 1]; ++j) {
+                        const vertex_t    v       = graphs.back().edges_v[j];
+                        const partition_t v_block = p_manager.partition[v];
+                        if (v_block == NO_ID) { continue; }
+                        const f64 w    = static_cast<f64>(graphs.back().edge_w(j));
+                        const f64 dist = static_cast<f64>(d_oracle.get(block, v_block));
+                        cost += ac.beta_end()  * w * static_cast<f64>(block != v_block)
+                              + ac.alpha_link  * dist
+                              + ac.beta_link   * w * dist;
+                    }
+
+                    if (best == NO_ID || cost < min_cost) {
+                        min_cost = cost;
+                        best     = block;
                     }
                 }
+
+                // fallback: all fine blocks overloaded — pick least loaded
+                if (best == NO_ID) {
+                    best = fine_blocks[0];
+                    weight_t min_w = p_manager.bweights[fine_blocks[0]];
+                    for (size_t i = 1; i < fine_blocks.size(); ++i) {
+                        if (p_manager.bweights[fine_blocks[i]] < min_w) {
+                            min_w = p_manager.bweights[fine_blocks[i]];
+                            best  = fine_blocks[i];
+                        }
+                    }
+                }
+
                 p_manager.set(u, u_weight, best);
+                blk_verts[best].push_back(u);
             }
+
+            // Second pass: guarantee every fine block gets at least one vertex.
+            // For each empty fine block e, steal the cheapest-to-move vertex from
+            // its most-loaded sibling (same coarse parent).  "Cheapest" = minimum
+            // increase in hop cost when switching from donor block s to e.
+            const graph_t &g = graphs.back();
+            for (partition_t c = 0; c < coarse_k; ++c) {
+                const auto &siblings = coarse_to_fine[c];
+                if (siblings.size() <= 1) { continue; }
+
+                for (const partition_t e : siblings) {
+                    if (p_manager.bweights[e] > 0) { continue; }
+
+                    vertex_t    best_u     = NO_ID;
+                    partition_t best_donor = NO_ID;
+                    f64         best_delta = std::numeric_limits<f64>::max();
+
+                    for (const partition_t s : siblings) {
+                        if (s == e) { continue; }
+                        for (const vertex_t u : blk_verts[s]) {
+                            if (p_manager.partition[u] != s) { continue; } // already moved
+                            if (g.v_weight(u) > p_manager.get_lmax(e)) { continue; }
+
+                            // hop-cost delta for moving u from s to e
+                            f64 delta = 0.0;
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                                const partition_t vb = p_manager.partition[g.edges_v[j]];
+                                if (vb == NO_ID || vb == s || vb == e) { continue; }
+                                const f64 w = static_cast<f64>(g.edge_w(j));
+                                delta += (ac.alpha_link + ac.beta_link * w)
+                                       * (static_cast<f64>(d_oracle.get(e, vb))
+                                        - static_cast<f64>(d_oracle.get(s, vb)));
+                            }
+
+                            if (delta < best_delta) {
+                                best_delta = delta;
+                                best_u     = u;
+                                best_donor = s;
+                            }
+                        }
+                    }
+
+                    if (best_u == NO_ID) { continue; } // coarse block has zero vertices — nothing to steal
+
+                    // Perform the move (bv_manager/q_graph not built yet, use raw arrays)
+                    const weight_t uw = g.v_weight(best_u);
+                    p_manager.bweights[best_donor] -= uw;
+                    p_manager.partition[best_u]     = e;
+                    p_manager.bweights[e]           += uw;
+                    blk_verts[e].push_back(best_u);
+                }
+            }
+
+            // Third pass: avalanche steal along density gradient.
+            // For each empty block, find the adjacent PE with highest weight,
+            // pick a sender group from it (all vertices sending to the same
+            // target), and move the whole group.  If that empties the donor,
+            // the "hole" cascades along the gradient until it reaches a block
+            // that can absorb the loss.  Each move is one grid hop.
+            {
+                const size_t W = static_cast<size_t>(d_oracle.current_W());
+                auto get_neighbors = [&](partition_t b, partition_t *nbrs) -> size_t {
+                    size_t cnt = 0;
+                    const size_t c = b % W;
+                    if (b >= static_cast<partition_t>(W))   nbrs[cnt++] = b - static_cast<partition_t>(W);
+                    if (b + static_cast<partition_t>(W) < fine_k) nbrs[cnt++] = b + static_cast<partition_t>(W);
+                    if (c > 0)                              nbrs[cnt++] = b - 1;
+                    if (c + 1 < W && b + 1 < fine_k)       nbrs[cnt++] = b + 1;
+                    return cnt;
+                };
+
+                // scratch for building sender groups
+                std::vector<size_t> target_idx(fine_k, SIZE_MAX);
+                std::vector<partition_t> target_dirty;
+
+                std::vector<partition_t> still_empty;
+                for (partition_t e = 0; e < fine_k; ++e) {
+                    if (p_manager.bweights[e] == 0) {
+                        still_empty.push_back(e);
+                    }
+                }
+
+                for (const partition_t e : still_empty) {
+                    if (p_manager.bweights[e] > 0) { continue; }
+
+                    partition_t hole = e;
+                    constexpr size_t MAX_CHAIN = 64;
+                    for (size_t step = 0; step < MAX_CHAIN; ++step) {
+                        partition_t nbrs[4];
+                        const size_t n_nbrs = get_neighbors(hole, nbrs);
+
+                        // Pick neighbor with highest block weight
+                        partition_t donor = NO_ID;
+                        weight_t donor_bw = 0;
+                        for (size_t i = 0; i < n_nbrs; ++i) {
+                            if (p_manager.bweights[nbrs[i]] > donor_bw) {
+                                donor_bw = p_manager.bweights[nbrs[i]];
+                                donor = nbrs[i];
+                            }
+                        }
+                        if (donor == NO_ID) { break; }
+
+                        // Build sender groups in donor
+                        std::vector<std::vector<vertex_t>> sg_verts;
+                        std::vector<partition_t> sg_target;
+                        std::vector<weight_t> sg_weight;
+
+                        for (const vertex_t u : blk_verts[donor]) {
+                            if (p_manager.partition[u] != donor) { continue; }
+                            const weight_t uw = g.v_weight(u);
+                            partition_t ext_tgts[256];
+                            size_t n_ext = 0;
+                            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                                const partition_t vb = p_manager.partition[g.edges_v[j]];
+                                if (vb == NO_ID || vb == donor) { continue; }
+                                bool dup = false;
+                                for (size_t x = 0; x < n_ext; ++x) {
+                                    if (ext_tgts[x] == vb) { dup = true; break; }
+                                }
+                                if (!dup && n_ext < 256) { ext_tgts[n_ext++] = vb; }
+                            }
+                            for (size_t x = 0; x < n_ext; ++x) {
+                                const partition_t D = ext_tgts[x];
+                                if (target_idx[D] == SIZE_MAX) {
+                                    target_idx[D] = sg_verts.size();
+                                    sg_verts.emplace_back();
+                                    sg_target.push_back(D);
+                                    sg_weight.push_back(0);
+                                    target_dirty.push_back(D);
+                                }
+                                const size_t idx = target_idx[D];
+                                sg_verts[idx].push_back(u);
+                                sg_weight[idx] += uw;
+                            }
+                        }
+                        for (const partition_t D : target_dirty) { target_idx[D] = SIZE_MAX; }
+                        target_dirty.clear();
+
+                        // Pick lightest group that fits in hole
+                        const weight_t hole_cap = p_manager.get_lmax(hole);
+                        size_t pick = SIZE_MAX;
+                        weight_t pick_w = std::numeric_limits<weight_t>::max();
+                        for (size_t i = 0; i < sg_verts.size(); ++i) {
+                            if (sg_weight[i] > hole_cap) { continue; }
+                            if (sg_weight[i] < pick_w) {
+                                pick_w = sg_weight[i];
+                                pick = i;
+                            }
+                        }
+                        if (pick == SIZE_MAX) { break; }
+
+                        // Move the group
+                        for (const vertex_t u : sg_verts[pick]) {
+                            if (p_manager.partition[u] != donor) { continue; }
+                            const weight_t uw = g.v_weight(u);
+                            p_manager.bweights[donor] -= uw;
+                            p_manager.partition[u] = hole;
+                            p_manager.bweights[hole] += uw;
+                            blk_verts[hole].push_back(u);
+                        }
+
+                        if (p_manager.bweights[donor] > 0) { break; }
+                        hole = donor;
+                    }
+                }
+            }
+
+            // Fourth pass: evacuate small islands of non-empty PEs.
+            // BFS on the PE grid to find connected components of non-empty
+            // blocks.  Small components get their vertices moved to the
+            // nearest block in the largest component.
+            {
+                const size_t W = static_cast<size_t>(d_oracle.current_W());
+                auto get_neighbors = [&](partition_t b, partition_t *nbrs) -> size_t {
+                    size_t cnt = 0;
+                    const size_t c = b % W;
+                    if (b >= static_cast<partition_t>(W))   nbrs[cnt++] = b - static_cast<partition_t>(W);
+                    if (b + static_cast<partition_t>(W) < fine_k) nbrs[cnt++] = b + static_cast<partition_t>(W);
+                    if (c > 0)                              nbrs[cnt++] = b - 1;
+                    if (c + 1 < W && b + 1 < fine_k)       nbrs[cnt++] = b + 1;
+                    return cnt;
+                };
+
+                // BFS to label connected components of non-empty blocks
+                std::vector<partition_t> comp_id(fine_k, NO_ID);
+                std::vector<std::vector<partition_t>> components;
+                std::vector<partition_t> bfs_queue;
+
+                for (partition_t b = 0; b < fine_k; ++b) {
+                    if (p_manager.bweights[b] == 0 || comp_id[b] != NO_ID) { continue; }
+                    const partition_t cid = static_cast<partition_t>(components.size());
+                    components.emplace_back();
+                    bfs_queue.clear();
+                    bfs_queue.push_back(b);
+                    comp_id[b] = cid;
+                    for (size_t head = 0; head < bfs_queue.size(); ++head) {
+                        const partition_t cur = bfs_queue[head];
+                        components[cid].push_back(cur);
+                        partition_t nbrs[4];
+                        const size_t n_nbrs = get_neighbors(cur, nbrs);
+                        for (size_t i = 0; i < n_nbrs; ++i) {
+                            if (p_manager.bweights[nbrs[i]] > 0 && comp_id[nbrs[i]] == NO_ID) {
+                                comp_id[nbrs[i]] = cid;
+                                bfs_queue.push_back(nbrs[i]);
+                            }
+                        }
+                    }
+                }
+
+                // Find the largest component
+                size_t largest_idx = 0;
+                for (size_t i = 1; i < components.size(); ++i) {
+                    if (components[i].size() > components[largest_idx].size()) {
+                        largest_idx = i;
+                    }
+                }
+
+                // Evacuate all small components into the largest
+                for (size_t ci = 0; ci < components.size(); ++ci) {
+                    if (ci == largest_idx) { continue; }
+                    for (const partition_t b : components[ci]) {
+                        if (p_manager.bweights[b] == 0) { continue; }
+                        // Find nearest block in largest component with capacity
+                        const weight_t b_weight = p_manager.bweights[b];
+                        partition_t target = NO_ID;
+                        weight_t best_dist = std::numeric_limits<weight_t>::max();
+                        for (const partition_t s : components[largest_idx]) {
+                            if (p_manager.bweights[s] + b_weight > p_manager.get_lmax(s)) { continue; }
+                            weight_t d = d_oracle.get(b, s);
+                            if (d < best_dist) {
+                                best_dist = d;
+                                target = s;
+                            }
+                        }
+                        if (target == NO_ID) { continue; }
+                        for (const vertex_t u : blk_verts[b]) {
+                            if (p_manager.partition[u] != b) { continue; }
+                            const weight_t uw = g.v_weight(u);
+                            p_manager.bweights[b] -= uw;
+                            p_manager.partition[u] = target;
+                            p_manager.bweights[target] += uw;
+                            blk_verts[target].push_back(u);
+                        }
+                    }
+                }
+            }
+
+            // Fifth pass: diffuse vertices from dense borders into empty regions
+            diffuse_into_empties();
 
             uncontraction_ms += get_milli_seconds(p, get_time_point());
         }
@@ -490,9 +1026,9 @@ namespace HeiProMap {
             auto p = get_time_point();
 
             if (level == 0) {
-                rebalancer.template rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             } else {
-                rebalancer.template rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             }
 
             rebalance_ms += get_milli_seconds(p, get_time_point());
@@ -506,6 +1042,14 @@ namespace HeiProMap {
                 auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
+            }
+
+            if (ac.waver_message_refinement_config.enabled) {
+                auto sp_local = get_time_point();
+                WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
+                                               ac.waver_message_refinement_config,
+                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
             refinement_ms += get_milli_seconds(p, get_time_point());

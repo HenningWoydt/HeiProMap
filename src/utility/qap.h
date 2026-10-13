@@ -733,6 +733,54 @@ namespace HeiProMap {
         return load.empty() ? 0.0 : *std::max_element(load.begin(), load.end());
     }
 
+    // Full four-term WSE cost: alpha_end*|E_π| + beta_end*ΣS + alpha_link*Σh + beta_link*Σh·S
+    // Each edge is counted once (undirected: we iterate all directed half-edges, halve at end).
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline f64 get_waver_cost(const GraphT &g,
+                              const PartitionManagerT &p_manager,
+                              const DistanceOracleT &d_oracle,
+                              const f64 alpha_end,
+                              const f64 beta_end,
+                              const f64 alpha_link,
+                              const f64 beta_link) {
+        // collect unique communicating block pairs for alpha_end
+        std::vector<u64> block_pairs;
+        block_pairs.reserve(g.m / 4);
+
+        f64 sum_S   = 0.0;
+        f64 sum_h   = 0.0;
+        f64 sum_hS  = 0.0;
+
+        for (vertex_t u = 0; u < g.n; ++u) {
+            const partition_t u_id = p_manager[u];
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t    v    = g.edges_v[i];
+                const partition_t v_id = p_manager[v];
+                if (u_id == v_id) { continue; }
+                const f64 w = static_cast<f64>(g.edge_w(i));
+                const f64 d = static_cast<f64>(d_oracle.get(u_id, v_id));
+                sum_S  += w;
+                sum_h  += d;
+                sum_hS += w * d;
+                // pack ordered pair so each undirected pair is unique
+                const partition_t lo = u_id < v_id ? u_id : v_id;
+                const partition_t hi = u_id < v_id ? v_id : u_id;
+                block_pairs.push_back((static_cast<u64>(lo) << 32) | static_cast<u64>(hi));
+            }
+        }
+
+        // edges were visited twice (both directions) — halve continuous sums
+        sum_S  *= 0.5;
+        sum_h  *= 0.5;
+        sum_hS *= 0.5;
+
+        // count distinct block pairs
+        std::sort(block_pairs.begin(), block_pairs.end());
+        const f64 n_pairs = static_cast<f64>(std::unique(block_pairs.begin(), block_pairs.end()) - block_pairs.begin());
+
+        return alpha_end * n_pairs + beta_end * sum_S + alpha_link * sum_h + beta_link * sum_hS;
+    }
+
 }
 
 #endif //HEIPROMAP_QAP_H
