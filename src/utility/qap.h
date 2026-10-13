@@ -595,6 +595,64 @@ namespace HeiProMap {
         return qap;
     }
 
+    struct MessageCostBreakdown {
+        f64 term_cardinality = 0.0;  // alpha_end  * |E_pi|
+        f64 term_cut_volume  = 0.0;  // beta_end   * sum S(m)
+        f64 term_hop_count   = 0.0;  // alpha_link * sum h(m)
+        f64 term_hop_bytes   = 0.0;  // beta_link  * sum h(m)*S(m)
+        f64 total            = 0.0;
+
+        void print(std::ostream &os) const {
+            os << "  Cardinality (alpha_end * |E_pi|)  : " << term_cardinality << "\n"
+               << "  Cut volume  (beta_end  * sum S)   : " << term_cut_volume  << "\n"
+               << "  Hop count   (alpha_link * sum h)  : " << term_hop_count   << "\n"
+               << "  Hop-bytes   (beta_link * sum h*S) : " << term_hop_bytes   << "\n"
+               << "  Total message cost                : " << total            << "\n";
+        }
+    };
+
+    // Computes the full four-term communication cost model over the quotient graph.
+    // Each undirected PE pair (p,q) with p<q represents two directed messages (p->q and q->p),
+    // so cardinality and volume-dependent terms are doubled to match the directed formulation.
+    template<typename QuotientGraphT, typename DistanceOracleT>
+    inline MessageCostBreakdown get_message_cost(const QuotientGraphT &q_graph,
+                                                 const partition_t k,
+                                                 const DistanceOracleT &d_oracle,
+                                                 f64 alpha_end,
+                                                 f64 beta_end,
+                                                 f64 alpha_link,
+                                                 f64 beta_link) {
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_message_cost");
+
+        f64 sum_cardinality = 0.0;
+        f64 sum_S           = 0.0;
+        f64 sum_h           = 0.0;
+        f64 sum_hS          = 0.0;
+
+        for (partition_t u = 0; u < k; ++u) {
+            q_graph.for_each_neighbor(u, [&](const partition_t v, const weight_t w) {
+                if (u < v) {
+                    f64 S = static_cast<f64>(w);
+                    f64 h = static_cast<f64>(d_oracle.get(u, v));
+                    // multiply by 2: each undirected pair = two directed messages
+                    sum_cardinality += 2.0;
+                    sum_S           += 2.0 * S;
+                    sum_h           += 2.0 * h;
+                    sum_hS          += 2.0 * h * S;
+                }
+            });
+        }
+
+        MessageCostBreakdown result;
+        result.term_cardinality = alpha_end  * sum_cardinality;
+        result.term_cut_volume  = beta_end   * sum_S;
+        result.term_hop_count   = alpha_link * sum_h;
+        result.term_hop_bytes   = beta_link  * sum_hS;
+        result.total            = result.term_cardinality + result.term_cut_volume
+                                + result.term_hop_count   + result.term_hop_bytes;
+        return result;
+    }
+
 }
 
 #endif //HEIPROMAP_QAP_H

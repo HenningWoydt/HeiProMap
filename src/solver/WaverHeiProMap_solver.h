@@ -202,6 +202,9 @@ namespace HeiProMap {
             f64 duration = get_seconds(sp, ep);
 
             weight_t qap = get_qap(graphs[0], p_manager, d_oracle);
+            MessageCostBreakdown cost = get_message_cost(q_graph, ac.k, d_oracle,
+                                                         ac.alpha_end(), ac.beta_end(),
+                                                         ac.alpha_link, ac.beta_link);
             weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             size_t n_empty_partitions = 0;
@@ -222,6 +225,7 @@ namespace HeiProMap {
             std::cout << "Threads               : " << ac.threads << std::endl;
             std::cout << "-----------------------" << std::endl;
             std::cout << "Final QAP             : " << qap << std::endl;
+            cost.print(std::cout);
             std::cout << "max block w           : " << max(p_manager.get_bweights()) << std::endl;
             std::cout << "#empty partitions     : " << n_empty_partitions << std::endl;
             std::cout << "#oload partitions     : " << n_overloaded_partitions << std::endl;
