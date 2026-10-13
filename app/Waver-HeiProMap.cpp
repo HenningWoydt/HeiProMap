@@ -24,67 +24,79 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#include "src/configuration/WaverMap_configuration.h"
-#include "src/distance_oracles/grid_distance_oracle.h"
-#include "src/solver/WaverMap_solver.h"
+#include <csignal>
+#include <cstring>
+#include <iostream>
+#include <vector>
+
+#include "../src/configuration/WaverHeiProMap_configuration.h"
+#include "../src/distance_oracles/grid_distance_oracle.h"
+#include "../src/solver/WaverHeiProMap_solver.h"
+#include "../src/utility/profiler.h"
+#include "../src/utility/utils.h"
+
+static void signal_handler(int sig) {
+    std::cout << "\n[Waver-HeiProMap] Caught signal " << sig << ", printing profiler before exit:\n";
+    HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
+    std::exit(128 + sig);
+}
 
 int main(const int argc, char *argv[]) {
+    std::signal(SIGTERM, signal_handler);
+    std::signal(SIGINT, signal_handler);
+    std::signal(SIGHUP, signal_handler);
+    std::signal(SIGABRT, signal_handler);
+
     auto sp = HeiProMap::get_time_point();
 
+    int run_argc = argc;
+    char **run_argv = argv;
+
+    std::vector<std::string> default_args_storage;
+    std::vector<char *> default_argv_ptrs;
+
     if (argc == 1) {
-        {
-            HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
-            std::vector<std::pair<std::string, std::string> > input = {
-                // {"--graph", "../../ProMapRepo/data/mapping/rgg_n_2_22_s0.graph"},
-                // {"--mapping", "../data/out/partition/rgg_n_2_22_s0.graph.txt"},
-                {"--topology", "../data/topologies/256_PEs.graph"},
-                {"--graph", "../data/heipromap_input.graph"},
-                {"--mapping", "../data/out/heipromap_input.txt"},
-                // {"--topology", "../data/heipromap_topology.graph"},
-                {"--imbalance", "0.03"},
-                {"--config", "fast"},
-                {"--seed", "0"},
-                {"--threads", "1"},
-            };
+        HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
+        std::vector<std::pair<std::string, std::string>> input = {
+            {"--topology", "../data/topologies/256_PEs.graph"},
+            {"--graph", "../data/heipromap_input.graph"},
+            {"--mapping", "../data/out/heipromap_input.txt"},
+            {"--imbalance", "0.03"},
+            {"--config", "fast"},
+            {"--seed", "0"},
+            {"--threads", "1"},
+        };
 
-            std::vector<std::string> args = {"waver_map"};
-            for (const auto &[key, val]: input) {
-                args.push_back(key);
-                args.push_back(val);
-            }
-
-            int temp_argc = (int) args.size();
-            if (temp_argc < 0) {
-                std::cerr << "Error: Invalid argc size" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-
-            char **temp_argv = new char *[temp_argc];
-
-            for (int i = 0; i < temp_argc; ++i) {
-                temp_argv[i] = new char[args[i].size() + 1];
-                std::strcpy(temp_argv[i], args[i].c_str());
-            }
-
-            HeiProMap::WaverMapConfiguration ac(temp_argc, temp_argv);
-
-            HeiProMap::WaverMapSolver<HeiProMap::GridDistanceOracle> solver(ac);
-            solver.solve();
-
-            for (int i = 0; i < temp_argc; ++i) { delete[] temp_argv[i]; }
-            delete[] temp_argv;
-
-            HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
+        default_args_storage.push_back("Waver-HeiProMap");
+        for (const auto &[key, val]: input) {
+            default_args_storage.push_back(key);
+            default_args_storage.push_back(val);
         }
-    } else {
-        HeiProMap::WaverMapConfiguration ac(argc, argv);
 
-        HeiProMap::WaverMapSolver<HeiProMap::GridDistanceOracle> solver(ac);
-        solver.solve();
+        for (auto &arg: default_args_storage) {
+            default_argv_ptrs.push_back(arg.data());
+        }
+
+        run_argc = static_cast<int>(default_argv_ptrs.size());
+        run_argv = default_argv_ptrs.data();
     }
 
+    HeiProMap::WaverHeiProMapConfiguration ac(run_argc, run_argv);
+
+    HeiProMap::WaverHeiProMapSolver<HeiProMap::GridDistanceOracle> solver(ac);
+    std::vector<HeiProMap::partition_t> partition = solver.solve();
+
+    auto t_write_start = HeiProMap::get_time_point();
+    HeiProMap::write_partition(partition, ac.mapping_out);
+    auto t_write_end = HeiProMap::get_time_point();
+    HeiProMap::f64 write_io_ms = HeiProMap::get_milli_seconds(t_write_start, t_write_end);
+
+    std::cout << "IO Write Time (ms)    : " << write_io_ms << std::endl;
+
     auto ep = HeiProMap::get_time_point();
-    std::cout << "Total Time in waver_map.cpp (s): " << HeiProMap::get_seconds(sp, ep) << std::endl;
+    std::cout << "Total Time in Waver-HeiProMap.cpp (s): " << HeiProMap::get_seconds(sp, ep) << std::endl;
+
+    HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
 
     return 0;
 }
