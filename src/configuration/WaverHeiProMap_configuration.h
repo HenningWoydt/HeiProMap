@@ -154,9 +154,8 @@ namespace HeiProMap {
 
 
 namespace HeiProMap {
-    class WaverMapConfiguration {
+    class WaverHeiProMapConfiguration {
     public:
-        bool use_grid_oracle = true;
         std::vector<CommandLineOption> options = {
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
@@ -252,7 +251,7 @@ namespace HeiProMap {
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
         NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
 
-        WaverMapConfiguration() = default;
+        WaverHeiProMapConfiguration() = default;
 
         void set_hierarchy() {
             hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
@@ -284,7 +283,7 @@ namespace HeiProMap {
         }
 
 
-        WaverMapConfiguration(int argc, char *argv[]) {
+        WaverHeiProMapConfiguration(int argc, char *argv[]) {
             // read command lines into vector
             std::vector<std::string> args(argv, argv + argc);
 
@@ -319,7 +318,7 @@ namespace HeiProMap {
             set_imbalance();
             set_seed();
             set_threads();
-            if (is_set("--use-grid-oracle")) { use_grid_oracle = (get("--use-grid-oracle") == "true"); }
+
 
             if (!is_set("--config")) {
                 std::cout << "Error: --config (or -c) must be specified." << std::endl;

@@ -21,7 +21,7 @@ namespace HeiProMap {
 
         size_t m_W = 0;
 
-        void initialize(const CSRGraph& topology_graph, size_t max_threads, bool use_grid = false, size_t grid_W = 0) {
+        void initialize(const CSRGraph& topology_graph, size_t max_threads, size_t grid_W = 0) {
             HEIPROMAP_PROFILE_SCOPE("misc", "GridDistanceOracle", "initialize");
             m_graph = &topology_graph;
             m_k = topology_graph.n;
