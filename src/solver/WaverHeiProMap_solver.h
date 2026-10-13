@@ -39,6 +39,7 @@
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/large_quotient_graph.h"
 #include "../datastructures/partition_manager.h"
+
 #include "../definitions.h"
 #include "../configuration/WaverHeiProMap_configuration.h"
 #include "../utility/macros.h"
@@ -52,7 +53,9 @@
 #include "../coarsening/heavy_edge_matching.h"
 #include "../rebalance/rebalancer.h"
 #include "../init_partitioning/greedy_partitioner.h"
-#include "../refinement/flow_based_refinement.h"
+#include "../init_partitioning/waver_greedy_partitioner.h"
+#include "../refinement/simple_label_propagation_refinement.h"
+#include "../refinement/waver_label_propagation_refinement.h"
 #include "../distance_oracles/grid_distance_oracle.h"
 
 namespace HeiProMap {
@@ -79,9 +82,7 @@ namespace HeiProMap {
         Rebalancer rebalancer;
 
         // refinement
-        LabelPropagationRefinement<false> lp_refine;
-        QuotientGraphRefinement<false> qg_refine;
-        FlowBasedRefinement<false> flow_based_refinement;
+        WaverLabelPropagationRefinement<false> lp_refine;
 
         f64 io_ms = 0.0;
         f64 misc_ms = 0.0;
@@ -92,8 +93,6 @@ namespace HeiProMap {
         f64 rebalance_ms = 0.0;
         f64 refinement_ms = 0.0;
         f64 lp_refine_ms = 0.0;
-        f64 qg_refine_ms = 0.0;
-        f64 flow_refine_ms = 0.0;
 
         void activate_all_blocks() {
             for (partition_t id = 0; id < ac.k; ++id) {
@@ -126,13 +125,8 @@ namespace HeiProMap {
             activate_all_blocks();
             update_lmax_array();
             bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
-            if (ac.label_propagation_config.enabled) lp_refine.update_k(ac.k);
-            if (ac.quotient_graph_refinement_config.enabled) qg_refine.update_k(ac.k);
-            if (ac.flow_based_refinement_config.enabled) flow_based_refinement.update_k(ac.k);
         }
 
         void initialize_common(CSRGraph topology) {
@@ -145,8 +139,6 @@ namespace HeiProMap {
             activate_all_blocks();
             update_lmax_array();
             bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
@@ -154,14 +146,8 @@ namespace HeiProMap {
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
-            if (ac.label_propagation_config.enabled) {
-                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
-            }
-            if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
-            }
-            if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+            if (ac.waver_label_propagation_config.enabled) {
+                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.waver_label_propagation_config);
             }
         }
 
@@ -201,6 +187,9 @@ namespace HeiProMap {
             const auto ep = std::chrono::high_resolution_clock::now();
             f64 duration = get_seconds(sp, ep);
 
+            q_graph.compute_from_scratch(graphs[0], p_manager);
+            block_conn.compute_from_scratch(graphs[0], p_manager);
+            HEAVYASSERT(assert_state_after_partitioning(graphs[0], p_manager, bv_manager, q_graph, block_conn, ac.k));
             MessageCostBreakdown cost = get_message_cost(q_graph, ac.k, d_oracle,
                                                          ac.alpha_end(), ac.beta_end(),
                                                          ac.alpha_link, ac.beta_link);
@@ -224,6 +213,12 @@ namespace HeiProMap {
             std::cout << "k                     : " << ac.k << std::endl;
             std::cout << "Lmax                  : " << lmax << std::endl;
             std::cout << "Threads               : " << ac.threads << std::endl;
+            std::cout << "alpha_send            : " << ac.alpha_send << std::endl;
+            std::cout << "alpha_recv            : " << ac.alpha_recv << std::endl;
+            std::cout << "alpha_link            : " << ac.alpha_link << std::endl;
+            std::cout << "beta_send             : " << ac.beta_send << std::endl;
+            std::cout << "beta_recv             : " << ac.beta_recv << std::endl;
+            std::cout << "beta_link             : " << ac.beta_link << std::endl;
             std::cout << "-----------------------" << std::endl;
             cost.print(std::cout);
             std::cout << std::left << std::setw(36) << "Max link load"
@@ -241,8 +236,6 @@ namespace HeiProMap {
             std::cout << "Rebalance             : " << rebalance_ms << std::endl;
             std::cout << "Refinement            : " << refinement_ms << std::endl;
             std::cout << "  Label Prop.         : " << lp_refine_ms << std::endl;
-            std::cout << "  Quotient Graph      : " << qg_refine_ms << std::endl;
-            std::cout << "  Flow                : " << flow_refine_ms << std::endl;
             std::cout << "Misc                  : " << misc_ms << std::endl;
             std::cout << "ALL                   : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
@@ -313,7 +306,7 @@ namespace HeiProMap {
                 for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
                     AlignedArray<vertex_t> vertices;
                     vertices.initialize(graphs.back().n);
-                    greedy_partition(graphs.back(), d_oracle, ac.imbalance, ac.seed + thread_id, local_p_managers[thread_id], vertices);
+                    waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, ac.seed + thread_id, local_p_managers[thread_id], vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                     local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
                 }
 
@@ -328,40 +321,32 @@ namespace HeiProMap {
             } else {
                 AlignedArray<vertex_t> vertices;
                 vertices.initialize(graphs.back().n);
-                greedy_partition(graphs.back(), d_oracle, ac.imbalance, ac.seed, p_manager, vertices);
+                waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, ac.seed, p_manager, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             }
 
             HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
             p_manager.reset_weights();
             bv_manager.reset();
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs.back().n, graphs.back().m, ac.k);
-            block_conn.reset_build();
 
             for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                block_conn.begin_vertex(graphs.back(), u);
-
                 const partition_t u_id = p_manager[u];
                 const weight_t u_w = graphs.back().v_weight(u);
                 p_manager.set(u, u_w, u_id);
 
                 for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
                     const vertex_t v = graphs.back().edges_v[i];
-                    const weight_t w = graphs.back().edge_w(i);
                     const partition_t v_id = p_manager[v];
-
-                    block_conn.add_connection(u, v_id, w);
 
                     if (u_id != v_id) {
                         bv_manager.add(u, u_id);
-                        if (u < v) {
-                            q_graph.add_edge(u_id, v_id, w);
-                        }
                     }
                 }
             }
 
             initial_partitioning_ms += get_milli_seconds(p, get_time_point());
+
+            q_graph.compute_from_scratch(graphs.back(), p_manager);
+            block_conn.compute_from_scratch(graphs.back(), p_manager);
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
@@ -434,8 +419,6 @@ namespace HeiProMap {
                 p_manager.set(u, u_weight, best);
             }
 
-            q_graph.compute_from_scratch(graphs.back(), p_manager);
-
             uncontraction_ms += get_milli_seconds(p, get_time_point());
         }
 
@@ -449,7 +432,6 @@ namespace HeiProMap {
 
             if (ac.threads > 1) {
                 bv_manager.parallel_reset(ac.threads);
-                block_conn.parallel_initialize_offsets(g_uncontracted, ac.threads);
 
                 std::vector<std::vector<std::vector<vertex_t>>> thread_boundaries(ac.threads, std::vector<std::vector<vertex_t>>(ac.k));
 
@@ -463,23 +445,11 @@ namespace HeiProMap {
                     for (vertex_t u = start_u; u < end_u; ++u) {
                         const partition_t u_id = p_manager[u];
                         size_t n_different = 0;
-                        weight_t own_weight = 0;
 
                         for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                             const vertex_t v = g_uncontracted.edges_v[i];
-                            const weight_t w = g_uncontracted.edge_w(i);
                             const partition_t v_id = p_manager[v];
-
-                            if (u_id == v_id) {
-                                own_weight += w;
-                            } else {
-                                block_conn.add_connection(u, v_id, w);
-                            }
-
                             n_different += (u_id != v_id);
-                        }
-                        if (own_weight > 0) {
-                            block_conn.add_connection(u, u_id, own_weight);
                         }
 
                         if (n_different > 0) {
@@ -492,31 +462,15 @@ namespace HeiProMap {
                 bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
             } else {
                 bv_manager.reset();
-                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
-                block_conn.reset_build();
 
                 for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
                     const partition_t u_id = p_manager[u];
                     size_t n_different = 0;
 
-                    block_conn.begin_vertex(g_uncontracted, u);
-                    weight_t own_weight = 0;
-
                     for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                         const vertex_t v = g_uncontracted.edges_v[i];
-                        const weight_t w = g_uncontracted.edge_w(i);
                         const partition_t v_id = p_manager[v];
-
-                        if (u_id == v_id) {
-                            own_weight += w;
-                        } else {
-                            block_conn.add_connection(u, v_id, w);
-                        }
-
                         n_different += (u_id != v_id);
-                    }
-                    if (own_weight > 0) {
-                        block_conn.add_connection(u, u_id, own_weight);
                     }
                     bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
                 }
@@ -526,6 +480,9 @@ namespace HeiProMap {
             mappings.pop_back();
 
             uncontraction_ms += get_milli_seconds(p, get_time_point());
+
+            q_graph.compute_from_scratch(graphs.back(), p_manager);
+            block_conn.compute_from_scratch(graphs.back(), p_manager);
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
@@ -545,22 +502,10 @@ namespace HeiProMap {
         void refinement() {
             auto p = get_time_point();
 
-            if (ac.label_propagation_config.enabled) {
+            if (ac.waver_label_propagation_config.enabled) {
                 auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
-            }
-
-            if (ac.quotient_graph_refinement_config.enabled) {
-                auto sp_local = get_time_point();
-                qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
-                qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
-            }
-
-            if (ac.flow_based_refinement_config.enabled) {
-                auto sp_local = get_time_point();
-                flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
-                flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
             refinement_ms += get_milli_seconds(p, get_time_point());

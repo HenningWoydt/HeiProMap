@@ -46,7 +46,7 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g3 -DNDEBUG -fno-omit-frame-pointer -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
 set(CMAKE_CXX_FLAGS_MINSIZEREL "-O3 -DNDEBUG -finline-functions -fwhole-program -ftree-vectorize -flto -funroll-loops -falign-loops -march=native -Wall -Wextra -pedantic")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -march=x86-64 -mtune=generic -fno-omit-frame-pointer -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -rdynamic -march=x86-64 -mtune=generic -fno-omit-frame-pointer -Wall -Wextra -pedantic -Wno-unused-variable -Wno-unused-parameter")
 
 # Enable IPO only where it makes sense
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)

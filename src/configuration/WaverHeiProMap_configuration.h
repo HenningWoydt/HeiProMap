@@ -31,7 +31,8 @@
 #include <vector>
 
 #include "../definitions.h"
-#include "../refinement/flow_based_refinement.h"
+#include "../refinement/simple_label_propagation_refinement.h"
+#include "../refinement/waver_label_propagation_refinement.h"
 namespace HeiProMap {
 
     class NegativeCycleConfiguration final {
@@ -145,8 +146,6 @@ namespace HeiProMap {
 
 #include "../utility/utils.h"
 // #include "../init_partitioning/global_multisection.h"
-#include "../refinement/label_propagation_refinement.h"
-#include "../refinement/quotient_graph_refinement.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../coarsening/heavy_edge_matching.h"
@@ -265,9 +264,8 @@ namespace HeiProMap {
         REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
 
         // refinement algorithms
-        LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
-        QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
-        FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
+        SimpleLabelPropagationConfiguration simple_label_propagation_config = SimpleLabelPropagationConfiguration("Label Propagation");
+        WaverLabelPropagationConfiguration  waver_label_propagation_config  = WaverLabelPropagationConfiguration("Waver Label Propagation");
         NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
 
         WaverHeiProMapConfiguration() = default;
@@ -379,6 +377,12 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
+            // Propagate cost-model parameters into the refinement config
+            waver_label_propagation_config.alpha_end  = alpha_end();
+            waver_label_propagation_config.beta_end   = beta_end();
+            waver_label_propagation_config.alpha_link = alpha_link;
+            waver_label_propagation_config.beta_link  = beta_link;
+
             // Override coarsening settings from CLI if they are set
             if (is_set("--coarsening")) {
                 coarsening_algorithm_string = get("--coarsening");
@@ -423,41 +427,6 @@ namespace HeiProMap {
                 heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-rating-function"));
             }
 
-            // Override flow refinement configs
-            if (is_set("--flow-refinement-enabled")) {
-                std::string val = get("--flow-refinement-enabled");
-                flow_based_refinement_config.enabled = (val == "true" || val == "1");
-            }
-            if (is_set("--flow-refinement-use-active-block-scheduling")) {
-                std::string val = get("--flow-refinement-use-active-block-scheduling");
-                flow_based_refinement_config.use_active_block_scheduling = (val == "true" || val == "1");
-            }
-            if (is_set("--flow-refinement-max-global-iteration")) {
-                flow_based_refinement_config.max_global_iteration = std::stoull(get("--flow-refinement-max-global-iteration"));
-            }
-            if (is_set("--flow-refinement-max-local-iteration")) {
-                flow_based_refinement_config.max_local_iteration = std::stoull(get("--flow-refinement-max-local-iteration"));
-            }
-            if (is_set("--flow-refinement-alpha")) {
-                flow_based_refinement_config.alpha = std::stod(get("--flow-refinement-alpha"));
-            }
-            if (is_set("--flow-refinement-alpha-upper-bound")) {
-                flow_based_refinement_config.alpha_upper_bound = std::stod(get("--flow-refinement-alpha-upper-bound"));
-            }
-            if (is_set("--flow-refinement-alpha-modifier")) {
-                flow_based_refinement_config.alpha_modifier = std::stod(get("--flow-refinement-alpha-modifier"));
-            }
-            if (is_set("--flow-refinement-use-closed-vertex-set")) {
-                std::string val = get("--flow-refinement-use-closed-vertex-set");
-                flow_based_refinement_config.use_closed_vertex_set = (val == "true" || val == "1");
-            }
-            if (is_set("--flow-refinement-closed-vertex-set-repeats")) {
-                flow_based_refinement_config.closed_vertex_sets_repeats = std::stoull(get("--flow-refinement-closed-vertex-set-repeats"));
-            }
-            if (is_set("--flow-refinement-enabled-edge-cut-optimization")) {
-                std::string val = get("--flow-refinement-enabled-edge-cut-optimization");
-                flow_based_refinement_config.use_edge_cut = (val == "true" || val == "1");
-            }
         }
 
         void set_fast() {
@@ -490,32 +459,13 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
 
 
-            // enable label propagation
-            label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
-            label_propagation_config.force_parallel_alg = false;
+            simple_label_propagation_config.enabled = false;
 
-            // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = false;
-            quotient_graph_refinement_config.max_iteration = 2;
-            quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 3;
-            quotient_graph_refinement_config.use_preemptive_exit = true;
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
+            waver_label_propagation_config.force_parallel_alg = false;
 
             negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
-
-            // enable flow based refinement
-            flow_based_refinement_config.enabled = false;
-            flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 1;
-            flow_based_refinement_config.alpha = 1.0;
-            flow_based_refinement_config.alpha_upper_bound = 64.0;
-            flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
         void set_eco() {
@@ -545,31 +495,12 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
 
 
-            // enable label propagation
-            label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            simple_label_propagation_config.enabled = false;
 
-            // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
-            quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 3;
-            quotient_graph_refinement_config.use_preemptive_exit = true;
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
 
             negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
-
-            // enable flow based refinement
-            flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.max_global_iteration = 1;
-            flow_based_refinement_config.max_local_iteration = 3;
-            flow_based_refinement_config.alpha = 1.0;
-            flow_based_refinement_config.alpha_upper_bound = 64.0;
-            flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
         void set_strong() {
@@ -599,34 +530,12 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
 
 
-            // enable label propagation
-            label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            simple_label_propagation_config.enabled = false;
 
-            // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
-            quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 3;
-            quotient_graph_refinement_config.use_preemptive_exit = true;
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
 
             negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
-
-            // enable flow based refinement
-            flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.use_active_block_scheduling = true;
-            flow_based_refinement_config.max_global_iteration = 2;
-            flow_based_refinement_config.max_local_iteration = 5;
-            flow_based_refinement_config.alpha = 1.0;
-            flow_based_refinement_config.alpha_upper_bound = 16.0;
-            flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = false;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
-            flow_based_refinement_config.always_include_boundary = true;
-            flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
         }
 
         void set_super_strong() {
@@ -649,32 +558,12 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
 
 
-            // enable label propagation
-            label_propagation_config.enabled = true;
-            label_propagation_config.max_iteration = 5;
+            simple_label_propagation_config.enabled = false;
 
-            // enable quotient graph refinement
-            quotient_graph_refinement_config.enabled = true;
-            quotient_graph_refinement_config.max_iteration = 5;
-            quotient_graph_refinement_config.alpha = 5.0;
-            quotient_graph_refinement_config.min_n_steps = 3;
-            quotient_graph_refinement_config.use_preemptive_exit = true;
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
 
             negative_cycle_config.enabled = false;
-            negative_cycle_config.max_iterations = 10;
-            negative_cycle_config.random_tries = 10;
-            negative_cycle_config.max_path_length = 8;
-
-            // enable flow based refinement
-            flow_based_refinement_config.enabled = true;
-            flow_based_refinement_config.use_active_block_scheduling = true;
-            flow_based_refinement_config.max_global_iteration = 5;
-            flow_based_refinement_config.max_local_iteration = 10;
-            flow_based_refinement_config.alpha = 8.0;
-            flow_based_refinement_config.alpha_upper_bound = 16.0;
-            flow_based_refinement_config.alpha_modifier = 2.0;
-            flow_based_refinement_config.use_closed_vertex_set = true;
-            flow_based_refinement_config.closed_vertex_sets_repeats = 500;
         }
 
         void set_fast_parallel() {
