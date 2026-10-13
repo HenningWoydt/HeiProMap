@@ -53,10 +53,9 @@
 #include "../rebalance/rebalancer.h"
 #include "../init_partitioning/greedy_partitioner.h"
 #include "../refinement/flow_based_refinement.h"
-#include "../distance_oracles/matrix_distance_oracle.h"
+#include "../distance_oracles/grid_distance_oracle.h"
 
 namespace HeiProMap {
-    template<typename DistanceOracleT = DistanceOracle>
     class WaverHeiProMapSolver {
         WaverHeiProMapConfiguration ac;
         RandomEngine random_engine;
@@ -72,7 +71,7 @@ namespace HeiProMap {
         bv_manager_t bv_manager;
         LargeQuotientGraph q_graph;
         block_conn_t block_conn;
-        DistanceOracleT d_oracle;
+        GridDistanceOracle d_oracle;
 
         // matching
         std::vector<Mapping> mappings;

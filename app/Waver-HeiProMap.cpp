@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "../src/configuration/WaverHeiProMap_configuration.h"
-#include "../src/distance_oracles/grid_distance_oracle.h"
 #include "../src/solver/WaverHeiProMap_solver.h"
 #include "../src/utility/profiler.h"
 #include "../src/utility/utils.h"
@@ -83,7 +82,7 @@ int main(const int argc, char *argv[]) {
 
     HeiProMap::WaverHeiProMapConfiguration ac(run_argc, run_argv);
 
-    HeiProMap::WaverHeiProMapSolver<HeiProMap::GridDistanceOracle> solver(ac);
+    HeiProMap::WaverHeiProMapSolver solver(ac);
     std::vector<HeiProMap::partition_t> partition = solver.solve();
 
     auto t_write_start = HeiProMap::get_time_point();
