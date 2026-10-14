@@ -51,7 +51,6 @@
 #include "partition_aligner.h"
 
 namespace HeiProMap {
-
     class DynHeiProMapSolver {
         DynGraph g;
 
@@ -95,8 +94,7 @@ namespace HeiProMap {
             std::cout << "  Processed: " << lines_processed << " commands" << std::endl;
             std::cout << "  Vertices:  " << g.n << " (+" << (g.n - n_before) << ")" << std::endl;
             std::cout << "  Edges:     " << g.m / 2 << " (+" << (g.m - m_before) / 2 << ")" << std::endl;
-            std::cout << "  Dirty:     " << g.dirty_list.size() << " (+" << (g.dirty_list.size() - dirty_before) << ")"
-                    << std::endl;
+            std::cout << "  Dirty:     " << g.dirty_list.size() << " (+" << (g.dirty_list.size() - dirty_before) << ")" << std::endl;
         }
 
     public:
@@ -164,7 +162,7 @@ namespace HeiProMap {
                 config.distance.clear();
                 std::istringstream d_iss(d_str);
                 while (std::getline(d_iss, token, ':')) {
-                    config.distance.push_back(std::stoull(token));
+                    config.distance.push_back((weight_t) std::stoull(token));
                 }
 
                 oracle.initialize(config.hierarchy, config.distance);
@@ -173,12 +171,12 @@ namespace HeiProMap {
                 for (auto h: config.hierarchy) num_blocks *= h;
 
                 // Reset managers if hierarchy changes
-                p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.initialize(g.n, num_blocks, g.g_weight);
                 p_manager.activate_all_blocks();
-                bv_manager.initialize(g.n, (partition_t) num_blocks);
-                b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
-                q.initialize((partition_t) num_blocks);
-                initial_q.initialize((partition_t) num_blocks);
+                bv_manager.initialize(g.n, num_blocks);
+                b_conn.initialize(g.n, g.m, num_blocks);
+                q.initialize(num_blocks);
+                initial_q.initialize(num_blocks);
 
                 std::cout << "Hierarchy set to " << h_str << " with distances " << d_str << std::endl;
             } else if (cmd == "partition") {
@@ -227,11 +225,20 @@ namespace HeiProMap {
                 run_refine_fast(iters);
                 print_stats();
             } else if (cmd == "autorefine") {
-                if (g.dirty_list.size() > 1000 || g.new_vertices.size() > 500) {
-                    run_partition("fast");
+                f64 threshold_percent = 10.0;
+                std::string config_str = "fast";
+                iss >> threshold_percent >> config_str;
+
+                f64 current_dirty_percent = (g.n > 0) ? (100.0 * (f64) g.dirty_list_partition.size() / (f64) g.n) : 0.0;
+                if (current_dirty_percent >= threshold_percent) {
+                    std::cout << "Autorefine: " << current_dirty_percent << "% dirty (>= " << threshold_percent << "%), partitioning (" << config_str << ")..." << std::endl;
+                    run_partition(config_str);
                 } else {
-                    u32 iters = 2;
-                    iss >> iters;
+                    u32 iters = 5;
+                    if (config_str == "eco") iters = 10;
+                    else if (config_str == "strong") iters = 20;
+
+                    std::cout << "Autorefine: " << current_dirty_percent << "% dirty (< " << threshold_percent << "%), refining (" << iters << " iterations)..." << std::endl;
                     run_refine_fast(iters);
                 }
                 print_stats();
@@ -242,29 +249,29 @@ namespace HeiProMap {
             }
 
             auto end = std::chrono::steady_clock::now();
-            double ms = std::chrono::duration<double, std::milli>(end - start).count();
+            f64 ms = std::chrono::duration<f64, std::milli>(end - start).count();
 
             // Only measure significant commands for the user
             command_stats[cmd].add(ms);
         }
 
-        void print_stats() {
+        void print_stats() const {
             DynPartitionStats::print(g, p_manager, oracle, previous_partition,
                                      initial_partition, total_migration_cost_from_start,
                                      command_stats, config.imbalance);
         }
 
-        explicit DynHeiProMapSolver(DynConfiguration &t_config) : config(t_config) {
+        explicit DynHeiProMapSolver(const DynConfiguration &t_config) : config(t_config) {
             oracle.initialize(t_config.hierarchy, t_config.distance);
 
             u64 num_blocks = 1;
             for (auto h: config.hierarchy) num_blocks *= h;
 
-            p_manager.initialize(0, (partition_t) num_blocks, 0);
-            bv_manager.initialize(0, (partition_t) num_blocks);
-            b_conn.initialize(0, 0, (partition_t) num_blocks);
-            q.initialize((partition_t) num_blocks);
-            initial_q.initialize((partition_t) num_blocks);
+            p_manager.initialize(0, num_blocks, 0);
+            bv_manager.initialize(0, num_blocks);
+            b_conn.initialize(0, 0, num_blocks);
+            q.initialize(num_blocks);
+            initial_q.initialize(num_blocks);
 
             g.dirty_callback = [](vertex_t v) {
                 // Placeholder for incremental manager updates if needed
@@ -272,27 +279,27 @@ namespace HeiProMap {
         }
 
         weight_t calculate_migration_cost(const std::vector<partition_t> &old_partition,
-                                          const std::vector<partition_t> &new_partition) {
+                                          const std::vector<partition_t> &new_partition) const {
             return DynPartitionStats::calculate_migration_cost(g, oracle, old_partition, new_partition);
         }
 
-        u64 count_moved_vertices(const std::vector<partition_t> &old_partition,
-                                 const std::vector<partition_t> &new_partition) {
+        static u64 count_moved_vertices(const std::vector<partition_t> &old_partition,
+                                        const std::vector<partition_t> &new_partition) {
             return DynPartitionStats::count_moved_vertices(old_partition, new_partition);
         }
 
-        void align_partitions_hierarchically(std::vector<partition_t> &new_partition) {
+        void align_partitions_hierarchically(std::vector<partition_t> &new_partition) const {
             PartitionAligner::align(g, previous_partition, new_partition, config.hierarchy);
         }
 
     private:
         void rebuild_managers() {
             u64 num_blocks = p_manager.k;
-            p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+            p_manager.initialize(g.n, num_blocks, g.g_weight);
             p_manager.activate_all_blocks();
-            bv_manager.initialize(g.n, (partition_t) num_blocks);
-            b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
-            q.initialize((partition_t) num_blocks);
+            bv_manager.initialize(g.n, num_blocks);
+            b_conn.initialize(g.n, g.m, num_blocks);
+            q.initialize(num_blocks);
 
             // This is a full rebuild, so we just iterate over the current graph
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -302,9 +309,9 @@ namespace HeiProMap {
             }
         }
 
-        void rebuild_q(QuotientGraph &target_q) {
+        void rebuild_q(QuotientGraph &target_q) const {
             u64 num_blocks = p_manager.k;
-            target_q.initialize((partition_t) num_blocks);
+            target_q.initialize(num_blocks);
             for (vertex_t u = 0; u < g.n; ++u) {
                 if (!g.vertex_exists(u)) continue;
                 partition_t u_id = p_manager[u];
@@ -358,7 +365,7 @@ namespace HeiProMap {
 
                 previous_partition = reference;
 
-                p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.initialize(g.n, num_blocks, g.g_weight);
                 p_manager.activate_all_blocks();
                 p_manager.reset_weights();
                 for (vertex_t u = 0; u < g.n; ++u) {
@@ -394,7 +401,7 @@ namespace HeiProMap {
             size_t num_new = g.new_vertices.size();
 
             weight_t comm_cost_before = get_qap(g, p_manager.partition.get_vector(), oracle);
-            double balance_before = (double) p_manager.max_weight() / ((double) g.g_weight / (double) p_manager.k);
+            f64 balance_before = (f64) p_manager.max_weight() / ((f64) g.g_weight / (f64) p_manager.k);
 
             u64 num_blocks = p_manager.k;
             weight_t allowed_max_block_weight = (weight_t) ((1.0 + config.imbalance) * ((f64) g.g_weight / (f64) num_blocks));
@@ -408,7 +415,7 @@ namespace HeiProMap {
 
             // 2. Incremental Refinement
             // Create temporary CSRGraph (Still needed because refinement algorithms expect CSRGraph)
-            ::HeiProMap::CSRGraph csr_g(g.n, g.m, g.g_weight);
+            CSRGraph csr_g(g.n, g.m, g.g_weight);
             for (vertex_t u = 0; u < g.n; ++u) {
                 csr_g.v_weights[u] = g.v_weights[u];
                 csr_g.neighborhoods[u + 1] = csr_g.neighborhoods[u] + g.neighbors[u].size();
@@ -419,10 +426,10 @@ namespace HeiProMap {
             }
 
             // Initialize managers (fully for now, later incrementally)
-            bv_manager.initialize(csr_g.n, (partition_t) num_blocks);
-            b_conn.initialize(csr_g.n, csr_g.m, (partition_t) num_blocks);
+            bv_manager.initialize(csr_g.n, num_blocks);
+            b_conn.initialize(csr_g.n, csr_g.m, num_blocks);
             b_conn.reset_build();
-            q.initialize((partition_t) num_blocks);
+            q.initialize(num_blocks);
 
             // Populate structures
             for (vertex_t u = 0; u < csr_g.n; ++u) {
@@ -441,18 +448,16 @@ namespace HeiProMap {
             }
 
             // Initialize and run refinement
-            ::HeiProMap::LabelPropagationConfiguration lp_config("Label Propagation");
+            LabelPropagationConfiguration lp_config("Label Propagation");
             lp_config.enabled = true;
             lp_config.max_iteration = num_iterations;
 
-            ::HeiProMap::LabelPropagationRefinement<false> lp_refine;
-            lp_refine.initialize(csr_g.n, csr_g.m, (partition_t) num_blocks, (u32) config.n_threads, (u32) config.seed, lp_config);
+            LabelPropagationRefinement<false> lp_refine;
+            lp_refine.initialize(csr_g.n, csr_g.m, num_blocks, (u32) config.n_threads, (u32) config.seed, lp_config);
 
-            AlignedArray<weight_t> lmax_constraints;
-            lmax_constraints.initialize((partition_t) num_blocks);
             weight_t lmax = std::ceil((1.0 + config.imbalance) * ((f64) csr_g.g_weight / (f64) num_blocks));
-            for (partition_t i = 0; i < (partition_t) num_blocks; ++i) {
-                lmax_constraints[i] = lmax;
+            for (partition_t i = 0; i < num_blocks; ++i) {
+                p_manager.lmax[i] = lmax;
             }
 
             lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn);
@@ -465,12 +470,10 @@ namespace HeiProMap {
             g.clear_new_vertices();
 
             weight_t comm_cost_after = get_qap(g, p_manager.partition.get_vector(), oracle);
-            double balance_after = (double) p_manager.max_weight() / ((double) g.g_weight / (double) p_manager.k);
+            f64 balance_after = (f64) p_manager.max_weight() / ((f64) g.g_weight / (f64) p_manager.k);
 
-            std::cout << "Incremental Refinement done (" << num_dirty << " dirty, " << num_new << " new vertices):" <<
-                    std::endl;
-            std::cout << "  Comm Cost: Before=" << comm_cost_before << " After=" << comm_cost_after << " (Diff=" << (
-                s64) comm_cost_before - (s64) comm_cost_after << ")" << std::endl;
+            std::cout << "Incremental Refinement done (" << num_dirty << " dirty, " << num_new << " new vertices):" << std::endl;
+            std::cout << "  Comm Cost: Before=" << comm_cost_before << " After=" << comm_cost_after << " (Diff=" << comm_cost_before - comm_cost_after << ")" << std::endl;
             std::cout << "  Balance:   Before=" << balance_before << " After=" << balance_after << std::endl;
             std::cout << "  Migration: Step=" << step_migration << " Total=" << total_migration_cost_from_start << std::endl;
         }
