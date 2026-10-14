@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_WAVER_MAP_CONFIGURATION_H
-#define HEIPROMAP_WAVER_MAP_CONFIGURATION_H
+#ifndef HEIPROMAP_WAVERHEIPROMAP_CONFIGURATION_H
+#define HEIPROMAP_WAVERHEIPROMAP_CONFIGURATION_H
 
 #include <string>
 #include <vector>
@@ -645,4 +645,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_WAVER_MAP_CONFIGURATION_H
+#endif //HEIPROMAP_WAVERHEIPROMAP_CONFIGURATION_H

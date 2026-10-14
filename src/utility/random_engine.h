@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_RANDOMENGINE_H
-#define HEIPROMAP_RANDOMENGINE_H
+#ifndef HEIPROMAP_RANDOM_ENGINE_H
+#define HEIPROMAP_RANDOM_ENGINE_H
 
 #include <random>
 
@@ -84,4 +84,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_RANDOMENGINE_H
+#endif //HEIPROMAP_RANDOM_ENGINE_H

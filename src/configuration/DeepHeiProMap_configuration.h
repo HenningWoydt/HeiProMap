@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_DEEP_HEIPROMAP_CONFIGURATION_H
-#define HEIPROMAP_DEEP_HEIPROMAP_CONFIGURATION_H
+#ifndef HEIPROMAP_DEEPHEIPROMAP_CONFIGURATION_H
+#define HEIPROMAP_DEEPHEIPROMAP_CONFIGURATION_H
 
 #include <algorithm>
 #include <iostream>
@@ -619,4 +619,4 @@ namespace HeiProMap {
     using AlgorithmConfiguration = DeepHeiProMapConfiguration;
 }
 
-#endif //HEIPROMAP_DEEP_HEIPROMAP_CONFIGURATION_H
+#endif //HEIPROMAP_DEEPHEIPROMAP_CONFIGURATION_H

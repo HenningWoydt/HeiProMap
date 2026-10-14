@@ -172,4 +172,4 @@ namespace HeiProMap {
     };
 }
 
-#endif // HEIPROMAP_SWAP_REFINEMENT_H
+#endif //HEIPROMAP_SWAP_REFINEMENT_H

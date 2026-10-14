@@ -667,4 +667,4 @@ namespace HeiProMap {
 #define HEIPROMAP_PROFILE_SCOPE(group, function, kernel)
 #endif
 
-#endif // HEIPROMAP_PROFILER_H
+#endif //HEIPROMAP_PROFILER_H

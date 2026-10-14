@@ -578,4 +578,4 @@ namespace HeiProMap {
     };
 } // namespace HeiProMap
 
-#endif // HEIPROMAP_RECURSIVE_BISECTION_H
+#endif //HEIPROMAP_RECURSIVE_BISECTION_H

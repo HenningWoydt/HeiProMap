@@ -306,4 +306,4 @@ namespace HeiProMap {
 
 } // namespace HeiProMap
 
-#endif // HEIPROMAP_WAVER_MESSAGE_REFINEMENT_H
+#endif //HEIPROMAP_WAVER_MESSAGE_REFINEMENT_H

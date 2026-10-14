@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_DEEP_HEIPROMAP_SOLVER_H
-#define HEIPROMAP_DEEP_HEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_DEEPHEIPROMAP_SOLVER_H
+#define HEIPROMAP_DEEPHEIPROMAP_SOLVER_H
 
 #include <algorithm>
 #include <chrono>
@@ -702,4 +702,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_DEEP_HEIPROMAP_SOLVER_H
+#endif //HEIPROMAP_DEEPHEIPROMAP_SOLVER_H

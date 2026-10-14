@@ -366,4 +366,4 @@ namespace HeiProMap {
     };
 } // namespace HeiProMap
 
-#endif // HEIPROMAP_PUSH_RELABEL_H
+#endif //HEIPROMAP_PUSH_RELABEL_H

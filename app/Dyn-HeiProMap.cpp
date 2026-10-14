@@ -1,5 +1,6 @@
 /*******************************************************************************
  * MIT License
+ *
  * This file is part of HeiProMap.
  *
  * Copyright (C) 2025 Henning Woydt <henning.woydt@informatik.uni-heidelberg.de>
@@ -23,12 +24,12 @@
  * SOFTWARE.
  ******************************************************************************/
 
- #include <csignal>
- #include <iostream>
- #include <string>
- #include <vector>
+#include <csignal>
+#include <iostream>
+#include <string>
+#include <vector>
 
- #include "../src/solver/DynHeiProMap_solver.h"
+#include "../src/solver/DynHeiProMap_solver.h"
 #include "../src/configuration/DynHeiProMap_configuration.h"
 
 static void signal_handler(int sig) {
