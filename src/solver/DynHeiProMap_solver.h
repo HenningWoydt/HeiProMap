@@ -184,7 +184,7 @@ namespace HeiProMap {
                 iss >> config_str;
                 run_partition(config_str);
                 print_stats();
-            } else if (cmd == "save-partition") {
+            } else if (cmd == "save-partition" || cmd == "save_partition") {
                 std::string file_path;
                 iss >> file_path;
                 std::ofstream file(file_path);
@@ -196,7 +196,7 @@ namespace HeiProMap {
                 } else {
                     std::cerr << "Cannot open file: " << file_path << std::endl;
                 }
-            } else if (cmd == "load-partition") {
+            } else if (cmd == "load-partition" || cmd == "load_partition") {
                 std::string file_path;
                 iss >> file_path;
                 std::ifstream file(file_path);
@@ -273,8 +273,10 @@ namespace HeiProMap {
             q.initialize(num_blocks);
             initial_q.initialize(num_blocks);
 
-            g.dirty_callback = [](vertex_t v) {
-                // Placeholder for incremental manager updates if needed
+            g.dirty_callback = [this](vertex_t v) {
+                if (v >= p_manager.n) {
+                    p_manager.resize(v + 1, 0);
+                }
             };
         }
 
@@ -288,8 +290,9 @@ namespace HeiProMap {
             return DynPartitionStats::count_moved_vertices(old_partition, new_partition);
         }
 
-        void align_partitions_hierarchically(std::vector<partition_t> &new_partition) const {
-            PartitionAligner::align(g, previous_partition, new_partition, config.hierarchy);
+        void align_partitions_hierarchically(const std::vector<partition_t> &ref_partition,
+                                             std::vector<partition_t> &new_partition) const {
+            PartitionAligner::align(g, ref_partition, new_partition, config.hierarchy);
         }
 
     private:
@@ -360,7 +363,7 @@ namespace HeiProMap {
                 if (reference.size() < g.n) reference.resize(g.n, 0);
 
                 weight_t migration_before = calculate_migration_cost(reference, new_partition);
-                align_partitions_hierarchically(new_partition);
+                align_partitions_hierarchically(reference, new_partition);
                 weight_t migration_after = calculate_migration_cost(reference, new_partition);
 
                 previous_partition = reference;
@@ -390,11 +393,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("solver", "refine-fast", "refine-fast");
 
             if (p_manager.n < g.n) {
-                // Should not happen if incremental updates are implemented,
-                // but for now we re-initialize if needed.
-                p_manager.initialize(g.n, p_manager.k, g.g_weight);
-                p_manager.activate_all_blocks();
-                // Need to recover partition data... this highlights why we need incremental updates.
+                p_manager.resize(g.n, 0);
             }
 
             size_t num_dirty = g.dirty_list.size();

@@ -111,6 +111,13 @@ namespace HeiProMap {
             n_active = 0;
         }
 
+        void resize(const vertex_t new_n, const partition_t default_part = 0) {
+            if (new_n <= n) return;
+            partition.resize(new_n, default_part);
+            partition_temp.resize(new_n, default_part);
+            n = new_n;
+        }
+
         void copy_from(const PartitionManager &p_manager) {
             for (vertex_t u = 0; u < p_manager.n; ++u) {
                 partition[u] = p_manager.partition[u];

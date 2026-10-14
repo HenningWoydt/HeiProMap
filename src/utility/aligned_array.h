@@ -95,6 +95,35 @@ namespace HeiProMap {
             std::fill_n(m_ptr, size, fill_value);
         }
 
+        void resize(const size_t n, const T fill_value = T{}) {
+            size_t new_size = round_up_64(n);
+            if (new_size <= m_n) {
+                if (n > m_n) {
+                    std::fill(m_ptr + m_n, m_ptr + n, fill_value);
+                }
+                return;
+            }
+            T *old_ptr = m_ptr;
+            size_t old_n = m_n;
+            bool old_own = m_own_memory;
+            MemoryPool *old_pool = m_pool;
+
+            m_ptr = nullptr;
+            m_n = 0;
+            do_alloc(new_size);
+            if (old_ptr && old_n > 0) {
+                std::memcpy(m_ptr, old_ptr, old_n * sizeof(T));
+                std::fill(m_ptr + old_n, m_ptr + new_size, fill_value);
+                if (old_own) {
+                    free(old_ptr);
+                } else if (old_pool) {
+                    old_pool->give_back(old_ptr, old_n * sizeof(T));
+                }
+            } else {
+                std::fill(m_ptr, m_ptr + new_size, fill_value);
+            }
+        }
+
         void free_memory() {
             do_free();
         }
