@@ -134,7 +134,7 @@ namespace HeiProMap {
                         const u64 t_seed,
                         const SizeConstrainedLPConfiguration &t_config,
                         MemoryPool *pool = nullptr) {
-            set_pool(pool);
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "initialize");
 
             m_n = t_n;

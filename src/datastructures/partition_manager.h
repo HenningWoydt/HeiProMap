@@ -95,7 +95,7 @@ namespace HeiProMap {
                         const partition_t t_k,
                         const weight_t g_weight,
                         MemoryPool *pool = nullptr) {
-            set_pool(pool);
+            if (pool) set_pool(pool);
             n = t_n;
             k = t_k;
 

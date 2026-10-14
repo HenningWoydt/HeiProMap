@@ -63,7 +63,7 @@ namespace HeiProMap {
                         const vertex_t t_m,
                         const partition_t t_k,
                         MemoryPool *pool = nullptr) {
-            set_pool(pool);
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "BlockConn", "initialize");
             m_n = t_n;
             m_m = t_m;

@@ -57,7 +57,7 @@ namespace HeiProMap {
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance,
                         MemoryPool *pool = nullptr) {
-            set_pool(pool);
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "DistanceOracle", "initialize");
 
             m_hierarchy = t_hierarchy;

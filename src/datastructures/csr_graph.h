@@ -198,7 +198,7 @@ namespace HeiProMap {
                         const weight_t *t_edges_w,
                         const vertex_t *t_edges_v,
                         MemoryPool *pool = nullptr) {
-            set_pool(pool);
+            if (pool) set_pool(pool);
             n = t_n;
             m = t_m;
             g_weight = 0;
