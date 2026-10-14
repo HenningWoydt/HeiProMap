@@ -100,7 +100,7 @@ namespace HeiProMap {
 
 
         // set vertex weights
-        for (int i = 0; i < n; i++) { vwgt[i] = (int) g.v_weights[i]; }
+        for (int i = 0; i < n; i++) { vwgt[i] = (int) g.v_weight(i); }
 
         // set xadj
         for (int i = 0; i < n + 1; i++) { xadj[i] = (int) g.neighborhoods[i]; }
@@ -109,7 +109,7 @@ namespace HeiProMap {
         for (int i = 0; i < m; i++) { adjncy[i] = (int) g.edges_v[i]; }
 
         // set adjcwgt
-        for (int i = 0; i < m; i++) { adjcwgt[i] = (int) g.edges_w[i]; }
+        for (int i = 0; i < m; i++) { adjcwgt[i] = (int) g.edge_w(i); }
 
         auto start_time = get_time_point();
 
@@ -131,7 +131,7 @@ namespace HeiProMap {
             // Calculate max block weight
             std::vector<weight_t> block_weights(k, 0);
             for (int i = 0; i < n; i++) {
-                block_weights[partition[i]] += g.v_weights[i];
+                block_weights[partition[i]] += g.v_weight(i);
             }
             weight_t max_block_weight = 0;
             for (partition_t i = 0; i < k; i++) {

@@ -287,7 +287,7 @@ namespace HeiProMap {
             #pragma omp parallel for num_threads(threads)
             for (vertex_t u = 0; u < g.n; ++u) {
                 mapping.set(u, u);
-                cluster_weights[u] = g.v_weights[u];
+                cluster_weights[u] = g.v_weight(u);
                 cluster_count[u] = 1;
             }
         }
@@ -357,7 +357,7 @@ namespace HeiProMap {
             for (vertex_t a = 0; a < g.n; ++a) {
                 if (used[a] == 1) { continue; }
                 const partition_t a_id = p_manager[a];
-                const weight_t a_w = t_uniform_v_weights ? 1 : g.v_weights[a];
+                const weight_t a_w = t_uniform_v_weights ? 1 : g.v_weight(a);
 
                 vertex_t best_b = static_cast<vertex_t>(-1);
                 weight_t best_ew = 0;
@@ -366,7 +366,7 @@ namespace HeiProMap {
                     const vertex_t b = g.edges_v[i];
                     if (used[b] == 1 || p_manager[b] != a_id) { continue; }
 
-                    const weight_t b_w = t_uniform_v_weights ? 1 : g.v_weights[b];
+                    const weight_t b_w = t_uniform_v_weights ? 1 : g.v_weight(b);
                     if (a_w + b_w <= max_w) {
                         const weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[i];
                         if (ew > best_ew || best_b == static_cast<vertex_t>(-1)) {
@@ -439,7 +439,7 @@ namespace HeiProMap {
                     if (cluster_count[cur_id] != 1) { continue; }
 
                     const partition_t u_id = p_manager[u];
-                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                     f32 current_id_w = 0;
 
                     flat_map.clear();
@@ -447,7 +447,7 @@ namespace HeiProMap {
                         const vertex_t v = g.edges_v[j];
                         if (u_id != p_manager[v]) { continue; }
 
-                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                         const weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
                         const f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew);
 
@@ -507,7 +507,7 @@ namespace HeiProMap {
                     const vertex_t u = flat_vertices[i];
                     if (active[u] == 0) { continue; }
 
-                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                     const partition_t u_id = p_manager[u];
                     const vertex_t current_id = mapping.get(u);
                     f32 current_id_w = 0;
@@ -520,7 +520,7 @@ namespace HeiProMap {
                         const vertex_t v = g.edges_v[j];
                         if (u_id != p_manager[v]) { continue; }
 
-                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                         const weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
                         const f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew);
 
@@ -576,7 +576,7 @@ namespace HeiProMap {
                 const vertex_t u = flat_vertices[i];
                 if (active[u] == 0) { continue; }
 
-                const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                 const partition_t u_id = p_manager[u];
                 const vertex_t current_id = mapping.get(u);
                 f32 current_id_w = 0;
@@ -589,7 +589,7 @@ namespace HeiProMap {
                     const vertex_t v = g.edges_v[j];
                     if (u_id != p_manager[v]) { continue; }
 
-                    const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                    const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
                     const weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
                     const f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew);
 
@@ -704,7 +704,7 @@ namespace HeiProMap {
 
             #pragma omp parallel for num_threads(threads) reduction(max:max_v_w,max_deg)
             for (vertex_t u = 0; u < g.n; ++u) {
-                max_v_w = std::max(max_v_w, g.v_weights[u]);
+                max_v_w = std::max(max_v_w, g.v_weight(u));
                 max_deg = std::max(max_deg, g.deg(u));
             }
 

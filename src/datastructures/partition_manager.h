@@ -259,7 +259,7 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < g.n; ++u) {
                 const partition_t id = partition[u];
                 n_vertices[id] += 1;
-                bweights[id] += g.v_weights[u];
+                bweights[id] += g.v_weight(u);
             }
         }
 

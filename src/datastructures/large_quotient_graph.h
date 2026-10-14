@@ -135,7 +135,7 @@ namespace HeiProMap {
                     if (u < v) {
                         const partition_t v_id = p_manager[v];
                         ASSERT(v_id < m_k);
-                        const weight_t w = g.edges_w[i];
+                        const weight_t w = g.edge_w(i);
                         add_edge(u_id, v_id, w);
                     }
                 }
@@ -158,7 +158,7 @@ namespace HeiProMap {
                             if (u < v) {
                                 const partition_t v_id = p_manager[v];
                                 if (id != v_id) {
-                                    add_edge(id, v_id, g.edges_w[i]);
+                                    add_edge(id, v_id, g.edge_w(i));
                                 }
                             }
                         }
@@ -173,7 +173,7 @@ namespace HeiProMap {
                             const vertex_t v = g.edges_v[i];
                             const partition_t v_id = p_manager[v];
                             if (id != v_id) {
-                                const weight_t w = g.edges_w[i];
+                                const weight_t w = g.edge_w(i);
                                 auto it = find_edge(adj, v_id);
                                 if (it != adj.end()) {
                                     it->weight += w;
@@ -285,7 +285,7 @@ namespace HeiProMap {
 
             for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                 const vertex_t v = g.edges_v[i];
-                const weight_t w = g.edges_w[i];
+                const weight_t w = g.edge_w(i);
                 const partition_t v_id = p_manager[v];
 
                 if (old_id != v_id) {

@@ -117,37 +117,14 @@ namespace HeiProMap {
 
         void print_memory_report() const {
             auto mb = [](size_t bytes) { return (double) bytes / (1024.0 * 1024.0); };
-            size_t total = 0;
             size_t g_bytes = 0;
             for (size_t i = 0; i < graphs.size(); ++i) { g_bytes += graphs[i].heap_bytes(); }
-            size_t pm_bytes = p_manager.heap_bytes();
             size_t bv_bytes = bv_manager.heap_bytes();
-            size_t qg_bytes = q_graph.heap_bytes();
-            size_t bc_bytes = block_conn.heap_bytes();
-            size_t do_bytes = d_oracle.heap_bytes();
-            size_t se_bytes = subgraph_extractor.heap_bytes();
-            size_t sc_bytes = size_constrained_lp_clustering.heap_bytes();
-            size_t lp_bytes = lp_refine.heap_bytes();
-            size_t qr_bytes = qg_refine.heap_bytes();
-            size_t sqr_bytes = simple_qg_refine.heap_bytes();
-            size_t fb_bytes = flow_based_refinement.heap_bytes();
-            total = g_bytes + pm_bytes + bv_bytes + qg_bytes + bc_bytes + do_bytes
-                  + se_bytes + sc_bytes + lp_bytes + qr_bytes + sqr_bytes + fb_bytes;
             std::cout << "------- Memory (MB) -------" << std::endl;
             std::cout << std::fixed << std::setprecision(1);
             std::cout << "Graph(s)              : " << mb(g_bytes) << std::endl;
-            std::cout << "PartitionManager      : " << mb(pm_bytes) << std::endl;
-            std::cout << "BoundaryVertexManager : " << mb(bv_bytes) << std::endl;
-            std::cout << "QuotientGraph         : " << mb(qg_bytes) << std::endl;
-            std::cout << "BlockConn             : " << mb(bc_bytes) << std::endl;
-            std::cout << "DistanceOracle        : " << mb(do_bytes) << std::endl;
-            std::cout << "SubgraphExtractor     : " << mb(se_bytes) << std::endl;
-            std::cout << "SizeConstrainedLP     : " << mb(sc_bytes) << std::endl;
-            std::cout << "LP Refinement         : " << mb(lp_bytes) << std::endl;
-            std::cout << "QG Refinement         : " << mb(qr_bytes) << std::endl;
-            std::cout << "Simple QG Refinement  : " << mb(sqr_bytes) << std::endl;
-            std::cout << "Flow Refinement       : " << mb(fb_bytes) << std::endl;
-            std::cout << "TOTAL                 : " << mb(total) << std::endl;
+            std::cout << "BoundaryVertexMgr     : " << mb(bv_bytes) << std::endl;
+            std::cout << "Pool peak             : " << mb(m_pool.peak_in_use()) << std::endl;
         }
 
         f64 misc_ms = 0.0;
@@ -225,8 +202,6 @@ namespace HeiProMap {
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config, &m_pool);
             }
-            print_memory_report();
-            m_pool.print_stats();
         }
 
         explicit DeepHeiProMapSolver(graph_t &&g, const DeepHeiProMapConfiguration &t_ac) {
@@ -290,14 +265,10 @@ namespace HeiProMap {
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config, &m_pool);
             }
-            print_memory_report();
-            m_pool.print_stats();
         }
 
         std::vector<partition_t> solve() {
             internal_solve();
-            print_memory_report();
-            m_pool.print_stats();
 
             std::vector<partition_t> p(graphs.back().n);
             for (vertex_t u = 0; u < graphs.back().n; ++u) { p[u] = p_manager[u]; }
@@ -352,6 +323,7 @@ namespace HeiProMap {
             std::cout << "  Flow                : " << flow_refine_ms << std::endl;
             std::cout << "Misc                  : " << misc_ms << std::endl;
             std::cout << "ALL                   : " << coarsening_ms + contraction_ms + initial_partitioning_ms + intermediate_partitioning_ms + recompute_datastructures_ms + uncontraction_ms + rebalance_ms + refinement_ms + misc_ms << std::endl;
+            print_memory_report();
 
             return p;
         }
@@ -415,6 +387,22 @@ namespace HeiProMap {
             }
         }
 
+        static bool is_better_partition(const PartitionManager &a, weight_t qap_a,
+                                        const PartitionManager &b, weight_t qap_b,
+                                        partition_t k, weight_t child_lmax) {
+            weight_t max_over_a = 0, max_over_b = 0;
+            bool balanced_a = true, balanced_b = true;
+            for (partition_t i = 0; i < k; ++i) {
+                weight_t over_a = a.bweights[i] - child_lmax;
+                weight_t over_b = b.bweights[i] - child_lmax;
+                if (over_a > 0) { balanced_a = false; max_over_a = std::max(max_over_a, over_a); }
+                if (over_b > 0) { balanced_b = false; max_over_b = std::max(max_over_b, over_b); }
+            }
+            if (balanced_a != balanced_b) return balanced_a;
+            if (!balanced_a && !balanced_b) return max_over_a < max_over_b;
+            return qap_a < qap_b;
+        }
+
         void initial_partitioning() {
             auto p = get_time_point();
             HEIPROMAP_PROFILE_SCOPE("initial_partition", "misc", "initial_partitioning");
@@ -427,19 +415,54 @@ namespace HeiProMap {
             f64 imb = ((f64) (child_lmax * block_k) / (f64) graphs.back().g_weight) - 1.0;
             if (imb <= 0.0) imb = 0.0001;
 
-            graph_t g_copy = graphs.back();
+            const graph_t &g = graphs.back();
+            const u64 n_threads = ac.threads;
+            const u64 kappa = ac.initial_kappa;
 
-            PartitionManager sub_pm(g_copy.n, block_k, g_copy.g_weight, &m_pool);
-            UniformDistanceOracle temp_d_oracle(block_k);
-            AlignedArray<vertex_t> vertices(&m_pool);
-            vertices.initialize(g_copy.n);
-            greedy_partition(g_copy, temp_d_oracle, imb, 42, sub_pm, vertices);
+            std::vector<PartitionManager> thread_best_pm(n_threads);
+            std::vector<weight_t> thread_best_qap(n_threads, std::numeric_limits<weight_t>::max());
 
-            for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                partition_t sub_p = sub_pm[u];
+            #pragma omp parallel num_threads(n_threads)
+            {
+                u64 tid = omp_get_thread_num();
+                PartitionManager cur_pm(g.n, block_k, g.g_weight, &m_pool);
+                PartitionManager &best_pm = thread_best_pm[tid];
+                best_pm.initialize(g.n, block_k, g.g_weight, &m_pool);
+                UniformDistanceOracle temp_d_oracle(block_k);
+                AlignedArray<vertex_t> vertices(&m_pool);
+                vertices.initialize(g.n);
+
+                for (u64 trial = 0; trial < kappa; ++trial) {
+                    greedy_partition(g, temp_d_oracle, imb, 42 + tid * kappa + trial, cur_pm, vertices);
+                    greedy_refine(g, temp_d_oracle, imb, cur_pm);
+                    weight_t cur_qap = get_qap(g, cur_pm, temp_d_oracle);
+
+                    if (trial == 0 || is_better_partition(cur_pm, cur_qap, best_pm, thread_best_qap[tid], block_k, child_lmax)) {
+                        thread_best_qap[tid] = cur_qap;
+                        for (vertex_t u = 0; u < g.n; ++u) { best_pm.partition[u] = cur_pm.partition[u]; }
+                        for (partition_t i = 0; i < block_k; ++i) { best_pm.bweights[i] = cur_pm.bweights[i]; }
+                    }
+                }
+
+                cur_pm.release_memory();
+                vertices.free_memory();
+            }
+
+            u64 best_tid = 0;
+            for (u64 t = 1; t < n_threads; ++t) {
+                if (is_better_partition(thread_best_pm[t], thread_best_qap[t],
+                                        thread_best_pm[best_tid], thread_best_qap[best_tid],
+                                        block_k, child_lmax)) {
+                    best_tid = t;
+                }
+            }
+
+            PartitionManager &best_pm = thread_best_pm[best_tid];
+            for (vertex_t u = 0; u < g.n; ++u) {
+                partition_t sub_p = best_pm[u];
                 if (sub_p == 0) continue;
                 partition_t move_id = 0 + k_spacing * sub_p;
-                weight_t w = graphs.back().v_weights[u];
+                weight_t w = g.v_weight(u);
                 p_manager.move(u, w, 0, move_id);
             }
 
@@ -447,6 +470,10 @@ namespace HeiProMap {
                 partition_t move_id = 0 + k_spacing * i;
                 p_manager.set_lmax(move_id, child_lmax);
                 p_manager.set_hierarchy_level(move_id, block_level - 1);
+            }
+
+            for (u64 t = 0; t < n_threads; ++t) {
+                thread_best_pm[t].release_memory();
             }
 
             initial_partitioning_ms += get_milli_seconds(p, get_time_point());
@@ -509,18 +536,33 @@ namespace HeiProMap {
 
                         u64 tid = omp_get_thread_num();
                         PartitionManager &sub_pm = thread_sub_pm[tid];
-                        sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
                         UniformDistanceOracle temp_d_oracle(block_k);
-                        greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id, sub_pm, thread_greedy_vertices[tid]);
+
+                        PartitionManager best_pm(sub_g.n, block_k, sub_g.g_weight, &m_pool);
+                        weight_t best_qap = std::numeric_limits<weight_t>::max();
+
+                        for (u64 trial = 0; trial < ac.intermediate_kappa; ++trial) {
+                            sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
+                            greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id + trial, sub_pm, thread_greedy_vertices[tid]);
+                            greedy_refine(sub_g, temp_d_oracle, imb, sub_pm);
+                            weight_t cur_qap = get_qap(sub_g, sub_pm, temp_d_oracle);
+
+                            if (trial == 0 || is_better_partition(sub_pm, cur_qap, best_pm, best_qap, block_k, child_lmax)) {
+                                best_qap = cur_qap;
+                                for (vertex_t u = 0; u < sub_g.n; ++u) { best_pm.partition[u] = sub_pm.partition[u]; }
+                                for (partition_t bi = 0; bi < block_k; ++bi) { best_pm.bweights[bi] = sub_pm.bweights[bi]; }
+                            }
+                        }
 
                         for (vertex_t u = 0; u < sub_g.n; ++u) {
-                            partition_t sub_p = sub_pm[u];
+                            partition_t sub_p = best_pm[u];
                             if (sub_p == 0) continue;
                             partition_t move_id = block_id + k_spacing * sub_p;
                             vertex_t orig_u = tt.get_o(u);
-                            weight_t w = sub_g.v_weights[u];
+                            weight_t w = sub_g.v_weight(u);
                             p_manager.move(orig_u, w, block_id, move_id);
                         }
+                        best_pm.release_memory();
                     }
 
                     for (partition_t p_id = 0; p_id < block_k; ++p_id) {
@@ -535,6 +577,7 @@ namespace HeiProMap {
                 thread_sub_pm[t].release_memory();
                 thread_greedy_vertices[t].free_memory();
             }
+            subgraph_extractor.release_memory();
 
             intermediate_partitioning_ms += get_milli_seconds(p, get_time_point());
         }

@@ -168,6 +168,13 @@ namespace HeiProMap {
 
             // done with the file
             munmap_file(mm);
+
+            if (uniform_v_weights) {
+                v_weights.free_memory();
+            }
+            if (uniform_e_weights) {
+                edges_w.free_memory();
+            }
         }
 
         explicit CSRGraph(vertex_t t_n, vertex_t t_m, weight_t t_g_weight) {
@@ -738,19 +745,22 @@ namespace HeiProMap {
 
         size_t deg(const vertex_t u) const { return neighborhoods[u + 1] - neighborhoods[u]; }
 
+        weight_t v_weight(const vertex_t i) const { return uniform_v_weights ? 1 : v_weights[i]; }
+        weight_t edge_w(const size_t i) const { return uniform_e_weights ? 1 : edges_w[i]; }
+
         u64 hash() const {
             u64 h = 0;
             h ^= splitmix64(n);
             h ^= splitmix64(m);
             for (vertex_t i = 0; i < n; ++i) {
-                h ^= splitmix64(v_weights[i] + i);
+                h ^= splitmix64(v_weight(i) + i);
             }
             for (vertex_t i = 0; i < n + 1; ++i) {
                 h ^= splitmix64(neighborhoods[i] + i);
             }
             for (vertex_t i = 0; i < m; ++i) {
                 h ^= splitmix64(edges_v[i] + i);
-                h ^= splitmix64(edges_w[i] + i);
+                h ^= splitmix64(edge_w(i) + i);
             }
             return h;
         }
@@ -760,9 +770,9 @@ namespace HeiProMap {
 
             file << n << " " << m / 2 << " 011" << std::endl;
             for (size_t i = 0; i < n; ++i) {
-                file << v_weights[i] << " ";
+                file << v_weight(i) << " ";
                 for (size_t j = neighborhoods[i]; j < neighborhoods[i + 1]; ++j) {
-                    file << edges_v[j] + 1 << " " << edges_w[j] << " ";
+                    file << edges_v[j] + 1 << " " << edge_w(j) << " ";
                 }
                 file << std::endl;
             }

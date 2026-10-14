@@ -28,6 +28,7 @@
 #define HEIPROMAP_BINARY_DISTANCE_ORACLE_H
 
 #include "../definitions.h"
+#include "../utility/aligned_array.h"
 #include "../utility/macros.h"
 #include "../utility/utils.h"
 #include "../utility/profiler.h"
@@ -41,7 +42,7 @@ namespace HeiProMap {
 
         std::vector<partition_t> m_system_sizes; // O(l)
 
-        std::vector<u64> identifier; // O(k)
+        AlignedArray<u64> identifier; // O(k)
         std::vector<weight_t> dist_lookup; // O(64)
         std::vector<partition_t> hierarchy_lookup; // O(64)
 
@@ -50,16 +51,19 @@ namespace HeiProMap {
             return m_hierarchy.capacity() * sizeof(partition_t)
                  + m_distance.capacity() * sizeof(weight_t)
                  + m_system_sizes.capacity() * sizeof(partition_t)
-                 + identifier.capacity() * sizeof(u64)
+                 + identifier.heap_bytes()
                  + dist_lookup.capacity() * sizeof(weight_t)
                  + hierarchy_lookup.capacity() * sizeof(partition_t);
         }
 
-        void set_pool(MemoryPool *) {}
+        void set_pool(MemoryPool *pool) {
+            identifier.set_pool(pool);
+        }
 
         void initialize(const std::vector<partition_t> &t_hierarchy,
                         const std::vector<weight_t> &t_distance,
-                        MemoryPool * = nullptr) {
+                        MemoryPool *pool = nullptr) {
+            if (pool) set_pool(pool);
             HEIPROMAP_PROFILE_SCOPE("misc", "BinaryDistanceOracle", "initialize");
 
             m_hierarchy = t_hierarchy;
@@ -90,7 +94,7 @@ namespace HeiProMap {
                 std::exit(EXIT_FAILURE);
             }
 
-            identifier.resize(m_k);
+            identifier.initialize(m_k);
             std::vector<partition_t> loc(m_hierarchy.size());
 
             for (partition_t id = 0; id < m_k; ++id) {

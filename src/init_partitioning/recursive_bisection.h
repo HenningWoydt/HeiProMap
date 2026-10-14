@@ -139,7 +139,7 @@ namespace HeiProMap {
             sub_pm.initialize(g.n, 2, g.g_weight);
             sub_pm.reset_weights();
             for (vertex_t u = 0; u < g.n; ++u) {
-                sub_pm.set(u, g.v_weights[u], side[u]);
+                sub_pm.set(u, g.v_weight(u), side[u]);
             }
 
             AlignedArray<weight_t> lmax_constraints;
@@ -173,8 +173,8 @@ namespace HeiProMap {
 
             weight_t w0 = 0, w1 = 0;
             for (vertex_t u = 0; u < g.n; ++u) {
-                if (current_side[u] == 0) w0 += g.v_weights[u];
-                else w1 += g.v_weights[u];
+                if (current_side[u] == 0) w0 += g.v_weight(u);
+                else w1 += g.v_weight(u);
             }
             bool is_balanced = (w0 <= lmax_left && w1 <= lmax_right);
 
@@ -250,7 +250,7 @@ namespace HeiProMap {
                 std::fill(visited.begin(), visited.end(), 0);
                 visited[seed_1] = 1;
                 side[seed_1] = 1;
-                weight_t w1 = g.v_weights[seed_1];
+                weight_t w1 = g.v_weight(seed_1);
 
                 std::queue<vertex_t> q;
                 q.push(seed_1);
@@ -263,9 +263,9 @@ namespace HeiProMap {
                         vertex_t v = g.edges_v[i];
                         if (visited[v] == 0) {
                             visited[v] = 1;
-                            if (w1 + g.v_weights[v] <= lmax_right) {
+                            if (w1 + g.v_weight(v) <= lmax_right) {
                                 side[v] = 1;
-                                w1 += g.v_weights[v];
+                                w1 += g.v_weight(v);
                             }
                             q.push(v);
                         }
@@ -284,7 +284,7 @@ namespace HeiProMap {
             std::vector<weight_t> weighted_degrees(g.n, 0);
             for (vertex_t u = 0; u < g.n; ++u) {
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                    weighted_degrees[u] += g.edges_w[i];
+                    weighted_degrees[u] += g.edge_w(i);
                 }
             }
 
@@ -313,7 +313,7 @@ namespace HeiProMap {
                 std::fill(visited.begin(), visited.end(), 0);
                 visited[seed] = 1;
                 side[seed] = 1;
-                weight_t w1 = g.v_weights[seed];
+                weight_t w1 = g.v_weight(seed);
 
                 auto add_or_update = [&](vertex_t v, weight_t w) {
                     if (pq.entry_exists(v)) pq.increment(v, 2 * w);
@@ -324,7 +324,7 @@ namespace HeiProMap {
 
                 for (size_t i = g.neighborhoods[seed]; i < g.neighborhoods[seed + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
-                    if (visited[v] == 0) add_or_update(v, g.edges_w[i]);
+                    if (visited[v] == 0) add_or_update(v, g.edge_w(i));
                 }
 
                 while (!pq.empty() && w1 < target_w1) {
@@ -333,14 +333,14 @@ namespace HeiProMap {
                     if (visited[u] == 1) continue;
                     visited[u] = 1;
 
-                    if (w1 + g.v_weights[u] <= lmax_right) {
+                    if (w1 + g.v_weight(u) <= lmax_right) {
                         side[u] = 1;
-                        w1 += g.v_weights[u];
+                        w1 += g.v_weight(u);
                     }
 
                     for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                         vertex_t v = g.edges_v[i];
-                        if (visited[v] == 0) add_or_update(v, g.edges_w[i]);
+                        if (visited[v] == 0) add_or_update(v, g.edge_w(i));
                     }
                 }
 
@@ -386,7 +386,7 @@ namespace HeiProMap {
                 u8 u_side = side[u];
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
-                    cut += (side[v] != u_side) * g.edges_w[i];
+                    cut += (side[v] != u_side) * g.edge_w(i);
                 }
             }
             return cut / 2;
@@ -405,7 +405,7 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "recurse_base_case");
                 pm.reset_weights();
                 for (vertex_t v = 0; v < g.n; ++v) {
-                    pm.set(v, g.v_weights[v], 0);
+                    pm.set(v, g.v_weight(v), 0);
                 }
                 return;
             }
@@ -440,7 +440,7 @@ namespace HeiProMap {
                         vertex_t u = q.front();
                         q.pop();
                         comp.push_back(u);
-                        w += g.v_weights[u];
+                        w += g.v_weight(u);
                         for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                             vertex_t v = g.edges_v[j];
                             if (!visited[v]) {
@@ -505,8 +505,8 @@ namespace HeiProMap {
                 weight_t w1_sub = 0;
                 for (vertex_t v = 0; v < sub_g.n; ++v) {
                     side[sub_to_g.get_o(v)] = sub_side[v];
-                    if (sub_side[v] == 0) w0_sub += sub_g.v_weights[v];
-                    else w1_sub += sub_g.v_weights[v];
+                    if (sub_side[v] == 0) w0_sub += sub_g.v_weight(v);
+                    else w1_sub += sub_g.v_weight(v);
                 }
                 w0_base += w0_sub;
                 w1_base += w1_sub;
@@ -536,11 +536,11 @@ namespace HeiProMap {
             pm.reset_weights();
             for (vertex_t v = 0; v < left_g.n; ++v) {
                 vertex_t u = left_to_g.get_o(v);
-                pm.set(u, left_g.v_weights[v], left_pm[v]);
+                pm.set(u, left_g.v_weight(v), left_pm[v]);
             }
             for (vertex_t v = 0; v < right_g.n; ++v) {
                 vertex_t u = right_to_g.get_o(v);
-                pm.set(u, right_g.v_weights[v], right_pm[v] + k_left);
+                pm.set(u, right_g.v_weight(v), right_pm[v] + k_left);
             }
 
             if (config.use_full_refine) {

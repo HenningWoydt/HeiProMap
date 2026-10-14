@@ -107,7 +107,7 @@ namespace HeiProMap {
                 if constexpr (t_uniform_e_weights) {
                     qap_delta += d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id);
                 } else {
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     qap_delta += (d_oracle.get(v_id, old_id) - d_oracle.get(v_id, new_id)) * w;
                 }
             }
@@ -128,7 +128,7 @@ namespace HeiProMap {
                     delta -= (v_id != new_id);
                     delta += (v_id != old_id);
                 } else {
-                    const weight_t w = g.edges_w[i];
+                    const weight_t w = g.edge_w(i);
                     delta -= (v_id != new_id) * w;
                     delta += (v_id != old_id) * w;
                 }
@@ -270,7 +270,7 @@ namespace HeiProMap {
                                 if (u_id != A && u_id != B) { continue; }
 
                                 const partition_t target_id = (u_id == A) ? B : A;
-                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                                 if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
 
@@ -335,7 +335,7 @@ namespace HeiProMap {
                                 if (u_id != A && u_id != B) { continue; }
 
                                 const partition_t target_id = (u_id == A) ? B : A;
-                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                                const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                                 if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
 
@@ -409,7 +409,7 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < g.n; ++u) {
                     if (!bv_manager.is_boundary(u)) { continue; }
 
-                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
                     const partition_t u_id = p_manager[u];
 
                     partition_t best_id = NO_ID;

@@ -104,7 +104,7 @@ namespace HeiProMap {
                 // Phase 1: Simple Label Propagation (Single Moves)
                 for (vertex_t u: vertices) {
                     partition_t u_id = p_manager[u];
-                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                     partition_t best_target = u_id;
                     weight_t best_gain = 0;
@@ -137,14 +137,14 @@ namespace HeiProMap {
                 std::shuffle(vertices.begin(), vertices.end(), random_engine.generator);
                 for (vertex_t u: vertices) {
                     partition_t u_id = p_manager[u];
-                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weights[u];
+                    const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                     for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
                         vertex_t v = g.edges_v[e];
                         partition_t v_id = p_manager[v];
                         if (u_id == v_id) continue;
 
-                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weights[v];
+                        const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
 
                         if (p_manager.get_bweight(u_id) - u_w + v_w > p_manager.lmax[u_id]) continue;
                         if (p_manager.get_bweight(v_id) - v_w + u_w > p_manager.lmax[v_id]) continue;

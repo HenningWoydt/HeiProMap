@@ -47,8 +47,8 @@ namespace HeiProMap {
         std::vector<SmallTranslationTable<vertex_t>> tts;
 
         // Reusable scratch buffers — flat CSR layout for block vertices
-        std::vector<vertex_t> bv_data;
-        std::vector<size_t> bv_offsets;
+        AlignedArray<vertex_t> bv_data;
+        AlignedArray<size_t> bv_offsets;
         AlignedArray<weight_t> block_weights;
 
         // Reusable buffers for parallel extraction
@@ -58,8 +58,7 @@ namespace HeiProMap {
 
         size_t heap_bytes() const {
             size_t bytes = block_weights.heap_bytes()
-                         + bv_data.capacity() * sizeof(vertex_t)
-                         + bv_offsets.capacity() * sizeof(size_t);
+                         + bv_data.heap_bytes() + bv_offsets.heap_bytes();
             for (size_t i = 0; i < graphs.size(); ++i) {
                 bytes += graphs[i].heap_bytes();
             }
@@ -74,12 +73,25 @@ namespace HeiProMap {
 
         void set_pool(MemoryPool *pool) {
             m_pool = pool;
+            bv_data.set_pool(pool);
+            bv_offsets.set_pool(pool);
             block_weights.set_pool(pool);
             for (auto &tw : par_thread_weights) {
                 tw.set_pool(pool);
             }
             for (auto &g : graphs) {
                 g.set_pool(pool);
+            }
+        }
+
+        void release_memory() {
+            bv_data.free_memory();
+            bv_offsets.free_memory();
+            for (auto &e : par_thread_entries) {
+                std::vector<VertexEntry>().swap(e);
+            }
+            for (auto &tt : tts) {
+                tt.release_memory();
             }
         }
 
@@ -120,8 +132,8 @@ namespace HeiProMap {
                 if (side[u] == target_side) {
                     tt.add(u, sub_u);
                     old_to_new[u] = sub_u;
-                    sub_g.v_weights[sub_u] = g.v_weights[u];
-                    sub_g.g_weight += g.v_weights[u];
+                    sub_g.v_weights[sub_u] = g.v_weight(u);
+                    sub_g.g_weight += g.v_weight(u);
                     sub_u++;
                 }
             }
@@ -152,7 +164,7 @@ namespace HeiProMap {
                     const vertex_t sub_v = old_to_new[v];
                     if (sub_v != std::numeric_limits<vertex_t>::max()) {
                         sub_g.edges_v[edge_cursor] = sub_v;
-                        sub_g.edges_w[edge_cursor] = g.edges_w[j];
+                        sub_g.edges_w[edge_cursor] = g.edge_w(j);
                         edge_cursor++;
                     }
                 }
@@ -210,14 +222,14 @@ namespace HeiProMap {
             // Pass 2: fill edges and vertex weights
             for (vertex_t sub_u = 0; sub_u < sub_n; ++sub_u) {
                 const vertex_t orig_u = verts[sub_u];
-                sub_g.v_weights[sub_u] = g.v_weights[orig_u];
+                sub_g.v_weights[sub_u] = g.v_weight(orig_u);
 
                 size_t edge_cursor = sub_g.neighborhoods[sub_u];
                 for (size_t i = g.neighborhoods[orig_u]; i < g.neighborhoods[orig_u + 1]; ++i) {
                     const vertex_t orig_v = g.edges_v[i];
                     if (p_manager[orig_v] == orig_block_id) {
                         sub_g.edges_v[edge_cursor] = cur_tt.get_n(orig_v);
-                        sub_g.edges_w[edge_cursor] = g.edges_w[i];
+                        sub_g.edges_w[edge_cursor] = g.edge_w(i);
                         edge_cursor++;
                     }
                 }
@@ -234,6 +246,7 @@ namespace HeiProMap {
             par_thread_entries.resize(t_threads);
             par_thread_weights.resize(t_threads);
             for (u64 tid = 0; tid < t_threads; ++tid) {
+                if (m_pool) par_thread_weights[tid].set_pool(m_pool);
                 par_thread_weights[tid].initialize(t_k, 0);
             }
         }
@@ -279,14 +292,14 @@ namespace HeiProMap {
                            const std::vector<partition_t> &ids,
                            const std::vector<partition_t> &id_to_dense,
                            const size_t num_active) {
-            bv_offsets.resize(num_active + 1);
+            bv_offsets.initialize(num_active + 1);
             bv_offsets[0] = 0;
             for (size_t i = 0; i < num_active; ++i) {
                 bv_offsets[i + 1] = bv_offsets[i] + p_manager.n_vertices[ids[i]];
                 block_weights[i] = 0;
             }
             const size_t total_verts = bv_offsets[num_active];
-            bv_data.resize(total_verts);
+            bv_data.initialize(total_verts);
 
             std::vector<size_t> counters(num_active, 0);
 
@@ -297,7 +310,7 @@ namespace HeiProMap {
 
                 bv_data[bv_offsets[dense_u] + counters[dense_u]] = u;
                 counters[dense_u]++;
-                block_weights[dense_u] += g.v_weights[u];
+                block_weights[dense_u] += g.v_weight(u);
             }
         }
 
@@ -316,7 +329,7 @@ namespace HeiProMap {
             build_bv_flat(g, p_manager, ids, id_to_dense, num_active);
 
             for (size_t dense_idx = 0; dense_idx < num_active; ++dense_idx) {
-                VertexSpan verts{bv_data.data() + bv_offsets[dense_idx],
+                VertexSpan verts{bv_data.get_ptr() + bv_offsets[dense_idx],
                                 bv_offsets[dense_idx + 1] - bv_offsets[dense_idx]};
                 build_subgraph_from_vertices(g, p_manager, ids[dense_idx], dense_idx,
                                             verts, block_weights[dense_idx]);
@@ -355,18 +368,18 @@ namespace HeiProMap {
                     if (dense_u == std::numeric_limits<partition_t>::max()) continue;
 
                     entries.push_back({u, dense_u});
-                    par_thread_weights[tid][dense_u] += g.v_weights[u];
+                    par_thread_weights[tid][dense_u] += g.v_weight(u);
                 }
             }
 
             // Build flat block_vertices from p_manager sizes
-            bv_offsets.resize(num_active + 1);
+            bv_offsets.initialize(num_active + 1);
             bv_offsets[0] = 0;
             for (size_t i = 0; i < num_active; ++i) {
                 bv_offsets[i + 1] = bv_offsets[i] + p_manager.n_vertices[ids[i]];
             }
             const size_t total_verts = bv_offsets[num_active];
-            bv_data.resize(total_verts);
+            bv_data.initialize(total_verts);
 
             std::vector<size_t> counters(num_active, 0);
             for (u64 tid = 0; tid < num_threads; ++tid) {
@@ -384,7 +397,7 @@ namespace HeiProMap {
                     total_w += par_thread_weights[tid][dense_idx];
                 }
 
-                VertexSpan verts{bv_data.data() + bv_offsets[dense_idx],
+                VertexSpan verts{bv_data.get_ptr() + bv_offsets[dense_idx],
                                 bv_offsets[dense_idx + 1] - bv_offsets[dense_idx]};
                 build_subgraph_from_vertices(g, p_manager, ids[dense_idx], dense_idx,
                                             verts, total_w);

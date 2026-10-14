@@ -60,6 +60,7 @@ namespace HeiProMap {
     class HeiProMapSolver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
+        MemoryPool m_pool;
         f64 init_time = 0.0;
 
         // statistics
@@ -173,24 +174,25 @@ namespace HeiProMap {
         explicit HeiProMapSolver(const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(t_ac.graph_in);
+            graphs[0].set_pool(&m_pool);
 
             auto sp = get_time_point();
             ac = t_ac;
             random_engine = RandomEngine(ac.seed);
 
             // manager
-            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight, &m_pool);
+            bv_manager.initialize(graphs[0].n, ac.k, &m_pool);
+            q_graph.initialize(ac.k, &m_pool);
+            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
-            d_oracle.initialize(ac.hierarchy, ac.distance);
+            d_oracle.initialize(ac.hierarchy, ac.distance, &m_pool);
 
             // matching
-            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
-            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config, &m_pool);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config, &m_pool);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
@@ -199,10 +201,10 @@ namespace HeiProMap {
                 lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
             }
             if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
             }
             if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
             }
 
             auto ep = get_time_point();
@@ -212,23 +214,24 @@ namespace HeiProMap {
         explicit HeiProMapSolver(graph_t &&g, const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
             graphs.emplace_back(std::move(g));
+            graphs[0].set_pool(&m_pool);
 
             ac = t_ac;
             random_engine = RandomEngine(ac.seed);
 
             // manager
-            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            bv_manager.initialize(graphs[0].n, ac.k);
-            q_graph.initialize(ac.k);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+            p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight, &m_pool);
+            bv_manager.initialize(graphs[0].n, ac.k, &m_pool);
+            q_graph.initialize(ac.k, &m_pool);
+            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
-            d_oracle.initialize(ac.hierarchy, ac.distance);
+            d_oracle.initialize(ac.hierarchy, ac.distance, &m_pool);
 
             // matching
-            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
-            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
+            gpa_matcher.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config, &m_pool);
+            size_constrained_lp.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config, &m_pool);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
@@ -238,11 +241,11 @@ namespace HeiProMap {
             }
 
             if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config);
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
             }
 
             if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config);
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
             }
         }
 
@@ -286,7 +289,7 @@ namespace HeiProMap {
                             if (u_id != v_id) {
                                 bv_manager.add(u, u_id);
                                 if (u < v) {
-                                    q_graph.add_edge(u_id, v_id, graphs[0].edges_w[i]);
+                                    q_graph.add_edge(u_id, v_id, graphs[0].edge_w(i));
                                 }
                             }
                         }
@@ -530,12 +533,12 @@ namespace HeiProMap {
                     block_conn.begin_vertex(graphs.back(), u);
 
                     const partition_t u_id = p_manager[u];
-                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weights[u];
+                    const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weight(u);
                     p_manager.set(u, u_w, u_id);
 
                     for (size_t i = graphs.back().neighborhoods[u]; i < graphs.back().neighborhoods[u + 1]; ++i) {
                         const vertex_t v = graphs.back().edges_v[i];
-                        const weight_t w = graphs.back().edges_w[i];
+                        const weight_t w = graphs.back().edge_w(i);
                         const partition_t v_id = p_manager[v];
 
                         // build block_conns directly here
@@ -630,7 +633,7 @@ namespace HeiProMap {
 
                         for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                             const vertex_t v = g_uncontracted.edges_v[i];
-                            const weight_t w = g_uncontracted.edges_w[i];
+                            const weight_t w = g_uncontracted.edge_w(i);
                             const partition_t v_id = p_manager[v];
 
                             // rebuild block connections
@@ -669,7 +672,7 @@ namespace HeiProMap {
 
                     for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
                         const vertex_t v = g_uncontracted.edges_v[i];
-                        const weight_t w = g_uncontracted.edges_w[i];
+                        const weight_t w = g_uncontracted.edge_w(i);
                         const partition_t v_id = p_manager[v];
 
                         // rebuild block connections
@@ -787,7 +790,7 @@ namespace HeiProMap {
                              const weight_t total_weight) {
             if (hierarchy.empty()) {
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    p_manager.set(tt.get_o(u), g.v_weights[u], offset);
+                    p_manager.set(tt.get_o(u), g.v_weight(u), offset);
                 }
                 return;
             }
@@ -869,7 +872,7 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < g.n; ++u) {
                 partition_t u_id = partition[u];
                 new_ns[u_id] += 1;
-                new_ws[u_id] += g.v_weights[u];
+                new_ws[u_id] += g.v_weight(u);
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
                     partition_t v_id = partition[v];
@@ -915,7 +918,7 @@ namespace HeiProMap {
                 for (vertex_t old_u = 0; old_u < g.n; ++old_u) {
                     if (partition[old_u] == i) {
                         vertex_t new_u = sub_tt.get_n(tt.get_o(old_u));
-                        sub_g.v_weights[new_u] = g.v_weights[old_u];
+                        sub_g.v_weights[new_u] = g.v_weight(old_u);
 
                         for (size_t j = g.neighborhoods[old_u]; j < g.neighborhoods[old_u + 1]; ++j) {
                             vertex_t old_v = g.edges_v[j];
@@ -923,7 +926,7 @@ namespace HeiProMap {
                                 vertex_t new_v = sub_tt.get_n(tt.get_o(old_v));
                                 size_t pos = sub_g.neighborhoods[new_u] + cursor[new_u];
                                 sub_g.edges_v[pos] = new_v;
-                                sub_g.edges_w[pos] = g.edges_w[j];
+                                sub_g.edges_w[pos] = g.edge_w(j);
                                 cursor[new_u]++;
                             }
                         }

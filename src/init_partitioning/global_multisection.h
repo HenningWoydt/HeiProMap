@@ -396,7 +396,7 @@ namespace HeiProMap {
                 partition_t u_id = pm[u];
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     vertex_t v = g.edges_v[i];
-                    weight_t w = g.edges_w[i];
+                    weight_t w = g.edge_w(i);
                     partition_t v_id = pm[v];
                     block_conn.add_connection(u, v_id, w);
                     if (u_id != v_id) {
@@ -449,7 +449,7 @@ namespace HeiProMap {
             pm.initialize(g.n, k, g.g_weight);
             pm.reset_weights();
             for (vertex_t u = 0; u < g.n; ++u) {
-                pm.set(u, g.v_weights[u], partition[u]);
+                pm.set(u, g.v_weight(u), partition[u]);
             }
 
             // 1. Initial Refinement
@@ -486,7 +486,7 @@ namespace HeiProMap {
                         partition_t old_id = pm[u];
                         partition_t new_id = coarse_partition[mapping.get(u)];
                         if (old_id != new_id) {
-                            pm.move(u, g.uniform_v_weights ? 1 : g.v_weights[u], old_id, new_id);
+                            pm.move(u, g.uniform_v_weights ? 1 : g.v_weight(u), old_id, new_id);
                         }
                     }
 

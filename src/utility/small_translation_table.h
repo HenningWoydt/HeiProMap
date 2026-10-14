@@ -80,6 +80,11 @@ namespace HeiProMap {
             m_translation_o_to_n.clear();
             m_translation_n_to_o.clear();
         }
+
+        void release_memory() {
+            std::unordered_map<T, T>().swap(m_translation_o_to_n);
+            std::unordered_map<T, T>().swap(m_translation_n_to_o);
+        }
     };
 }
 

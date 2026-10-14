@@ -149,7 +149,7 @@ namespace HeiProMap {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
-            weight_t u_weight = g.v_weights[u];
+            weight_t u_weight = g.v_weight(u);
 
             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                 const vertex_t v = g.edges_v[j];
@@ -190,7 +190,7 @@ namespace HeiProMap {
             RebalancerMove move(u, m_k, -std::numeric_limits<weight_t>::max(), state_id);
 
             partition_t u_id = p_manager[u];
-            weight_t u_weight = g.v_weights[u];
+            weight_t u_weight = g.v_weight(u);
 
             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                 const vertex_t v = g.edges_v[j];
@@ -314,7 +314,7 @@ namespace HeiProMap {
                     RebalancerMove move = global_queue.top();
                     global_queue.pop();
                     vertex_t u = move.u;
-                    weight_t u_weight = g.v_weights[u];
+                    weight_t u_weight = g.v_weight(u);
                     partition_t u_id = p_manager[u];
                     partition_t best_id = move.best_id;
 
@@ -391,7 +391,7 @@ namespace HeiProMap {
             size_t ul_idx = 0;
             for (vertex_t u : candidates) {
                 partition_t u_id = p_manager[u];
-                weight_t u_w = g.v_weights[u];
+                weight_t u_w = g.v_weight(u);
                 if (p_manager[u] != u_id) continue;
                 if (p_manager.get_bweight(u_id) <= p_manager.get_lmax(u_id)) continue;
 
@@ -459,7 +459,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < bv_manager.size(id); ++i) {
                     const vertex_t u = bv_manager.get(id, i);
 
-                    weight_t u_w = g.v_weights[u];
+                    weight_t u_w = g.v_weight(u);
 
                     partition_t best_id = NO_ID;
                     weight_t best_qap = -std::numeric_limits<weight_t>::max();
@@ -491,7 +491,7 @@ namespace HeiProMap {
                 empty_iter++;
                 vertex_t u = heap.top_key();
                 partition_t u_id = p_manager[u];
-                weight_t u_w = g.v_weights[u];
+                weight_t u_w = g.v_weight(u);
                 partition_t new_id = heap.top().id;
                 heap.pop();
 
@@ -515,7 +515,7 @@ namespace HeiProMap {
                     partition_t v_id = p_manager[v];
                     if (blocks_to_fill_lookup[v_id] == true) { continue; }
 
-                    weight_t v_w = g.v_weights[v];
+                    weight_t v_w = g.v_weight(v);
                     partition_t best_id = NO_ID;
                     weight_t best_qap = -std::numeric_limits<weight_t>::max();
 
