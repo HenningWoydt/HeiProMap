@@ -47,7 +47,7 @@ namespace HeiProMap {
         static weight_t assign(const DynGraph &g,
                                PartitionManager &p_manager,
                                const DistanceOracle &oracle,
-                               weight_t max_block_weight) {
+                               weight_t max_block_weight = 0) {
             weight_t migration_cost = 0;
             for (vertex_t v: g.new_vertices) {
                 if (!g.vertex_exists(v)) continue;
@@ -63,12 +63,18 @@ namespace HeiProMap {
                 std::sort(candidates.begin(), candidates.end());
                 candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
 
-                partition_t best_block = 0;
+                partition_t best_block = current_block;
                 weight_t min_comm_cost = std::numeric_limits<weight_t>::max();
+                partition_t min_weight_block = current_block;
+                weight_t min_target_weight = std::numeric_limits<weight_t>::max();
 
                 for (partition_t target_block: candidates) {
                     weight_t current_target_weight = p_manager.bweights[target_block];
-                    if (target_block != current_block && current_target_weight + v_weight > max_block_weight) {
+                    if (current_target_weight < min_target_weight) {
+                        min_target_weight = current_target_weight;
+                        min_weight_block = target_block;
+                    }
+                    if (target_block != current_block && current_target_weight + v_weight > p_manager.get_lmax(target_block)) {
                         continue;
                     }
 
@@ -82,6 +88,11 @@ namespace HeiProMap {
                         min_comm_cost = current_comm_cost;
                         best_block = target_block;
                     }
+                }
+
+                if (min_comm_cost == std::numeric_limits<weight_t>::max()) {
+                    // All candidates exceeded capacity, fall back to candidate with minimum load
+                    best_block = min_weight_block;
                 }
 
                 if (best_block != current_block) {

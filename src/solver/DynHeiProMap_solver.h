@@ -44,6 +44,7 @@
 #include "../init_partitioning/heipromap_partition.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/dyn_greedy_assign.h"
+#include "../rebalance/rebalancer.h"
 #include "../configuration/DynHeiProMap_configuration.h"
 #include "../utility/profiler.h"
 #include "../distance_oracles/matrix_distance_oracle.h"
@@ -57,6 +58,7 @@ namespace HeiProMap {
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
         BlockConn b_conn;
+        Rebalancer rebalancer;
 
         std::vector<partition_t> previous_partition;
         std::vector<partition_t> initial_partition;
@@ -392,8 +394,19 @@ namespace HeiProMap {
         void run_refine_fast(u32 num_iterations) {
             HEIPROMAP_PROFILE_SCOPE("solver", "refine-fast", "refine-fast");
 
+            u64 num_blocks = p_manager.k;
+
+            // Step 2: Resize structures & compute updated lmax
             if (p_manager.n < g.n) {
                 p_manager.resize(g.n, 0);
+            }
+            p_manager.recalculate_weights_dyn(g);
+
+            weight_t lmax = (num_blocks > 0)
+                ? (weight_t) std::ceil((1.0 + config.imbalance) * ((f64) g.g_weight / (f64) num_blocks))
+                : 0;
+            for (partition_t i = 0; i < num_blocks; ++i) {
+                p_manager.lmax[i] = lmax;
             }
 
             size_t num_dirty = g.dirty_list.size();
@@ -402,18 +415,14 @@ namespace HeiProMap {
             weight_t comm_cost_before = get_qap(g, p_manager.partition.get_vector(), oracle);
             f64 balance_before = (f64) p_manager.max_weight() / ((f64) g.g_weight / (f64) p_manager.k);
 
-            u64 num_blocks = p_manager.k;
-            weight_t allowed_max_block_weight = (weight_t) ((1.0 + config.imbalance) * ((f64) g.g_weight / (f64) num_blocks));
-
-            // 1. Greedy assignment for new vertices
+            // Step 3: Greedily assign new vertices (has access to updated lmax)
             if (!g.new_vertices.empty()) {
-                total_migration_cost_from_start += DynGreedyAssign::assign(g, p_manager, oracle, allowed_max_block_weight);
+                total_migration_cost_from_start += DynGreedyAssign::assign(g, p_manager, oracle, lmax);
             }
 
             std::vector<partition_t> partition_before = p_manager.partition.get_vector();
 
-            // 2. Incremental Refinement
-            // Create temporary CSRGraph (Still needed because refinement algorithms expect CSRGraph)
+            // Create temporary CSRGraph for rebalancer and refinement
             CSRGraph csr_g(g.n, g.m, g.g_weight);
             for (vertex_t u = 0; u < g.n; ++u) {
                 csr_g.v_weights[u] = g.v_weights[u];
@@ -424,13 +433,12 @@ namespace HeiProMap {
                 }
             }
 
-            // Initialize managers (fully for now, later incrementally)
+            // Populate structures for rebalancing and refinement
             bv_manager.initialize(csr_g.n, num_blocks);
             b_conn.initialize(csr_g.n, csr_g.m, num_blocks);
             b_conn.reset_build();
             q.initialize(num_blocks);
 
-            // Populate structures
             for (vertex_t u = 0; u < csr_g.n; ++u) {
                 b_conn.begin_vertex(csr_g, u);
                 partition_t u_id = p_manager[u];
@@ -446,18 +454,17 @@ namespace HeiProMap {
                 }
             }
 
-            // Initialize and run refinement
+            // Step 4: Rebalance
+            rebalancer.initialize(csr_g.n, csr_g.m, num_blocks, config.seed);
+            rebalancer.rebalance_last_layer<true, true>(csr_g, p_manager, bv_manager, q, oracle, b_conn);
+
+            // Step 5: Refinement
             LabelPropagationConfiguration lp_config("Label Propagation");
             lp_config.enabled = true;
             lp_config.max_iteration = num_iterations;
 
             LabelPropagationRefinement<false> lp_refine;
             lp_refine.initialize(csr_g.n, csr_g.m, num_blocks, (u32) config.n_threads, (u32) config.seed, lp_config);
-
-            weight_t lmax = std::ceil((1.0 + config.imbalance) * ((f64) csr_g.g_weight / (f64) num_blocks));
-            for (partition_t i = 0; i < num_blocks; ++i) {
-                p_manager.lmax[i] = lmax;
-            }
 
             lp_refine.refine(csr_g, oracle, bv_manager, p_manager, q, b_conn);
 
