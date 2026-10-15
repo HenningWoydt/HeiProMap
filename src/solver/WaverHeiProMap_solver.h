@@ -118,7 +118,8 @@ namespace HeiProMap {
                     lmax_vec[i] = std::ceil((1.0 + ac.imbalance) * graphs[0].g_weight * fair_share);
                 }
             }
-            const weight_t global_lmin = static_cast<weight_t>(ac.min_imbalance * ((f64) graphs[0].g_weight / (f64) ac.k));
+            weight_t global_lmin = static_cast<weight_t>(ac.min_imbalance * ((f64) graphs[0].g_weight / (f64) ac.k));
+            if (graphs[0].n >= ac.k && global_lmin < 1) global_lmin = 1;
             weight_t lmax_min = lmax_vec[0], lmax_max = lmax_vec[0];
             weight_t lmin_min = std::min(global_lmin, lmax_vec[0] / 2);
             weight_t lmin_max = lmin_min;
@@ -225,10 +226,11 @@ namespace HeiProMap {
                             donor = nbrs[i];
                         }
                     }
-                    if (donor == NO_ID || donor_bw <= 1) { skipped_no_donor++; continue; }
+                    const weight_t donor_lmin = p_manager.get_lmin(donor == NO_ID ? 0 : donor);
+                    if (donor == NO_ID || donor_bw <= donor_lmin) { skipped_no_donor++; continue; }
 
                     const weight_t e_cap = p_manager.get_lmax(e);
-                    const weight_t donor_floor = std::max(weight_t(1), donor_bw / 2);
+                    const weight_t donor_floor = std::max(donor_lmin, donor_bw / 2);
                     bool moved_any = false;
                     for (const vertex_t u : blk_v[donor]) {
                         if (p_manager.partition[u] != donor) { continue; }
@@ -445,17 +447,19 @@ namespace HeiProMap {
         void internal_solve() {
             u64 level = 0;
 
+            // Pre-coarsen the topology oracle when graph is already small
+            // relative to k (e.g., quotient graph mapping where n ≈ k).
+            while (graphs.back().n <= ac.k * ac.initial_c && d_oracle.can_coarsen()) {
+                d_oracle.coarsen();
+                ac.k = d_oracle.current_k();
+                reinit_structures_for_new_k();
+            }
+
             update_lmax_array();
 
             while (graphs.back().n > ac.k * ac.initial_c) {
                 coarsening(level);
                 contraction();
-
-                if (d_oracle.can_coarsen()) {
-                    d_oracle.coarsen();
-                    ac.k = d_oracle.current_k();
-                    reinit_structures_for_new_k();
-                }
 
                 if (graphs.back().n == graphs[graphs.size() - 2].n) {
                     graphs.pop_back();
@@ -491,11 +495,72 @@ namespace HeiProMap {
             while (!mappings.empty()) {
                 level -= 1;
 
-                // If oracle was coarsened at this graph level, uncoarsen it first
-                if (d_oracle.depth() == mappings.size()) {
+                // Try to uncoarsen the topology if every coarse block has enough
+                // vertices to populate all its fine children.
+                while (d_oracle.depth() > 0) {
+                    const partition_t coarse_k = d_oracle.current_k();
+                    const partition_t fine_k_val = d_oracle.fine_k();
+                    const Mapping &topo_map = d_oracle.top_mapping();
+
+                    // Count how many fine blocks each coarse block owns
+                    std::vector<partition_t> children_count(coarse_k, 0);
+                    for (partition_t f = 0; f < fine_k_val; ++f) {
+                        children_count[topo_map.get(f)]++;
+                    }
+
+                    // Compute the max weight each coarse block may have so that
+                    // after splitting, every fine child can stay within fine-lmax.
+                    // Use the actual fine topology to get per-child lmax.
+                    const auto &fine_topo = d_oracle.fine_topology();
+                    const f64 fine_total_w = fine_topo.g_weight > 0 ? (f64)fine_topo.g_weight : (f64)fine_k_val;
+
+                    bool safe = true;
+                    for (partition_t c = 0; c < coarse_k; ++c) {
+                        if (p_manager.get_bweight(c) < static_cast<weight_t>(children_count[c])) {
+                            safe = false;
+                            break;
+                        }
+                        // Sum of fine children's lmax = max capacity after split
+                        weight_t sum_child_lmax = 0;
+                        for (partition_t f = 0; f < fine_k_val; ++f) {
+                            if (topo_map.get(f) == c) {
+                                f64 fair = (f64)fine_topo.v_weight(f) / fine_total_w;
+                                sum_child_lmax += static_cast<weight_t>(
+                                    std::ceil((1.0 + ac.imbalance) * graphs[0].g_weight * fair));
+                            }
+                        }
+                        if (p_manager.get_bweight(c) > sum_child_lmax) {
+                            safe = false;
+                            break;
+                        }
+                    }
+                    if (!safe) break;
+
                     uncoarsen_topology();
                     print_block_stats("uncoarsen_topo", level);
                     dump_heatmap("L" + std::to_string(level) + "_1_uncoarsen_topo");
+
+                    update_lmax_array();
+                    rebalance(level);
+                    print_block_stats("rebalance", level);
+                    diffuse_into_empties();
+                    print_block_stats("diffuse", level);
+                    {
+                        const auto &g_cur = graphs.back();
+                        bv_manager.reset();
+                        for (vertex_t u = 0; u < g_cur.n; ++u) {
+                            const partition_t u_id = p_manager[u];
+                            size_t n_different = 0;
+                            for (size_t i = g_cur.neighborhoods[u]; i < g_cur.neighborhoods[u + 1]; ++i) {
+                                n_different += (u_id != p_manager[g_cur.edges_v[i]]);
+                            }
+                            bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+                        }
+                        q_graph.compute_from_scratch(g_cur, p_manager);
+                        block_conn.compute_from_scratch(g_cur, p_manager);
+                    }
+                    refinement();
+                    print_block_stats("refinement", level);
                 }
 
                 uncoarsening();
@@ -505,7 +570,6 @@ namespace HeiProMap {
                 print_block_stats("rebalance", level);
                 diffuse_into_empties();
                 print_block_stats("diffuse", level);
-                // Recompute data structures after diffusion moved vertices
                 {
                     const auto &g_cur = graphs.back();
                     bv_manager.reset();
@@ -538,6 +602,88 @@ namespace HeiProMap {
                     weight_t max_bw = 0, lmax_val = p_manager.get_lmax(0);
                     for (partition_t id = 0; id < ac.k; ++id) { max_bw = std::max(max_bw, p_manager.get_bweight(id)); }
                     std::cout << "[level " << level << "] n=" << g.n << " k=" << ac.k
+                              << " |E_pi|=" << n_pairs << " empty=" << n_empty
+                              << " lmax=" << lmax_val << " max_bw=" << max_bw << std::endl;
+                }
+            }
+
+            // Uncoarsen remaining pre-coarsened topology levels after graph is fully uncoarsened
+            while (d_oracle.depth() > 0) {
+                const partition_t coarse_k = d_oracle.current_k();
+                const partition_t fine_k_val = d_oracle.fine_k();
+                const Mapping &topo_map = d_oracle.top_mapping();
+
+                std::vector<partition_t> children_count(coarse_k, 0);
+                for (partition_t f = 0; f < fine_k_val; ++f) {
+                    children_count[topo_map.get(f)]++;
+                }
+
+                const auto &fine_topo = d_oracle.fine_topology();
+                const f64 fine_total_w = fine_topo.g_weight > 0 ? (f64)fine_topo.g_weight : (f64)fine_k_val;
+
+                bool safe = true;
+                for (partition_t c = 0; c < coarse_k; ++c) {
+                    if (p_manager.get_bweight(c) < static_cast<weight_t>(children_count[c])) {
+                        safe = false;
+                        std::cout << "  [topo_uncoarsen] BLOCKED: coarse block " << c
+                                  << " has weight " << p_manager.get_bweight(c)
+                                  << " but needs " << children_count[c] << " children" << std::endl;
+                        break;
+                    }
+                    weight_t sum_child_lmax = 0;
+                    for (partition_t f = 0; f < fine_k_val; ++f) {
+                        if (topo_map.get(f) == c) {
+                            f64 fair = (f64)fine_topo.v_weight(f) / fine_total_w;
+                            sum_child_lmax += static_cast<weight_t>(
+                                std::ceil((1.0 + ac.imbalance) * graphs[0].g_weight * fair));
+                        }
+                    }
+                    if (p_manager.get_bweight(c) > sum_child_lmax) {
+                        safe = false;
+                        std::cout << "  [topo_uncoarsen] BLOCKED: coarse block " << c
+                                  << " has weight " << p_manager.get_bweight(c)
+                                  << " but sum_child_lmax=" << sum_child_lmax << std::endl;
+                        break;
+                    }
+                }
+                if (!safe) break;
+
+                uncoarsen_topology();
+                print_block_stats("uncoarsen_topo", 0);
+
+                update_lmax_array();
+                rebalance(0);
+                print_block_stats("rebalance", 0);
+                diffuse_into_empties();
+                print_block_stats("diffuse", 0);
+                {
+                    const auto &g_cur = graphs.back();
+                    bv_manager.reset();
+                    for (vertex_t u = 0; u < g_cur.n; ++u) {
+                        const partition_t u_id = p_manager[u];
+                        size_t n_different = 0;
+                        for (size_t i = g_cur.neighborhoods[u]; i < g_cur.neighborhoods[u + 1]; ++i) {
+                            n_different += (u_id != p_manager[g_cur.edges_v[i]]);
+                        }
+                        bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
+                    }
+                    q_graph.compute_from_scratch(g_cur, p_manager);
+                    block_conn.compute_from_scratch(g_cur, p_manager);
+                }
+                refinement();
+                print_block_stats("refinement", 0);
+
+                {
+                    const graph_t &g = graphs.back();
+                    partition_t n_empty = 0;
+                    for (partition_t id = 0; id < ac.k; ++id) {
+                        if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) { ++n_empty; }
+                    }
+                    u64 n_pairs = 0;
+                    for (partition_t id = 0; id < ac.k; ++id) { n_pairs += q_graph.neighbors(id).size(); }
+                    weight_t max_bw = 0, lmax_val = p_manager.get_lmax(0);
+                    for (partition_t id = 0; id < ac.k; ++id) { max_bw = std::max(max_bw, p_manager.get_bweight(id)); }
+                    std::cout << "[topo  ] n=" << g.n << " k=" << ac.k
                               << " |E_pi|=" << n_pairs << " empty=" << n_empty
                               << " lmax=" << lmax_val << " max_bw=" << max_bw << std::endl;
                 }

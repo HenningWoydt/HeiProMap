@@ -55,6 +55,9 @@ namespace HeiProMap {
 
         const CSRGraph &current_topology() const { return m_levels.back().topology; }
 
+        // Topology at the next finer level (valid only when depth() > 0).
+        const CSRGraph &fine_topology() const { return m_levels[m_levels.size() - 2].topology; }
+
         // Number of coarsenings applied so far.
         size_t depth() const { return m_levels.size() - 1; }
 

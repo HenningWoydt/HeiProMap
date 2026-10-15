@@ -16,3 +16,4 @@ data/
 extern/*
 !extern/*.patch
 run_waver.sh
+run_qgraph_waver.sh
