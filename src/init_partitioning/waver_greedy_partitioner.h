@@ -67,7 +67,6 @@ namespace HeiProMap {
                                        const f64 beta_link) {
         const vertex_t    n                = g.n;
         const partition_t k                = d_oracle.get_k();
-        const weight_t    max_block_weight = static_cast<weight_t>((1.0 + imbalance) * (g.g_weight / k));
 
         p_manager.reset_weights();
         for (vertex_t u = 0; u < n; ++u) {
@@ -106,7 +105,7 @@ namespace HeiProMap {
             }
 
             for (partition_t block = 0; block < k; ++block) {
-                if (p_manager.bweights[block] + u_weight > max_block_weight) { continue; }
+                if (p_manager.bweights[block] + u_weight > p_manager.get_lmax(block)) { continue; }
 
                 // alpha_end: once per distinct neighbor block (not per edge)
                 f64 cost = 0.0;
@@ -128,6 +127,13 @@ namespace HeiProMap {
                     cost += beta_end   * w * static_cast<f64>(block != v_block)
                           + alpha_link * dist
                           + beta_link  * w * dist;
+                }
+
+                // Penalize blocks above lmin to steer vertices toward under-filled blocks
+                const weight_t block_lmin = p_manager.get_lmin(block);
+                if (block_lmin > 0 && p_manager.bweights[block] >= block_lmin) {
+                    f64 over_ratio = static_cast<f64>(p_manager.bweights[block]) / static_cast<f64>(block_lmin);
+                    cost += alpha_end * over_ratio;
                 }
 
                 if (cost < min_cost ||

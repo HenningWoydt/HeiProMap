@@ -162,6 +162,7 @@ namespace HeiProMap {
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--topology", "-tp", "Filepath to the topology graph for the distance oracle.", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
+            {"--min-imbalance", "", "Minimum block weight as fraction of avg (0.0 = allow empty, 0.5 = at least half avg).", "0.5", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
@@ -216,6 +217,7 @@ namespace HeiProMap {
 
         // balancing information
         f64 imbalance = -1.0;
+        f64 min_imbalance = 0.0;
         f64 per_level_imb_add = 0.005;
 
         // random initialization
@@ -338,6 +340,7 @@ namespace HeiProMap {
             set_hierarchy();
             set_distance();
             set_imbalance();
+            if (is_set("--min-imbalance")) min_imbalance = std::stod(get("--min-imbalance"));
             set_seed();
             set_threads();
 

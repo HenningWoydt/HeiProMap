@@ -292,6 +292,7 @@ namespace HeiProMap {
                                 const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                                 if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
+                                if (p_manager.get_bweight(u_id) - u_weight < p_manager.lmin[u_id]) { continue; }
 
                                 const f64 delta = compute_cost_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, q_graph, block_conn);
 
@@ -345,6 +346,7 @@ namespace HeiProMap {
                                 const weight_t u_weight = t_uniform_v_weights ? 1 : g.v_weight(u);
 
                                 if (p_manager.get_bweight(target_id) + u_weight > p_manager.lmax[target_id]) { continue; }
+                                if (p_manager.get_bweight(u_id) - u_weight < p_manager.lmin[u_id]) { continue; }
 
                                 const f64 delta = compute_cost_delta<t_uniform_e_weights>(g, u, u_id, target_id, p_manager, d_oracle, q_graph, block_conn);
 
@@ -419,6 +421,8 @@ namespace HeiProMap {
                             neighbor_blocks[n_neighbor_blocks++] = v_id;
                         }
                     }
+
+                    if (p_manager.get_bweight(u_id) - u_weight < p_manager.lmin[u_id]) { continue; }
 
                     for (size_t bi = 0; bi < n_neighbor_blocks; ++bi) {
                         const partition_t id = neighbor_blocks[bi];

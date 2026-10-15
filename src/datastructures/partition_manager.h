@@ -47,6 +47,7 @@ namespace HeiProMap {
         AlignedArray<weight_t> bweights;
         AlignedArray<size_t> n_vertices;
         AlignedArray<weight_t> lmax;
+        AlignedArray<weight_t> lmin;
         AlignedArray<partition_t> hierarchy_level;
         AlignedArray<partition_t> active_ids;
         partition_t n_active = 0;
@@ -56,7 +57,7 @@ namespace HeiProMap {
         size_t heap_bytes() const {
             return partition.heap_bytes() + partition_temp.heap_bytes()
                  + bweights.heap_bytes() + n_vertices.heap_bytes()
-                 + lmax.heap_bytes() + hierarchy_level.heap_bytes()
+                 + lmax.heap_bytes() + lmin.heap_bytes() + hierarchy_level.heap_bytes()
                  + active_ids.heap_bytes();
         }
 
@@ -66,6 +67,7 @@ namespace HeiProMap {
             bweights.set_pool(pool);
             n_vertices.set_pool(pool);
             lmax.set_pool(pool);
+            lmin.set_pool(pool);
             hierarchy_level.set_pool(pool);
             active_ids.set_pool(pool);
         }
@@ -76,6 +78,7 @@ namespace HeiProMap {
             bweights.free_memory();
             n_vertices.free_memory();
             lmax.free_memory();
+            lmin.free_memory();
             hierarchy_level.free_memory();
             active_ids.free_memory();
         }
@@ -106,6 +109,7 @@ namespace HeiProMap {
             n_vertices.initialize(k, 0);
             n_vertices[0] = t_n;
             lmax.initialize(k, 0);
+            lmin.initialize(k, 0);
             hierarchy_level.initialize(k, k);
             active_ids.initialize(k, 0);
             n_active = 0;
@@ -119,6 +123,7 @@ namespace HeiProMap {
                 bweights[id] = p_manager.bweights[id];
                 n_vertices[id] = p_manager.n_vertices[id];
                 lmax[id] = p_manager.lmax[id];
+                lmin[id] = p_manager.lmin[id];
                 hierarchy_level[id] = p_manager.hierarchy_level[id];
             }
             n_active = p_manager.n_active;
@@ -140,8 +145,10 @@ namespace HeiProMap {
         weight_t get_bweight(const partition_t id) const { return bweights[id]; }
 
         void set_lmax(const partition_t id, const weight_t new_lmax) { lmax[id] = new_lmax; }
+        void set_lmin(const partition_t id, const weight_t new_lmin) { lmin[id] = new_lmin; }
 
         weight_t get_lmax(const partition_t id) const { return lmax[id]; }
+        weight_t get_lmin(const partition_t id) const { return lmin[id]; }
 
         partition_t get_hierarchy_level(const partition_t id) const { return hierarchy_level[id]; }
 

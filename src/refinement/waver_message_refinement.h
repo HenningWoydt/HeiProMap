@@ -273,6 +273,7 @@ namespace HeiProMap {
                     auto try_candidate = [&](const partition_t C) {
                         if (C == A) { return; }
                         if (p_manager.bweights[C] + group_weight > p_manager.get_lmax(C)) { return; }
+                        if (p_manager.bweights[A] - group_weight < p_manager.get_lmin(A)) { return; }
                         f64 d = compute_group_delta(g, A, C, group, in_group,
                                                     ext_neighbors, weight_to_A,
                                                     p_manager, q_graph, d_oracle, block_conn,

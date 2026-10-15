@@ -118,9 +118,26 @@ namespace HeiProMap {
                     lmax_vec[i] = std::ceil((1.0 + ac.imbalance) * graphs[0].g_weight * fair_share);
                 }
             }
+            const weight_t global_lmin = static_cast<weight_t>(ac.min_imbalance * ((f64) graphs[0].g_weight / (f64) ac.k));
+            weight_t lmax_min = lmax_vec[0], lmax_max = lmax_vec[0];
+            weight_t lmin_min = std::min(global_lmin, lmax_vec[0] / 2);
+            weight_t lmin_max = lmin_min;
             for (partition_t i = 0; i < ac.k; ++i) {
+                const weight_t lmin_i = std::min(global_lmin, lmax_vec[i] / 2);
                 p_manager.set_lmax(i, lmax_vec[i]);
+                p_manager.set_lmin(i, lmin_i);
+                lmax_min = std::min(lmax_min, lmax_vec[i]);
+                lmax_max = std::max(lmax_max, lmax_vec[i]);
+                lmin_min = std::min(lmin_min, lmin_i);
+                lmin_max = std::max(lmin_max, lmin_i);
             }
+            std::cout << "  [update_lmax] k=" << ac.k
+                      << " g_weight=" << graphs[0].g_weight
+                      << " lmin=[" << lmin_min << "," << lmin_max << "]"
+                      << " lmax=[" << lmax_min << "," << lmax_max << "]"
+                      << " avg=" << (graphs[0].g_weight / ac.k)
+                      << " topo_uniform=" << topo.uniform_v_weights
+                      << std::endl;
         }
 
         void dump_heatmap(const std::string &tag) {
@@ -157,7 +174,7 @@ namespace HeiProMap {
             }
         }
 
-        void diffuse_into_empties() {
+        void  diffuse_into_empties() {
             const size_t W = static_cast<size_t>(d_oracle.current_W());
             const partition_t k = ac.k;
             const auto &g = graphs.back();
@@ -367,6 +384,7 @@ namespace HeiProMap {
             std::cout << "#Edges                : " << graphs[0].m << std::endl;
             std::cout << "k                     : " << ac.k << std::endl;
             std::cout << "Lmax                  : " << lmax << std::endl;
+            std::cout << "Min imbalance         : " << ac.min_imbalance << std::endl;
             std::cout << "Threads               : " << ac.threads << std::endl;
             std::cout << "alpha_send            : " << ac.alpha_send << std::endl;
             std::cout << "alpha_recv            : " << ac.alpha_recv << std::endl;
@@ -398,6 +416,31 @@ namespace HeiProMap {
             return p;
         }
 
+        void print_block_stats(const std::string &tag, u64 level) {
+            partition_t n_empty = 0, n_over = 0, n_under = 0, n_ok = 0;
+            weight_t max_bw = 0, min_bw = std::numeric_limits<weight_t>::max();
+            weight_t sum_bw = 0;
+            for (partition_t id = 0; id < ac.k; ++id) {
+                if (!p_manager.is_active(id)) continue;
+                weight_t bw = p_manager.get_bweight(id);
+                weight_t lmax = p_manager.get_lmax(id);
+                weight_t lmin = p_manager.get_lmin(id);
+                if (bw == 0) { ++n_empty; }
+                else if (bw > lmax) { ++n_over; }
+                else if (lmin > 0 && bw < lmin) { ++n_under; }
+                else { ++n_ok; }
+                max_bw = std::max(max_bw, bw);
+                if (bw > 0) min_bw = std::min(min_bw, bw);
+                sum_bw += bw;
+            }
+            f64 avg_bw = static_cast<f64>(sum_bw) / ac.k;
+            std::cout << "  [L" << level << " " << tag << "] empty=" << n_empty
+                      << " over=" << n_over << " under=" << n_under << " ok=" << n_ok
+                      << " min=" << min_bw << " max=" << max_bw
+                      << " avg=" << std::fixed << std::setprecision(0) << avg_bw
+                      << std::defaultfloat << std::setprecision(6) << std::endl;
+        }
+
     private:
         void internal_solve() {
             u64 level = 0;
@@ -424,8 +467,11 @@ namespace HeiProMap {
             }
 
             initial_partitioning();
+            print_block_stats("init_part", level);
             rebalance(level);
+            print_block_stats("rebalance", level);
             refinement();
+            print_block_stats("refinement", level);
 
             {
                 const graph_t &g = graphs.back();
@@ -448,13 +494,17 @@ namespace HeiProMap {
                 // If oracle was coarsened at this graph level, uncoarsen it first
                 if (d_oracle.depth() == mappings.size()) {
                     uncoarsen_topology();
+                    print_block_stats("uncoarsen_topo", level);
                     dump_heatmap("L" + std::to_string(level) + "_1_uncoarsen_topo");
                 }
 
                 uncoarsening();
+                print_block_stats("uncoarsen", level);
                 dump_heatmap("L" + std::to_string(level) + "_2_uncoarsening");
                 rebalance(level);
+                print_block_stats("rebalance", level);
                 diffuse_into_empties();
+                print_block_stats("diffuse", level);
                 // Recompute data structures after diffusion moved vertices
                 {
                     const auto &g_cur = graphs.back();
@@ -472,6 +522,7 @@ namespace HeiProMap {
                 }
                 dump_heatmap("L" + std::to_string(level) + "_3_rebalance");
                 refinement();
+                print_block_stats("refinement", level);
                 dump_heatmap("L" + std::to_string(level) + "_4_refinement");
 
                 {
@@ -682,6 +733,13 @@ namespace HeiProMap {
                         cost += ac.beta_end()  * w * static_cast<f64>(block != v_block)
                               + ac.alpha_link  * dist
                               + ac.beta_link   * w * dist;
+                    }
+
+                    // Penalize blocks above lmin to spread load across siblings
+                    const weight_t block_lmin = p_manager.get_lmin(block);
+                    if (block_lmin > 0 && p_manager.bweights[block] >= block_lmin) {
+                        f64 over_ratio = static_cast<f64>(p_manager.bweights[block]) / static_cast<f64>(block_lmin);
+                        cost += ac.alpha_end() * over_ratio;
                     }
 
                     if (best == NO_ID || cost < min_cost) {
@@ -1042,6 +1100,12 @@ namespace HeiProMap {
                 auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                {
+                    partition_t ne = 0;
+                    for (partition_t id = 0; id < ac.k; ++id)
+                        if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) ++ne;
+                    if (ne > 0) std::cout << "    [after LP] empty=" << ne << std::endl;
+                }
             }
 
             if (ac.waver_message_refinement_config.enabled) {
@@ -1050,6 +1114,12 @@ namespace HeiProMap {
                                                ac.waver_message_refinement_config,
                                                ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                {
+                    partition_t ne = 0;
+                    for (partition_t id = 0; id < ac.k; ++id)
+                        if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) ++ne;
+                    if (ne > 0) std::cout << "    [after MsgRef] empty=" << ne << std::endl;
+                }
             }
 
             refinement_ms += get_milli_seconds(p, get_time_point());

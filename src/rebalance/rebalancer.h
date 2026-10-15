@@ -324,6 +324,11 @@ namespace HeiProMap {
                     if (p_manager.get_bweight(u_id) <= p_manager.get_lmax(u_id)) { continue; }
                     if (state_ids[u] != move.state_id) { continue; }
 
+                    // Refuse move if it would drop source below lmin (unless source is overloaded)
+                    if (p_manager.get_bweight(u_id) - u_weight < p_manager.get_lmin(u_id)
+                        && p_manager.get_bweight(u_id) <= p_manager.get_lmax(u_id)) {
+                        continue;
+                    }
                     if (p_manager.get_bweight(best_id) + u_weight > p_manager.get_lmax(best_id)) {
                         state_ids[u] += 1;
                         RebalancerMove new_move = compute_move(u, state_ids[u]);
