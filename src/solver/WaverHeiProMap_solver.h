@@ -418,8 +418,9 @@ namespace HeiProMap {
             return p;
         }
 
-        void swap_refinement() {
+        void swap_refinement(size_t neighbor_radius = 1) {
             const size_t W = static_cast<size_t>(d_oracle.current_W());
+            const size_t H = (ac.k + W - 1) / W;
             const partition_t k = ac.k;
             const auto &g = graphs.back();
 
@@ -428,6 +429,30 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < g.n; ++u) {
                 blk_verts[p_manager.partition[u]].push_back(u);
             }
+
+            // Collect all PEs within Manhattan distance <= neighbor_radius
+            auto get_neighbors_radius = [&](partition_t p, std::vector<partition_t> &nbrs) {
+                nbrs.clear();
+                const size_t px = p % W;
+                const size_t py = p / W;
+                const size_t r = neighbor_radius;
+                for (size_t dy = 0; dy <= r; ++dy) {
+                    const size_t dx_max = r - dy;
+                    for (size_t dx = (dy == 0 ? 1 : 0); dx <= dx_max; ++dx) {
+                        // Generate all sign combinations, skip (0,0)
+                        size_t coords[4][2];
+                        size_t n_coords = 0;
+                        if (px + dx < W && py + dy < H) coords[n_coords][0] = px+dx, coords[n_coords][1] = py+dy, n_coords++;
+                        if (dx > 0 && px >= dx && py + dy < H) coords[n_coords][0] = px-dx, coords[n_coords][1] = py+dy, n_coords++;
+                        if (dy > 0 && px + dx < W && py >= dy) coords[n_coords][0] = px+dx, coords[n_coords][1] = py-dy, n_coords++;
+                        if (dx > 0 && dy > 0 && px >= dx && py >= dy) coords[n_coords][0] = px-dx, coords[n_coords][1] = py-dy, n_coords++;
+                        for (size_t c = 0; c < n_coords; ++c) {
+                            partition_t q = static_cast<partition_t>(coords[c][1] * W + coords[c][0]);
+                            if (q < k && q > p) nbrs.push_back(q);
+                        }
+                    }
+                }
+            };
 
             // Cost of all vertices in a block at a given PE
             auto block_cost = [&](const std::vector<vertex_t> &verts, partition_t block) -> f64 {
@@ -446,35 +471,34 @@ namespace HeiProMap {
                 return cost;
             };
 
-            const size_t max_rounds = 50;
+            const size_t max_rounds = 100;
             size_t total_swaps = 0;
             bool progress = true;
             size_t round = 0;
+            std::vector<partition_t> nbrs;
             while (progress && round < max_rounds) {
                 progress = false;
                 size_t swaps = 0;
                 for (partition_t p = 0; p < k; ++p) {
                     if (blk_verts[p].empty()) continue;
 
-                    partition_t nbrs[4];
-                    size_t cnt = 0;
-                    const size_t col = p % W;
-                    if (p >= static_cast<partition_t>(W))        nbrs[cnt++] = p - static_cast<partition_t>(W);
-                    if (p + static_cast<partition_t>(W) < k)     nbrs[cnt++] = p + static_cast<partition_t>(W);
-                    if (col > 0)                                 nbrs[cnt++] = p - 1;
-                    if (col + 1 < W && p + 1 < k)               nbrs[cnt++] = p + 1;
+                    get_neighbors_radius(p, nbrs);
 
-                    for (size_t i = 0; i < cnt; ++i) {
-                        const partition_t q = nbrs[i];
-                        if (q <= p) continue;
+                    // Find best swap among all neighbors in radius
+                    partition_t best_q = NO_ID;
+                    f64 best_gain = 1e-6;
+
+                    const f64 cost_p = block_cost(blk_verts[p], p);
+
+                    for (const partition_t q : nbrs) {
                         if (blk_verts[q].empty()) continue;
 
-                        // Check feasibility: q's weight must fit in p's lmax and vice versa
                         const weight_t wp = p_manager.bweights[p];
                         const weight_t wq = p_manager.bweights[q];
                         if (wq > p_manager.get_lmax(p) || wp > p_manager.get_lmax(q)) continue;
 
-                        const f64 cost_before = block_cost(blk_verts[p], p) + block_cost(blk_verts[q], q);
+                        const f64 cost_q = block_cost(blk_verts[q], q);
+                        const f64 cost_before = cost_p + cost_q;
 
                         // Temporarily swap all partition assignments
                         for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = q;
@@ -482,26 +506,35 @@ namespace HeiProMap {
 
                         const f64 cost_after = block_cost(blk_verts[p], q) + block_cost(blk_verts[q], p);
 
-                        if (cost_after < cost_before - 1e-6) {
-                            // Keep swap
-                            p_manager.bweights[p] = wq;
-                            p_manager.bweights[q] = wp;
-                            std::swap(blk_verts[p], blk_verts[q]);
-                            swaps++;
-                            progress = true;
-                            break;
-                        } else {
-                            // Revert
-                            for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = p;
-                            for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = q;
+                        // Revert
+                        for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = p;
+                        for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = q;
+
+                        const f64 gain = cost_before - cost_after;
+                        if (gain > best_gain) {
+                            best_gain = gain;
+                            best_q = q;
                         }
+                    }
+
+                    if (best_q != NO_ID) {
+                        // Execute best swap
+                        for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = best_q;
+                        for (const vertex_t v : blk_verts[best_q]) p_manager.partition[v] = p;
+                        const weight_t wp = p_manager.bweights[p];
+                        const weight_t wq = p_manager.bweights[best_q];
+                        p_manager.bweights[p] = wq;
+                        p_manager.bweights[best_q] = wp;
+                        std::swap(blk_verts[p], blk_verts[best_q]);
+                        swaps++;
+                        progress = true;
                     }
                 }
                 total_swaps += swaps;
-                std::cout << "  [swap] round=" << round << " swaps=" << swaps << std::endl;
+                std::cout << "  [swap-r" << neighbor_radius << "] round=" << round << " swaps=" << swaps << std::endl;
                 round++;
             }
-            std::cout << "  [swap] total_swaps=" << total_swaps << std::endl;
+            std::cout << "  [swap-r" << neighbor_radius << "] total_swaps=" << total_swaps << std::endl;
         }
 
         void print_block_stats(const std::string &tag, u64 level) {
@@ -645,7 +678,7 @@ namespace HeiProMap {
                         block_conn.compute_from_scratch(g_cur, p_manager);
                     }
                     refinement();
-                    swap_refinement();
+                    swap_refinement(ac.swap_radius);
                     print_block_stats("refinement", level);
                 }
 
@@ -672,7 +705,7 @@ namespace HeiProMap {
                 }
                 dump_heatmap("L" + std::to_string(level) + "_3_rebalance");
                 refinement();
-                swap_refinement();
+                swap_refinement(ac.swap_radius);
                 print_block_stats("refinement", level);
                 dump_heatmap("L" + std::to_string(level) + "_4_refinement");
 
@@ -758,7 +791,7 @@ namespace HeiProMap {
                     block_conn.compute_from_scratch(g_cur, p_manager);
                 }
                 refinement();
-                swap_refinement();
+                swap_refinement(ac.swap_radius);
                 print_block_stats("refinement", 0);
 
                 {
@@ -779,7 +812,7 @@ namespace HeiProMap {
 
             // Final swap refinement when all topology levels are expanded
             if (d_oracle.depth() == 0) {
-                swap_refinement();
+                swap_refinement(ac.swap_radius);
                 print_block_stats("swap", 0);
             }
         }
