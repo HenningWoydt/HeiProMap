@@ -430,28 +430,60 @@ namespace HeiProMap {
                 blk_verts[p_manager.partition[u]].push_back(u);
             }
 
-            // Collect all PEs within Manhattan distance <= neighbor_radius
-            auto get_neighbors_radius = [&](partition_t p, std::vector<partition_t> &nbrs) {
+            // Collect all PEs within Manhattan distance <= r of center (cx, cy)
+            auto add_radius_nbrs = [&](size_t cx, size_t cy, size_t r,
+                                       partition_t p, std::vector<partition_t> &nbrs,
+                                       std::vector<bool> &seen) {
+                for (size_t dy = 0; dy <= r; ++dy) {
+                    const size_t dx_max = r - dy;
+                    for (size_t dx = 0; dx <= dx_max; ++dx) {
+                        if (dx == 0 && dy == 0) continue;
+                        size_t coords[4][2];
+                        size_t n_coords = 0;
+                        if (cx + dx < W && cy + dy < H) coords[n_coords][0] = cx+dx, coords[n_coords][1] = cy+dy, n_coords++;
+                        if (dx > 0 && cx >= dx && cy + dy < H) coords[n_coords][0] = cx-dx, coords[n_coords][1] = cy+dy, n_coords++;
+                        if (dy > 0 && cx + dx < W && cy >= dy) coords[n_coords][0] = cx+dx, coords[n_coords][1] = cy-dy, n_coords++;
+                        if (dx > 0 && dy > 0 && cx >= dx && cy >= dy) coords[n_coords][0] = cx-dx, coords[n_coords][1] = cy-dy, n_coords++;
+                        if (dx == 0 && cy + dy < H) { coords[0][0] = cx; coords[0][1] = cy+dy; n_coords = 1; }
+                        if (dx == 0 && dy > 0 && cy >= dy) { coords[n_coords][0] = cx; coords[n_coords][1] = cy-dy; n_coords++; }
+                        for (size_t c = 0; c < n_coords; ++c) {
+                            partition_t q = static_cast<partition_t>(coords[c][1] * W + coords[c][0]);
+                            if (q < k && q != p && !seen[q]) {
+                                seen[q] = true;
+                                nbrs.push_back(q);
+                            }
+                        }
+                    }
+                }
+            };
+
+            // Get swap candidates for PE p: neighborhood of p + neighborhoods of communication partners
+            auto get_swap_candidates = [&](partition_t p, std::vector<partition_t> &nbrs,
+                                           std::vector<bool> &seen) {
                 nbrs.clear();
                 const size_t px = p % W;
                 const size_t py = p / W;
                 const size_t r = neighbor_radius;
-                for (size_t dy = 0; dy <= r; ++dy) {
-                    const size_t dx_max = r - dy;
-                    for (size_t dx = (dy == 0 ? 1 : 0); dx <= dx_max; ++dx) {
-                        // Generate all sign combinations, skip (0,0)
-                        size_t coords[4][2];
-                        size_t n_coords = 0;
-                        if (px + dx < W && py + dy < H) coords[n_coords][0] = px+dx, coords[n_coords][1] = py+dy, n_coords++;
-                        if (dx > 0 && px >= dx && py + dy < H) coords[n_coords][0] = px-dx, coords[n_coords][1] = py+dy, n_coords++;
-                        if (dy > 0 && px + dx < W && py >= dy) coords[n_coords][0] = px+dx, coords[n_coords][1] = py-dy, n_coords++;
-                        if (dx > 0 && dy > 0 && px >= dx && py >= dy) coords[n_coords][0] = px-dx, coords[n_coords][1] = py-dy, n_coords++;
-                        for (size_t c = 0; c < n_coords; ++c) {
-                            partition_t q = static_cast<partition_t>(coords[c][1] * W + coords[c][0]);
-                            if (q < k && q > p) nbrs.push_back(q);
+
+                // Neighborhood of p itself
+                add_radius_nbrs(px, py, r, p, nbrs, seen);
+
+                // If extended search: also neighborhoods of all PEs we communicate with
+                if (ac.swap_extended) {
+                    for (const vertex_t u : blk_verts[p]) {
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            const partition_t nb = p_manager.partition[g.edges_v[j]];
+                            if (nb != p) {
+                                const size_t nx = nb % W;
+                                const size_t ny = nb / W;
+                                add_radius_nbrs(nx, ny, r, p, nbrs, seen);
+                            }
                         }
                     }
                 }
+
+                // Clear seen flags for next call
+                for (const partition_t q : nbrs) seen[q] = false;
             };
 
             // Cost of all vertices in a block at a given PE
@@ -476,13 +508,14 @@ namespace HeiProMap {
             bool progress = true;
             size_t round = 0;
             std::vector<partition_t> nbrs;
+            std::vector<bool> seen(k, false);
             while (progress && round < max_rounds) {
                 progress = false;
                 size_t swaps = 0;
                 for (partition_t p = 0; p < k; ++p) {
                     if (blk_verts[p].empty()) continue;
 
-                    get_neighbors_radius(p, nbrs);
+                    get_swap_candidates(p, nbrs, seen);
 
                     // Find best swap among all neighbors in radius
                     partition_t best_q = NO_ID;
