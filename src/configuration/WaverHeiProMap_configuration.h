@@ -164,7 +164,9 @@ namespace HeiProMap {
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
             {"--min-imbalance", "", "Minimum block weight as fraction of avg (0.0 = allow empty, 0.5 = at least half avg).", "0.5", "", false},
             {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors).", "2", "", false},
-            {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "1", "", false},
+            {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
+            {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
+            {"--vmove-extended", "", "Also consider neighborhoods of communication partners for vertex moves.", "1", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
             {"--threads", "-t", "Number of threads.", "1", "", false},
             {"--seed", "", "Seed for diversifying results.", "", "", false},
@@ -222,6 +224,8 @@ namespace HeiProMap {
         f64 min_imbalance = 0.0;
         u64 swap_radius = 2;
         bool swap_extended = false;
+        u64 vmove_radius = 2;
+        bool vmove_extended = false;
         f64 per_level_imb_add = 0.005;
 
         // random initialization
@@ -346,7 +350,9 @@ namespace HeiProMap {
             set_imbalance();
             if (is_set("--min-imbalance")) min_imbalance = std::stod(get("--min-imbalance"));
             swap_radius = std::stoull(get("--swap-radius"));
-            swap_extended = is_set("--swap-extended");
+            swap_extended = std::stoull(get("--swap-extended")) != 0;
+            vmove_radius = std::stoull(get("--vmove-radius"));
+            vmove_extended = std::stoull(get("--vmove-extended")) != 0;
             set_seed();
             set_threads();
 
