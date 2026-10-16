@@ -161,14 +161,12 @@ namespace HeiProMap {
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--topology", "-tp", "Filepath to the topology graph for the distance oracle.", "", "", false},
-            {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
-            {"--min-imbalance", "", "Minimum block weight as fraction of avg (0.0 = allow empty, 0.5 = at least half avg).", "0.5", "", false},
+            {"--imbalance", "-e", "Allowed imbalance of the partition of the input graph into PEs, used by KaMinPar (for example 0.03). The mapping itself is always a bijection.", "0.03", "", false},
             {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors, 0 = disabled).", "0", "", false},
             {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
             {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "3", "", false},
             {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "10000000", "", false},
             {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
-            {"--kaminpar-imbalance", "", "Imbalance of the KaMinPar partition built first when the input graph has more vertices than the topology has PEs.", "0.03", "", false},
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
             {"--spectral-only", "", "Disable all refinement and return the spectral (Laplacian RCB) placement only (0 = off).", "1", "", false},
@@ -230,7 +228,6 @@ namespace HeiProMap {
 
         // balancing information
         f64 imbalance = -1.0;
-        f64 min_imbalance = 0.0;
         u64 swap_radius = 0;
         bool swap_extended = false;
         u64 vmove_radius = 2;
@@ -239,7 +236,6 @@ namespace HeiProMap {
         u64 sa_radius = 10;
         bool spectral_solution = true;
         bool spectral_only = true;
-        f64 kaminpar_imbalance = 0.03;
         std::string kaminpar_preset = "default";
         u64 kaminpar_threads = 0;
         u64 topo_split_factor = 4;
@@ -366,7 +362,6 @@ namespace HeiProMap {
             set_hierarchy();
             set_distance();
             set_imbalance();
-            if (is_set("--min-imbalance")) min_imbalance = std::stod(get("--min-imbalance"));
             swap_radius = std::stoull(get("--swap-radius"));
             swap_extended = std::stoull(get("--swap-extended")) != 0;
             long_msg_padding = std::stoull(get("--long-msg-padding"));
@@ -374,7 +369,6 @@ namespace HeiProMap {
             sa_radius = std::stoull(get("--sa-radius"));
             spectral_solution = std::stoull(get("--spectral-solution")) != 0;
             spectral_only = std::stoull(get("--spectral-only")) != 0;
-            kaminpar_imbalance = std::stod(get("--kaminpar-imbalance"));
             kaminpar_preset = get("--kaminpar-preset");
             kaminpar_threads = std::stoull(get("--kaminpar-threads"));
             topo_split_factor = std::stoull(get("--topo-split-factor"));

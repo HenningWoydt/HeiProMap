@@ -83,7 +83,7 @@ namespace HeiProMap {
         os << "#Edges                : " << g.m << std::endl;
         os << "k                     : " << ac.k << std::endl;
         os << "Lmax                  : " << lmax << std::endl;
-        os << "Min imbalance         : " << ac.min_imbalance << std::endl;
+        os << "Imbalance (input)     : " << ac.imbalance << std::endl;
         os << "Threads               : " << ac.threads << std::endl;
         os << "alpha_send            : " << ac.alpha_send << std::endl;
         os << "alpha_recv            : " << ac.alpha_recv << std::endl;

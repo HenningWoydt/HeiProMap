@@ -71,6 +71,11 @@
 
 namespace HeiProMap {
     class WaverHeiProMapSolver {
+        // The pipeline always maps a bijection (one quotient vertex per PE): no imbalance, and every PE gets
+        // exactly one vertex. ac.imbalance is the imbalance of the input graph's partition into PEs (KaMinPar).
+        static constexpr f64 kImbalance = 0.0;
+        static constexpr f64 kMinImbalance = 1.0;
+
         // ---- configuration and run state ----
         WaverHeiProMapConfiguration ac;
         RandomEngine random_engine;
@@ -78,6 +83,7 @@ namespace HeiProMap {
         WaverTimings timings;
 
         // ---- graph hierarchy and partition state ----
+        graph_t topology; // PE topology; handed to the distance oracle by internal_solve
         std::vector<graph_t> graphs;
         std::vector<Mapping> mappings; // mappings[i]: graphs[i] -> graphs[i + 1]
         p_manager_t p_manager;
@@ -88,10 +94,6 @@ namespace HeiProMap {
 
         // ---- spectral solution (follows the graph hierarchy) ----
         SpectralTracker spectral;
-
-        // ---- input reduction: set when the input graph had more vertices than PEs ----
-        std::vector<partition_t> kaminpar_part; // KaMinPar block of every original vertex
-        vertex_t orig_n = 0;                    // number of original vertices
 
         // ---- coarsening ----
         GlobalPathAlgorithmMatcher gpa_matcher;
@@ -106,7 +108,7 @@ namespace HeiProMap {
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
             p_manager.activate_all();
             p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
-                                    ac.imbalance, ac.min_imbalance);
+                                    kImbalance, kMinImbalance);
             bv_manager.initialize(graphs[0].n, ac.k);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
@@ -122,7 +124,7 @@ namespace HeiProMap {
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
             p_manager.activate_all();
             p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
-                                    ac.imbalance, ac.min_imbalance);
+                                    kImbalance, kMinImbalance);
             bv_manager.initialize(graphs[0].n, ac.k);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
@@ -138,38 +140,33 @@ namespace HeiProMap {
             }
         }
 
-        // If g has more vertices than there are PEs, partition it into k blocks with KaMinPar and replace it by
-        // its quotient graph (one unit-weight vertex per block, summed edge weights), so n == k afterwards.
-        void reduce_to_quotient(const partition_t k) {
+        // If the input graph has more vertices than there are PEs, partition it into k blocks with KaMinPar and
+        // replace graphs[0] by its quotient graph (one unit-weight vertex per block, summed edge weights), so
+        // that n == k afterwards. Returns the block of every input vertex (empty if no reduction was needed).
+        std::vector<partition_t> reduce_to_quotient(const partition_t k) {
             CSRGraph &g = graphs[0];
-            if (g.n <= k) { return; }
+            if (g.n <= k) { return {}; }
             HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "reduce_to_quotient");
 
-            orig_n = g.n;
-            QuotientResult r = partition_into_quotient(g, k, ac.kaminpar_imbalance, ac.kaminpar_threads,
+            QuotientResult r = partition_into_quotient(g, k, ac.imbalance, ac.kaminpar_threads,
                                                        ac.threads, ac.seed, ac.kaminpar_preset);
-            kaminpar_part = std::move(r.part);
             graphs[0] = std::move(r.quotient);
+            return std::move(r.part);
         }
 
     public:
-        explicit WaverHeiProMapSolver(graph_t &&g, graph_t &&topology, const WaverHeiProMapConfiguration &t_ac) {
+        explicit WaverHeiProMapSolver(graph_t &&g, graph_t &&t_topology, const WaverHeiProMapConfiguration &t_ac) {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "constructor");
             sp = std::chrono::high_resolution_clock::now();
 
             ac = t_ac;
             graphs.emplace_back(std::move(g));
-
-            reduce_to_quotient(topology.n);
-            initialize_common(std::move(topology));
+            topology = std::move(t_topology);
         }
 
         std::vector<vertex_t> solve() {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "solve");
-            internal_solve();
-
-            std::vector<partition_t> p(graphs[0].n);
-            for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
+            std::vector<partition_t> result = internal_solve();
 
             const auto ep = std::chrono::high_resolution_clock::now();
             const f64 duration = get_seconds(sp, ep);
@@ -182,17 +179,11 @@ namespace HeiProMap {
                                                                ac.alpha_link, ac.beta_link);
             const f64 max_link_load = get_max_link_load(q_graph, ac.k, d_oracle.current_W(),
                                                         ac.alpha_link, ac.beta_link);
-            const weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+            const weight_t lmax = std::ceil((1.0 + kImbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, p_manager, timings);
 
-            if (!kaminpar_part.empty()) {
-                // Propagate the block -> PE mapping back to the original vertices.
-                std::vector<partition_t> orig_p(orig_n);
-                for (vertex_t u = 0; u < orig_n; ++u) { orig_p[u] = p[kaminpar_part[u]]; }
-                return orig_p;
-            }
-            return p;
+            return result;
         }
 
 
@@ -274,14 +265,20 @@ namespace HeiProMap {
 
             uncoarsen_topology();
             p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
-                                    ac.imbalance, ac.min_imbalance);
+                                    kImbalance, kMinImbalance);
             return true;
         }
 
     private:
-        void internal_solve() {
+        // Runs the whole pipeline and returns the PE of every vertex of the input graph. If the input graph has more
+        // vertices than there are PEs, it is first reduced to a quotient graph by KaMinPar (n == k), the pipeline
+        // runs on the quotient, and the block -> PE mapping is propagated back to the input vertices at the end.
+        std::vector<partition_t> internal_solve() {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "internal_solve");
             u64 level = 0;
+
+            const std::vector<partition_t> kaminpar_part = reduce_to_quotient(topology.n);
+            initialize_common(std::move(topology));
 
             // Pre-coarsen the topology oracle as far as possible.
             while (d_oracle.can_coarsen()) {
@@ -291,7 +288,7 @@ namespace HeiProMap {
             }
 
             p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
-                                    ac.imbalance, ac.min_imbalance);
+                                    kImbalance, kMinImbalance);
 
             // Coarsen the graph.
             while (graphs.back().n > d_oracle.current_k() * ac.initial_c) {
@@ -361,6 +358,15 @@ namespace HeiProMap {
             if (ac.spectral_only && ac.spectral_solution && spectral.size() == graphs.back().n) {
                 adopt_spectral_only();
             }
+
+            std::vector<partition_t> p(graphs[0].n);
+            for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
+            if (kaminpar_part.empty()) { return p; }
+
+            // Propagate the block -> PE mapping back to the input vertices.
+            std::vector<partition_t> input_p(kaminpar_part.size());
+            for (vertex_t u = 0; u < kaminpar_part.size(); ++u) { input_p[u] = p[kaminpar_part[u]]; }
+            return input_p;
         }
 
         // Spectral-only mode: replace the multilevel partition by the spectral placement (rebalanced, not refined).
@@ -416,7 +422,7 @@ namespace HeiProMap {
                     for (u64 trial = 0; trial < kappa; ++trial) {
                         // tid=0, trial=0 → seed=0 (natural vertex order, no shuffle)
                         const u64 trial_seed = (tid == 0 && trial == 0) ? 0 : (1 + ac.seed + tid * kappa + trial);
-                        waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, trial_seed, cur_pm, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                        waver_greedy_partition(graphs.back(), d_oracle, kImbalance, trial_seed, cur_pm, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                         f64 cur_cost = get_waver_cost(graphs.back(), cur_pm, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
 
                         if (trial == 0 || cur_cost < local_best_cost[tid]) {
@@ -444,7 +450,7 @@ namespace HeiProMap {
                 for (u64 trial = 0; trial < kappa; ++trial) {
                     // trial=0 → seed=0 (natural vertex order, no shuffle)
                     const u64 trial_seed = (trial == 0) ? 0 : (1 + ac.seed + trial);
-                    waver_greedy_partition(graphs.back(), d_oracle, ac.imbalance, trial_seed, p_manager, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                    waver_greedy_partition(graphs.back(), d_oracle, kImbalance, trial_seed, p_manager, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                     f64 cur_cost = get_waver_cost(graphs.back(), p_manager, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
 
                     if (trial == 0 || cur_cost < best_cost) {
@@ -488,11 +494,11 @@ namespace HeiProMap {
             mappings.back().initialize(graphs.back().n);
 
             if (ac.coarsening_algorithm_id == COARSENING_ALG_GLOBAL_PATHS) {
-                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), ac.imbalance);
+                gpa_matcher.match(level, graphs.back(), p_manager, mappings.back(), kImbalance);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_SIZE_CONSTRAINED_LP) {
-                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), ac.imbalance, ac.threads);
+                size_constrained_lp.cluster(level, graphs.back(), p_manager, mappings.back(), kImbalance, ac.threads);
             } else if (ac.coarsening_algorithm_id == COARSENING_ALG_HEAVY_EDGE) {
-                heavy_edge_matching.match(graphs.back(), p_manager, mappings.back(), ac.imbalance, random_engine.get_u64(), ac.heavy_edge_matching_config);
+                heavy_edge_matching.match(graphs.back(), p_manager, mappings.back(), kImbalance, random_engine.get_u64(), ac.heavy_edge_matching_config);
             } else {
                 std::cerr << "Coarsening algorithm " << coarsening_algorithm_to_string(ac.coarsening_algorithm_id) << " with id " << ac.coarsening_algorithm_id << " not known!" << std::endl;
                 exit(EXIT_FAILURE);
