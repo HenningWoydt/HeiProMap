@@ -82,7 +82,18 @@ int main(const int argc, char *argv[]) {
 
     HeiProMap::WaverHeiProMapConfiguration ac(run_argc, run_argv);
 
-    HeiProMap::WaverHeiProMapSolver solver(ac);
+    if (ac.topology_in.empty()) {
+        std::cerr << "Topology required for Waver-HeiProMap!" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    auto t_read_start = HeiProMap::get_time_point();
+    HeiProMap::CSRGraph g(ac.graph_in);
+    HeiProMap::CSRGraph topology(ac.topology_in);
+    auto t_read_end = HeiProMap::get_time_point();
+    HeiProMap::f64 read_io_ms = HeiProMap::get_milli_seconds(t_read_start, t_read_end);
+
+    HeiProMap::WaverHeiProMapSolver solver(std::move(g), std::move(topology), ac);
     std::vector<HeiProMap::partition_t> partition = solver.solve();
 
     auto t_write_start = HeiProMap::get_time_point();
@@ -90,6 +101,7 @@ int main(const int argc, char *argv[]) {
     auto t_write_end = HeiProMap::get_time_point();
     HeiProMap::f64 write_io_ms = HeiProMap::get_milli_seconds(t_write_start, t_write_end);
 
+    std::cout << "IO Read Time (ms)     : " << read_io_ms << std::endl;
     std::cout << "IO Write Time (ms)    : " << write_io_ms << std::endl;
 
     auto ep = HeiProMap::get_time_point();

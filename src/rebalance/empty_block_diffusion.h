@@ -33,6 +33,7 @@
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
+#include "../utility/grid_utils.h"
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
@@ -43,16 +44,6 @@ namespace HeiProMap {
         static void diffuse(const CSRGraph &g, PartitionManager &p_manager, const size_t W) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "EmptyBlockDiffusion", "diffuse");
             const partition_t k = p_manager.get_k();
-
-            auto get_neighbors = [&](partition_t b, partition_t *nbrs) -> size_t {
-                size_t cnt = 0;
-                const size_t c = b % W;
-                if (b >= static_cast<partition_t>(W)) nbrs[cnt++] = b - static_cast<partition_t>(W);
-                if (b + static_cast<partition_t>(W) < k) nbrs[cnt++] = b + static_cast<partition_t>(W);
-                if (c > 0) nbrs[cnt++] = b - 1;
-                if (c + 1 < W && b + 1 < k) nbrs[cnt++] = b + 1;
-                return cnt;
-            };
 
             // Target weight: fair share per PE
             const weight_t avg_bw = g.g_weight / k;
@@ -75,7 +66,7 @@ namespace HeiProMap {
                     if (p_manager.bweights[e] > 0) { continue; }
 
                     partition_t nbrs[4];
-                    const size_t n_nbrs = get_neighbors(e, nbrs);
+                    const size_t n_nbrs = grid_neighbors(e, W, k, nbrs);
 
                     partition_t donor = NO_ID;
                     weight_t donor_bw = 0;
@@ -118,7 +109,7 @@ namespace HeiProMap {
                     const weight_t e_cap = p_manager.get_lmax(e);
 
                     partition_t nbrs[4];
-                    const size_t n_nbrs = get_neighbors(e, nbrs);
+                    const size_t n_nbrs = grid_neighbors(e, W, k, nbrs);
 
                     partition_t donor = NO_ID;
                     weight_t donor_bw = avg_bw;
