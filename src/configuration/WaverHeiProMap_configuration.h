@@ -165,6 +165,11 @@ namespace HeiProMap {
             {"--min-imbalance", "", "Minimum block weight as fraction of avg (0.0 = allow empty, 0.5 = at least half avg).", "0.5", "", false},
             {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors).", "2", "", false},
             {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
+            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement.", "3", "", false},
+            {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "10000000", "", false},
+            {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
+            {"--spectral-solution", "", "Also build a spectral (Laplacian RCB) solution and keep the cheaper one (0 = off).", "1", "", false},
+            {"--topo-split-factor", "", "Split a coarse topology cell only if its block weight is at least this factor times its number of children.", "4", "", false},
             {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
             {"--vmove-extended", "", "Also consider neighborhoods of communication partners for vertex moves.", "1", "", false},
             {"--config", "-c", "The configuration.", "", "", false},
@@ -225,6 +230,11 @@ namespace HeiProMap {
         u64 swap_radius = 2;
         bool swap_extended = false;
         u64 vmove_radius = 2;
+        u64 long_msg_padding = 3;
+        u64 sa_iterations = 0;
+        u64 sa_radius = 10;
+        bool spectral_solution = true;
+        u64 topo_split_factor = 4;
         bool vmove_extended = false;
         f64 per_level_imb_add = 0.005;
 
@@ -351,6 +361,11 @@ namespace HeiProMap {
             if (is_set("--min-imbalance")) min_imbalance = std::stod(get("--min-imbalance"));
             swap_radius = std::stoull(get("--swap-radius"));
             swap_extended = std::stoull(get("--swap-extended")) != 0;
+            long_msg_padding = std::stoull(get("--long-msg-padding"));
+            sa_iterations = std::stoull(get("--sa-iterations"));
+            sa_radius = std::stoull(get("--sa-radius"));
+            spectral_solution = std::stoull(get("--spectral-solution")) != 0;
+            topo_split_factor = std::stoull(get("--topo-split-factor"));
             vmove_radius = std::stoull(get("--vmove-radius"));
             vmove_extended = std::stoull(get("--vmove-extended")) != 0;
             set_seed();
