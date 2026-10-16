@@ -165,7 +165,7 @@ namespace HeiProMap {
             {"--min-imbalance", "", "Minimum block weight as fraction of avg (0.0 = allow empty, 0.5 = at least half avg).", "0.5", "", false},
             {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors, 0 = disabled).", "0", "", false},
             {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
-            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "0", "", false},
+            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "3", "", false},
             {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "10000000", "", false},
             {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
             {"--kaminpar-imbalance", "", "Imbalance of the KaMinPar partition built first when the input graph has more vertices than the topology has PEs.", "0.03", "", false},
@@ -234,7 +234,7 @@ namespace HeiProMap {
         u64 swap_radius = 0;
         bool swap_extended = false;
         u64 vmove_radius = 2;
-        u64 long_msg_padding = 0;
+        u64 long_msg_padding = 3;
         u64 sa_iterations = 0;
         u64 sa_radius = 10;
         bool spectral_solution = true;

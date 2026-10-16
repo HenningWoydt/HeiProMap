@@ -931,6 +931,56 @@ namespace HeiProMap {
             rebalance(0);
             diffuse_into_empties();
             recompute_datastructures();
+            f64 raw_cost = current_message_cost();
+            if (ac.waver_message_refinement_config.enabled) {
+                const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+                const auto sp_mr = get_time_point();
+                WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
+                                               ac.waver_message_refinement_config,
+                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                const f64 mr_s = get_seconds(sp_mr, get_time_point());
+                const f64 after = current_message_cost();
+                const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+                std::cout << "[msg-ref]  iters<=" << ac.waver_message_refinement_config.max_iters
+                          << " cost " << std::fixed << std::setprecision(2) << raw_cost / 1e6 << "M -> " << after / 1e6 << "M ("
+                          << std::showpos << 100.0 * (after / raw_cost - 1.0) << std::noshowpos << "%)"
+                          << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
+                          << " (" << mr_s << " s)" << std::endl;
+                raw_cost = after;
+            }
+            if (ac.swap_radius > 0) {
+                const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+                const auto sp_sw = get_time_point();
+                WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
+                                                 ac.swap_radius, ac.swap_extended,
+                                                 ac.alpha_end(), ac.beta_end(),
+                                                 ac.alpha_link, ac.beta_link);
+                const f64 sw_s = get_seconds(sp_sw, get_time_point());
+                const f64 after = current_message_cost();
+                const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+                std::cout << "[swap]     radius=" << ac.swap_radius
+                          << " cost " << std::fixed << std::setprecision(2) << raw_cost / 1e6 << "M -> " << after / 1e6 << "M ("
+                          << std::showpos << 100.0 * (after / raw_cost - 1.0) << std::noshowpos << "%)"
+                          << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
+                          << " (" << sw_s << " s)" << std::endl;
+                raw_cost = after;
+            }
+            if (ac.long_msg_padding > 0) {
+                const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+                const auto sp_lm = get_time_point();
+                const size_t swaps = WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
+                                                                        ac.long_msg_padding,
+                                                                        ac.alpha_end(), ac.beta_end(),
+                                                                        ac.alpha_link, ac.beta_link);
+                const f64 lm_s = get_seconds(sp_lm, get_time_point());
+                const f64 after = current_message_cost();
+                const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+                std::cout << "[long-msg] padding=" << ac.long_msg_padding << " swaps=" << swaps
+                          << " cost " << std::fixed << std::setprecision(2) << raw_cost / 1e6 << "M -> " << after / 1e6 << "M ("
+                          << std::showpos << 100.0 * (after / raw_cost - 1.0) << std::noshowpos << "%)"
+                          << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
+                          << " (" << lm_s << " s)" << std::endl;
+            }
             std::cout << "spectral-only placement: cost=" << std::fixed << std::setprecision(2)
                       << current_message_cost() / 1e6 << "M " << balance_summary() << std::endl;
         }

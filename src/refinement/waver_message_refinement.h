@@ -44,7 +44,7 @@ namespace HeiProMap {
     struct WaverMessageRefinementConfiguration {
         std::string name;
         bool enabled  = false;
-        u64  max_iters = 5;
+        u64  max_iters = 5000;
 
         explicit WaverMessageRefinementConfiguration(std::string n) : name(std::move(n)) {}
     };

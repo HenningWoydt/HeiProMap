@@ -46,7 +46,8 @@ namespace HeiProMap {
 
     public:
         template<typename DistanceOracleT>
-        static void refine(graph_t              &g,
+        // Returns the number of block swaps performed.
+        static size_t refine(graph_t              &g,
                             p_manager_t          &p_manager,
                             const DistanceOracleT &d_oracle,
                             size_t                padding,
@@ -97,10 +98,10 @@ namespace HeiProMap {
                     }
                 }
             }
-            if (all_dists.empty()) return;
+            if (all_dists.empty()) return 0;
             std::sort(all_dists.begin(), all_dists.end());
             const weight_t dist_threshold = all_dists[all_dists.size() * 90 / 100];
-            if (dist_threshold <= 1) return;
+            if (dist_threshold <= 1) return 0;
 
             std::vector<LongEdge> long_edges;
             std::unordered_map<u64, size_t> pair_to_idx;
@@ -129,7 +130,7 @@ namespace HeiProMap {
                           return a.weighted_dist > b.weighted_dist;
                       });
 
-            const size_t max_rounds = 3;
+            const size_t max_rounds = 3000;
             const size_t max_edges = std::min(long_edges.size(), static_cast<size_t>(5000));
             size_t total_swaps = 0;
 
@@ -207,6 +208,7 @@ namespace HeiProMap {
                 total_swaps += swaps;
                 if (swaps == 0) break;
             }
+            return total_swaps;
         }
     };
 
