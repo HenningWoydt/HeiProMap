@@ -170,6 +170,10 @@ namespace HeiProMap {
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
             {"--spectral-only", "", "Disable all refinement and return the spectral (Laplacian RCB) placement only (0 = off).", "1", "", false},
+            {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "1", "", false},
+            {"--vcycle-swap-radius", "", "Neighborhood radius of the swap refinement used at every V-cycle level.", "2", "", false},
+            {"--vertex-refine", "", "After the mapping is propagated back to the input vertices, refine the individual vertex placement with message-group refinement within the allowed --imbalance (0 = off).", "1", "", false},
+            {"--vertex-refine-iters", "", "Maximum iterations of the input-vertex refinement.", "10", "", false},
             {"--spectral-solution", "", "Also build a spectral (Laplacian RCB) solution and keep the cheaper one (0 = off).", "1", "", false},
             {"--topo-split-factor", "", "Split a coarse topology cell only if its block weight is at least this factor times its number of children.", "4", "", false},
             {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
@@ -236,6 +240,10 @@ namespace HeiProMap {
         u64 sa_radius = 10;
         bool spectral_solution = true;
         bool spectral_only = true;
+        bool vcycle = true;
+        bool vertex_refine = true;
+        u64 vertex_refine_iters = 10;
+        u64 vcycle_swap_radius = 2;
         std::string kaminpar_preset = "default";
         u64 kaminpar_threads = 0;
         u64 topo_split_factor = 4;
@@ -369,6 +377,10 @@ namespace HeiProMap {
             sa_radius = std::stoull(get("--sa-radius"));
             spectral_solution = std::stoull(get("--spectral-solution")) != 0;
             spectral_only = std::stoull(get("--spectral-only")) != 0;
+            vcycle = std::stoull(get("--vcycle")) != 0;
+            vertex_refine = std::stoull(get("--vertex-refine")) != 0;
+            vertex_refine_iters = std::stoull(get("--vertex-refine-iters"));
+            vcycle_swap_radius = std::stoull(get("--vcycle-swap-radius"));
             kaminpar_preset = get("--kaminpar-preset");
             kaminpar_threads = std::stoull(get("--kaminpar-threads"));
             topo_split_factor = std::stoull(get("--topo-split-factor"));

@@ -67,6 +67,7 @@
 #include "../refinement/waver_long_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
+#include "../refinement/input_vertex_refinement.h"
 #include "../distance_oracles/grid_distance_oracle.h"
 
 namespace HeiProMap {
@@ -94,6 +95,9 @@ namespace HeiProMap {
 
         // ---- spectral solution (follows the graph hierarchy) ----
         SpectralTracker spectral;
+
+        // ---- refinement of the individual input vertices (after the mapping is propagated back) ----
+        InputVertexRefinement::Stats vertex_refinement;
 
         // ---- coarsening ----
         GlobalPathAlgorithmMatcher gpa_matcher;
@@ -142,14 +146,15 @@ namespace HeiProMap {
 
         // If the input graph has more vertices than there are PEs, partition it into k blocks with KaMinPar and
         // replace graphs[0] by its quotient graph (one unit-weight vertex per block, summed edge weights), so
-        // that n == k afterwards. Returns the block of every input vertex (empty if no reduction was needed).
-        std::vector<partition_t> reduce_to_quotient(const partition_t k) {
-            CSRGraph &g = graphs[0];
-            if (g.n <= k) { return {}; }
+        // that n == k afterwards. The input graph is moved to input_graph. Returns the block of every input vertex
+        // (empty if no reduction was needed).
+        std::vector<partition_t> reduce_to_quotient(const partition_t k, graph_t &input_graph) {
+            if (graphs[0].n <= k) { return {}; }
             HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "reduce_to_quotient");
 
-            QuotientResult r = partition_into_quotient(g, k, ac.imbalance, ac.kaminpar_threads,
+            QuotientResult r = partition_into_quotient(graphs[0], k, ac.imbalance, ac.kaminpar_threads,
                                                        ac.threads, ac.seed, ac.kaminpar_preset);
+            input_graph = std::move(graphs[0]); // kept for the refinement of the input vertices
             graphs[0] = std::move(r.quotient);
             return std::move(r.part);
         }
@@ -181,7 +186,7 @@ namespace HeiProMap {
                                                         ac.alpha_link, ac.beta_link);
             const weight_t lmax = std::ceil((1.0 + kImbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-            print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, p_manager, timings);
+            print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, p_manager, timings, vertex_refinement);
 
             return result;
         }
@@ -277,7 +282,8 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "internal_solve");
             u64 level = 0;
 
-            const std::vector<partition_t> kaminpar_part = reduce_to_quotient(topology.n);
+            graph_t input_graph;
+            const std::vector<partition_t> kaminpar_part = reduce_to_quotient(topology.n, input_graph);
             initialize_common(std::move(topology));
 
             // Pre-coarsen the topology oracle as far as possible.
@@ -359,6 +365,8 @@ namespace HeiProMap {
                 adopt_spectral_only();
             }
 
+            if (ac.vcycle && is_bijection()) { vcycle(); }
+
             std::vector<partition_t> p(graphs[0].n);
             for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
             if (kaminpar_part.empty()) { return p; }
@@ -366,6 +374,17 @@ namespace HeiProMap {
             // Propagate the block -> PE mapping back to the input vertices.
             std::vector<partition_t> input_p(kaminpar_part.size());
             for (vertex_t u = 0; u < kaminpar_part.size(); ++u) { input_p[u] = p[kaminpar_part[u]]; }
+
+            if (ac.vertex_refine) {
+                InputVertexRefinement::Params params;
+                params.imbalance = ac.imbalance;
+                params.max_iters = ac.vertex_refine_iters;
+                params.alpha_end = ac.alpha_end();
+                params.beta_end = ac.beta_end();
+                params.alpha_link = ac.alpha_link;
+                params.beta_link = ac.beta_link;
+                vertex_refinement = InputVertexRefinement::refine(input_graph, input_p, d_oracle, params);
+            }
             return input_p;
         }
 
@@ -394,6 +413,72 @@ namespace HeiProMap {
                 WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
                                                    ac.long_msg_padding,
                                                    ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
+        }
+
+        // True if the finished mapping is a bijection on the finest level: one vertex per PE, nothing else.
+        bool is_bijection() const {
+            if (graphs.size() != 1 || d_oracle.depth() != 0 || graphs[0].n != ac.k) { return false; }
+            for (partition_t id = 0; id < ac.k; ++id) {
+                if (p_manager.get_bweight(id) != 1) { return false; }
+            }
+            return true;
+        }
+
+        // One swap refinement pass on the current level of the V-cycle.
+        void vcycle_swap_pass() {
+            if (ac.vcycle_swap_radius == 0) { return; }
+            WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle, ac.vcycle_swap_radius, false,
+                                             ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+        }
+
+        // V-cycle on a finished bijection. The topology is coarsened (2x2 cells) and the vertices mapped to the merged
+        // cells are contracted the same way, so every coarse vertex sits in its own coarse cell. Uncoarsening then
+        // restores graph and topology level by level, with a swap refinement pass on every level, starting at the
+        // coarsest. The previous mapping is restored if the cycle does not lower the message cost.
+        void vcycle() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "vcycle");
+            std::vector<partition_t> saved(graphs[0].n);
+            for (vertex_t u = 0; u < graphs[0].n; ++u) { saved[u] = p_manager[u]; }
+            const f64 cost_before = current_message_cost();
+
+            // Coarsen topology and mapped vertices together.
+            u64 levels = 0;
+            while (d_oracle.can_coarsen()) {
+                d_oracle.coarsen();
+                const Mapping &topo_map = d_oracle.top_mapping();
+                const vertex_t fine_n = graphs.back().n;
+
+                mappings.emplace_back();
+                mappings.back().initialize(fine_n);
+                mappings.back().set_coarse_n(d_oracle.current_k());
+                for (vertex_t u = 0; u < fine_n; ++u) { mappings.back().set(u, topo_map.get(p_manager[u])); }
+
+                graphs.emplace_back();
+                graphs.back().contract(graphs[graphs.size() - 2], mappings.back(), ac.threads);
+
+                ac.k = d_oracle.current_k();
+                reinit_structures_for_new_k();
+                p_manager.reset_weights();
+                for (vertex_t c = 0; c < graphs.back().n; ++c) { p_manager.set(c, graphs.back().v_weight(c), c); }
+                ++levels;
+            }
+
+            // Uncoarsen with swap refinement on every level.
+            recompute_datastructures();
+            vcycle_swap_pass();
+            for (u64 l = 0; l < levels; ++l) {
+                uncoarsening();
+                uncoarsen_topology();
+                recompute_datastructures();
+                rebalance(1);
+                EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
+                vcycle_swap_pass();
+            }
+
+            if (!is_bijection() || current_message_cost() >= cost_before) {
+                load_partition(saved);
+                recompute_datastructures();
             }
         }
 

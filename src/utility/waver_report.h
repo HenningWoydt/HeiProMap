@@ -36,6 +36,7 @@
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
 #include "qap.h"
+#include "../refinement/input_vertex_refinement.h"
 #include "utils.h"
 
 namespace HeiProMap {
@@ -67,7 +68,8 @@ namespace HeiProMap {
                                     const MessageCostBreakdown &cost,
                                     const f64 max_link_load,
                                     const PartitionManager &p_manager,
-                                    const WaverTimings &t) {
+                                    const WaverTimings &t,
+                                    const InputVertexRefinement::Stats &vr) {
         size_t n_empty_partitions = 0;
         size_t n_overloaded_partitions = 0;
         weight_t sum_too_much = 0;
@@ -99,6 +101,15 @@ namespace HeiProMap {
         os << "#empty partitions     : " << n_empty_partitions << std::endl;
         os << "#oload partitions     : " << n_overloaded_partitions << std::endl;
         os << "Sum oload weights     : " << sum_too_much << std::endl;
+        if (vr.ran) {
+            os << "------- Input vertex refinement -------" << std::endl;
+            os << "Message cost          : " << static_cast<u64>(vr.cost_before) << " -> " << static_cast<u64>(vr.cost_after)
+               << " (" << std::showpos << 100.0 * (vr.cost_after / vr.cost_before - 1.0) << std::noshowpos << "%)" << std::endl;
+            os << "Max link load         : " << static_cast<u64>(vr.max_link_before) << " -> " << static_cast<u64>(vr.max_link_after) << std::endl;
+            os << "Rows per PE           : max " << vr.max_rows_before << " -> " << vr.max_rows_after
+               << ", min after " << vr.min_rows_after << std::endl;
+            os << "Time (s)              : " << vr.seconds << std::endl;
+        }
         os << "------- Time -------" << std::endl;
         os << "Coarsening            : " << t.coarsening_ms << std::endl;
         os << "Contraction           : " << t.contraction_ms << std::endl;
