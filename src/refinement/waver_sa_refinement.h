@@ -221,10 +221,6 @@ namespace HeiProMap {
                 T *= cooling;
             }
 
-            std::cout << "    [SA] k=" << k << " eval=" << evaluated
-                      << " accepted=" << accepted << " improved=" << improved
-                      << " T_init=" << (T / std::pow(cooling, evaluated))
-                      << " T_final=" << T << std::endl;
 
             for (vertex_t u = 0; u < g.n; ++u) p_manager.partition[u] = best_partition[u];
             for (partition_t b = 0; b < k; ++b) p_manager.bweights[b] = best_bweights[b];

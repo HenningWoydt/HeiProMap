@@ -367,6 +367,12 @@ namespace HeiProMap {
 
             if (ac.vcycle && is_bijection()) { vcycle(); }
 
+            // Simulated annealing on the finished bijection (swaps the contents of nearby PEs).
+            if (ac.sa_iterations > 0 && is_bijection()) {
+                WaverSARefinement::refine(graphs.back(), p_manager, d_oracle, ac.sa_iterations, ac.sa_radius,
+                                          ac.seed + 99999, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
+
             std::vector<partition_t> p(graphs[0].n);
             for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
             if (kaminpar_part.empty()) { return p; }
