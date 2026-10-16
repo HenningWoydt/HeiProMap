@@ -10,6 +10,27 @@ set(PROJECT_VERSION "1.0.0")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------
+# KaMinPar (shared-memory partitioner, built from extern/KaMinPar)
+# Added before HeiProMap's global compiler flags (-fno-exceptions, -fwhole-program, ...) so it builds with its own.
+# ---------------------------
+set(KAMINPAR_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/KaMinPar")
+if(NOT EXISTS "${KAMINPAR_SOURCE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "KaMinPar not found under ${KAMINPAR_SOURCE_DIR}; run build.sh to fetch it")
+endif()
+set(KAMINPAR_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_APPS OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_WITH_SPARSEHASH OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_WITH_CCACHE OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_BUILD_WITH_MTUNE_NATIVE OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_ENABLE_TIMERS OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_64BIT_EDGE_IDS ON CACHE BOOL "" FORCE)
+set(INSTALL_KAMINPAR OFF CACHE BOOL "" FORCE)
+add_subdirectory("${KAMINPAR_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/KaMinPar" EXCLUDE_FROM_ALL)
+
+# ---------------------------
 # Options
 # ---------------------------
 option(ENABLE_ASSERTS "Enable assertions" OFF)
@@ -134,6 +155,7 @@ target_link_libraries(HeiProMapLib INTERFACE
         ${KAHIP_LIBRARY}
         OpenMP::OpenMP_CXX
         TBB::tbb
+        KaMinPar::KaMinPar
         m
 )
 

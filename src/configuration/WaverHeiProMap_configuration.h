@@ -168,6 +168,10 @@ namespace HeiProMap {
             {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "0", "", false},
             {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "10000000", "", false},
             {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
+            {"--kaminpar-imbalance", "", "Imbalance of the KaMinPar partition built first when the input graph has more vertices than the topology has PEs.", "0.03", "", false},
+            {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
+            {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
+            {"--spectral-only", "", "Disable all refinement and return the spectral (Laplacian RCB) placement only (0 = off).", "1", "", false},
             {"--spectral-solution", "", "Also build a spectral (Laplacian RCB) solution and keep the cheaper one (0 = off).", "1", "", false},
             {"--topo-split-factor", "", "Split a coarse topology cell only if its block weight is at least this factor times its number of children.", "4", "", false},
             {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
@@ -234,6 +238,10 @@ namespace HeiProMap {
         u64 sa_iterations = 0;
         u64 sa_radius = 10;
         bool spectral_solution = true;
+        bool spectral_only = true;
+        f64 kaminpar_imbalance = 0.03;
+        std::string kaminpar_preset = "default";
+        u64 kaminpar_threads = 0;
         u64 topo_split_factor = 4;
         bool vmove_extended = false;
         f64 per_level_imb_add = 0.005;
@@ -365,6 +373,10 @@ namespace HeiProMap {
             sa_iterations = std::stoull(get("--sa-iterations"));
             sa_radius = std::stoull(get("--sa-radius"));
             spectral_solution = std::stoull(get("--spectral-solution")) != 0;
+            spectral_only = std::stoull(get("--spectral-only")) != 0;
+            kaminpar_imbalance = std::stod(get("--kaminpar-imbalance"));
+            kaminpar_preset = get("--kaminpar-preset");
+            kaminpar_threads = std::stoull(get("--kaminpar-threads"));
             topo_split_factor = std::stoull(get("--topo-split-factor"));
             vmove_radius = std::stoull(get("--vmove-radius"));
             vmove_extended = std::stoull(get("--vmove-extended")) != 0;

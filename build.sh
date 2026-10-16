@@ -175,6 +175,20 @@ else
 fi
 
 # -----------------------------
+# KaMinPar (built as part of HeiProMap via add_subdirectory)
+# -----------------------------
+KAMINPAR_COMMIT="a2d1a7b0dcfc35a0f2449b752808beb6c13e6c8b"
+if [ -f "${ROOT}/extern/KaMinPar/CMakeLists.txt" ]; then
+  echo "KaMinPar found; skipping download."
+else
+  echo "Cloning KaMinPar..."
+  rm -rf "${ROOT}/extern/KaMinPar"
+  execute git clone https://github.com/KaHIP/KaMinPar.git "${ROOT}/extern/KaMinPar"
+  execute git -C "${ROOT}/extern/KaMinPar" checkout "${KAMINPAR_COMMIT}"
+  execute git -C "${ROOT}/extern/KaMinPar" submodule update --init --recursive
+fi
+
+# -----------------------------
 # Build HeiProMap
 # -----------------------------
 BUILD_DIR="${ROOT}/build"

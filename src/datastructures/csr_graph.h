@@ -790,6 +790,8 @@ namespace HeiProMap {
                     edge_idx++;
                 }
                 neighborhoods[map_u + 1] = edge_idx;
+            }
+
             coords.resize(n, {0.0, 0.0});
             std::vector<int> counts(n, 0);
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -805,7 +807,6 @@ namespace HeiProMap {
                     coords[u].first /= counts[u];
                     coords[u].second /= counts[u];
                 }
-            }
             }
         }
         // Move constructor

@@ -33,6 +33,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <thread>
 #include <iostream>
 #include <numeric>
 #include <vector>
@@ -52,6 +53,7 @@
 #include "../utility/qap.h"
 #include "../utility/spectral_embedding.h"
 #include "../utility/spectral_tracker.h"
+#include "../utility/kaminpar_partitioner.h"
 #include "../utility/utils.h"
 
 #include "../coarsening/global_path_algorithm.h"
@@ -333,6 +335,7 @@ namespace HeiProMap {
         }
 
         void initialize_common(CSRGraph topology) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "initialize_common");
             random_engine = RandomEngine(ac.seed);
 
             d_oracle.initialize(std::move(topology), ac.threads);
@@ -349,13 +352,49 @@ namespace HeiProMap {
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
-            if (ac.waver_label_propagation_config.enabled) {
+            // Note: the non-LARGE_K label propagation allocates a k x k table (10^10 entries at k = 99856),
+            // so it is not set up when refinement is disabled.
+            if (ac.waver_label_propagation_config.enabled && !ac.spectral_only) {
                 lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.waver_label_propagation_config);
             }
         }
 
+        // Set when the input graph had more vertices than PEs: kaminpar block of each original vertex.
+        std::vector<partition_t> kaminpar_part;
+
+        // If g has more vertices than there are PEs, partition it into k blocks with KaMinPar and replace it by
+        // its quotient graph (one unit-weight vertex per block, summed edge weights), so n == k afterwards.
+        void reduce_to_quotient(const partition_t k) {
+            CSRGraph &g = graphs[0];
+            if (g.n <= k) { return; }
+            HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "reduce_to_quotient");
+
+            const u64 kp_threads = ac.kaminpar_threads > 0 ? ac.kaminpar_threads
+                                                           : std::max<u64>(1, std::thread::hardware_concurrency());
+            const auto sp_kp = get_time_point();
+            kaminpar_part = kaminpar_partition(g, k, ac.kaminpar_imbalance, kp_threads, ac.seed, ac.kaminpar_preset);
+
+            Mapping mapping;
+            mapping.initialize(g.n);
+            mapping.set_coarse_n(k);
+            for (vertex_t u = 0; u < g.n; ++u) { mapping.set(u, kaminpar_part[u]); }
+
+            CSRGraph quotient;
+            quotient.contract(g, mapping, ac.threads);
+            quotient.uniform_v_weights = true;
+            quotient.v_weights.free_memory();
+            quotient.g_weight = k;
+
+            std::cout << "[kaminpar] n=" << g.n << " -> quotient n=" << quotient.n << " m=" << quotient.m
+                      << " (" << get_seconds(sp_kp, get_time_point()) << " s, " << kp_threads << " threads)" << std::endl;
+            orig_n = g.n;
+            graphs[0] = std::move(quotient);
+        }
+        vertex_t orig_n = 0;
+
     public:
         explicit WaverHeiProMapSolver(const WaverHeiProMapConfiguration &t_ac) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "constructor");
             sp = std::chrono::high_resolution_clock::now();
 
             ac = t_ac;
@@ -369,19 +408,24 @@ namespace HeiProMap {
                 exit(1);
             }
 
-            initialize_common(CSRGraph(ac.topology_in));
+            CSRGraph topology(ac.topology_in);
+            reduce_to_quotient(topology.n);
+            initialize_common(std::move(topology));
         }
 
         explicit WaverHeiProMapSolver(graph_t &&g, graph_t &&topology, const WaverHeiProMapConfiguration &t_ac) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "constructor");
             sp = std::chrono::high_resolution_clock::now();
 
             ac = t_ac;
             graphs.emplace_back(std::move(g));
 
+            reduce_to_quotient(topology.n);
             initialize_common(std::move(topology));
         }
 
         std::vector<vertex_t> solve() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "solve");
             internal_solve();
 
             std::vector<partition_t> p(graphs[0].n);
@@ -444,6 +488,12 @@ namespace HeiProMap {
             std::cout << "Misc                  : " << misc_ms << std::endl;
             std::cout << "ALL                   : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
 
+            if (!kaminpar_part.empty()) {
+                // Propagate the block -> PE mapping back to the original vertices.
+                std::vector<partition_t> orig_p(orig_n);
+                for (vertex_t u = 0; u < orig_n; ++u) { orig_p[u] = p[kaminpar_part[u]]; }
+                return orig_p;
+            }
             return p;
         }
 
@@ -491,7 +541,7 @@ namespace HeiProMap {
             os << std::left << std::setw(9) << tag << std::right
                << " n=" << std::setw(6) << g.n << " k=" << std::setw(6) << ac.k;
 
-            if (ac.spectral_solution && spectral.size() == g.n) {
+            if (ac.spectral_solution && !ac.spectral_only && spectral.size() == g.n) {
                 std::vector<partition_t> sp_part;
                 spectral.place(g, d_oracle.current_topology(), d_oracle.current_W(), sp_part);
                 const f64 ml = SpectralTracker::message_cost(g, p_manager.partition, d_oracle,
@@ -744,7 +794,9 @@ namespace HeiProMap {
             }
 
             // Random restarts
-            const size_t n_restarts = std::max(static_cast<size_t>(1000), static_cast<size_t>(k * k));
+            // Each restart costs ~k^3 (local search over all swaps), so keep the total work bounded for larger k.
+            const size_t n_restarts = std::clamp(static_cast<size_t>(6e7 / (static_cast<f64>(k) * k * k)),
+                                                 static_cast<size_t>(1), static_cast<size_t>(1000));
             std::mt19937_64 rng(ac.seed + 12345);
             for (size_t r = 0; r < n_restarts; ++r) {
                 std::vector<partition_t> perm(k);
@@ -785,6 +837,7 @@ namespace HeiProMap {
 
     private:
         void internal_solve() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "internal_solve");
             u64 level = 0;
 
             // Pre-coarsen the topology oracle as far as possible.
@@ -861,6 +914,25 @@ namespace HeiProMap {
                 refinement();
                 print_level_stats("topo", 0);
             }
+
+            if (ac.spectral_only && ac.spectral_solution && spectral.size() == graphs.back().n) {
+                adopt_spectral_only();
+            }
+        }
+
+        // Spectral-only mode: replace the multilevel partition by the spectral placement (rebalanced, not refined).
+        void adopt_spectral_only() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "adopt_spectral_only");
+            const graph_t &g = graphs.back();
+            std::vector<partition_t> sp_part;
+            spectral.place(g, d_oracle.current_topology(), d_oracle.current_W(), sp_part);
+            load_partition(sp_part);
+            recompute_datastructures();
+            rebalance(0);
+            diffuse_into_empties();
+            recompute_datastructures();
+            std::cout << "spectral-only placement: cost=" << std::fixed << std::setprecision(2)
+                      << current_message_cost() / 1e6 << "M " << balance_summary() << std::endl;
         }
 
         void initial_partitioning() {
@@ -1516,6 +1588,7 @@ namespace HeiProMap {
         }
 
         void refinement() {
+            if (ac.spectral_only) { return; }
             auto p = get_time_point();
 
             if (ac.waver_label_propagation_config.enabled) {
