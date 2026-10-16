@@ -39,6 +39,7 @@
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
 #include "mapping.h"
+#include "profiler.h"
 
 namespace HeiProMap {
 
@@ -60,6 +61,7 @@ namespace HeiProMap {
         vertex_t size() const { return initialized() ? static_cast<vertex_t>(X[0].size()) : 0; }
 
         void init(const CSRGraph &g, u64 seed) {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "init");
             const size_t n = g.n;
             X.assign(kSubspace, std::vector<f64>(n));
             std::mt19937_64 rng(seed ^ 0x5BEC7A1ull);
@@ -78,6 +80,7 @@ namespace HeiProMap {
 
         // Piecewise-constant prolongation onto the finer graph, then re-smoothing.
         void prolong(const Mapping &m, const CSRGraph &fine) {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "prolong");
             std::vector<std::vector<f64>> F(kSubspace, std::vector<f64>(fine.n));
             for (size_t k = 0; k < kSubspace; ++k) {
                 for (vertex_t u = 0; u < fine.n; ++u) F[k][u] = X[k][m.get(u)];
@@ -90,6 +93,7 @@ namespace HeiProMap {
         // (cell id = row * W + col, capacity = topo vertex weight). Column cuts use
         // the smoothest direction, row cuts the second, as in SpectralEmbeddingMapper.
         void place(const CSRGraph &g, const CSRGraph &topo, size_t W, std::vector<partition_t> &out) const {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "place");
             const size_t k = topo.n;
             const size_t H = (k + W - 1) / W;
             const std::vector<f64> &cx = W >= H ? X[0] : X[1];
@@ -182,6 +186,7 @@ namespace HeiProMap {
         template<typename PartT, typename OracleT>
         static f64 message_cost(const CSRGraph &g, const PartT &part, const OracleT &oracle,
                                 f64 alpha_end, f64 beta_end, f64 alpha_link, f64 beta_link) {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "message_cost");
             const u64 k = oracle.current_k();
             std::vector<std::pair<u64, f64> > pairs;
             pairs.reserve(g.m);
@@ -309,6 +314,7 @@ namespace HeiProMap {
 
         // Rotate the (orthonormal) basis into Ritz vectors ordered by ascending eigenvalue.
         void rayleigh_ritz(const CSRGraph &g, const std::vector<f64> &deg) {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "rayleigh_ritz");
             const size_t s = X.size();
             std::vector<std::vector<f64>> LX(s, std::vector<f64>(g.n));
             for (size_t k = 0; k < s; ++k) apply_L(g, deg, X[k], LX[k]);
@@ -370,6 +376,7 @@ namespace HeiProMap {
 
         // Rounds of inexact inverse iteration + Rayleigh-Ritz; returns {rounds, residual}.
         std::pair<int, f64> resmooth(const CSRGraph &g, int budget, int cg_depth) {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "resmooth");
             const std::vector<f64> deg = degrees(g);
             std::vector<f64> scratch(g.n);
             orthonormalise(0xA110u);
@@ -393,6 +400,7 @@ namespace HeiProMap {
 
         // Exact inverse subspace iteration with a dense Cholesky factor of L + delta*I.
         void dense_solve(const CSRGraph &g) {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "dense_solve");
             const size_t n = g.n;
             const std::vector<f64> deg = degrees(g);
             const f64 maxdeg = deg.empty() ? 0.0 : *std::max_element(deg.begin(), deg.end());

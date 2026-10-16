@@ -36,6 +36,7 @@
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
+#include "../utility/profiler.h"
 
 namespace HeiProMap {
 
@@ -55,6 +56,7 @@ namespace HeiProMap {
                             f64                   beta_end,
                             f64                   alpha_link,
                             f64                   beta_link) {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "WaverSARefinement", "refine");
             const size_t W = static_cast<size_t>(d_oracle.current_W());
             const partition_t k = p_manager.get_k();
             const size_t H = (k + W - 1) / W;

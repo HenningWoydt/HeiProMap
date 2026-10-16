@@ -36,6 +36,7 @@
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
+#include "profiler.h"
 
 namespace HeiProMap {
 
@@ -104,6 +105,7 @@ namespace HeiProMap {
                 const CSRGraph &quotient,
                 const DistanceOracleT &d_oracle,
                 u64 seed) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "SpectralEmbedding", "spectral_assignment");
             const partition_t k = p_manager.get_k();
             const size_t W = static_cast<size_t>(d_oracle.current_W());
 
@@ -194,6 +196,7 @@ namespace HeiProMap {
         // Jacobi eigendecomposition for symmetric matrix.
         // A is overwritten with diagonal (eigenvalues), V gets eigenvectors as columns.
         static void jacobi_eigendecomposition(std::vector<f64> &A, std::vector<f64> &V, size_t n) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "SpectralEmbedding", "jacobi_eigendecomposition");
             const size_t max_sweeps = 100;
             const f64 eps = 1e-12;
 

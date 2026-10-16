@@ -198,6 +198,7 @@ namespace HeiProMap {
         }
 
         void diffuse_into_empties() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "diffuse_into_empties");
             const size_t W = static_cast<size_t>(d_oracle.current_W());
             const partition_t k = ac.k;
             const auto &g = graphs.back();
@@ -484,6 +485,7 @@ namespace HeiProMap {
         // One line per stage. If the tracked spectral placement beats the multilevel partition, adopt it
         // (rebalanced and refined). The spectral tracker itself is never overwritten.
         void print_level_stats(const std::string &tag, u64 level) {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "print_level_stats");
             const graph_t &g = graphs.back();
             std::ostringstream os;
             os << std::left << std::setw(9) << tag << std::right
@@ -531,12 +533,14 @@ namespace HeiProMap {
         }
 
         f64 current_message_cost() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "current_message_cost");
             recompute_datastructures();
             return get_message_cost(q_graph, ac.k, d_oracle, ac.alpha_end(), ac.beta_end(),
                                     ac.alpha_link, ac.beta_link).total;
         }
 
         bool try_uncoarsen_topology() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "try_uncoarsen_topology");
             if (d_oracle.depth() == 0) return false;
 
             const partition_t coarse_k = d_oracle.current_k();
@@ -561,6 +565,7 @@ namespace HeiProMap {
         }
 
         void optimize_block_assignment() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "optimize_block_assignment");
             const auto &g = graphs.back();
             const partition_t k = ac.k;
 
@@ -979,6 +984,7 @@ namespace HeiProMap {
         }
 
         void uncoarsen_topology() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "uncoarsen_topology");
             auto p = get_time_point();
 
             // Build coarse->fine map for partition expansion before popping oracle level
@@ -1538,15 +1544,19 @@ namespace HeiProMap {
                 }
             }
 
-            WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
-                                             ac.swap_radius, ac.swap_extended,
-                                             ac.alpha_end(), ac.beta_end(),
-                                             ac.alpha_link, ac.beta_link);
+            if (ac.swap_radius > 0) {
+                WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
+                                                 ac.swap_radius, ac.swap_extended,
+                                                 ac.alpha_end(), ac.beta_end(),
+                                                 ac.alpha_link, ac.beta_link);
+            }
 
-            WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
-                                               ac.long_msg_padding,
-                                               ac.alpha_end(), ac.beta_end(),
-                                               ac.alpha_link, ac.beta_link);
+            if (ac.long_msg_padding > 0) {
+                WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
+                                                   ac.long_msg_padding,
+                                                   ac.alpha_end(), ac.beta_end(),
+                                                   ac.alpha_link, ac.beta_link);
+            }
 
             if (ac.sa_iterations > 0 && d_oracle.depth() == 0) {
                 WaverSARefinement::refine(graphs.back(), p_manager, d_oracle,

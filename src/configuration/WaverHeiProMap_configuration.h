@@ -163,9 +163,9 @@ namespace HeiProMap {
             {"--topology", "-tp", "Filepath to the topology graph for the distance oracle.", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance (for example 0.03).", "0.03", "", false},
             {"--min-imbalance", "", "Minimum block weight as fraction of avg (0.0 = allow empty, 0.5 = at least half avg).", "0.5", "", false},
-            {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors).", "2", "", false},
+            {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors, 0 = disabled).", "0", "", false},
             {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
-            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement.", "3", "", false},
+            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "0", "", false},
             {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "10000000", "", false},
             {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
             {"--spectral-solution", "", "Also build a spectral (Laplacian RCB) solution and keep the cheaper one (0 = off).", "1", "", false},
@@ -227,10 +227,10 @@ namespace HeiProMap {
         // balancing information
         f64 imbalance = -1.0;
         f64 min_imbalance = 0.0;
-        u64 swap_radius = 2;
+        u64 swap_radius = 0;
         bool swap_extended = false;
         u64 vmove_radius = 2;
-        u64 long_msg_padding = 3;
+        u64 long_msg_padding = 0;
         u64 sa_iterations = 0;
         u64 sa_radius = 10;
         bool spectral_solution = true;
@@ -502,7 +502,7 @@ namespace HeiProMap {
             waver_label_propagation_config.max_iteration = 25;
             waver_label_propagation_config.force_parallel_alg = false;
 
-            waver_message_refinement_config.enabled   = true;
+            waver_message_refinement_config.enabled   = false;
             waver_message_refinement_config.max_iters = 5;
 
             negative_cycle_config.enabled = false;
