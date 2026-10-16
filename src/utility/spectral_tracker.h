@@ -70,11 +70,8 @@ namespace HeiProMap {
 
             if (g.n <= kDenseMaxN) {
                 dense_solve(g);
-                std::cout << "  [spectral] init n=" << n << " dense, lambda=" << ritz_values(g) << std::endl;
             } else {
-                const auto [rounds, res] = resmooth(g, kFallbackRounds, 4 * kCgDepth);
-                std::cout << "  [spectral] init n=" << n << " cg rounds=" << rounds << " res=" << res
-                          << ", lambda=" << ritz_values(g) << std::endl;
+                resmooth(g, kFallbackRounds, 4 * kCgDepth);
             }
         }
 
@@ -453,17 +450,6 @@ namespace HeiProMap {
             }
             rayleigh_ritz(g, deg);
             orthonormalise(0x5EEDu);
-        }
-
-        std::string ritz_values(const CSRGraph &g) const {
-            const std::vector<f64> deg = degrees(g);
-            std::vector<f64> tmp(g.n);
-            std::string s;
-            for (size_t k = 0; k < X.size(); ++k) {
-                apply_L(g, deg, X[k], tmp);
-                s += (k ? ", " : "") + std::to_string(dot(X[k], tmp));
-            }
-            return s;
         }
     };
 

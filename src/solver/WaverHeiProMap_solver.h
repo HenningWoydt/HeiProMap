@@ -31,8 +31,6 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
-#include <iomanip>
-#include <sstream>
 #include <thread>
 #include <iostream>
 #include <numeric>
@@ -174,16 +172,16 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
 
             const auto ep = std::chrono::high_resolution_clock::now();
-            f64 duration = get_seconds(sp, ep);
+            const f64 duration = get_seconds(sp, ep);
 
             q_graph.compute_from_scratch(graphs[0], p_manager);
             block_conn.compute_from_scratch(graphs[0], p_manager);
             HEAVYASSERT(assert_state_after_partitioning(graphs[0], p_manager, bv_manager, q_graph, block_conn, ac.k));
-            MessageCostBreakdown cost = get_message_cost(q_graph, ac.k, d_oracle,
-                                                         ac.alpha_end(), ac.beta_end(),
-                                                         ac.alpha_link, ac.beta_link);
-            f64 max_link_load = get_max_link_load(q_graph, ac.k, d_oracle.current_W(),
-                                                  ac.alpha_link, ac.beta_link);
+            const MessageCostBreakdown cost = get_message_cost(q_graph, ac.k, d_oracle,
+                                                               ac.alpha_end(), ac.beta_end(),
+                                                               ac.alpha_link, ac.beta_link);
+            const f64 max_link_load = get_max_link_load(q_graph, ac.k, d_oracle.current_W(),
+                                                        ac.alpha_link, ac.beta_link);
             const weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
             print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, p_manager, timings);
@@ -197,25 +195,6 @@ namespace HeiProMap {
             return p;
         }
 
-
-        // Compact balance summary: "over=2 under=0 empty=0 [3717..4095]/4096".
-        std::string balance_summary() {
-            partition_t n_empty = 0, n_over = 0, n_under = 0;
-            weight_t max_bw = 0, min_bw = std::numeric_limits<weight_t>::max(), lmax_max = 0;
-            for (partition_t id = 0; id < ac.k; ++id) {
-                if (!p_manager.is_active(id)) continue;
-                const weight_t bw = p_manager.get_bweight(id);
-                const weight_t lmin = p_manager.get_lmin(id);
-                lmax_max = std::max(lmax_max, p_manager.get_lmax(id));
-                if (bw == 0) { ++n_empty; } else if (bw > p_manager.get_lmax(id)) { ++n_over; } else if (lmin > 0 && bw < lmin) { ++n_under; }
-                max_bw = std::max(max_bw, bw);
-                if (bw > 0) min_bw = std::min(min_bw, bw);
-            }
-            std::ostringstream os;
-            os << "over=" << n_over << " under=" << n_under << " empty=" << n_empty
-               << " bw=[" << min_bw << ".." << max_bw << "]/" << lmax_max;
-            return os.str();
-        }
 
         void recompute_datastructures() {
             const auto &g_cur = graphs.back();
@@ -232,49 +211,33 @@ namespace HeiProMap {
             block_conn.compute_from_scratch(g_cur, p_manager);
         }
 
-        // One line per stage. If the tracked spectral placement beats the multilevel partition, adopt it
-        // (rebalanced and refined). The spectral tracker itself is never overwritten.
-        void print_level_stats(const std::string &tag, u64 level) {
-            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "print_level_stats");
+        // Multilevel mode: if the tracked spectral placement is cheaper than the current multilevel partition,
+        // adopt it (rebalanced and refined). The spectral tracker itself is never overwritten.
+        void sync_with_spectral_solution(const u64 level) {
             const graph_t &g = graphs.back();
-            std::ostringstream os;
-            os << std::left << std::setw(9) << tag << std::right
-               << " n=" << std::setw(6) << g.n << " k=" << std::setw(6) << ac.k;
+            if (!ac.spectral_solution || ac.spectral_only || spectral.size() != g.n) { return; }
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "sync_with_spectral_solution");
 
-            if (ac.spectral_solution && !ac.spectral_only && spectral.size() == g.n) {
-                std::vector<partition_t> sp_part;
-                spectral.place(g, d_oracle.current_topology(), d_oracle.current_W(), sp_part);
-                const f64 ml = SpectralTracker::message_cost(g, p_manager.partition, d_oracle,
-                                                             ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                const f64 sp = SpectralTracker::message_cost(g, sp_part, d_oracle,
-                                                             ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                os << " | ml=" << std::fixed << std::setprecision(2) << ml / 1e6 << "M sp=" << sp / 1e6 << "M";
-                if (sp < ml) {
-                    std::vector<partition_t> ml_part(g.n);
-                    for (vertex_t u = 0; u < g.n; ++u) ml_part[u] = p_manager[u];
-                    load_partition(sp_part);
-                    recompute_datastructures();
-                    rebalance(level);
-                    EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
-                    recompute_datastructures();
-                    refinement();
-                    const f64 refined = current_message_cost();
-                    if (refined < ml) {
-                        os << " -> sp refined=" << refined / 1e6 << "M";
-                    } else {
-                        load_partition(ml_part);
-                        recompute_datastructures();
-                        os << " -> ml (sp refined=" << refined / 1e6 << "M)";
-                    }
-                } else {
-                    os << " -> ml";
-                }
+            std::vector<partition_t> sp_part;
+            spectral.place(g, d_oracle.current_topology(), d_oracle.current_W(), sp_part);
+            const f64 ml = SpectralTracker::message_cost(g, p_manager.partition, d_oracle,
+                                                         ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            const f64 sp = SpectralTracker::message_cost(g, sp_part, d_oracle,
+                                                         ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            if (sp >= ml) { return; }
+
+            std::vector<partition_t> ml_part(g.n);
+            for (vertex_t u = 0; u < g.n; ++u) ml_part[u] = p_manager[u];
+            load_partition(sp_part);
+            recompute_datastructures();
+            rebalance(level);
+            EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
+            recompute_datastructures();
+            refinement();
+            if (current_message_cost() >= ml) {
+                load_partition(ml_part);
+                recompute_datastructures();
             }
-
-            u64 n_pairs = 0;
-            for (partition_t id = 0; id < ac.k; ++id) { n_pairs += q_graph.neighbors(id).size(); }
-            os << " | |Eq|=" << n_pairs << " " << balance_summary();
-            std::cout << os.str() << std::endl;
         }
 
         void load_partition(const std::vector<partition_t> &part) {
@@ -351,7 +314,7 @@ namespace HeiProMap {
             recompute_datastructures();
             rebalance(level);
             refinement();
-            print_level_stats("init", level);
+            sync_with_spectral_solution(level);
 
             // Graph uncoarsening loop.
             while (!mappings.empty()) {
@@ -374,7 +337,7 @@ namespace HeiProMap {
                 EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                 recompute_datastructures();
                 refinement();
-                print_level_stats("L" + std::to_string(level), level);
+                sync_with_spectral_solution(level);
             }
 
             // Uncoarsen remaining topology levels after graph is fully uncoarsened.
@@ -384,7 +347,7 @@ namespace HeiProMap {
                     EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                     recompute_datastructures();
                     refinement();
-                    print_level_stats("topo_blocked", 0);
+                    sync_with_spectral_solution(0);
                     break;
                 }
 
@@ -392,31 +355,12 @@ namespace HeiProMap {
                 EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                 recompute_datastructures();
                 refinement();
-                print_level_stats("topo", 0);
+                sync_with_spectral_solution(0);
             }
 
             if (ac.spectral_only && ac.spectral_solution && spectral.size() == graphs.back().n) {
                 adopt_spectral_only();
             }
-        }
-
-        // Runs one improvement pass on the current placement and prints
-        // "[name] <detail> cost a -> b (+-x%) max_link a -> b (t s)". The pass returns its detail string.
-        // cost is the message cost before the pass and is updated to the cost after it.
-        template<typename PassT>
-        void run_reported_pass(const char *name, f64 &cost, PassT &&pass) {
-            const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-            const auto sp_pass = get_time_point();
-            const std::string detail = pass();
-            const f64 seconds = get_seconds(sp_pass, get_time_point());
-            const f64 after = current_message_cost();
-            const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-            std::cout << "[" << name << "] " << detail
-                      << " cost " << std::fixed << std::setprecision(2) << cost / 1e6 << "M -> " << after / 1e6 << "M ("
-                      << std::showpos << 100.0 * (after / cost - 1.0) << std::noshowpos << "%)"
-                      << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
-                      << " (" << seconds << " s)" << std::endl;
-            cost = after;
         }
 
         // Spectral-only mode: replace the multilevel partition by the spectral placement (rebalanced, not refined).
@@ -430,34 +374,21 @@ namespace HeiProMap {
             rebalance(0);
             EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
             recompute_datastructures();
-            f64 cost = current_message_cost();
             if (ac.waver_message_refinement_config.enabled) {
-                run_reported_pass("msg-ref", cost, [&] {
-                    WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
-                                                   ac.waver_message_refinement_config,
-                                                   ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                    return "iters<=" + std::to_string(ac.waver_message_refinement_config.max_iters);
-                });
+                WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
+                                               ac.waver_message_refinement_config,
+                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             }
             if (ac.swap_radius > 0) {
-                run_reported_pass("swap", cost, [&] {
-                    WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
-                                                     ac.swap_radius, ac.swap_extended,
-                                                     ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                    return "radius=" + std::to_string(ac.swap_radius);
-                });
+                WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
+                                                 ac.swap_radius, ac.swap_extended,
+                                                 ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             }
             if (ac.long_msg_padding > 0) {
-                run_reported_pass("long-msg", cost, [&] {
-                    const size_t swaps = WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
-                                                                            ac.long_msg_padding,
-                                                                            ac.alpha_end(), ac.beta_end(),
-                                                                            ac.alpha_link, ac.beta_link);
-                    return "padding=" + std::to_string(ac.long_msg_padding) + " swaps=" + std::to_string(swaps);
-                });
+                WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
+                                                   ac.long_msg_padding,
+                                                   ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             }
-            std::cout << "spectral-only placement: cost=" << std::fixed << std::setprecision(2)
-                      << current_message_cost() / 1e6 << "M " << balance_summary() << std::endl;
         }
 
         void initial_partitioning() {
@@ -544,10 +475,10 @@ namespace HeiProMap {
                 }
             }
 
-            timings.initial_partitioning_ms += get_milli_seconds(p, get_time_point());
 
             q_graph.compute_from_scratch(graphs.back(), p_manager);
             block_conn.compute_from_scratch(graphs.back(), p_manager);
+            timings.initial_partitioning_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
@@ -661,10 +592,10 @@ namespace HeiProMap {
             graphs.pop_back();
             mappings.pop_back();
 
-            timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
 
             q_graph.compute_from_scratch(graphs.back(), p_manager);
             block_conn.compute_from_scratch(graphs.back(), p_manager);
+            timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
@@ -689,12 +620,6 @@ namespace HeiProMap {
                 auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 timings.lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                {
-                    partition_t ne = 0;
-                    for (partition_t id = 0; id < ac.k; ++id)
-                        if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) ++ne;
-                    if (ne > 0) std::cout << "    [after LP] empty=" << ne << std::endl;
-                }
             }
 
             if (ac.waver_message_refinement_config.enabled) {
@@ -703,12 +628,6 @@ namespace HeiProMap {
                                                ac.waver_message_refinement_config,
                                                ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 timings.msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                {
-                    partition_t ne = 0;
-                    for (partition_t id = 0; id < ac.k; ++id)
-                        if (p_manager.get_bweight(id) == 0 && p_manager.is_active(id)) ++ne;
-                    if (ne > 0) std::cout << "    [after MsgRef] empty=" << ne << std::endl;
-                }
             }
 
             if (ac.swap_radius > 0) {
