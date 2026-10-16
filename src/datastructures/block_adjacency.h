@@ -209,4 +209,4 @@ namespace HeiProMap {
     };
 }
 
-#endif // HEIPROMAP_BLOCK_ADJACENCY_H
+#endif //HEIPROMAP_BLOCK_ADJACENCY_H

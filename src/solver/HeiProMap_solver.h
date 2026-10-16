@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_SOLVER_H
-#define HEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_HEIPROMAP_SOLVER_H
+#define HEIPROMAP_HEIPROMAP_SOLVER_H
 
 #include <omp.h>
 #include <cmath>
@@ -935,4 +935,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_SOLVER_H
+#endif //HEIPROMAP_HEIPROMAP_SOLVER_H

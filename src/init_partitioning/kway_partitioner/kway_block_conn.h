@@ -145,4 +145,4 @@ namespace GPU_HeiPa::ModifiedMetis {
 }
 
 
-#endif // GPU_HEIPA_KWAY_BLOCK_CONN_H
+#endif //GPU_HEIPA_KWAY_BLOCK_CONN_H

@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_DYN_CONFIGURATION_H
-#define HEIPROMAP_DYN_CONFIGURATION_H
+#ifndef HEIPROMAP_DYNHEIPROMAP_CONFIGURATION_H
+#define HEIPROMAP_DYNHEIPROMAP_CONFIGURATION_H
 
 #include <iostream>
 #include <random>
@@ -181,4 +181,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_DYN_CONFIGURATION_H
+#endif //HEIPROMAP_DYNHEIPROMAP_CONFIGURATION_H

@@ -1588,4 +1588,4 @@ namespace HeiProMap {
 }
 
 
-#endif
+#endif //GPU_HEIPA_KWAY_CORE_H

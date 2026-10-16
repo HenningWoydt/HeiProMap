@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_DYN_SOLVER_H
-#define HEIPROMAP_DYN_SOLVER_H
+#ifndef HEIPROMAP_DYNHEIPROMAP_SOLVER_H
+#define HEIPROMAP_DYNHEIPROMAP_SOLVER_H
 
 #include <iostream>
 #include <string>
@@ -664,4 +664,4 @@ namespace HeiProMap {
     }
 }
 
-#endif // HEIPROMAP_DYN_SOLVER_H
+#endif //HEIPROMAP_DYNHEIPROMAP_SOLVER_H

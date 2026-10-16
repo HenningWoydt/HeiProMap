@@ -219,4 +219,4 @@ namespace HeiProMap {
     };
 } // namespace HeiProMap
 
-#endif // HEIPROMAP_DINICS_H
+#endif //HEIPROMAP_DINICS_H

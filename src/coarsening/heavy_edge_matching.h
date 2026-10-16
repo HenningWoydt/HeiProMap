@@ -186,4 +186,4 @@ namespace HeiProMap {
     };
 }
 
-#endif // HEIPROMAP_HEAVY_EDGE_MATCHING_H
+#endif //HEIPROMAP_HEAVY_EDGE_MATCHING_H

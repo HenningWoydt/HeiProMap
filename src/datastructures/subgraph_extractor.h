@@ -406,4 +406,4 @@ namespace HeiProMap {
     };
 }
 
-#endif // HEIPROMAP_SUBGRAPH_EXTRACTOR_H
+#endif //HEIPROMAP_SUBGRAPH_EXTRACTOR_H

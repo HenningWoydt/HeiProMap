@@ -92,4 +92,4 @@ namespace HeiProMap {
     }
 }
 
-#endif // HEIPROMAP_HUNGARIAN_H
+#endif //HEIPROMAP_HUNGARIAN_H

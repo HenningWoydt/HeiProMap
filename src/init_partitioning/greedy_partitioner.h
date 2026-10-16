@@ -246,4 +246,4 @@ namespace HeiProMap {
     }
 }
 
-#endif // HEIPROMAP_GREEDY_PARTITIONER_H
+#endif //HEIPROMAP_GREEDY_PARTITIONER_H

@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_WAVER_MAP_SOLVER_H
-#define HEIPROMAP_WAVER_MAP_SOLVER_H
+#ifndef HEIPROMAP_WAVERHEIPROMAP_SOLVER_H
+#define HEIPROMAP_WAVERHEIPROMAP_SOLVER_H
 
 #include <algorithm>
 #include <chrono>
@@ -760,4 +760,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_WAVER_MAP_SOLVER_H
+#endif //HEIPROMAP_WAVERHEIPROMAP_SOLVER_H

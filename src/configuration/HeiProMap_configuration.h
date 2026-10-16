@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_ALGORITHMCONFIGURATION_H
-#define HEIPROMAP_ALGORITHMCONFIGURATION_H
+#ifndef HEIPROMAP_HEIPROMAP_CONFIGURATION_H
+#define HEIPROMAP_HEIPROMAP_CONFIGURATION_H
 
 #include <string>
 #include <vector>
@@ -914,4 +914,4 @@ namespace HeiProMap {
     };
 }
 
-#endif //HEIPROMAP_ALGORITHMCONFIGURATION_H
+#endif //HEIPROMAP_HEIPROMAP_CONFIGURATION_H

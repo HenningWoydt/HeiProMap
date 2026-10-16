@@ -87,4 +87,4 @@ namespace HeiProMap {
     };
 }
 
-#endif // HEIPROMAP_MEMORY_STACK_H
+#endif //HEIPROMAP_MEMORY_STACK_H

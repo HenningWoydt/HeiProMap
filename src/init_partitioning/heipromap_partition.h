@@ -24,8 +24,8 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_DYN_PARTITIONER_H
-#define HEIPROMAP_DYN_PARTITIONER_H
+#ifndef HEIPROMAP_HEIPROMAP_PARTITION_H
+#define HEIPROMAP_HEIPROMAP_PARTITION_H
 
 #include <omp.h>
 #include "../datastructures/dyn_graph.h"
@@ -86,4 +86,4 @@ namespace HeiProMap {
     }
 }
 
-#endif //HEIPROMAP_DYN_PARTITIONER_H
+#endif //HEIPROMAP_HEIPROMAP_PARTITION_H
