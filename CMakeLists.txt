@@ -10,6 +10,16 @@ set(PROJECT_VERSION "1.0.0")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------------------
+# TBB: prefer the copy built by build.sh in extern/local/tbb. The system TBB may be built with a newer
+# libstdc++ than this compiler provides and then fails to link. This also overrides a stale TBB_DIR cache entry.
+# ---------------------------
+set(HEIPROMAP_LOCAL_TBB "${CMAKE_CURRENT_SOURCE_DIR}/extern/local/tbb")
+if(EXISTS "${HEIPROMAP_LOCAL_TBB}/lib/cmake/TBB/TBBConfig.cmake")
+    set(TBB_DIR "${HEIPROMAP_LOCAL_TBB}/lib/cmake/TBB" CACHE PATH "TBB package directory" FORCE)
+    list(PREPEND CMAKE_PREFIX_PATH "${HEIPROMAP_LOCAL_TBB}")
+endif()
+
+# ---------------------------
 # KaMinPar (shared-memory partitioner, built from extern/KaMinPar)
 # Added before HeiProMap's global compiler flags (-fno-exceptions, -fwhole-program, ...) so it builds with its own.
 # ---------------------------
@@ -26,6 +36,9 @@ set(KAMINPAR_BUILD_WITH_SPARSEHASH OFF CACHE BOOL "" FORCE)
 set(KAMINPAR_BUILD_WITH_CCACHE OFF CACHE BOOL "" FORCE)
 set(KAMINPAR_BUILD_WITH_MTUNE_NATIVE OFF CACHE BOOL "" FORCE)
 set(KAMINPAR_ENABLE_TIMERS OFF CACHE BOOL "" FORCE)
+set(KAMINPAR_ENABLE_TIMER_BARRIERS OFF CACHE BOOL "" FORCE)   # MPI barriers, distributed partitioner only
+set(KAMINPAR_BUILD_WITH_KASSERT OFF CACHE BOOL "" FORCE)      # no runtime assertions in the partitioner
+set(KAMINPAR_BUILD_WITH_DEBUG_SYMBOLS OFF CACHE BOOL "" FORCE)
 set(KAMINPAR_64BIT_EDGE_IDS ON CACHE BOOL "" FORCE)
 set(INSTALL_KAMINPAR OFF CACHE BOOL "" FORCE)
 add_subdirectory("${KAMINPAR_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/KaMinPar" EXCLUDE_FROM_ALL)
