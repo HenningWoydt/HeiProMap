@@ -28,6 +28,7 @@
 #define HEIPROMAP_PARTITION_MANAGER_H
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "../definitions.h"
@@ -151,6 +152,34 @@ namespace HeiProMap {
         weight_t get_lmin(const partition_t id) const { return lmin[id]; }
 
         partition_t get_hierarchy_level(const partition_t id) const { return hierarchy_level[id]; }
+
+        // Makes every block active (hierarchy level 0).
+        void activate_all() {
+            for (partition_t id = 0; id < k; ++id) { set_hierarchy_level(id, 0); }
+        }
+
+        // Sets lmax of every block from the topology's cell capacities (uniform topology: the fair share) and
+        // lmin from min_imbalance, for a graph of the given total weight and vertex count.
+        void update_limits(const CSRGraph &topology, const weight_t total_weight, const vertex_t graph_n,
+                           const f64 imbalance, const f64 min_imbalance) {
+            std::vector<weight_t> lmax_vec(k);
+            if (topology.uniform_v_weights) {
+                const weight_t uniform = std::ceil((1.0 + imbalance) * ((f64) total_weight / (f64) k));
+                std::fill(lmax_vec.begin(), lmax_vec.end(), uniform);
+            } else {
+                const f64 topo_total_w = topology.g_weight > 0 ? (f64) topology.g_weight : (f64) k;
+                for (partition_t i = 0; i < k; ++i) {
+                    const f64 fair_share = (f64) topology.v_weight(i) / topo_total_w;
+                    lmax_vec[i] = std::ceil((1.0 + imbalance) * total_weight * fair_share);
+                }
+            }
+            weight_t global_lmin = static_cast<weight_t>(min_imbalance * ((f64) total_weight / (f64) k));
+            if (graph_n >= k && global_lmin < 1) { global_lmin = 1; }
+            for (partition_t i = 0; i < k; ++i) {
+                lmax[i] = lmax_vec[i];
+                lmin[i] = std::min(global_lmin, lmax_vec[i] / 2);
+            }
+        }
 
         bool is_active(const partition_t id) const { return hierarchy_level[id] != k; }
 

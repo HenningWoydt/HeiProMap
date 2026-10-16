@@ -28,15 +28,19 @@
 #define HEIPROMAP_KAMINPAR_PARTITIONER_H
 
 #include <algorithm>
+#include <iostream>
 #include <limits>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <kaminpar.h>
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
+#include "mapping.h"
 #include "profiler.h"
+#include "utils.h"
 
 namespace HeiProMap {
 
@@ -87,6 +91,44 @@ namespace HeiProMap {
         std::vector<partition_t> out(g.n);
         for (vertex_t u = 0; u < g.n; ++u) { out[u] = static_cast<partition_t>(part[u]); }
         return out;
+    }
+
+    // Result of partition_into_quotient: part[u] is the block of original vertex u, quotient has one
+    // unit-weight vertex per block and the summed edge weights between blocks (so quotient.n == k).
+    struct QuotientResult {
+        CSRGraph quotient;
+        std::vector<partition_t> part;
+    };
+
+    // Partitions g into k blocks with KaMinPar and contracts the blocks into the quotient graph.
+    // kaminpar_threads == 0 uses all hardware threads.
+    inline QuotientResult partition_into_quotient(const CSRGraph &g,
+                                                  const partition_t k,
+                                                  const f64 epsilon,
+                                                  const u64 kaminpar_threads,
+                                                  const u64 contraction_threads,
+                                                  const u64 seed,
+                                                  const std::string &preset) {
+        const u64 threads = kaminpar_threads > 0 ? kaminpar_threads
+                                                 : std::max<u64>(1, std::thread::hardware_concurrency());
+        const auto sp = get_time_point();
+
+        QuotientResult result;
+        result.part = kaminpar_partition(g, k, epsilon, threads, seed, preset);
+
+        Mapping mapping;
+        mapping.initialize(g.n);
+        mapping.set_coarse_n(k);
+        for (vertex_t u = 0; u < g.n; ++u) { mapping.set(u, result.part[u]); }
+
+        result.quotient.contract(g, mapping, contraction_threads);
+        result.quotient.uniform_v_weights = true;
+        result.quotient.v_weights.free_memory();
+        result.quotient.g_weight = k;
+
+        std::cout << "[kaminpar] n=" << g.n << " -> quotient n=" << result.quotient.n << " m=" << result.quotient.m
+                  << " (" << get_seconds(sp, get_time_point()) << " s, " << threads << " threads)" << std::endl;
+        return result;
     }
 }
 

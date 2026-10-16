@@ -49,17 +49,17 @@
 #include "../utility/macros.h"
 #include "../utility/random_engine.h"
 #include "../utility/assert_state.h"
-#include "../utility/hungarian.h"
 #include "../utility/qap.h"
-#include "../utility/spectral_embedding.h"
 #include "../utility/spectral_tracker.h"
 #include "../utility/kaminpar_partitioner.h"
+#include "../utility/waver_report.h"
 #include "../utility/utils.h"
 
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../coarsening/heavy_edge_matching.h"
 #include "../rebalance/rebalancer.h"
+#include "../rebalance/empty_block_diffusion.h"
 #include "../init_partitioning/greedy_partitioner.h"
 #include "../init_partitioning/waver_greedy_partitioner.h"
 #include "../refinement/simple_label_propagation_refinement.h"
@@ -72,263 +72,42 @@
 
 namespace HeiProMap {
     class WaverHeiProMapSolver {
+        // ---- configuration and run state ----
         WaverHeiProMapConfiguration ac;
         RandomEngine random_engine;
-
         std::chrono::high_resolution_clock::time_point sp;
+        WaverTimings timings;
 
+        // ---- graph hierarchy and partition state ----
         std::vector<graph_t> graphs;
-
+        std::vector<Mapping> mappings; // mappings[i]: graphs[i] -> graphs[i + 1]
         p_manager_t p_manager;
         bv_manager_t bv_manager;
         LargeQuotientGraph q_graph;
         block_conn_t block_conn;
         GridDistanceOracle d_oracle;
+
+        // ---- spectral solution (follows the graph hierarchy) ----
         SpectralTracker spectral;
 
-        // matching
-        std::vector<Mapping> mappings;
+        // ---- input reduction: set when the input graph had more vertices than PEs ----
+        std::vector<partition_t> kaminpar_part; // KaMinPar block of every original vertex
+        vertex_t orig_n = 0;                    // number of original vertices
+
+        // ---- coarsening ----
         GlobalPathAlgorithmMatcher gpa_matcher;
         SizeConstrainedLP size_constrained_lp;
         HeavyEdgeMatching heavy_edge_matching;
 
+        // ---- rebalancing and refinement ----
         Rebalancer rebalancer;
-
-        // refinement
         WaverLabelPropagationRefinement<false> lp_refine;
-
-        f64 io_ms = 0.0;
-        f64 msg_refine_ms = 0.0;
-        f64 misc_ms = 0.0;
-        f64 coarsening_ms = 0.0;
-        f64 contraction_ms = 0.0;
-        f64 initial_partitioning_ms = 0.0;
-        f64 uncontraction_ms = 0.0;
-        f64 rebalance_ms = 0.0;
-        f64 refinement_ms = 0.0;
-        f64 lp_refine_ms = 0.0;
-
-        void activate_all_blocks() {
-            for (partition_t id = 0; id < ac.k; ++id) {
-                p_manager.set_hierarchy_level(id, 0);
-            }
-        }
-
-        void update_lmax_array() {
-            const CSRGraph &topo = d_oracle.current_topology();
-            std::vector<weight_t> lmax_vec(ac.k);
-            if (topo.uniform_v_weights) {
-                weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
-                for (partition_t i = 0; i < ac.k; ++i) {
-                    lmax_vec[i] = lmax;
-                }
-            } else {
-                f64 topo_total_w = topo.g_weight > 0 ? (f64) topo.g_weight : (f64) ac.k;
-                for (partition_t i = 0; i < ac.k; ++i) {
-                    double fair_share = (double) topo.v_weight(i) / topo_total_w;
-                    lmax_vec[i] = std::ceil((1.0 + ac.imbalance) * graphs[0].g_weight * fair_share);
-                }
-            }
-            weight_t global_lmin = static_cast<weight_t>(ac.min_imbalance * ((f64) graphs[0].g_weight / (f64) ac.k));
-            if (graphs[0].n >= ac.k && global_lmin < 1) global_lmin = 1;
-            weight_t lmax_min = lmax_vec[0], lmax_max = lmax_vec[0];
-            weight_t lmin_min = std::min(global_lmin, lmax_vec[0] / 2);
-            weight_t lmin_max = lmin_min;
-            for (partition_t i = 0; i < ac.k; ++i) {
-                const weight_t lmin_i = std::min(global_lmin, lmax_vec[i] / 2);
-                p_manager.set_lmax(i, lmax_vec[i]);
-                p_manager.set_lmin(i, lmin_i);
-                lmax_min = std::min(lmax_min, lmax_vec[i]);
-                lmax_max = std::max(lmax_max, lmax_vec[i]);
-                lmin_min = std::min(lmin_min, lmin_i);
-                lmin_max = std::max(lmin_max, lmin_i);
-            }
-        }
-
-        void dump_heatmap(const std::string &tag) {
-            const size_t W = static_cast<size_t>(d_oracle.current_W());
-            const size_t H = (ac.k + W - 1) / W;
-            const size_t scale = std::max(size_t(1), 512 / std::max(W, H));
-            const size_t pw = W * scale, ph = H * scale;
-
-            weight_t max_bw = 1;
-            for (partition_t b = 0; b < ac.k; ++b) {
-                max_bw = std::max(max_bw, p_manager.bweights[b]);
-            }
-
-            auto heat_color = [](double t, uint8_t &r, uint8_t &g, uint8_t &b) {
-                if (t <= 0.0) {
-                    r = 0;
-                    g = 0;
-                    b = 0;
-                    return;
-                }
-                t = std::min(t, 1.0);
-                if (t < 0.25) {
-                    r = 0;
-                    g = uint8_t(255 * t * 4);
-                    b = 255;
-                } else if (t < 0.50) {
-                    r = 0;
-                    g = 255;
-                    b = uint8_t(255 * (2 - t * 4));
-                } else if (t < 0.75) {
-                    r = uint8_t(255 * (t * 4 - 2));
-                    g = 255;
-                    b = 0;
-                } else {
-                    r = 255;
-                    g = uint8_t(255 * (4 - t * 4));
-                    b = 0;
-                }
-            };
-
-            std::string fname = "/tmp/heatmap_" + tag + ".ppm";
-            std::ofstream out(fname, std::ios::binary);
-            out << "P6\n" << pw << " " << ph << "\n255\n";
-            for (size_t py = 0; py < ph; ++py) {
-                for (size_t px = 0; px < pw; ++px) {
-                    partition_t b = static_cast<partition_t>((py / scale) * W + (px / scale));
-                    double t = (b < ac.k) ? static_cast<double>(p_manager.bweights[b]) / max_bw : 0.0;
-                    uint8_t r, g, bl;
-                    heat_color(t, r, g, bl);
-                    out.put(r);
-                    out.put(g);
-                    out.put(bl);
-                }
-            }
-        }
-
-        void diffuse_into_empties() {
-            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "diffuse_into_empties");
-            const size_t W = static_cast<size_t>(d_oracle.current_W());
-            const partition_t k = ac.k;
-            const auto &g = graphs.back();
-
-            auto get_neighbors = [&](partition_t b, partition_t *nbrs) -> size_t {
-                size_t cnt = 0;
-                const size_t c = b % W;
-                if (b >= static_cast<partition_t>(W)) nbrs[cnt++] = b - static_cast<partition_t>(W);
-                if (b + static_cast<partition_t>(W) < k) nbrs[cnt++] = b + static_cast<partition_t>(W);
-                if (c > 0) nbrs[cnt++] = b - 1;
-                if (c + 1 < W && b + 1 < k) nbrs[cnt++] = b + 1;
-                return cnt;
-            };
-
-            // Target weight: fair share per PE
-            const weight_t avg_bw = g.g_weight / k;
-
-            // Build per-block vertex lists
-            std::vector<std::vector<vertex_t> > blk_v(k);
-            for (vertex_t u = 0; u < g.n; ++u) {
-                const partition_t b = p_manager.partition[u];
-                if (b != NO_ID && b < k) { blk_v[b].push_back(u); }
-            }
-
-            // Phase 1: aggressively fill empties.
-            // Pull from ANY non-empty neighbor, allow donor to go as low
-            // as 1 (just don't empty it).  Repeat until no empties touch
-            // a non-empty neighbor.
-            size_t round = 0;
-            bool progress = true;
-            while (progress) {
-                progress = false;
-                size_t filled_this_round = 0;
-                size_t still_empty_count = 0;
-                size_t skipped_cap = 0, skipped_floor = 0, skipped_no_donor = 0;
-                for (partition_t e = 0; e < k; ++e) {
-                    if (p_manager.bweights[e] > 0) { continue; }
-                    still_empty_count++;
-
-                    partition_t nbrs[4];
-                    const size_t n_nbrs = get_neighbors(e, nbrs);
-
-                    partition_t donor = NO_ID;
-                    weight_t donor_bw = 0;
-                    for (size_t i = 0; i < n_nbrs; ++i) {
-                        if (p_manager.bweights[nbrs[i]] > donor_bw) {
-                            donor_bw = p_manager.bweights[nbrs[i]];
-                            donor = nbrs[i];
-                        }
-                    }
-                    const weight_t donor_lmin = p_manager.get_lmin(donor == NO_ID ? 0 : donor);
-                    if (donor == NO_ID || donor_bw <= donor_lmin) {
-                        skipped_no_donor++;
-                        continue;
-                    }
-
-                    const weight_t e_cap = p_manager.get_lmax(e);
-                    const weight_t donor_floor = std::max(donor_lmin, donor_bw / 2);
-                    bool moved_any = false;
-                    for (const vertex_t u: blk_v[donor]) {
-                        if (p_manager.partition[u] != donor) { continue; }
-                        const weight_t uw = g.v_weight(u);
-                        if (p_manager.bweights[e] + uw > e_cap) {
-                            skipped_cap++;
-                            continue;
-                        }
-                        if (p_manager.bweights[donor] - uw < donor_floor) {
-                            skipped_floor++;
-                            continue;
-                        }
-
-                        p_manager.bweights[donor] -= uw;
-                        p_manager.partition[u] = e;
-                        p_manager.bweights[e] += uw;
-                        blk_v[e].push_back(u);
-                        progress = true;
-                        moved_any = true;
-                    }
-                    if (moved_any) { filled_this_round++; }
-                }
-                round++;
-            }
-
-            // Phase 2: equalize — pull from above-average neighbors into
-            // below-average blocks.
-            progress = true;
-            while (progress) {
-                progress = false;
-                for (partition_t e = 0; e < k; ++e) {
-                    if (p_manager.bweights[e] >= avg_bw) { continue; }
-
-                    const weight_t e_cap = p_manager.get_lmax(e);
-
-                    partition_t nbrs[4];
-                    const size_t n_nbrs = get_neighbors(e, nbrs);
-
-                    partition_t donor = NO_ID;
-                    weight_t donor_bw = avg_bw;
-                    for (size_t i = 0; i < n_nbrs; ++i) {
-                        if (p_manager.bweights[nbrs[i]] > donor_bw) {
-                            donor_bw = p_manager.bweights[nbrs[i]];
-                            donor = nbrs[i];
-                        }
-                    }
-                    if (donor == NO_ID) { continue; }
-
-                    for (const vertex_t u: blk_v[donor]) {
-                        if (p_manager.partition[u] != donor) { continue; }
-                        const weight_t uw = g.v_weight(u);
-                        if (p_manager.bweights[e] + uw > e_cap) { continue; }
-                        if (p_manager.bweights[donor] - uw < avg_bw) { continue; }
-
-                        p_manager.bweights[donor] -= uw;
-                        p_manager.partition[u] = e;
-                        p_manager.bweights[e] += uw;
-                        blk_v[e].push_back(u);
-                        progress = true;
-
-                        if (p_manager.bweights[e] >= avg_bw) { break; }
-                    }
-                }
-            }
-        }
 
         void reinit_structures_for_new_k() {
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            activate_all_blocks();
-            update_lmax_array();
+            p_manager.activate_all();
+            p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
+                                    ac.imbalance, ac.min_imbalance);
             bv_manager.initialize(graphs[0].n, ac.k);
 
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
@@ -342,8 +121,9 @@ namespace HeiProMap {
             ac.k = d_oracle.current_k();
 
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
-            activate_all_blocks();
-            update_lmax_array();
+            p_manager.activate_all();
+            p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
+                                    ac.imbalance, ac.min_imbalance);
             bv_manager.initialize(graphs[0].n, ac.k);
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
@@ -359,9 +139,6 @@ namespace HeiProMap {
             }
         }
 
-        // Set when the input graph had more vertices than PEs: kaminpar block of each original vertex.
-        std::vector<partition_t> kaminpar_part;
-
         // If g has more vertices than there are PEs, partition it into k blocks with KaMinPar and replace it by
         // its quotient graph (one unit-weight vertex per block, summed edge weights), so n == k afterwards.
         void reduce_to_quotient(const partition_t k) {
@@ -369,28 +146,12 @@ namespace HeiProMap {
             if (g.n <= k) { return; }
             HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "reduce_to_quotient");
 
-            const u64 kp_threads = ac.kaminpar_threads > 0 ? ac.kaminpar_threads
-                                                           : std::max<u64>(1, std::thread::hardware_concurrency());
-            const auto sp_kp = get_time_point();
-            kaminpar_part = kaminpar_partition(g, k, ac.kaminpar_imbalance, kp_threads, ac.seed, ac.kaminpar_preset);
-
-            Mapping mapping;
-            mapping.initialize(g.n);
-            mapping.set_coarse_n(k);
-            for (vertex_t u = 0; u < g.n; ++u) { mapping.set(u, kaminpar_part[u]); }
-
-            CSRGraph quotient;
-            quotient.contract(g, mapping, ac.threads);
-            quotient.uniform_v_weights = true;
-            quotient.v_weights.free_memory();
-            quotient.g_weight = k;
-
-            std::cout << "[kaminpar] n=" << g.n << " -> quotient n=" << quotient.n << " m=" << quotient.m
-                      << " (" << get_seconds(sp_kp, get_time_point()) << " s, " << kp_threads << " threads)" << std::endl;
             orig_n = g.n;
-            graphs[0] = std::move(quotient);
+            QuotientResult r = partition_into_quotient(g, k, ac.kaminpar_imbalance, ac.kaminpar_threads,
+                                                       ac.threads, ac.seed, ac.kaminpar_preset);
+            kaminpar_part = std::move(r.part);
+            graphs[0] = std::move(r.quotient);
         }
-        vertex_t orig_n = 0;
 
     public:
         explicit WaverHeiProMapSolver(const WaverHeiProMapConfiguration &t_ac) {
@@ -401,7 +162,7 @@ namespace HeiProMap {
 
             auto sp_io = get_time_point();
             graphs.emplace_back(ac.graph_in);
-            io_ms += get_milli_seconds(sp_io, get_time_point());
+            timings.io_ms += get_milli_seconds(sp_io, get_time_point());
 
             if (ac.topology_in.empty()) {
                 std::cerr << "Topology required for WaverMap!" << std::endl;
@@ -442,51 +203,9 @@ namespace HeiProMap {
                                                          ac.alpha_link, ac.beta_link);
             f64 max_link_load = get_max_link_load(q_graph, ac.k, d_oracle.current_W(),
                                                   ac.alpha_link, ac.beta_link);
-            weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
+            const weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-            size_t n_empty_partitions = 0;
-            size_t n_overloaded_partitions = 0;
-            weight_t sum_too_much = 0;
-            for (partition_t id = 0; id < ac.k; ++id) {
-                n_empty_partitions += p_manager.get_bweight(id) == 0;
-                n_overloaded_partitions += p_manager.get_bweight(id) > lmax;
-                sum_too_much += std::max((weight_t) 0, p_manager.get_bweight(id) - lmax);
-            }
-
-            std::cout << "Graph                 : " << ac.graph_in << std::endl;
-            std::cout << "Total time (s)        : " << duration << std::endl;
-            std::cout << "#Nodes                : " << graphs[0].n << std::endl;
-            std::cout << "#Edges                : " << graphs[0].m << std::endl;
-            std::cout << "k                     : " << ac.k << std::endl;
-            std::cout << "Lmax                  : " << lmax << std::endl;
-            std::cout << "Min imbalance         : " << ac.min_imbalance << std::endl;
-            std::cout << "Threads               : " << ac.threads << std::endl;
-            std::cout << "alpha_send            : " << ac.alpha_send << std::endl;
-            std::cout << "alpha_recv            : " << ac.alpha_recv << std::endl;
-            std::cout << "alpha_link            : " << ac.alpha_link << std::endl;
-            std::cout << "beta_send             : " << ac.beta_send << std::endl;
-            std::cout << "beta_recv             : " << ac.beta_recv << std::endl;
-            std::cout << "beta_link             : " << ac.beta_link << std::endl;
-            std::cout << "-----------------------" << std::endl;
-            cost.print(std::cout);
-            std::cout << std::left << std::setw(36) << "Max link load"
-                    << ": " << std::right << std::setw(16) << static_cast<u64>(max_link_load) << "\n";
-            std::cout << "max block w           : " << max(p_manager.get_bweights()) << std::endl;
-            std::cout << "#empty partitions     : " << n_empty_partitions << std::endl;
-            std::cout << "#oload partitions     : " << n_overloaded_partitions << std::endl;
-            std::cout << "Sum oload weights     : " << sum_too_much << std::endl;
-            std::cout << "------- Time -------" << std::endl;
-            std::cout << "IO                    : " << io_ms << std::endl;
-            std::cout << "Coarsening            : " << coarsening_ms << std::endl;
-            std::cout << "Contraction           : " << contraction_ms << std::endl;
-            std::cout << "Init. Part.           : " << initial_partitioning_ms << std::endl;
-            std::cout << "Uncontraction         : " << uncontraction_ms << std::endl;
-            std::cout << "Rebalance             : " << rebalance_ms << std::endl;
-            std::cout << "Refinement            : " << refinement_ms << std::endl;
-            std::cout << "  Label Prop.         : " << lp_refine_ms << std::endl;
-            std::cout << "  Msg Refinement      : " << msg_refine_ms << std::endl;
-            std::cout << "Misc                  : " << misc_ms << std::endl;
-            std::cout << "ALL                   : " << io_ms + misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms + uncontraction_ms + rebalance_ms + refinement_ms << std::endl;
+            print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, p_manager, timings);
 
             if (!kaminpar_part.empty()) {
                 // Propagate the block -> PE mapping back to the original vertices.
@@ -555,7 +274,7 @@ namespace HeiProMap {
                     load_partition(sp_part);
                     recompute_datastructures();
                     rebalance(level);
-                    diffuse_into_empties();
+                    EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                     recompute_datastructures();
                     refinement();
                     const f64 refined = current_message_cost();
@@ -610,229 +329,9 @@ namespace HeiProMap {
             }
 
             uncoarsen_topology();
-            update_lmax_array();
+            p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
+                                    ac.imbalance, ac.min_imbalance);
             return true;
-        }
-
-        void optimize_block_assignment() {
-            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "optimize_block_assignment");
-            const auto &g = graphs.back();
-            const partition_t k = ac.k;
-
-            // Build flow matrix: flow[b1][b2] = sum of (alpha_link + beta_link * w) over edges between b1 and b2
-            std::vector<f64> flow(k * k, 0.0);
-            for (vertex_t u = 0; u < g.n; ++u) {
-                const partition_t bu = p_manager.partition[u];
-                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                    const partition_t bv = p_manager.partition[g.edges_v[j]];
-                    if (bu != bv) {
-                        const f64 w = static_cast<f64>(g.edge_w(j));
-                        flow[bu * k + bv] += ac.alpha_link + ac.beta_link * w;
-                    }
-                }
-            }
-
-            // Build distance matrix for all cell pairs
-            std::vector<f64> dist(k * k, 0.0);
-            for (partition_t i = 0; i < k; ++i) {
-                for (partition_t j = i + 1; j < k; ++j) {
-                    f64 d = static_cast<f64>(d_oracle.get(i, j));
-                    dist[i * k + j] = d;
-                    dist[j * k + i] = d;
-                }
-            }
-
-            // Evaluate QAP cost for a given permutation (block b -> cell perm[b])
-            auto qap_cost = [&](const std::vector<partition_t> &perm) -> f64 {
-                f64 cost = 0.0;
-                for (partition_t b1 = 0; b1 < k; ++b1) {
-                    for (partition_t b2 = b1 + 1; b2 < k; ++b2) {
-                        f64 f = flow[b1 * k + b2] + flow[b2 * k + b1];
-                        if (f > 0.0) {
-                            cost += f * dist[perm[b1] * k + perm[b2]];
-                        }
-                    }
-                }
-                return cost;
-            };
-
-            // Evaluate swap delta: cost change if we swap perm[a] and perm[b]
-            auto swap_delta = [&](const std::vector<partition_t> &perm, partition_t a, partition_t b) -> f64 {
-                f64 delta = 0.0;
-                const partition_t ca = perm[a], cb = perm[b];
-                for (partition_t x = 0; x < k; ++x) {
-                    if (x == a || x == b) continue;
-                    const partition_t cx = perm[x];
-                    f64 fa = flow[a * k + x] + flow[x * k + a];
-                    f64 fb = flow[b * k + x] + flow[x * k + b];
-                    if (fa > 0.0) delta += fa * (dist[cb * k + cx] - dist[ca * k + cx]);
-                    if (fb > 0.0) delta += fb * (dist[ca * k + cx] - dist[cb * k + cx]);
-                }
-                f64 fab = flow[a * k + b] + flow[b * k + a];
-                if (fab > 0.0) delta += fab * (dist[cb * k + ca] - dist[ca * k + cb]);
-                return delta;
-            };
-
-            // Local search: repeatedly find best improving swap
-            auto local_search = [&](std::vector<partition_t> &perm) {
-                bool improved = true;
-                while (improved) {
-                    improved = false;
-                    partition_t best_a = 0, best_b = 0;
-                    f64 best_delta = -1e-9;
-                    for (partition_t a = 0; a < k; ++a) {
-                        for (partition_t b = a + 1; b < k; ++b) {
-                            f64 d = swap_delta(perm, a, b);
-                            if (d < best_delta) {
-                                best_delta = d;
-                                best_a = a;
-                                best_b = b;
-                            }
-                        }
-                    }
-                    if (best_delta < -1e-9) {
-                        std::swap(perm[best_a], perm[best_b]);
-                        improved = true;
-                    }
-                }
-            };
-
-            // Current assignment: block b is at cell b (identity permutation after greedy)
-            std::vector<partition_t> best_perm(k);
-            std::iota(best_perm.begin(), best_perm.end(), 0);
-            local_search(best_perm);
-            f64 best_cost = qap_cost(best_perm);
-
-            // Try spectral assignment as starting permutation
-            {
-                // Build a dense CSRGraph from the flow matrix for spectral embedding
-                CSRGraph flow_graph;
-                std::vector<std::vector<std::pair<vertex_t, weight_t>>> adj(k);
-                for (partition_t i = 0; i < k; ++i) {
-                    for (partition_t j = 0; j < k; ++j) {
-                        if (i == j) continue;
-                        f64 f = flow[i * k + j];
-                        if (f > 0.0) {
-                            adj[i].emplace_back(j, static_cast<weight_t>(std::max(1.0, f)));
-                        }
-                    }
-                }
-                size_t total_edges = 0;
-                for (partition_t i = 0; i < k; ++i) total_edges += adj[i].size();
-                flow_graph.n = k;
-                flow_graph.m = total_edges;
-                flow_graph.neighborhoods.initialize(k + 1);
-                flow_graph.edges_v.initialize(total_edges);
-                flow_graph.edges_w.initialize(total_edges);
-                flow_graph.v_weights.initialize(k, 1);
-                flow_graph.g_weight = k;
-                flow_graph.neighborhoods[0] = 0;
-                for (partition_t i = 0; i < k; ++i) {
-                    flow_graph.neighborhoods[i + 1] = flow_graph.neighborhoods[i] + adj[i].size();
-                    for (size_t e = 0; e < adj[i].size(); ++e) {
-                        size_t idx = flow_graph.neighborhoods[i] + e;
-                        flow_graph.edges_v[idx] = adj[i][e].first;
-                        flow_graph.edges_w[idx] = adj[i][e].second;
-                    }
-                }
-
-                auto spectral_embedding = SpectralEmbedding::compute_laplacian_eigenvectors(flow_graph, 2, ac.seed);
-
-                // Normalize embedding to [0,1]
-                const size_t W = static_cast<size_t>(d_oracle.current_W());
-                const size_t H = (k + W - 1) / W;
-                for (size_t d = 0; d < 2; ++d) {
-                    f64 mn = spectral_embedding[d], mx = spectral_embedding[d];
-                    for (partition_t i = 0; i < k; ++i) {
-                        mn = std::min(mn, spectral_embedding[i * 2 + d]);
-                        mx = std::max(mx, spectral_embedding[i * 2 + d]);
-                    }
-                    f64 range = mx - mn;
-                    if (range < 1e-12) range = 1.0;
-                    for (partition_t i = 0; i < k; ++i) {
-                        spectral_embedding[i * 2 + d] = (spectral_embedding[i * 2 + d] - mn) / range;
-                    }
-                }
-
-                // Grid cell coordinates normalized to [0,1]
-                std::vector<f64> grid_x(k), grid_y(k);
-                for (partition_t c = 0; c < k; ++c) {
-                    grid_x[c] = static_cast<f64>(c % W) / static_cast<f64>(std::max(W - 1, static_cast<size_t>(1)));
-                    grid_y[c] = static_cast<f64>(c / W) / static_cast<f64>(std::max(H - 1, static_cast<size_t>(1)));
-                }
-
-                // Try 8 orientation variants
-                for (int variant = 0; variant < 8; ++variant) {
-                    bool flip_x = (variant & 1) != 0;
-                    bool flip_y = (variant & 2) != 0;
-                    bool swap_axes = (variant & 4) != 0;
-
-                    std::vector<std::vector<weight_t>> cost_mat(k, std::vector<weight_t>(k));
-                    for (partition_t b = 0; b < k; ++b) {
-                        f64 bx = spectral_embedding[b * 2 + 0];
-                        f64 by = spectral_embedding[b * 2 + 1];
-                        if (swap_axes) std::swap(bx, by);
-                        if (flip_x) bx = 1.0 - bx;
-                        if (flip_y) by = 1.0 - by;
-                        for (partition_t c = 0; c < k; ++c) {
-                            f64 dx = bx - grid_x[c];
-                            f64 dy = by - grid_y[c];
-                            cost_mat[b][c] = static_cast<weight_t>((dx * dx + dy * dy) * 1e6);
-                        }
-                    }
-
-                    auto assignment = solve_hungarian(cost_mat);
-                    std::vector<partition_t> perm(k);
-                    for (partition_t b = 0; b < k; ++b) perm[b] = static_cast<partition_t>(assignment[b]);
-                    local_search(perm);
-                    f64 cost = qap_cost(perm);
-                    if (cost < best_cost) {
-                        best_cost = cost;
-                        best_perm = perm;
-                    }
-                }
-            }
-
-            // Random restarts
-            // Each restart costs ~k^3 (local search over all swaps), so keep the total work bounded for larger k.
-            const size_t n_restarts = std::clamp(static_cast<size_t>(6e7 / (static_cast<f64>(k) * k * k)),
-                                                 static_cast<size_t>(1), static_cast<size_t>(1000));
-            std::mt19937_64 rng(ac.seed + 12345);
-            for (size_t r = 0; r < n_restarts; ++r) {
-                std::vector<partition_t> perm(k);
-                std::iota(perm.begin(), perm.end(), 0);
-                std::shuffle(perm.begin(), perm.end(), rng);
-                local_search(perm);
-                f64 cost = qap_cost(perm);
-                if (cost < best_cost) {
-                    best_cost = cost;
-                    best_perm = perm;
-                }
-            }
-
-            // Check if permutation is non-trivial
-            bool changed = false;
-            for (partition_t b = 0; b < k; ++b) {
-                if (best_perm[b] != b) { changed = true; break; }
-            }
-            if (!changed) return;
-
-            // Apply permutation: remap all vertex assignments
-            // Build inverse: inv_perm[cell] = block that should go there
-            // We need: vertex u was in block b, now block b goes to cell perm[b]
-            // But cells ARE blocks in our representation, so we need to reassign
-            // vertex u from block b to block perm[b]
-            std::vector<weight_t> new_bweights(k, 0);
-            for (vertex_t u = 0; u < g.n; ++u) {
-                partition_t old_block = p_manager.partition[u];
-                partition_t new_block = best_perm[old_block];
-                p_manager.partition[u] = new_block;
-                new_bweights[new_block] += g.v_weight(u);
-            }
-            for (partition_t b = 0; b < k; ++b) {
-                p_manager.bweights[b] = new_bweights[b];
-            }
-
         }
 
     private:
@@ -847,7 +346,8 @@ namespace HeiProMap {
                 reinit_structures_for_new_k();
             }
 
-            update_lmax_array();
+            p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
+                                    ac.imbalance, ac.min_imbalance);
 
             // Coarsen the graph.
             while (graphs.back().n > d_oracle.current_k() * ac.initial_c) {
@@ -867,7 +367,6 @@ namespace HeiProMap {
 
             // Initial partitioning at coarsest level.
             initial_partitioning();
-            optimize_block_assignment();
             recompute_datastructures();
             rebalance(level);
             refinement();
@@ -882,7 +381,7 @@ namespace HeiProMap {
                     if (!try_uncoarsen_topology()) break;
 
                     rebalance(level);
-                    diffuse_into_empties();
+                    EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                     recompute_datastructures();
                     refinement();
                 }
@@ -891,7 +390,7 @@ namespace HeiProMap {
                 uncoarsening();
 
                 rebalance(level);
-                diffuse_into_empties();
+                EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                 recompute_datastructures();
                 refinement();
                 print_level_stats("L" + std::to_string(level), level);
@@ -901,7 +400,7 @@ namespace HeiProMap {
             while (d_oracle.depth() > 0) {
                 if (!try_uncoarsen_topology()) {
                     rebalance(0);
-                    diffuse_into_empties();
+                    EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                     recompute_datastructures();
                     refinement();
                     print_level_stats("topo_blocked", 0);
@@ -909,7 +408,7 @@ namespace HeiProMap {
                 }
 
                 rebalance(0);
-                diffuse_into_empties();
+                EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
                 recompute_datastructures();
                 refinement();
                 print_level_stats("topo", 0);
@@ -918,6 +417,25 @@ namespace HeiProMap {
             if (ac.spectral_only && ac.spectral_solution && spectral.size() == graphs.back().n) {
                 adopt_spectral_only();
             }
+        }
+
+        // Runs one improvement pass on the current placement and prints
+        // "[name] <detail> cost a -> b (+-x%) max_link a -> b (t s)". The pass returns its detail string.
+        // cost is the message cost before the pass and is updated to the cost after it.
+        template<typename PassT>
+        void run_reported_pass(const char *name, f64 &cost, PassT &&pass) {
+            const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+            const auto sp_pass = get_time_point();
+            const std::string detail = pass();
+            const f64 seconds = get_seconds(sp_pass, get_time_point());
+            const f64 after = current_message_cost();
+            const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
+            std::cout << "[" << name << "] " << detail
+                      << " cost " << std::fixed << std::setprecision(2) << cost / 1e6 << "M -> " << after / 1e6 << "M ("
+                      << std::showpos << 100.0 * (after / cost - 1.0) << std::noshowpos << "%)"
+                      << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
+                      << " (" << seconds << " s)" << std::endl;
+            cost = after;
         }
 
         // Spectral-only mode: replace the multilevel partition by the spectral placement (rebalanced, not refined).
@@ -929,57 +447,33 @@ namespace HeiProMap {
             load_partition(sp_part);
             recompute_datastructures();
             rebalance(0);
-            diffuse_into_empties();
+            EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
             recompute_datastructures();
-            f64 raw_cost = current_message_cost();
+            f64 cost = current_message_cost();
             if (ac.waver_message_refinement_config.enabled) {
-                const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-                const auto sp_mr = get_time_point();
-                WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
-                                               ac.waver_message_refinement_config,
-                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                const f64 mr_s = get_seconds(sp_mr, get_time_point());
-                const f64 after = current_message_cost();
-                const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-                std::cout << "[msg-ref]  iters<=" << ac.waver_message_refinement_config.max_iters
-                          << " cost " << std::fixed << std::setprecision(2) << raw_cost / 1e6 << "M -> " << after / 1e6 << "M ("
-                          << std::showpos << 100.0 * (after / raw_cost - 1.0) << std::noshowpos << "%)"
-                          << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
-                          << " (" << mr_s << " s)" << std::endl;
-                raw_cost = after;
+                run_reported_pass("msg-ref", cost, [&] {
+                    WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
+                                                   ac.waver_message_refinement_config,
+                                                   ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                    return "iters<=" + std::to_string(ac.waver_message_refinement_config.max_iters);
+                });
             }
             if (ac.swap_radius > 0) {
-                const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-                const auto sp_sw = get_time_point();
-                WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
-                                                 ac.swap_radius, ac.swap_extended,
-                                                 ac.alpha_end(), ac.beta_end(),
-                                                 ac.alpha_link, ac.beta_link);
-                const f64 sw_s = get_seconds(sp_sw, get_time_point());
-                const f64 after = current_message_cost();
-                const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-                std::cout << "[swap]     radius=" << ac.swap_radius
-                          << " cost " << std::fixed << std::setprecision(2) << raw_cost / 1e6 << "M -> " << after / 1e6 << "M ("
-                          << std::showpos << 100.0 * (after / raw_cost - 1.0) << std::noshowpos << "%)"
-                          << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
-                          << " (" << sw_s << " s)" << std::endl;
-                raw_cost = after;
+                run_reported_pass("swap", cost, [&] {
+                    WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
+                                                     ac.swap_radius, ac.swap_extended,
+                                                     ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                    return "radius=" + std::to_string(ac.swap_radius);
+                });
             }
             if (ac.long_msg_padding > 0) {
-                const f64 link_before = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-                const auto sp_lm = get_time_point();
-                const size_t swaps = WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
-                                                                        ac.long_msg_padding,
-                                                                        ac.alpha_end(), ac.beta_end(),
-                                                                        ac.alpha_link, ac.beta_link);
-                const f64 lm_s = get_seconds(sp_lm, get_time_point());
-                const f64 after = current_message_cost();
-                const f64 link_after = get_max_link_load(q_graph, ac.k, d_oracle.current_W(), ac.alpha_link, ac.beta_link);
-                std::cout << "[long-msg] padding=" << ac.long_msg_padding << " swaps=" << swaps
-                          << " cost " << std::fixed << std::setprecision(2) << raw_cost / 1e6 << "M -> " << after / 1e6 << "M ("
-                          << std::showpos << 100.0 * (after / raw_cost - 1.0) << std::noshowpos << "%)"
-                          << " max_link " << static_cast<u64>(link_before) << " -> " << static_cast<u64>(link_after)
-                          << " (" << lm_s << " s)" << std::endl;
+                run_reported_pass("long-msg", cost, [&] {
+                    const size_t swaps = WaverLongMessageRefinement::refine(graphs.back(), p_manager, d_oracle,
+                                                                            ac.long_msg_padding,
+                                                                            ac.alpha_end(), ac.beta_end(),
+                                                                            ac.alpha_link, ac.beta_link);
+                    return "padding=" + std::to_string(ac.long_msg_padding) + " swaps=" + std::to_string(swaps);
+                });
             }
             std::cout << "spectral-only placement: cost=" << std::fixed << std::setprecision(2)
                       << current_message_cost() / 1e6 << "M " << balance_summary() << std::endl;
@@ -1069,7 +563,7 @@ namespace HeiProMap {
                 }
             }
 
-            initial_partitioning_ms += get_milli_seconds(p, get_time_point());
+            timings.initial_partitioning_ms += get_milli_seconds(p, get_time_point());
 
             q_graph.compute_from_scratch(graphs.back(), p_manager);
             block_conn.compute_from_scratch(graphs.back(), p_manager);
@@ -1092,7 +586,7 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
-            coarsening_ms += get_milli_seconds(p, get_time_point());
+            timings.coarsening_ms += get_milli_seconds(p, get_time_point());
         }
 
         void contraction() {
@@ -1101,7 +595,7 @@ namespace HeiProMap {
             graphs.back().contract(graphs[graphs.size() - 2], mappings.back(), ac.threads);
             p_manager.contract(mappings.back());
 
-            contraction_ms += get_milli_seconds(p, get_time_point());
+            timings.contraction_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
         }
 
@@ -1555,9 +1049,9 @@ namespace HeiProMap {
             }
 
             // Sixth pass: diffuse vertices from dense borders into empty regions
-            diffuse_into_empties();
+            EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
 
-            uncontraction_ms += get_milli_seconds(p, get_time_point());
+            timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
         }
 
         void uncoarsening() {
@@ -1617,7 +1111,7 @@ namespace HeiProMap {
             graphs.pop_back();
             mappings.pop_back();
 
-            uncontraction_ms += get_milli_seconds(p, get_time_point());
+            timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
 
             q_graph.compute_from_scratch(graphs.back(), p_manager);
             block_conn.compute_from_scratch(graphs.back(), p_manager);
@@ -1633,7 +1127,7 @@ namespace HeiProMap {
                 rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             }
 
-            rebalance_ms += get_milli_seconds(p, get_time_point());
+            timings.rebalance_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
 
@@ -1644,7 +1138,7 @@ namespace HeiProMap {
             if (ac.waver_label_propagation_config.enabled) {
                 auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
-                lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                timings.lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 {
                     partition_t ne = 0;
                     for (partition_t id = 0; id < ac.k; ++id)
@@ -1658,7 +1152,7 @@ namespace HeiProMap {
                 WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
                                                ac.waver_message_refinement_config,
                                                ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                timings.msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 {
                     partition_t ne = 0;
                     for (partition_t id = 0; id < ac.k; ++id)
@@ -1694,7 +1188,7 @@ namespace HeiProMap {
             //                                         ac.alpha_end(), ac.beta_end(),
             //                                         ac.alpha_link, ac.beta_link);
 
-            refinement_ms += get_milli_seconds(p, get_time_point());
+            timings.refinement_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
     };
