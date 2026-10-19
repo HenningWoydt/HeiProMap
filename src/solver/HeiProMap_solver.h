@@ -278,8 +278,8 @@ namespace HeiProMap {
                     HEIPROMAP_PROFILE_SCOPE("final_refinement", "Solver", "refine");
 
                     bv_manager.reset();
-                    q_graph.initialize(ac.k);
-                    block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
+                    q_graph.initialize(ac.k, &m_pool);
+                    block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
 
                     for (vertex_t u = 0; u < graphs[0].n; ++u) {
                         partition_t u_id = p_manager[u];
@@ -519,8 +519,8 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
                 p_manager.reset_weights();
                 bv_manager.reset();
-                q_graph.initialize(ac.k);
-                block_conn.initialize(graphs.back().n, graphs.back().m, ac.k);
+                q_graph.initialize(ac.k, &m_pool);
+                block_conn.initialize(graphs.back().n, graphs.back().m, ac.k, &m_pool);
                 block_conn.reset_build();
 
                 for (vertex_t u = 0; u < graphs.back().n; ++u) {
@@ -596,7 +596,10 @@ namespace HeiProMap {
             level_infos[level].t_contraction += get_milli_seconds(sp, ep);
             #endif
 
-            HEAVYASSERT(assert_state_pre_partitioning(graphs.back(), p_manager, ac.k));
+            // p_manager is not contracted here (no partition exists yet), so only check the graph
+            HEAVYASSERT(assert_csr_structure(graphs.back(), ac.threads));
+            HEAVYASSERT(assert_no_self_loops(graphs.back(), ac.threads));
+            HEAVYASSERT(assert_no_double_edges(graphs.back(), ac.threads));
         }
 
         void uncontraction([[maybe_unused]] const u64 level) {
@@ -654,7 +657,7 @@ namespace HeiProMap {
                 bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
             } else {
                 bv_manager.reset();
-                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k);
+                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k, &m_pool);
                 block_conn.reset_build();
 
                 for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
