@@ -85,11 +85,21 @@ int main(const int argc, char *argv[]) {
     std::vector<HeiProMap::partition_t> partition;
 
     if (ac.use_binary_oracle()) {
-        HeiProMap::HeiProMapSolver<HeiProMap::BinaryDistanceOracle> solver(std::move(g), ac);
-        partition = solver.solve();
+        if (ac.k >= 1024) {
+            HeiProMap::HeiProMapSolver<HeiProMap::BinaryDistanceOracle, true, HeiProMap::LargeQuotientGraph> solver(std::move(g), ac);
+            partition = solver.solve();
+        } else {
+            HeiProMap::HeiProMapSolver<HeiProMap::BinaryDistanceOracle> solver(std::move(g), ac);
+            partition = solver.solve();
+        }
     } else {
-        HeiProMap::HeiProMapSolver<HeiProMap::DistanceOracle> solver(std::move(g), ac);
-        partition = solver.solve();
+        if (ac.k >= 1024) {
+            HeiProMap::HeiProMapSolver<HeiProMap::DistanceOracle, true, HeiProMap::LargeQuotientGraph> solver(std::move(g), ac);
+            partition = solver.solve();
+        } else {
+            HeiProMap::HeiProMapSolver<HeiProMap::DistanceOracle> solver(std::move(g), ac);
+            partition = solver.solve();
+        }
     }
 
     auto t_write_start = HeiProMap::get_time_point();

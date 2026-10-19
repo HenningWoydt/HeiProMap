@@ -237,7 +237,7 @@ namespace HeiProMap {
                     std::vector<weight_t> block_weights(item.k, 0);
                     std::vector<vertex_t> block_vertices(item.k, 0);
                     for (vertex_t u = 0; u < item.g->n; ++u) {
-                        block_weights[partition[u]] += item.g->v_weights[u];
+                        block_weights[partition[u]] += item.g->v_weight(u);
                         block_vertices[partition[u]] += 1;
                     }
                     weight_t max_block_weight = 0;
@@ -271,7 +271,7 @@ namespace HeiProMap {
                     // insert solution
                     u64 offset = 0;
                     for (partition_t i = 0; i < l - 1; ++i) { offset += item.identifier->operator[](i) * index_vec[index_vec.size() - 1 - i]; }
-                    for (vertex_t u = 0; u < item.g->n; ++u) { p_manager.set(item.tt->get_o(u), item.g->v_weights[u], offset + partition[u]); }
+                    for (vertex_t u = 0; u < item.g->n; ++u) { p_manager.set(item.tt->get_o(u), item.g->v_weight(u), offset + partition[u]); }
                 } else {
                     HEIPROMAP_PROFILE_SCOPE("partition", "GlobalMultisectionPartitioner", "split");
                     // split problem
@@ -282,7 +282,7 @@ namespace HeiProMap {
                     for (vertex_t u = 0; u < item.g->n; ++u) {
                         partition_t id = partition[u];
                         new_ns[id] += 1;
-                        new_ws[id] += item.g->v_weights[u];
+                        new_ws[id] += item.g->v_weight(u);
                         for (size_t i = item.g->neighborhoods[u]; i < item.g->neighborhoods[u + 1]; ++i) {
                             vertex_t v = item.g->edges_v[i];
                             if (partition[v] == id) { new_ms[id] += 1; }
@@ -326,7 +326,7 @@ namespace HeiProMap {
                         for (vertex_t old_u = 0; old_u < item.g->n; ++old_u) {
                             if (partition[old_u] == i) {
                                 vertex_t new_u = next_item.tt->get_n(item.tt->get_o(old_u));
-                                next_item.g->v_weights[new_u] = item.g->v_weights[old_u];
+                                next_item.g->v_weights[new_u] = item.g->v_weight(old_u);
 
                                 for (size_t j = item.g->neighborhoods[old_u]; j < item.g->neighborhoods[old_u + 1]; ++j) {
                                     vertex_t old_v = item.g->edges_v[j];
@@ -334,7 +334,7 @@ namespace HeiProMap {
                                         vertex_t new_v = next_item.tt->get_n(item.tt->get_o(old_v));
                                         size_t pos = next_item.g->neighborhoods[new_u] + cursor[new_u];
                                         next_item.g->edges_v[pos] = new_v;
-                                        next_item.g->edges_w[pos] = item.g->edges_w[j];
+                                        next_item.g->edges_w[pos] = item.g->edge_w(j);
                                         cursor[new_u]++;
                                     }
                                 }

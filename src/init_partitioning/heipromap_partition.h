@@ -72,11 +72,21 @@ namespace HeiProMap {
 
         std::vector<vertex_t> result;
         if (ac.use_binary_oracle()) {
-            HeiProMapSolver<BinaryDistanceOracle> solver(std::move(csr_g), ac);
-            result = solver.solve();
+            if (ac.k >= 1024) {
+                HeiProMapSolver<BinaryDistanceOracle, true, LargeQuotientGraph> solver(std::move(csr_g), ac);
+                result = solver.solve();
+            } else {
+                HeiProMapSolver<BinaryDistanceOracle> solver(std::move(csr_g), ac);
+                result = solver.solve();
+            }
         } else {
-            HeiProMapSolver<DistanceOracle> solver(std::move(csr_g), ac);
-            result = solver.solve();
+            if (ac.k >= 1024) {
+                HeiProMapSolver<DistanceOracle, true, LargeQuotientGraph> solver(std::move(csr_g), ac);
+                result = solver.solve();
+            } else {
+                HeiProMapSolver<DistanceOracle> solver(std::move(csr_g), ac);
+                result = solver.solve();
+            }
         }
 
         partition.resize(g.n);

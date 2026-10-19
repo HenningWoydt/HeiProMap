@@ -33,6 +33,7 @@
 #include "../datastructures/boundary_vertex_manger.h"
 #include "../datastructures/partition_manager.h"
 #include "../datastructures/quotient_graph.h"
+#include "../datastructures/large_quotient_graph.h"
 #include "../datastructures/block_conn.h"
 #include "../definitions.h"
 #include "../utility/aligned_array.h"
@@ -56,7 +57,7 @@
 #include "HeiPa_solver.h"
 
 namespace HeiProMap {
-    template<typename DistanceOracleT = DistanceOracle>
+    template<typename DistanceOracleT = DistanceOracle, bool LARGE_K = false, typename QuotientGraphT = QuotientGraph>
     class HeiProMapSolver {
         AlgorithmConfiguration ac;
         RandomEngine random_engine;
@@ -74,7 +75,7 @@ namespace HeiProMap {
 
         PartitionManager p_manager;
         BoundaryVertexManager bv_manager;
-        QuotientGraph q_graph;
+        QuotientGraphT q_graph;
         BlockConn block_conn;
         DistanceOracleT d_oracle;
 
@@ -87,9 +88,9 @@ namespace HeiProMap {
         Rebalancer rebalancer;
 
         // refinement
-        LabelPropagationRefinement<false> lp_refine;
-        QuotientGraphRefinement<false> qg_refine;
-        FlowBasedRefinement<false> flow_based_refinement;
+        LabelPropagationRefinement<LARGE_K> lp_refine;
+        QuotientGraphRefinement<LARGE_K> qg_refine;
+        FlowBasedRefinement<LARGE_K> flow_based_refinement;
 
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
