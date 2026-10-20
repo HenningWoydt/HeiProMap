@@ -50,6 +50,7 @@
 #include "../utility/qap.h"
 #include "../utility/spectral_tracker.h"
 #include "../utility/kaminpar_partitioner.h"
+#include "../utility/spectral_prepartitioner.h"
 #include "../utility/waver_report.h"
 #include "../utility/utils.h"
 
@@ -152,8 +153,20 @@ namespace HeiProMap {
             if (graphs[0].n <= k) { return {}; }
             HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "reduce_to_quotient");
 
-            QuotientResult r = partition_into_quotient(graphs[0], k, ac.imbalance, ac.kaminpar_threads,
-                                                       ac.threads, ac.seed, ac.kaminpar_preset);
+            QuotientResult r;
+            if (ac.prepartitioner == "spectral3d") {
+                const size_t W = GridDistanceOracle::grid_width(topology);
+                if (W == 0 || k % W != 0) {
+                    std::cout << "Error: --prepartitioner spectral3d needs a full grid topology (k = " << k
+                            << ", inferred width " << W << ")" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                r.part = SpectralPrepartitioner::partition(graphs[0], W, k / W, ac.seed, ac.threads);
+                r.quotient = contract_into_quotient(graphs[0], r.part, k, ac.threads);
+            } else {
+                r = partition_into_quotient(graphs[0], k, ac.imbalance, ac.kaminpar_threads,
+                                            ac.threads, ac.seed, ac.kaminpar_preset);
+            }
             input_graph = std::move(graphs[0]); // kept for the refinement of the input vertices
             graphs[0] = std::move(r.quotient);
             return std::move(r.part);
@@ -365,12 +378,11 @@ namespace HeiProMap {
                 adopt_spectral_only();
             }
 
-            if (ac.vcycle && is_bijection()) { vcycle(); }
+            // if (ac.vcycle && is_bijection()) { vcycle(); }
 
             // Simulated annealing on the finished bijection (swaps the contents of nearby PEs).
             if (ac.sa_iterations > 0 && is_bijection()) {
-                WaverSARefinement::refine(graphs.back(), p_manager, d_oracle, ac.sa_iterations, ac.sa_radius,
-                                          ac.seed + 99999, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                // WaverSARefinement::refine(graphs.back(), p_manager, d_oracle, ac.sa_iterations, ac.sa_radius, ac.seed + 99999, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             }
 
             std::vector<partition_t> p(graphs[0].n);

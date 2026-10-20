@@ -98,6 +98,25 @@ namespace HeiProMap {
         std::vector<partition_t> part;
     };
 
+    // Contracts the blocks of a given partition into the quotient graph (one unit-weight vertex per block,
+    // summed edge weights between blocks, so quotient.n == k).
+    inline CSRGraph contract_into_quotient(const CSRGraph &g,
+                                           const std::vector<partition_t> &part,
+                                           const partition_t k,
+                                           const u64 contraction_threads) {
+        Mapping mapping;
+        mapping.initialize(g.n);
+        mapping.set_coarse_n(k);
+        for (vertex_t u = 0; u < g.n; ++u) { mapping.set(u, part[u]); }
+
+        CSRGraph quotient;
+        quotient.contract(g, mapping, contraction_threads);
+        quotient.uniform_v_weights = true;
+        quotient.v_weights.free_memory();
+        quotient.g_weight = k;
+        return quotient;
+    }
+
     // Partitions g into k blocks with KaMinPar and contracts the blocks into the quotient graph.
     // kaminpar_threads == 0 uses all hardware threads.
     inline QuotientResult partition_into_quotient(const CSRGraph &g,
@@ -112,16 +131,7 @@ namespace HeiProMap {
 
         QuotientResult result;
         result.part = kaminpar_partition(g, k, epsilon, threads, seed, preset);
-
-        Mapping mapping;
-        mapping.initialize(g.n);
-        mapping.set_coarse_n(k);
-        for (vertex_t u = 0; u < g.n; ++u) { mapping.set(u, result.part[u]); }
-
-        result.quotient.contract(g, mapping, contraction_threads);
-        result.quotient.uniform_v_weights = true;
-        result.quotient.v_weights.free_memory();
-        result.quotient.g_weight = k;
+        result.quotient = contract_into_quotient(g, result.part, k, contraction_threads);
         return result;
     }
 }

@@ -28,6 +28,7 @@
 #define HEIPROMAP_SPECTRAL_TRACKER_H
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <numeric>
@@ -57,6 +58,9 @@ namespace HeiProMap {
         static constexpr f64 kResidualTol = 0.03;
 
         bool initialized() const { return !X.empty() && !X[0].empty(); }
+
+        // The kSubspace mean-free orthonormal vectors, X[0] smoothest.
+        const std::vector<std::vector<f64>> &basis() const { return X; }
 
         vertex_t size() const { return initialized() ? static_cast<vertex_t>(X[0].size()) : 0; }
 
@@ -218,14 +222,94 @@ namespace HeiProMap {
             return deg;
         }
 
-        static void apply_L(const CSRGraph &g, const std::vector<f64> &deg, const std::vector<f64> &in, std::vector<f64> &out) {
-            for (vertex_t u = 0; u < g.n; ++u) {
-                f64 s = deg[u] * in[u];
-                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                    s -= static_cast<f64>(g.edge_w(j)) * in[g.edges_v[j]];
+        // Compact read-only copy of a graph for the bandwidth-bound Laplacian products: 32-bit neighbor ids and,
+        // if the graph is not unweighted, 32-bit float weights (kept as doubles if some weight is not exactly
+        // representable). Weights are converted back to f64 exactly, so products equal those on the original graph.
+        struct CompactCsr {
+            vertex_t n = 0;
+            const size_t *off = nullptr;
+            std::vector<u32> adj;
+            std::vector<f32> wf;
+            std::vector<f64> wd;
+            bool uniform = true;
+
+            explicit CompactCsr(const CSRGraph &g) {
+                n = g.n;
+                off = &g.neighborhoods[0];
+                if (g.n >= (static_cast<vertex_t>(1) << 32)) {
+                    std::cout << "Error: spectral solver supports at most 2^32 - 1 vertices" << std::endl;
+                    exit(EXIT_FAILURE);
                 }
-                out[u] = s;
+                const size_t m = g.neighborhoods[g.n];
+                adj.resize(m);
+                for (size_t j = 0; j < m; ++j) adj[j] = static_cast<u32>(g.edges_v[j]);
+                uniform = g.uniform_e_weights;
+                if (uniform) return;
+                constexpr weight_t kExactF32 = static_cast<weight_t>(1) << 24;
+                bool exact = true;
+                for (size_t j = 0; j < m && exact; ++j) exact = g.edges_w[j] >= 0 && g.edges_w[j] <= kExactF32;
+                if (exact) {
+                    wf.resize(m);
+                    for (size_t j = 0; j < m; ++j) wf[j] = static_cast<f32>(g.edges_w[j]);
+                } else {
+                    wd.resize(m);
+                    for (size_t j = 0; j < m; ++j) wd[j] = static_cast<f64>(g.edges_w[j]);
+                }
             }
+
+            // Calls f with a weight accessor f(j) -> f64 matching the storage of this graph.
+            template<typename F>
+            void with_weights(F &&f) const {
+                if (uniform) {
+                    f([](size_t) { return 1.0; });
+                } else if (!wf.empty()) {
+                    const f32 *w = wf.data();
+                    f([w](size_t j) { return static_cast<f64>(w[j]); });
+                } else {
+                    const f64 *w = wd.data();
+                    f([w](size_t j) { return w[j]; });
+                }
+            }
+        };
+
+        // out = L in for one vector.
+        static void apply_L(const CompactCsr &c, const std::vector<f64> &deg, const std::vector<f64> &in,
+                            std::vector<f64> &out) {
+            c.with_weights([&](auto w) {
+                const u32 *adj = c.adj.data();
+                const f64 *x = in.data();
+                for (vertex_t u = 0; u < c.n; ++u) {
+                    f64 s = deg[u] * x[u];
+                    for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) s -= w(j) * x[adj[j]];
+                    out[u] = s;
+                }
+            });
+        }
+
+        // out_k = L in_k for the kSubspace vectors at once: the matrix is streamed once instead of kSubspace times.
+        // Each output is computed with the same operations in the same order as apply_L.
+        static void apply_L_block(const CompactCsr &c, const std::vector<f64> &deg,
+                                  const std::array<const std::vector<f64> *, kSubspace> &in,
+                                  const std::array<std::vector<f64> *, kSubspace> &out) {
+            static_assert(kSubspace == 3, "apply_L_block is written for three vectors");
+            c.with_weights([&](auto w) {
+                const u32 *adj = c.adj.data();
+                const f64 *x0 = in[0]->data(), *x1 = in[1]->data(), *x2 = in[2]->data();
+                f64 *y0 = out[0]->data(), *y1 = out[1]->data(), *y2 = out[2]->data();
+                for (vertex_t u = 0; u < c.n; ++u) {
+                    f64 s0 = deg[u] * x0[u], s1 = deg[u] * x1[u], s2 = deg[u] * x2[u];
+                    for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) {
+                        const f64 wj = w(j);
+                        const u32 v = adj[j];
+                        s0 -= wj * x0[v];
+                        s1 -= wj * x1[v];
+                        s2 -= wj * x2[v];
+                    }
+                    y0[u] = s0;
+                    y1[u] = s1;
+                    y2[u] = s2;
+                }
+            });
         }
 
         static f64 dot(const std::vector<f64> &a, const std::vector<f64> &b) {
@@ -310,11 +394,11 @@ namespace HeiProMap {
         }
 
         // Rotate the (orthonormal) basis into Ritz vectors ordered by ascending eigenvalue.
-        void rayleigh_ritz(const CSRGraph &g, const std::vector<f64> &deg) {
+        void rayleigh_ritz(const CompactCsr &g, const std::vector<f64> &deg) {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "rayleigh_ritz");
             const size_t s = X.size();
             std::vector<std::vector<f64>> LX(s, std::vector<f64>(g.n));
-            for (size_t k = 0; k < s; ++k) apply_L(g, deg, X[k], LX[k]);
+            apply_L_block(g, deg, {&X[0], &X[1], &X[2]}, {&LX[0], &LX[1], &LX[2]});
 
             std::vector<f64> B(s * s);
             for (size_t i = 0; i < s; ++i)
@@ -339,32 +423,48 @@ namespace HeiProMap {
             X.swap(NX);
         }
 
-        // Fixed-depth CG on L x = b (b mean-free): the depth is a work budget, not a tolerance.
-        static void cg_solve(const CSRGraph &g, const std::vector<f64> &deg, const std::vector<f64> &b,
-                             std::vector<f64> &x, int depth) {
-            const size_t n = b.size();
-            std::vector<f64> r(b), p(b), Ap(n);
-            std::fill(x.begin(), x.end(), 0.0);
-            f64 rsq = dot(r, r);
-            if (!(rsq > 0.0)) return;
+        // Fixed-depth CG on L x_k = b_k for the kSubspace right-hand sides b_k = x_k (b_k mean-free), run in
+        // lockstep so that all vectors share one matrix pass per iteration. Every vector keeps its own step sizes
+        // and stops on its own; the depth is a work budget, not a tolerance. On return x_k holds the solution.
+        void cg_solve_block(const CompactCsr &g, const std::vector<f64> &deg, int depth) {
+            const size_t n = g.n;
+            constexpr size_t S = kSubspace;
+            std::array<std::vector<f64>, S> r, p, Ap;
+            std::array<f64, S> rsq{};
+            std::array<bool, S> active{};
+            for (size_t k = 0; k < S; ++k) {
+                r[k] = X[k];
+                p[k] = X[k];
+                Ap[k].resize(n);
+                std::fill(X[k].begin(), X[k].end(), 0.0);
+                rsq[k] = dot(r[k], r[k]);
+                active[k] = rsq[k] > 0.0;
+            }
             for (int it = 0; it < depth; ++it) {
-                apply_L(g, deg, p, Ap);
-                const f64 pAp = dot(p, Ap);
-                if (!(pAp > 0.0)) break;
-                const f64 alpha = rsq / pAp;
-                for (size_t i = 0; i < n; ++i) {
-                    x[i] += alpha * p[i];
-                    r[i] -= alpha * Ap[i];
+                if (!(active[0] || active[1] || active[2])) break;
+                apply_L_block(g, deg, {&p[0], &p[1], &p[2]}, {&Ap[0], &Ap[1], &Ap[2]});
+                for (size_t k = 0; k < S; ++k) {
+                    if (!active[k]) continue;
+                    const f64 pAp = dot(p[k], Ap[k]);
+                    if (!(pAp > 0.0)) {
+                        active[k] = false;
+                        continue;
+                    }
+                    const f64 alpha = rsq[k] / pAp;
+                    for (size_t i = 0; i < n; ++i) {
+                        X[k][i] += alpha * p[k][i];
+                        r[k][i] -= alpha * Ap[k][i];
+                    }
+                    const f64 nrsq = dot(r[k], r[k]);
+                    const f64 beta = nrsq / rsq[k];
+                    rsq[k] = nrsq;
+                    for (size_t i = 0; i < n; ++i) p[k][i] = r[k][i] + beta * p[k][i];
                 }
-                const f64 nrsq = dot(r, r);
-                const f64 beta = nrsq / rsq;
-                rsq = nrsq;
-                for (size_t i = 0; i < n; ++i) p[i] = r[i] + beta * p[i];
             }
         }
 
         // Relative residual ||L x - lambda x|| / lambda of the leading Ritz pair.
-        f64 leading_residual(const CSRGraph &g, const std::vector<f64> &deg, std::vector<f64> &scratch) const {
+        f64 leading_residual(const CompactCsr &g, const std::vector<f64> &deg, std::vector<f64> &scratch) const {
             apply_L(g, deg, X[0], scratch);
             const f64 lam = dot(X[0], scratch);
             const f64 r2 = dot(scratch, scratch) - lam * lam;
@@ -375,20 +475,18 @@ namespace HeiProMap {
         std::pair<int, f64> resmooth(const CSRGraph &g, int budget, int cg_depth) {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "resmooth");
             const std::vector<f64> deg = degrees(g);
+            const CompactCsr compact(g);
             std::vector<f64> scratch(g.n);
             orthonormalise(0xA110u);
             int rounds = 0;
             f64 res = 0.0;
             for (int r = 0; r < budget; ++r) {
-                for (auto &xk: X) {
-                    scratch = xk;
-                    cg_solve(g, deg, scratch, xk, cg_depth);
-                    subtract_mean(xk);
-                }
+                cg_solve_block(compact, deg, cg_depth);
+                for (auto &xk: X) subtract_mean(xk);
                 orthonormalise(static_cast<u64>(r));
-                rayleigh_ritz(g, deg);
+                rayleigh_ritz(compact, deg);
                 orthonormalise(static_cast<u64>(r) + 0x8000u);
-                res = leading_residual(g, deg, scratch);
+                res = leading_residual(compact, deg, scratch);
                 ++rounds;
                 if (res <= kResidualTol) break;
             }
@@ -448,7 +546,7 @@ namespace HeiProMap {
                 }
                 orthonormalise(static_cast<u64>(r));
             }
-            rayleigh_ritz(g, deg);
+            rayleigh_ritz(CompactCsr(g), deg);
             orthonormalise(0x5EEDu);
         }
     };

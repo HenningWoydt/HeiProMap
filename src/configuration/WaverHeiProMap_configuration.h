@@ -164,13 +164,14 @@ namespace HeiProMap {
             {"--imbalance", "-e", "Allowed imbalance of the partition of the input graph into PEs, used by KaMinPar (for example 0.03). The mapping itself is always a bijection.", "0.03", "", false},
             {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors, 0 = disabled).", "0", "", false},
             {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
-            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "3", "", false},
-            {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "10000000", "", false},
+            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "1", "", false},
+            {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "1000", "", false},
             {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
+            {"--prepartitioner", "", "Partitioner of the input graph into k blocks if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "kaminpar", "", false},
             {"--spectral-only", "", "Disable all refinement and return the spectral (Laplacian RCB) placement only (0 = off).", "1", "", false},
-            {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "1", "", false},
+            {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "0", "", false},
             {"--vcycle-swap-radius", "", "Neighborhood radius of the swap refinement used at every V-cycle level.", "2", "", false},
             {"--vertex-refine", "", "After the mapping is propagated back to the input vertices, refine the individual vertex placement with message-group refinement within the allowed --imbalance (0 = off).", "1", "", false},
             {"--vertex-refine-iters", "", "Maximum iterations of the input-vertex refinement.", "10", "", false},
@@ -246,6 +247,7 @@ namespace HeiProMap {
         u64 vcycle_swap_radius = 2;
         std::string kaminpar_preset = "default";
         u64 kaminpar_threads = 0;
+        std::string prepartitioner = "kaminpar";
         u64 topo_split_factor = 4;
         bool vmove_extended = false;
         f64 per_level_imb_add = 0.005;
@@ -383,6 +385,12 @@ namespace HeiProMap {
             vcycle_swap_radius = std::stoull(get("--vcycle-swap-radius"));
             kaminpar_preset = get("--kaminpar-preset");
             kaminpar_threads = std::stoull(get("--kaminpar-threads"));
+            prepartitioner = get("--prepartitioner");
+            if (prepartitioner != "kaminpar" && prepartitioner != "spectral3d") {
+                std::cout << "Error: Invalid --prepartitioner '" << prepartitioner
+                          << "'. Allowed values: kaminpar, spectral3d" << std::endl;
+                exit(EXIT_FAILURE);
+            }
             topo_split_factor = std::stoull(get("--topo-split-factor"));
             vmove_radius = std::stoull(get("--vmove-radius"));
             vmove_extended = std::stoull(get("--vmove-extended")) != 0;

@@ -58,6 +58,9 @@ namespace HeiProMap {
         }
 
     public:
+        // Grid width of a topology graph given in row-major cell order.
+        static size_t grid_width(const CSRGraph &topology) { return infer_W(topology); }
+
         void initialize(CSRGraph topology, size_t /*max_threads*/) {
             HEIPROMAP_PROFILE_SCOPE("misc", "GridDistanceOracle", "initialize");
             m_levels.clear();
