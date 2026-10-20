@@ -27,6 +27,8 @@
 #ifndef HEIPROMAP_WAVER_MESSAGE_REFINEMENT_H
 #define HEIPROMAP_WAVER_MESSAGE_REFINEMENT_H
 
+#include <chrono>
+#include <iostream>
 #include <limits>
 #include <vector>
 
@@ -83,6 +85,21 @@ namespace HeiProMap {
             bv_manager.move(g, p_manager, u, from_id, to_id);
             p_manager.move_serial(u, u_weight, from_id, to_id);
         }
+
+#if ENABLE_PROFILER
+        // The per-pair phases of refine() are far too short for one ScopedTimer each (every stop takes a lock
+        // and a hash lookup), so they are accumulated locally from shared timestamps and recorded once per
+        // iteration. The time is charged to the active "iteration" scope as child time, so its own row shows
+        // only what is not covered by a phase.
+        static void record_phase(const char *kernel, const double ms) {
+            Profiler::instance().add("refinement", "WaverMessageRefinement", kernel, ms);
+            if (current_active_timer) { current_active_timer->child_ms += ms; }
+        }
+        static double ms_between(const std::chrono::steady_clock::time_point a,
+                                 const std::chrono::steady_clock::time_point b) {
+            return std::chrono::duration<double, std::milli>(b - a).count();
+        }
+#endif
 
         // Compute the cost delta (positive = improvement) for moving all vertices in
         // `group` from block A to block C.
@@ -185,13 +202,18 @@ namespace HeiProMap {
 
             const partition_t k = p_manager.get_k();
 
-            std::vector<bool>   in_group(g.n, false);
+            std::vector<bool>   in_group;
             std::vector<vertex_t> group;
 
             // per-run accumulator for external neighbor weights
             std::vector<std::pair<partition_t, weight_t>> ext_neighbors;
-            std::vector<weight_t> tmp_weight(k, 0); // scratch: D → total group→D weight
+            std::vector<weight_t> tmp_weight; // scratch: D → total group→D weight
             std::vector<partition_t> dirty; // blocks touched in tmp_weight
+            {
+                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "setup");
+                in_group.assign(g.n, false);
+                tmp_weight.assign(k, 0);
+            }
 
             bool any_move = true;
             for (u64 iter = 0; iter < config.max_iters && any_move; ++iter) {
@@ -200,17 +222,30 @@ namespace HeiProMap {
 
                 // Snapshot quotient edges to avoid iterator invalidation during moves
                 std::vector<std::pair<partition_t, partition_t>> edges;
-                for (partition_t A = 0; A < k; ++A) {
-                    for (const auto &he : q_graph.neighbors(A)) {
-                        if (A < he.target) { // process each undirected pair once
-                            edges.emplace_back(A, he.target);
+                {
+                    HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "snapshot_edges");
+                    for (partition_t A = 0; A < k; ++A) {
+                        for (const auto &he : q_graph.neighbors(A)) {
+                            if (A < he.target) { // process each undirected pair once
+                                edges.emplace_back(A, he.target);
+                            }
                         }
                     }
                 }
 
+#if ENABLE_PROFILER
+                // Per-phase times (ms) and counters of this iteration.
+                double t_collect = 0.0, t_ext = 0.0, t_eval = 0.0, t_apply = 0.0;
+                u64 n_pairs = 0, n_groups = 0, n_group_vertices = 0, n_candidates = 0, n_moves = 0;
+#endif
+
                 for (const auto &[A, B] : edges) {
                     // Skip if pair no longer exists (prior move may have dissolved it)
                     if (q_graph.get_weight(A, B) == 0) { continue; }
+#if ENABLE_PROFILER
+                    ++n_pairs;
+                    auto t_prev = std::chrono::steady_clock::now();
+#endif
 
                     // -----------------------------------------------------------
                     // Collect S_AB: boundary vertices in A connecting to B
@@ -228,8 +263,20 @@ namespace HeiProMap {
                     }
                     if (group.empty()) {
                         for (vertex_t u : group) { in_group[u] = false; }
+#if ENABLE_PROFILER
+                        t_collect += ms_between(t_prev, std::chrono::steady_clock::now());
+#endif
                         continue;
                     }
+#if ENABLE_PROFILER
+                    ++n_groups;
+                    n_group_vertices += group.size();
+                    {
+                        const auto t_now = std::chrono::steady_clock::now();
+                        t_collect += ms_between(t_prev, t_now);
+                        t_prev = t_now;
+                    }
+#endif
 
                     // Also consider S_BA (vertices in B connecting to A) as a separate group
                     // — handled in the next iteration when (B,A) is processed as (A,B) with A<B swapped.
@@ -262,6 +309,13 @@ namespace HeiProMap {
                         tmp_weight[D] = 0;
                     }
                     dirty.clear();
+#if ENABLE_PROFILER
+                    {
+                        const auto t_now = std::chrono::steady_clock::now();
+                        t_ext += ms_between(t_prev, t_now);
+                        t_prev = t_now;
+                    }
+#endif
 
                     // -----------------------------------------------------------
                     // Try candidates: B itself + all current neighbors of B +
@@ -274,6 +328,9 @@ namespace HeiProMap {
                         if (C == A) { return; }
                         if (p_manager.bweights[C] + group_weight > p_manager.get_lmax(C)) { return; }
                         if (p_manager.bweights[A] - group_weight < p_manager.get_lmin(A)) { return; }
+#if ENABLE_PROFILER
+                        ++n_candidates;
+#endif
                         f64 d = compute_group_delta(g, A, C, group, in_group,
                                                     ext_neighbors, weight_to_A,
                                                     p_manager, q_graph, d_oracle, block_conn,
@@ -285,7 +342,13 @@ namespace HeiProMap {
                     for (const auto &he : q_graph.neighbors(B)) {
                         try_candidate(he.target);
                     }
-
+#if ENABLE_PROFILER
+                    {
+                        const auto t_now = std::chrono::steady_clock::now();
+                        t_eval += ms_between(t_prev, t_now);
+                        t_prev = t_now;
+                    }
+#endif
 
                     // -----------------------------------------------------------
                     // Apply best move
@@ -297,10 +360,26 @@ namespace HeiProMap {
                             apply_move(g, bv_manager, p_manager, u, g.v_weight(u), A, best_C);
                         }
                         any_move = true;
+#if ENABLE_PROFILER
+                        ++n_moves;
+#endif
                     }
 
                     for (vertex_t u : group) { in_group[u] = false; }
+#if ENABLE_PROFILER
+                    t_apply += ms_between(t_prev, std::chrono::steady_clock::now());
+#endif
                 }
+
+#if ENABLE_PROFILER
+                record_phase("collect_group", t_collect);
+                record_phase("build_ext_neighbors", t_ext);
+                record_phase("evaluate_candidates", t_eval);
+                record_phase("apply_move", t_apply);
+                std::cout << "[WaverMessageRefinement] iteration " << iter << ": pairs " << n_pairs
+                          << ", groups " << n_groups << " (" << n_group_vertices << " vertices), candidates "
+                          << n_candidates << ", moves " << n_moves << std::endl;
+#endif
             }
         }
     };

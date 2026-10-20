@@ -396,7 +396,7 @@ namespace HeiProMap {
             if (ac.vertex_refine) {
                 InputVertexRefinement::Params params;
                 params.imbalance = ac.imbalance;
-                params.max_iters = ac.vertex_refine_iters;
+                params.max_iters = 2; // ac.vertex_refine_iters;
                 params.alpha_end = ac.alpha_end();
                 params.beta_end = ac.beta_end();
                 params.alpha_link = ac.alpha_link;
