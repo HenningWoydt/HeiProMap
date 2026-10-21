@@ -378,11 +378,11 @@ namespace HeiProMap {
                 adopt_spectral_only();
             }
 
-            // if (ac.vcycle && is_bijection()) { vcycle(); }
+            if (ac.vcycle && is_bijection()) { vcycle(); }
 
             // Simulated annealing on the finished bijection (swaps the contents of nearby PEs).
             if (ac.sa_iterations > 0 && is_bijection()) {
-                // WaverSARefinement::refine(graphs.back(), p_manager, d_oracle, ac.sa_iterations, ac.sa_radius, ac.seed + 99999, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                WaverSARefinement::refine(graphs.back(), p_manager, d_oracle, ac.sa_iterations, ac.sa_radius, ac.seed + 99999, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             }
 
             std::vector<partition_t> p(graphs[0].n);
@@ -396,7 +396,7 @@ namespace HeiProMap {
             if (ac.vertex_refine) {
                 InputVertexRefinement::Params params;
                 params.imbalance = ac.imbalance;
-                params.max_iters = 2; // ac.vertex_refine_iters;
+                params.max_iters = ac.vertex_refine_iters;
                 params.alpha_end = ac.alpha_end();
                 params.beta_end = ac.beta_end();
                 params.alpha_link = ac.alpha_link;
