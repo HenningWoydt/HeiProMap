@@ -143,24 +143,13 @@ namespace HeiProMap {
 
         void remove_vertex(vertex_t v, weight_t w) {
             if (v >= n) { return; }
-            for (auto [nv, nw]: neighbors[v]) {
-                mark_dirty(nv);
-                for (size_t i = 0; i < neighbors[nv].size(); i++) {
-                    if (neighbors[nv][i].u == v) {
-                        neighbors[nv][i].w -= w;
-                        if (neighbors[nv][i].w == 0) {
-                            std::swap(neighbors[nv][i], neighbors[nv].back());
-                            neighbors[nv].pop_back();
-                            m -= 1;
-                        }
-                        break;
-                    }
-                }
+            weight_t removed = std::min(w, v_weights[v]);
+            v_weights[v] -= removed;
+            g_weight -= removed;
+            mark_dirty(v);
+            if (v_weights[v] == 0) {
+                remove_vertex(v);
             }
-            g_weight -= v_weights[v];
-            v_weights[v] = 0;
-            m -= neighbors[v].size();
-            neighbors[v].clear();
         }
 
         void remove_edge(vertex_t u, vertex_t v) {
