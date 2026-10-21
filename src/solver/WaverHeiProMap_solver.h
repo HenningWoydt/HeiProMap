@@ -140,7 +140,7 @@ namespace HeiProMap {
 
             // Note: the non-LARGE_K label propagation allocates a k x k table (10^10 entries at k = 99856),
             // so it is not set up when refinement is disabled.
-            if (ac.waver_label_propagation_config.enabled && !ac.spectral_only) {
+            if (ac.waver_label_propagation_config.enabled && ac.do_multilevel) {
                 lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.waver_label_propagation_config);
             }
         }
@@ -224,7 +224,7 @@ namespace HeiProMap {
         // adopt it (rebalanced and refined). The spectral tracker itself is never overwritten.
         void sync_with_spectral_solution(const u64 level) {
             const graph_t &g = graphs.back();
-            if (!ac.spectral_solution || ac.spectral_only || spectral.size() != g.n) { return; }
+            if (!ac.do_spectral || spectral.size() != g.n) { return; }
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "sync_with_spectral_solution");
 
             std::vector<partition_t> sp_part;
@@ -261,8 +261,11 @@ namespace HeiProMap {
                                     ac.alpha_link, ac.beta_link).total;
         }
 
-        bool try_uncoarsen_topology() {
-            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "try_uncoarsen_topology");
+        // True if the topology can be uncoarsened one level now: there is a level left, every coarse cell holds at
+        // least as many vertices as it has children, and (while the graph is coarse) the graph is not too small for
+        // the finer topology.
+        bool can_uncoarsen_topology() {
+            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "can_uncoarsen_topology");
             if (d_oracle.depth() == 0) return false;
 
             const partition_t coarse_k = d_oracle.current_k();
@@ -281,9 +284,6 @@ namespace HeiProMap {
                 if (p_manager.get_bweight(c) < static_cast<weight_t>(children_count[c])) { return false; }
             }
 
-            uncoarsen_topology();
-            p_manager.update_limits(d_oracle.current_topology(), graphs[0].g_weight, graphs[0].n,
-                                    kImbalance, kMinImbalance);
             return true;
         }
 
@@ -323,59 +323,42 @@ namespace HeiProMap {
                 level += 1;
             }
 
-            if (ac.spectral_solution) spectral.init(graphs.back(), ac.seed);
+            if (ac.do_spectral) spectral.init(graphs.back(), ac.seed);
 
-            // Initial partitioning at coarsest level.
-            initial_partitioning();
-            recompute_datastructures();
-            rebalance(level);
-            refinement();
-            sync_with_spectral_solution(level);
-
-            // Graph uncoarsening loop.
-            while (!mappings.empty()) {
-                level -= 1;
-
-                // Try to uncoarsen topology levels before graph uncoarsening.
-                while (d_oracle.depth() > 0) {
-                    if (!try_uncoarsen_topology()) break;
-
-                    rebalance(level);
-                    EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
-                    recompute_datastructures();
-                    refinement();
+            if (!ac.do_multilevel) {
+                // Spectral mode: only the hierarchy is used (to solve the eigenproblem); no partition is built or
+                // refined on the way back. Restore the finest topology and graph, carrying only the spectral solution.
+                while (d_oracle.depth() > 0) { d_oracle.uncoarsen(); }
+                ac.k = d_oracle.current_k();
+                while (!mappings.empty()) {
+                    spectral.prolong(mappings.back(), graphs[graphs.size() - 2]);
+                    graphs.pop_back();
+                    mappings.pop_back();
                 }
-
-                if (ac.spectral_solution) spectral.prolong(mappings.back(), graphs[graphs.size() - 2]);
-                uncoarsening();
-
-                rebalance(level);
-                EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
+                reinit_structures_for_new_k();
+                adopt_spectral_only();
+            } else {
+                // Multilevel and both modes: initial partition at the coarsest level, then uncoarsen one thing per
+                // step: a topology level if the coarse graph allows it, otherwise a graph level. Never both at once.
+                // Each step is followed by a rebalance and the full refinement on the new state. In both mode the
+                // spectral placement is adopted at every level where it is cheaper.
+                initial_partitioning();
                 recompute_datastructures();
+                rebalance(level);
                 refinement();
                 sync_with_spectral_solution(level);
-            }
 
-            // Uncoarsen remaining topology levels after graph is fully uncoarsened.
-            while (d_oracle.depth() > 0) {
-                if (!try_uncoarsen_topology()) {
-                    rebalance(0);
-                    EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
-                    recompute_datastructures();
-                    refinement();
-                    sync_with_spectral_solution(0);
-                    break;
+                while (true) {
+                    if (can_uncoarsen_topology()) {
+                        uncoarsen_topology();
+                    } else if (!mappings.empty()) {
+                        if (ac.do_spectral) spectral.prolong(mappings.back(), graphs[graphs.size() - 2]);
+                        uncoarsening();
+                    } else {
+                        break;
+                    }
+                    settle_level(mappings.size());
                 }
-
-                rebalance(0);
-                EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
-                recompute_datastructures();
-                refinement();
-                sync_with_spectral_solution(0);
-            }
-
-            if (ac.spectral_only && ac.spectral_solution && spectral.size() == graphs.back().n) {
-                adopt_spectral_only();
             }
 
             if (ac.vcycle && is_bijection()) { vcycle(); }
@@ -404,6 +387,16 @@ namespace HeiProMap {
                 vertex_refinement = InputVertexRefinement::refine(input_graph, input_p, d_oracle, params);
             }
             return input_p;
+        }
+
+        // Restores a valid, refined partition after a level change: rebalance, fill empty blocks, refine, and
+        // compare against the spectral placement. level is the number of graph levels still to uncoarsen.
+        void settle_level(const u64 level) {
+            rebalance(level);
+            EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
+            recompute_datastructures();
+            refinement();
+            sync_with_spectral_solution(level);
         }
 
         // Spectral-only mode: replace the multilevel partition by the spectral placement (rebalanced, not refined).
@@ -722,7 +715,6 @@ namespace HeiProMap {
         }
 
         void refinement() {
-            if (ac.spectral_only) { return; }
             auto p = get_time_point();
 
             if (ac.waver_label_propagation_config.enabled) {

@@ -170,12 +170,11 @@ namespace HeiProMap {
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
             {"--prepartitioner", "", "Partitioner of the input graph into k blocks if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "kaminpar", "", false},
-            {"--spectral-only", "", "Disable all refinement and return the spectral (Laplacian RCB) placement only (0 = off).", "1", "", false},
+            {"--mode", "", "How the mapping is found: spectral (return the spectral Laplacian-RCB placement, then refine only the finished mapping), multilevel (coarsen, partition, uncoarsen with refinement), or both (multilevel, adopting the spectral placement at a level whenever it is cheaper).", "spectral", "", false},
             {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "0", "", false},
             {"--vcycle-swap-radius", "", "Neighborhood radius of the swap refinement used at every V-cycle level.", "2", "", false},
             {"--vertex-refine", "", "After the mapping is propagated back to the input vertices, refine the individual vertex placement with message-group refinement within the allowed --imbalance (0 = off).", "1", "", false},
             {"--vertex-refine-iters", "", "Maximum iterations of the input-vertex refinement.", "10", "", false},
-            {"--spectral-solution", "", "Also build a spectral (Laplacian RCB) solution and keep the cheaper one (0 = off).", "1", "", false},
             {"--topo-split-factor", "", "Split a coarse topology cell only if its block weight is at least this factor times its number of children.", "4", "", false},
             {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
             {"--vmove-extended", "", "Also consider neighborhoods of communication partners for vertex moves.", "1", "", false},
@@ -239,8 +238,9 @@ namespace HeiProMap {
         u64 long_msg_padding = 3;
         u64 sa_iterations = 0;
         u64 sa_radius = 10;
-        bool spectral_solution = true;
-        bool spectral_only = true;
+        std::string mode = "spectral"; // spectral | multilevel | both
+        bool do_spectral = true;     // derived from mode: solve the spectral placement (spectral, both)
+        bool do_multilevel = false;  // derived from mode: partition and refine multilevel (multilevel, both)
         bool vcycle = true;
         bool vertex_refine = true;
         u64 vertex_refine_iters = 10;
@@ -377,8 +377,14 @@ namespace HeiProMap {
             long_msg_padding = std::stoull(get("--long-msg-padding"));
             sa_iterations = std::stoull(get("--sa-iterations"));
             sa_radius = std::stoull(get("--sa-radius"));
-            spectral_solution = std::stoull(get("--spectral-solution")) != 0;
-            spectral_only = std::stoull(get("--spectral-only")) != 0;
+            mode = get("--mode");
+            if (mode != "spectral" && mode != "multilevel" && mode != "both") {
+                std::cout << "Error: Invalid --mode '" << mode
+                          << "'. Allowed values: spectral, multilevel, both" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            do_spectral = mode != "multilevel";
+            do_multilevel = mode != "spectral";
             vcycle = std::stoull(get("--vcycle")) != 0;
             vertex_refine = std::stoull(get("--vertex-refine")) != 0;
             vertex_refine_iters = std::stoull(get("--vertex-refine-iters"));
