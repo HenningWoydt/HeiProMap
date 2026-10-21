@@ -96,22 +96,27 @@ namespace HeiProMap {
             return edge_cut / 2;
         }
 
+        struct ComponentStats {
+            u64 total = 0;
+            u64 max_per_block = 0;
+            // Component counts by size: 1, 2-9, 10-99, 100 and more vertices.
+            u64 by_size[4] = {0, 0, 0, 0};
+        };
+
         // Counts the connected components of each block's induced subgraph via BFS.
-        // Returns the total over all blocks and writes the per-block maximum into max_per_block.
-        static u64 calculate_connected_components(const DynGraph &g,
-                                                  const PartitionManager &p_manager,
-                                                  u64 &max_per_block) {
+        static ComponentStats calculate_connected_components(const DynGraph &g,
+                                                             const PartitionManager &p_manager) {
+            ComponentStats stats;
             std::vector<char> visited(g.n, 0);
             std::vector<u64> components_per_block(p_manager.k, 0);
             std::vector<vertex_t> queue;
 
-            u64 total = 0;
             for (vertex_t start = 0; start < g.n; ++start) {
                 if (!g.vertex_exists(start) || visited[start]) continue;
 
                 partition_t block = p_manager[start];
                 components_per_block[block]++;
-                total++;
+                stats.total++;
 
                 visited[start] = 1;
                 queue.clear();
@@ -125,13 +130,18 @@ namespace HeiProMap {
                         queue.push_back(v);
                     }
                 }
+
+                size_t size = queue.size();
+                if (size == 1) stats.by_size[0]++;
+                else if (size < 10) stats.by_size[1]++;
+                else if (size < 100) stats.by_size[2]++;
+                else stats.by_size[3]++;
             }
 
-            max_per_block = 0;
             for (u64 c: components_per_block) {
-                max_per_block = std::max(max_per_block, c);
+                stats.max_per_block = std::max(stats.max_per_block, c);
             }
-            return total;
+            return stats;
         }
 
         static void print(const DynGraph &g,
@@ -165,10 +175,12 @@ namespace HeiProMap {
                 std::cout << "  LMax (Allowed):   " << lmax << std::endl;
                 std::cout << "  Balance (max/avg): " << balance << std::endl;
 
-                u64 max_components_per_block = 0;
-                u64 total_components = calculate_connected_components(g, p_manager, max_components_per_block);
-                std::cout << "  Components (total): " << total_components << std::endl;
-                std::cout << "  Components (max/block): " << max_components_per_block << std::endl;
+                ComponentStats components = calculate_connected_components(g, p_manager);
+                std::cout << "  Components (total): " << components.total << std::endl;
+                std::cout << "  Components (max/block): " << components.max_per_block << std::endl;
+                std::cout << "  Components by size (1 / 2-9 / 10-99 / 100+): "
+                        << components.by_size[0] << " / " << components.by_size[1] << " / "
+                        << components.by_size[2] << " / " << components.by_size[3] << std::endl;
 
                 if (!previous_partition.empty()) {
                     std::cout << "  Migration Cost (prev): " << calculate_migration_cost(g, oracle, previous_partition, p_manager.partition.get_vector()) << std::endl;
