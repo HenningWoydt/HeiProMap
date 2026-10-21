@@ -96,6 +96,44 @@ namespace HeiProMap {
             return edge_cut / 2;
         }
 
+        // Counts the connected components of each block's induced subgraph via BFS.
+        // Returns the total over all blocks and writes the per-block maximum into max_per_block.
+        static u64 calculate_connected_components(const DynGraph &g,
+                                                  const PartitionManager &p_manager,
+                                                  u64 &max_per_block) {
+            std::vector<char> visited(g.n, 0);
+            std::vector<u64> components_per_block(p_manager.k, 0);
+            std::vector<vertex_t> queue;
+
+            u64 total = 0;
+            for (vertex_t start = 0; start < g.n; ++start) {
+                if (!g.vertex_exists(start) || visited[start]) continue;
+
+                partition_t block = p_manager[start];
+                components_per_block[block]++;
+                total++;
+
+                visited[start] = 1;
+                queue.clear();
+                queue.push_back(start);
+                for (size_t head = 0; head < queue.size(); ++head) {
+                    vertex_t u = queue[head];
+                    for (const auto &edge: g.neighbors[u]) {
+                        vertex_t v = edge.u;
+                        if (visited[v] || p_manager[v] != block) continue;
+                        visited[v] = 1;
+                        queue.push_back(v);
+                    }
+                }
+            }
+
+            max_per_block = 0;
+            for (u64 c: components_per_block) {
+                max_per_block = std::max(max_per_block, c);
+            }
+            return total;
+        }
+
         static void print(const DynGraph &g,
                           const PartitionManager &p_manager,
                           const DistanceOracle &oracle,
@@ -126,6 +164,11 @@ namespace HeiProMap {
                 std::cout << "  Max Block Weight: " << max_block_weight << std::endl;
                 std::cout << "  LMax (Allowed):   " << lmax << std::endl;
                 std::cout << "  Balance (max/avg): " << balance << std::endl;
+
+                u64 max_components_per_block = 0;
+                u64 total_components = calculate_connected_components(g, p_manager, max_components_per_block);
+                std::cout << "  Components (total): " << total_components << std::endl;
+                std::cout << "  Components (max/block): " << max_components_per_block << std::endl;
 
                 if (!previous_partition.empty()) {
                     std::cout << "  Migration Cost (prev): " << calculate_migration_cost(g, oracle, previous_partition, p_manager.partition.get_vector()) << std::endl;

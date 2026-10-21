@@ -23,7 +23,9 @@
  * SOFTWARE.
  ******************************************************************************/
 
+#include <algorithm>
 #include <csignal>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -62,15 +64,25 @@ int main(int argc, char **argv) {
 
         HeiProMap::DynHeiProMapSolver solver(config);
 
+        // Replay the advection_cellular frames in order: the first frame is partitioned
+        // from scratch, every following frame is applied as a batch and refined.
+        std::vector<std::string> frames;
+        for (const auto &entry: std::filesystem::directory_iterator("../data/advection_cellular")) {
+            if (entry.path().extension() == ".my_seq") {
+                frames.push_back(entry.path().string());
+            }
+        }
+        std::sort(frames.begin(), frames.end());
+
         std::vector<std::string> commands;
-        commands.emplace_back("exec ../../Dyn-HeiProMap-Experiments/data/batches_100/2cubes_sphere.mtx/batch_0.my_seq");
-        commands.emplace_back("partition fast");
-        commands.emplace_back("save_partition mapping_0.txt");
-        for (size_t i = 1; i < 20; ++i) {
-            commands.emplace_back("exec ../../Dyn-HeiProMap-Experiments/data/batches_100/2cubes_sphere.mtx/batch_" + std::to_string(i) + ".my_seq");
-            commands.emplace_back("autorefine 40");
-            commands.emplace_back("stats");
-            commands.emplace_back("save_partition mapping_" + std::to_string(i) + ".txt");
+        for (size_t i = 0; i < frames.size(); ++i) {
+            commands.emplace_back("exec " + frames[i]);
+            if (i == 0) {
+                commands.emplace_back("partition fast");
+            } else {
+                commands.emplace_back("autorefine 40");
+                commands.emplace_back("stats");
+            }
         }
 
         HeiProMap::execute_commands(solver, commands);
