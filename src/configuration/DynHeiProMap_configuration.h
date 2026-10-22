@@ -201,7 +201,8 @@ namespace HeiProMap {
             std::cout << "  partition [config]             - Partition graph (config: fast|eco|strong)\n";
             std::cout << "  refine-fast [iter]             - Fast refinement (dirty vertices only)\n";
             std::cout << "  autorefine [threshold] [config]- Partition if dirty % > threshold, else refine-fast. config: fast|eco|strong\n";
-            std::cout << "  no-refinement                  - Dummy command, does nothing\n";
+            std::cout << "  greedy-assign                  - Greedily place new vertices and rebalance, no refinement\n";
+            std::cout << "  no-op                          - No refinement, only adds the current comm cost to the cumulative total\n";
             std::cout << "  save-partition <file>          - Save partition to file\n";
             std::cout << "  save-graph <file>              - Save graph to METIS format\n";
             std::cout << "  stats                          - Print graph statistics\n";

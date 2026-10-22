@@ -41,168 +41,125 @@
 #include "../utility/qap.h"
 
 namespace HeiProMap {
-
-    struct KTStat {
-        u32 calls = 0;
-        double total_ms = 0;
-
-        void add(double ms) {
-            calls++;
-            total_ms += ms;
+    // new_partition can be any container indexable by vertex (vector or AlignedArray).
+    template<typename NewPartition>
+    inline weight_t calculate_migration_cost(const DynGraph &g,
+                                             const DistanceOracle &oracle,
+                                             const AlignedArray<partition_t> &old_partition,
+                                             const NewPartition &new_partition) {
+        // New vertices have no previous location, so only old vertices pay migration.
+        std::vector<char> is_new = g.new_vertex_mask();
+        weight_t total_migration_cost = 0;
+        for (vertex_t v = 0; v < g.n; ++v) {
+            if (is_new[v]) continue;
+            if (old_partition[v] != new_partition[v]) {
+                total_migration_cost += g.v_weights[v] * oracle.get(old_partition[v], new_partition[v]);
+            }
         }
+        return total_migration_cost;
+    }
 
-        double avg() const {
-            return calls > 0 ? total_ms / calls : 0.0;
+    inline weight_t calculate_edge_cut(const DynGraph &g, const PartitionManager &p_manager) {
+        weight_t edge_cut = 0;
+        for (vertex_t u = 0; u < g.n; ++u) {
+            for (const auto &edge: g.neighbors[u]) {
+                if (p_manager[u] != p_manager[edge.u]) {
+                    edge_cut += edge.w;
+                }
+            }
         }
+        return edge_cut / 2;
+    }
+
+    struct ComponentStats {
+        u64 total = 0;
+        u64 max_per_block = 0;
+        // Component counts by size: 1, 2-9, 10-99, 100 and more vertices.
+        u64 by_size[4] = {0, 0, 0, 0};
     };
 
-    class DynPartitionStats {
-    public:
-        static weight_t calculate_migration_cost(const DynGraph &g,
-                                                const DistanceOracle &oracle,
-                                                const std::vector<partition_t> &old_partition,
-                                                const std::vector<partition_t> &new_partition) {
-            weight_t total_migration_cost = 0;
-            vertex_t num_vertices = std::min((vertex_t) old_partition.size(), (vertex_t) new_partition.size());
-            for (vertex_t v = 0; v < num_vertices; ++v) {
-                if (old_partition[v] != new_partition[v]) {
-                    total_migration_cost += g.v_weights[v] * oracle.get(old_partition[v], new_partition[v]);
-                }
-            }
-            return total_migration_cost;
-        }
+    // Counts the connected components of each block's induced subgraph via BFS.
+    inline ComponentStats calculate_connected_components(const DynGraph &g,
+                                                         const PartitionManager &p_manager) {
+        ComponentStats stats;
+        std::vector<char> visited(g.n, 0);
+        std::vector<u64> components_per_block(p_manager.k, 0);
+        std::vector<vertex_t> queue;
 
-        static u64 count_moved_vertices(const std::vector<partition_t> &old_partition,
-                                        const std::vector<partition_t> &new_partition) {
-            u64 moved_count = 0;
-            vertex_t num_vertices = std::min((vertex_t) old_partition.size(), (vertex_t) new_partition.size());
-            for (vertex_t v = 0; v < num_vertices; ++v) {
-                if (old_partition[v] != new_partition[v]) {
-                    moved_count++;
-                }
-            }
-            return moved_count;
-        }
+        for (vertex_t start = 0; start < g.n; ++start) {
+            if (!g.vertex_exists(start) || visited[start]) continue;
 
-        static weight_t calculate_edge_cut(const DynGraph &g, const PartitionManager &p_manager) {
-            weight_t edge_cut = 0;
-            for (vertex_t u = 0; u < g.n; ++u) {
+            partition_t block = p_manager[start];
+            components_per_block[block]++;
+            stats.total++;
+
+            visited[start] = 1;
+            queue.clear();
+            queue.push_back(start);
+            for (size_t head = 0; head < queue.size(); ++head) {
+                vertex_t u = queue[head];
                 for (const auto &edge: g.neighbors[u]) {
-                    if (p_manager[u] != p_manager[edge.u]) {
-                        edge_cut += edge.w;
-                    }
+                    vertex_t v = edge.u;
+                    if (visited[v] || p_manager[v] != block) continue;
+                    visited[v] = 1;
+                    queue.push_back(v);
                 }
             }
-            return edge_cut / 2;
+
+            size_t size = queue.size();
+            if (size == 1) stats.by_size[0]++;
+            else if (size < 10) stats.by_size[1]++;
+            else if (size < 100) stats.by_size[2]++;
+            else stats.by_size[3]++;
         }
 
-        struct ComponentStats {
-            u64 total = 0;
-            u64 max_per_block = 0;
-            // Component counts by size: 1, 2-9, 10-99, 100 and more vertices.
-            u64 by_size[4] = {0, 0, 0, 0};
-        };
+        for (u64 c: components_per_block) {
+            stats.max_per_block = std::max(stats.max_per_block, c);
+        }
+        return stats;
+    }
 
-        // Counts the connected components of each block's induced subgraph via BFS.
-        static ComponentStats calculate_connected_components(const DynGraph &g,
-                                                             const PartitionManager &p_manager) {
-            ComponentStats stats;
-            std::vector<char> visited(g.n, 0);
-            std::vector<u64> components_per_block(p_manager.k, 0);
-            std::vector<vertex_t> queue;
+    inline void print_dyn_stats(const DynGraph &g,
+                      const PartitionManager &p_manager,
+                      const DistanceOracle &oracle,
+                      weight_t total_migration_cost_from_start,
+                      f64 imbalance = 0.03,
+                      weight_t total_comm_cost_from_start = 0) {
+        std::cout << "--------------------------------------------------" << std::endl;
+        std::cout << "Graph Statistics:" << std::endl;
+        u64 active_n = 0;
+        for (vertex_t v = 0; v < g.n; ++v) {
+            if (g.vertex_exists(v)) active_n++;
+        }
+        std::cout << "  Total Nodes (n): " << g.n << std::endl;
+        std::cout << "  Curr. Nodes (n): " << active_n << std::endl;
+        std::cout << "  Curr. Edges (m): " << g.m / 2 << std::endl;
+        std::cout << "  Curr. Weight:    " << g.g_weight << std::endl;
 
-            for (vertex_t start = 0; start < g.n; ++start) {
-                if (!g.vertex_exists(start) || visited[start]) continue;
+        if (p_manager.n > 0) {
+            weight_t edge_cut = calculate_edge_cut(g, p_manager);
+            weight_t max_block_weight = p_manager.max_weight();
+            weight_t lmax = (p_manager.k > 0) ? (weight_t) std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k)) : 0;
+            double balance = (p_manager.k > 0 && g.g_weight > 0) ? (double) max_block_weight / ((double) g.g_weight / (double) p_manager.k) : 0.0;
 
-                partition_t block = p_manager[start];
-                components_per_block[block]++;
-                stats.total++;
+            std::cout << "Partition Statistics:" << std::endl;
+            std::cout << "  Curr. Edge Cut:       " << edge_cut << std::endl;
+            std::cout << "  Curr. Comm Cost:      " << get_qap(g, p_manager.partition.get_vector(), oracle) << std::endl;
+            std::cout << "  Curr. Max Block Weight: " << max_block_weight << std::endl;
+            std::cout << "  Curr. LMax (Allowed):   " << lmax << std::endl;
+            std::cout << "  Curr. Balance (max/avg): " << balance << std::endl;
 
-                visited[start] = 1;
-                queue.clear();
-                queue.push_back(start);
-                for (size_t head = 0; head < queue.size(); ++head) {
-                    vertex_t u = queue[head];
-                    for (const auto &edge: g.neighbors[u]) {
-                        vertex_t v = edge.u;
-                        if (visited[v] || p_manager[v] != block) continue;
-                        visited[v] = 1;
-                        queue.push_back(v);
-                    }
-                }
+            ComponentStats components = calculate_connected_components(g, p_manager);
+            std::cout << "  Curr. Components (total): " << components.total << std::endl;
+            std::cout << "  Curr. Components (max/block): " << components.max_per_block << std::endl;
+            std::cout << "  Curr. Components by size (1 / 2-9 / 10-99 / 100+): " << components.by_size[0] << " / " << components.by_size[1] << " / " << components.by_size[2] << " / " << components.by_size[3] << std::endl;
 
-                size_t size = queue.size();
-                if (size == 1) stats.by_size[0]++;
-                else if (size < 10) stats.by_size[1]++;
-                else if (size < 100) stats.by_size[2]++;
-                else stats.by_size[3]++;
-            }
-
-            for (u64 c: components_per_block) {
-                stats.max_per_block = std::max(stats.max_per_block, c);
-            }
-            return stats;
+            std::cout << "  Total Migration Cost: " << total_migration_cost_from_start << std::endl;
+            std::cout << "  Total Comm Cost: " << total_comm_cost_from_start << std::endl;
         }
 
-        static void print(const DynGraph &g,
-                          const PartitionManager &p_manager,
-                          const DistanceOracle &oracle,
-                          const std::vector<partition_t> &previous_partition,
-                          const std::vector<partition_t> &initial_partition,
-                          weight_t total_migration_cost_from_start,
-                          const std::map<std::string, KTStat> &command_stats,
-                          f64 imbalance = 0.03) {
-            std::cout << "--------------------------------------------------" << std::endl;
-            std::cout << "Graph Statistics:" << std::endl;
-            std::cout << "  Nodes (n):      " << g.n << std::endl;
-            std::cout << "  Edges (m):      " << g.m << std::endl;
-            std::cout << "  Total Weight:   " << g.g_weight << std::endl;
-
-            if (p_manager.n > 0) {
-                weight_t edge_cut = calculate_edge_cut(g, p_manager);
-                weight_t max_block_weight = p_manager.max_weight();
-                weight_t lmax = (p_manager.k > 0)
-                    ? (weight_t) std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) p_manager.k))
-                    : 0;
-                double balance = (p_manager.k > 0 && g.g_weight > 0)
-                    ? (double) max_block_weight / ((double) g.g_weight / (double) p_manager.k)
-                    : 0.0;
-
-                std::cout << "Partition Statistics:" << std::endl;
-                std::cout << "  Edge Cut:       " << edge_cut << std::endl;
-                std::cout << "  Comm Cost:      " << get_qap(g, p_manager.partition.get_vector(), oracle) << std::endl;
-                std::cout << "  Max Block Weight: " << max_block_weight << std::endl;
-                std::cout << "  LMax (Allowed):   " << lmax << std::endl;
-                std::cout << "  Balance (max/avg): " << balance << std::endl;
-
-                ComponentStats components = calculate_connected_components(g, p_manager);
-                std::cout << "  Components (total): " << components.total << std::endl;
-                std::cout << "  Components (max/block): " << components.max_per_block << std::endl;
-                std::cout << "  Components by size (1 / 2-9 / 10-99 / 100+): "
-                        << components.by_size[0] << " / " << components.by_size[1] << " / "
-                        << components.by_size[2] << " / " << components.by_size[3] << std::endl;
-
-                if (!previous_partition.empty()) {
-                    std::cout << "  Migration Cost (prev): " << calculate_migration_cost(g, oracle, previous_partition, p_manager.partition.get_vector()) << std::endl;
-                    std::cout << "  Moved Vertices (prev): " << count_moved_vertices(previous_partition, p_manager.partition.get_vector()) << std::endl;
-                }
-                if (!initial_partition.empty()) {
-                    std::cout << "  Migration Cost (init): " << calculate_migration_cost(g, oracle, initial_partition, p_manager.partition.get_vector()) << std::endl;
-                    std::cout << "  Moved Vertices (init): " << count_moved_vertices(initial_partition, p_manager.partition.get_vector()) << std::endl;
-                }
-                std::cout << "  Cumulative Migration Cost: " << total_migration_cost_from_start << std::endl;
-            }
-
-            std::cout << "--------------------------------------------------" << std::endl;
-            std::cout << "Command Timings (User):" << std::endl;
-            std::cout << "  " << std::left << std::setw(20) << "Command" << std::right << std::setw(8) << "Calls" << std::setw(15) << "Total (ms)" << std::setw(15) << "Avg (ms)" << std::endl;
-            for (const auto &[name, stat]: command_stats) {
-                std::cout << "  " << std::left << std::setw(20) << name << std::right << std::setw(8) << stat.calls << std::setw(15) << std::fixed << std::setprecision(3) << stat.total_ms << std::setw(15) << stat.avg() << std::endl;
-            }
-            std::cout << "--------------------------------------------------" << std::endl;
-        }
-    };
-
+        std::cout << "--------------------------------------------------" << std::endl;
+    }
 }
 
 #endif // HEIPROMAP_DYN_PARTITION_STATS_H

@@ -47,6 +47,8 @@ int main(int argc, char **argv) {
     std::signal(SIGHUP, signal_handler);
     std::signal(SIGABRT, signal_handler);
 
+    auto sp = HeiProMap::get_time_point();
+
     std::ios::sync_with_stdio(false);
     std::cout.tie(nullptr);
 
@@ -81,12 +83,16 @@ int main(int argc, char **argv) {
                 commands.emplace_back("partition fast");
             } else {
                 commands.emplace_back("autorefine 40");
-                commands.emplace_back("stats");
+                // commands.emplace_back("stats");
             }
         }
+        commands.emplace_back("stats");
 
         HeiProMap::execute_commands(solver, commands);
     }
+
+    auto ep = HeiProMap::get_time_point();
+    std::cout << "Total Time in Dyn-HeiProMap.cpp (s): " << HeiProMap::get_seconds(sp, ep) << std::endl;
 
     HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
     return 0;
