@@ -36,10 +36,23 @@
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
 #include "qap.h"
-#include "../refinement/input_vertex_refinement.h"
 #include "utils.h"
 
 namespace HeiProMap {
+
+    // What the last uncoarsening level (the individual input vertices) changed: projection of the quotient mapping
+    // onto the input vertices versus the refined result.
+    struct InputLevelStats {
+        bool ran = false;
+        f64 cost_before = 0.0;
+        f64 cost_after = 0.0;
+        f64 max_link_before = 0.0;
+        f64 max_link_after = 0.0;
+        weight_t max_rows_before = 0;
+        weight_t max_rows_after = 0;
+        weight_t min_rows_after = 0;
+        f64 seconds = 0.0;
+    };
 
     // Accumulated wall time (ms) per solver phase.
     struct WaverTimings {
@@ -72,7 +85,7 @@ namespace HeiProMap {
                                     const f64 max_link_load,
                                     const PartitionManager &p_manager,
                                     const WaverTimings &t,
-                                    const InputVertexRefinement::Stats &vr) {
+                                    const InputLevelStats &vr) {
         size_t n_empty_partitions = 0;
         size_t n_overloaded_partitions = 0;
         weight_t sum_too_much = 0;
@@ -105,7 +118,7 @@ namespace HeiProMap {
         os << "#oload partitions     : " << n_overloaded_partitions << std::endl;
         os << "Sum oload weights     : " << sum_too_much << std::endl;
         if (vr.ran) {
-            os << "------- Input vertex refinement -------" << std::endl;
+            os << "------- Input level (projection -> refined) -------" << std::endl;
             os << "Message cost          : " << static_cast<u64>(vr.cost_before) << " -> " << static_cast<u64>(vr.cost_after)
                << " (" << std::showpos << 100.0 * (vr.cost_after / vr.cost_before - 1.0) << std::noshowpos << "%)" << std::endl;
             os << "Max link load         : " << static_cast<u64>(vr.max_link_before) << " -> " << static_cast<u64>(vr.max_link_after) << std::endl;

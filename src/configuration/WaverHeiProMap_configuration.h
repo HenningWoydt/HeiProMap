@@ -176,8 +176,8 @@ namespace HeiProMap {
             {"--mode", "", "How the coarsest level is initialized; the uncoarsening with refinement is the same for all: spectral (spectral Laplacian-RCB placement), multilevel (greedy partition), or both (greedy partition; on every level the spectral placement is adopted whenever it is cheaper). Spectral also adopts the spectral placement of a level whenever it is cheaper than the refined partition.", "spectral", "", false},
             {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "0", "", false},
             {"--vcycle-swap-radius", "", "Neighborhood radius of the swap refinement used at every V-cycle level.", "2", "", false},
-            {"--vertex-refine", "", "After the mapping is propagated back to the input vertices, refine the individual vertex placement with message-group refinement within the allowed --imbalance (0 = off).", "1", "", false},
-            {"--vertex-refine-iters", "", "Maximum iterations of the input-vertex refinement.", "10", "", false},
+            {"--vertex-refine", "", "Run the message-group refinement on every level, including the individual input vertices (0 = off). On the input level no PE may exceed --imbalance.", "1", "", false},
+            {"--vertex-refine-iters", "", "Maximum iterations of the message-group refinement on one level.", "10", "", false},
             {"--topo-split-factor", "", "Split a coarse topology cell only if its block weight is at least this factor times its number of children.", "4", "", false},
             {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
             {"--vmove-extended", "", "Also consider neighborhoods of communication partners for vertex moves.", "1", "", false},
@@ -451,6 +451,10 @@ namespace HeiProMap {
                 exit(EXIT_FAILURE);
             }
 
+            // The message-group refinement of the individual vertices is a regular refinement of every level.
+            waver_message_refinement_config.enabled = vertex_refine;
+            waver_message_refinement_config.max_iters = vertex_refine_iters;
+
             // Propagate cost-model parameters into the refinement configs
             waver_label_propagation_config.alpha_end  = alpha_end();
             waver_label_propagation_config.beta_end   = beta_end();
@@ -537,7 +541,6 @@ namespace HeiProMap {
 
             waver_label_propagation_config.enabled = true;
             waver_label_propagation_config.max_iteration = 25;
-            waver_label_propagation_config.force_parallel_alg = false;
 
             waver_message_refinement_config.enabled   = false;
             waver_message_refinement_config.max_iters = 5;
