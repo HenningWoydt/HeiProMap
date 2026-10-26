@@ -423,30 +423,60 @@ namespace HeiProMap {
             std::vector<PartitionManager> thread_best_pm(n_threads);
             std::vector<weight_t> thread_best_qap(n_threads, std::numeric_limits<weight_t>::max());
 
-            #pragma omp parallel num_threads(n_threads)
-            {
-                u64 tid = omp_get_thread_num();
-                PartitionManager cur_pm(g.n, block_k, g.g_weight, &m_pool);
-                PartitionManager &best_pm = thread_best_pm[tid];
-                best_pm.initialize(g.n, block_k, g.g_weight, &m_pool);
-                UniformDistanceOracle temp_d_oracle(block_k);
-                AlignedArray<vertex_t> vertices(&m_pool);
-                vertices.initialize(g.n);
+            if (ac.initial_partitioner_id == INITIAL_PARTITIONER_KAFFPA_FAST ||
+                ac.initial_partitioner_id == INITIAL_PARTITIONER_KAFFPA_ECO) {
+                #pragma omp parallel num_threads(n_threads)
+                {
+                    u64 tid = omp_get_thread_num();
+                    PartitionManager &best_pm = thread_best_pm[tid];
+                    best_pm.initialize(g.n, block_k, g.g_weight, &m_pool);
 
-                for (u64 trial = 0; trial < kappa; ++trial) {
-                    greedy_partition(g, temp_d_oracle, imb, 42 + tid * kappa + trial, cur_pm, vertices);
-                    greedy_refine(g, temp_d_oracle, imb, cur_pm);
-                    weight_t cur_qap = get_qap(g, cur_pm, temp_d_oracle);
+                    AlignedArray<partition_t> kaffpa_part;
+                    kaffpa_part.set_pool(&m_pool);
+                    kaffpa_part.initialize(g.n);
 
-                    if (trial == 0 || is_better_partition(cur_pm, cur_qap, best_pm, thread_best_qap[tid], block_k, child_lmax)) {
-                        thread_best_qap[tid] = cur_qap;
-                        for (vertex_t u = 0; u < g.n; ++u) { best_pm.partition[u] = cur_pm.partition[u]; }
-                        for (partition_t i = 0; i < block_k; ++i) { best_pm.bweights[i] = cur_pm.bweights[i]; }
+                    KaffpaPartitionMode km = (ac.initial_partitioner_id == INITIAL_PARTITIONER_KAFFPA_ECO)
+                                             ? KAFFPA_PARTITION_ECO : KAFFPA_PARTITION_FAST;
+
+                    // Distribute kappa attempts across threads
+                    u64 trials_per_thread = (kappa + n_threads - 1) / n_threads;
+                    kaffpa_partition(const_cast<graph_t &>(g), block_k, imb, km, 42 + tid * trials_per_thread, kaffpa_part, trials_per_thread);
+
+                    for (vertex_t u = 0; u < g.n; ++u) {
+                        best_pm.partition[u] = kaffpa_part[u];
                     }
-                }
+                    kaffpa_part.free_memory();
+                    best_pm.recalculate_weights(g);
 
-                cur_pm.release_memory();
-                vertices.free_memory();
+                    UniformDistanceOracle temp_d_oracle(block_k);
+                    thread_best_qap[tid] = get_qap(g, best_pm, temp_d_oracle);
+                }
+            } else {
+                #pragma omp parallel num_threads(n_threads)
+                {
+                    u64 tid = omp_get_thread_num();
+                    PartitionManager cur_pm(g.n, block_k, g.g_weight, &m_pool);
+                    PartitionManager &best_pm = thread_best_pm[tid];
+                    best_pm.initialize(g.n, block_k, g.g_weight, &m_pool);
+                    UniformDistanceOracle temp_d_oracle(block_k);
+                    AlignedArray<vertex_t> vertices(&m_pool);
+                    vertices.initialize(g.n);
+
+                    for (u64 trial = 0; trial < kappa; ++trial) {
+                        greedy_partition(g, temp_d_oracle, imb, 42 + tid * kappa + trial, cur_pm, vertices);
+                        greedy_refine(g, temp_d_oracle, imb, cur_pm);
+                        weight_t cur_qap = get_qap(g, cur_pm, temp_d_oracle);
+
+                        if (trial == 0 || is_better_partition(cur_pm, cur_qap, best_pm, thread_best_qap[tid], block_k, child_lmax)) {
+                            thread_best_qap[tid] = cur_qap;
+                            for (vertex_t u = 0; u < g.n; ++u) { best_pm.partition[u] = cur_pm.partition[u]; }
+                            for (partition_t i = 0; i < block_k; ++i) { best_pm.bweights[i] = cur_pm.bweights[i]; }
+                        }
+                    }
+
+                    cur_pm.release_memory();
+                    vertices.free_memory();
+                }
             }
 
             u64 best_tid = 0;

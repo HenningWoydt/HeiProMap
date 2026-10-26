@@ -111,6 +111,34 @@ namespace HeiProMap {
     }
     #endif
 
+    #ifndef HEIPROMAP_INITIAL_PARTITIONER_ALGS_DEFINED
+    #define HEIPROMAP_INITIAL_PARTITIONER_ALGS_DEFINED
+
+    enum INITIAL_PARTITIONER_ALGS {
+        INITIAL_PARTITIONER_GREEDY,
+        INITIAL_PARTITIONER_KAFFPA_FAST,
+        INITIAL_PARTITIONER_KAFFPA_ECO
+    };
+
+    inline INITIAL_PARTITIONER_ALGS string_to_initial_partitioner_algorithm(const std::string &str) {
+        if (str == "kaffpa-fast") return INITIAL_PARTITIONER_KAFFPA_FAST;
+        if (str == "kaffpa-eco") return INITIAL_PARTITIONER_KAFFPA_ECO;
+        return INITIAL_PARTITIONER_GREEDY;
+    }
+
+    inline std::string initial_partitioner_algorithm_to_string(INITIAL_PARTITIONER_ALGS alg) {
+        switch (alg) {
+            case INITIAL_PARTITIONER_KAFFPA_FAST:
+                return "kaffpa-fast";
+            case INITIAL_PARTITIONER_KAFFPA_ECO:
+                return "kaffpa-eco";
+            case INITIAL_PARTITIONER_GREEDY:
+            default:
+                return "greedy";
+        }
+    }
+    #endif
+
     #ifndef HEIPROMAP_INTERMEDIATE_PARTITIONER_ALGS_DEFINED
     #define HEIPROMAP_INTERMEDIATE_PARTITIONER_ALGS_DEFINED
 
@@ -196,6 +224,7 @@ namespace HeiProMap {
             {"--hierarchical-coarsening", "",   "Coarsening mode. {hierarchical, flat}",                                             "hierarchical",        "", false},
             {"--initial-C",               "",   "Initial coarsening: stop when n <= k * C.",                                         "32",                  "", false},
             {"--initial-kappa",           "",   "Initial partitioning: number of attempts, best is kept.",                            "10",                  "", false},
+            {"--initial-partitioner",     "",   "Initial partitioner algorithm {greedy, kaffpa-fast, kaffpa-eco}.",                   "kaffpa-fast",         "", false},
             {"--intermediate-C",          "",   "Intermediate coarsening: stop when block size < C * h_i.",                           "32",                  "", false},
             {"--intermediate-kappa",      "",   "Intermediate partitioning: number of attempts, best is kept (defaults to initial-kappa).", "", "", false},
             {"--intermediate-partitioner","",   "Intermediate partitioner algorithm {greedy, kaffpa-fast, kaffpa-eco}.",             "kaffpa-fast",         "", false},
@@ -249,6 +278,8 @@ namespace HeiProMap {
         bool hierarchical_coarsening = true;
         vertex_t initial_C = 32;
         u64 initial_kappa = 10;
+        std::string initial_partitioner_string = "kaffpa-fast";
+        INITIAL_PARTITIONER_ALGS initial_partitioner_id = INITIAL_PARTITIONER_KAFFPA_FAST;
         vertex_t intermediate_C = 32;
         u64 intermediate_kappa = 10;
         std::string intermediate_partitioner_string = "kaffpa-fast";
@@ -368,6 +399,10 @@ namespace HeiProMap {
             if (is_set("--initial-kappa")) {
                 initial_kappa = std::stoull(get("--initial-kappa"));
                 intermediate_kappa = initial_kappa;
+            }
+            if (is_set("--initial-partitioner")) {
+                initial_partitioner_string = get("--initial-partitioner");
+                initial_partitioner_id = string_to_initial_partitioner_algorithm(initial_partitioner_string);
             }
             if (is_set("--intermediate-C")) {
                 intermediate_C = std::stoul(get("--intermediate-C"));
