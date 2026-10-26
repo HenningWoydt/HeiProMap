@@ -243,6 +243,8 @@ namespace HeiProMap {
             {"--gpa-rating",              "",   "GPA: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "expansionstar", "", false},
             {"--gpa-tiebreaking",         "",   "GPA: use edge rating tiebreaking via shuffle (true/false).",                        "true",                "", false},
             {"--gpa-two-hop-threshold",   "",   "GPA: matching fraction below which two-hop fallbacks activate.",                    "0.75",                "", false},
+            // Refinement overrides
+            {"--lp-max-iteration",        "",   "Label propagation: maximum number of iterations.",                                  "25",                  "", false},
         };
 
         // =====================================================================
@@ -475,6 +477,9 @@ namespace HeiProMap {
             if (is_set("--gpa-two-hop-threshold")) {
                 global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-two-hop-threshold"));
             }
+            if (is_set("--lp-max-iteration")) {
+                deep_label_propagation_refinement_config.max_iteration = std::stoull(get("--lp-max-iteration"));
+            }
         }
 
         // =====================================================================
@@ -497,7 +502,7 @@ namespace HeiProMap {
 
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
-            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.max_iteration = 25;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
             deep_label_propagation_refinement_config.enable_q_graph = false;
             deep_label_propagation_refinement_config.enable_block_conn = false;
@@ -539,7 +544,7 @@ namespace HeiProMap {
 
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
-            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.max_iteration = 25;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
             deep_label_propagation_refinement_config.enable_q_graph = false;
             deep_label_propagation_refinement_config.enable_block_conn = false;
@@ -585,7 +590,7 @@ namespace HeiProMap {
 
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
-            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.max_iteration = 25;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
 
             deep_quotient_graph_refinement_config.enabled = true;
@@ -620,7 +625,7 @@ namespace HeiProMap {
 
             // refinement
             deep_label_propagation_refinement_config.enabled = true;
-            deep_label_propagation_refinement_config.max_iteration = 5;
+            deep_label_propagation_refinement_config.max_iteration = 25;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
 
             deep_quotient_graph_refinement_config.enabled = true;
