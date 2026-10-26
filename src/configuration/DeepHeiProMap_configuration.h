@@ -44,6 +44,7 @@
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/simple_quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/simple_flow_based_refinement.h"
 
 namespace HeiProMap {
     // =========================================================================
@@ -247,6 +248,8 @@ namespace HeiProMap {
             {"--lp-max-iteration",        "",   "Label propagation: maximum number of iterations.",                                  "25",                  "", false},
             {"--simple-qg",               "",   "Enable simple quotient graph refinement (true/false).",                             "true",                "", false},
             {"--simple-qg-max-iteration", "",   "Simple quotient graph: maximum number of iterations.",                              "2",                   "", false},
+            {"--simple-flow",             "",   "Enable simple flow-based refinement (true/false).",                                 "false",               "", false},
+            {"--simple-flow-max-iteration","",   "Simple flow: maximum number of global iterations.",                                 "1",                   "", false},
         };
 
         // =====================================================================
@@ -302,6 +305,7 @@ namespace HeiProMap {
         SimpleLabelPropagationConfiguration deep_label_propagation_refinement_config = SimpleLabelPropagationConfiguration("Deep Label Propagation Refinement");
         QuotientGraphRefinementConfiguration deep_quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Deep Quotient Graph Refinement");
         SimpleQuotientGraphRefinementConfiguration deep_simple_qg_refinement_config = SimpleQuotientGraphRefinementConfiguration("Deep Simple QG Refinement");
+        SimpleFlowBasedRefinementConfiguration deep_simple_flow_based_refinement_config = SimpleFlowBasedRefinementConfiguration("Deep Simple Flow Based Refinement");
         FlowBasedRefinementConfiguration deep_flow_based_refinement_config = FlowBasedRefinementConfiguration("Deep Flow Based Refinement");
 
         // datastructure flags
@@ -489,6 +493,13 @@ namespace HeiProMap {
             if (is_set("--simple-qg-max-iteration")) {
                 deep_simple_qg_refinement_config.max_iteration = std::stoull(get("--simple-qg-max-iteration"));
             }
+            if (is_set("--simple-flow")) {
+                std::string val = get("--simple-flow");
+                deep_simple_flow_based_refinement_config.enabled = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--simple-flow-max-iteration")) {
+                deep_simple_flow_based_refinement_config.max_global_iteration = std::stoull(get("--simple-flow-max-iteration"));
+            }
         }
 
         // =====================================================================
@@ -527,6 +538,9 @@ namespace HeiProMap {
             deep_simple_qg_refinement_config.alpha = 5.0;
             deep_simple_qg_refinement_config.min_n_steps = 3;
             deep_simple_qg_refinement_config.use_preemptive_exit = true;
+
+            deep_simple_flow_based_refinement_config.enabled = false;
+            deep_simple_flow_based_refinement_config.max_global_iteration = 1;
 
             deep_flow_based_refinement_config.enabled = false;
             deep_flow_based_refinement_config.max_global_iteration = 1;
@@ -572,6 +586,9 @@ namespace HeiProMap {
             deep_simple_qg_refinement_config.min_n_steps = 3;
             deep_simple_qg_refinement_config.use_preemptive_exit = true;
 
+            deep_simple_flow_based_refinement_config.enabled = false;
+            deep_simple_flow_based_refinement_config.max_global_iteration = 1;
+
             deep_flow_based_refinement_config.enabled = false;
             deep_flow_based_refinement_config.use_active_block_scheduling = true;
             deep_flow_based_refinement_config.max_global_iteration = 5;
@@ -607,24 +624,25 @@ namespace HeiProMap {
             deep_label_propagation_refinement_config.enabled = true;
             deep_label_propagation_refinement_config.max_iteration = 25;
             deep_label_propagation_refinement_config.force_parallel_alg = true;
+            deep_label_propagation_refinement_config.enable_q_graph = false;
+            deep_label_propagation_refinement_config.enable_block_conn = false;
 
-            deep_quotient_graph_refinement_config.enabled = true;
-            deep_quotient_graph_refinement_config.max_iteration = 2;
-            deep_quotient_graph_refinement_config.alpha = 5.0;
-            deep_quotient_graph_refinement_config.min_n_steps = 3;
-            deep_quotient_graph_refinement_config.use_preemptive_exit = true;
+            deep_quotient_graph_refinement_config.enabled = false;
 
-            deep_flow_based_refinement_config.enabled = true;
-            deep_flow_based_refinement_config.use_active_block_scheduling = true;
-            deep_flow_based_refinement_config.max_global_iteration = 5;
-            deep_flow_based_refinement_config.max_local_iteration = 5;
-            deep_flow_based_refinement_config.alpha = 2.0;
-            deep_flow_based_refinement_config.alpha_upper_bound = 64.0;
-            deep_flow_based_refinement_config.alpha_modifier = 2.0;
-            deep_flow_based_refinement_config.use_closed_vertex_set = false;
-            deep_flow_based_refinement_config.closed_vertex_sets_repeats = 500;
-            deep_flow_based_refinement_config.always_include_boundary = true;
-            deep_flow_based_refinement_config.growth_strategy = GrowthStrategy::BFS;
+            deep_simple_qg_refinement_config.enabled = true;
+            deep_simple_qg_refinement_config.max_iteration = 2;
+            deep_simple_qg_refinement_config.alpha = 5.0;
+            deep_simple_qg_refinement_config.min_n_steps = 3;
+            deep_simple_qg_refinement_config.use_preemptive_exit = true;
+
+            deep_simple_flow_based_refinement_config.enabled = true;
+            deep_simple_flow_based_refinement_config.max_global_iteration = 1;
+
+            deep_flow_based_refinement_config.enabled = false;
+
+            // datastructure flags
+            enable_q_graph = false;
+            enable_block_conn = false;
         }
 
         void set_experimental() {

@@ -65,6 +65,7 @@
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/simple_quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/simple_flow_based_refinement.h"
 #include "../refinement/simple_label_propagation_refinement.h"
 #include "../init_partitioning/kaffpa_partitioner.h"
 #include "HeiPa_solver.h"
@@ -107,6 +108,7 @@ namespace HeiProMap {
         SimpleLabelPropagationRefinement<LARGE_K> lp_refine;
         QuotientGraphRefinement<LARGE_K> qg_refine;
         SimpleQuotientGraphRefinement<LARGE_K> simple_qg_refine;
+        SimpleFlowBasedRefinement<LARGE_K> simple_flow_based_refinement;
         FlowBasedRefinement<LARGE_K> flow_based_refinement;
 
         std::vector<partition_t> inter_ids;
@@ -200,6 +202,9 @@ namespace HeiProMap {
             if (ac.deep_simple_qg_refinement_config.enabled) {
                 simple_qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_simple_qg_refinement_config, &m_pool);
             }
+            if (ac.deep_simple_flow_based_refinement_config.enabled) {
+                simple_flow_based_refinement.initialize(graphs[0].n, ac.k, ac.threads, random_engine.get_u64(), ac.deep_simple_flow_based_refinement_config, &m_pool);
+            }
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config, &m_pool);
             }
@@ -262,6 +267,9 @@ namespace HeiProMap {
             }
             if (ac.deep_simple_qg_refinement_config.enabled) {
                 simple_qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_simple_qg_refinement_config, &m_pool);
+            }
+            if (ac.deep_simple_flow_based_refinement_config.enabled) {
+                simple_flow_based_refinement.initialize(graphs[0].n, ac.k, ac.threads, random_engine.get_u64(), ac.deep_simple_flow_based_refinement_config, &m_pool);
             }
             if (ac.deep_flow_based_refinement_config.enabled) {
                 flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.deep_flow_based_refinement_config, &m_pool);
@@ -710,6 +718,12 @@ namespace HeiProMap {
                 auto sp_local = get_time_point();
                 simple_qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager);
                 qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
+            }
+
+            if (ac.deep_simple_flow_based_refinement_config.enabled) {
+                auto sp_local = get_time_point();
+                simple_flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager);
+                flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
             if (ac.deep_flow_based_refinement_config.enabled) {
