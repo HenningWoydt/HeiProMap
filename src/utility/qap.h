@@ -676,6 +676,36 @@ namespace HeiProMap {
         return result;
     }
 
+    // Busiest PE endpoint: a PE sends one message and receives one message per neighbor, so its load is
+    // sum over neighbors of (alpha_end + beta_end * S). Reported to compare against the evaluator's resource bound.
+    struct EndpointLoad {
+        f64 max_load = 0.0;
+        partition_t max_pe = 0;
+        f64 max_messages = 0.0;  // largest neighbor count of any PE
+    };
+
+    template<typename QuotientGraphT>
+    inline EndpointLoad get_max_endpoint_load(const QuotientGraphT &q_graph,
+                                              const partition_t k,
+                                              const f64 alpha_end,
+                                              const f64 beta_end) {
+        EndpointLoad result;
+        for (partition_t u = 0; u < k; ++u) {
+            f64 load = 0.0;
+            f64 messages = 0.0;
+            q_graph.for_each_neighbor(u, [&](const partition_t, const weight_t w) {
+                load += alpha_end + beta_end * static_cast<f64>(w);
+                messages += 1.0;
+            });
+            if (load > result.max_load) {
+                result.max_load = load;
+                result.max_pe = u;
+            }
+            result.max_messages = std::max(result.max_messages, messages);
+        }
+        return result;
+    }
+
     // Computes the maximum load on any directed link under strict XY routing.
     // For each directed message (u->v), the load contribution to each link on its
     // route is (alpha_link + beta_link * S(m)). Returns the max over all directed links.

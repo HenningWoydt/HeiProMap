@@ -40,20 +40,6 @@
 
 namespace HeiProMap {
 
-    // What the last uncoarsening level (the individual input vertices) changed: projection of the quotient mapping
-    // onto the input vertices versus the refined result.
-    struct InputLevelStats {
-        bool ran = false;
-        f64 cost_before = 0.0;
-        f64 cost_after = 0.0;
-        f64 max_link_before = 0.0;
-        f64 max_link_after = 0.0;
-        weight_t max_rows_before = 0;
-        weight_t max_rows_after = 0;
-        weight_t min_rows_after = 0;
-        f64 seconds = 0.0;
-    };
-
     // Accumulated wall time (ms) per solver phase.
     struct WaverTimings {
         f64 coarsening_ms = 0.0;
@@ -83,9 +69,9 @@ namespace HeiProMap {
                                     const weight_t lmax,
                                     const MessageCostBreakdown &cost,
                                     const f64 max_link_load,
+                                    const EndpointLoad &endpoint,
                                     const PartitionManager &p_manager,
-                                    const WaverTimings &t,
-                                    const InputLevelStats &vr) {
+                                    const WaverTimings &t) {
         size_t n_empty_partitions = 0;
         size_t n_overloaded_partitions = 0;
         weight_t sum_too_much = 0;
@@ -113,19 +99,16 @@ namespace HeiProMap {
         cost.print(os);
         os << std::left << std::setw(36) << "Max link load"
            << ": " << std::right << std::setw(16) << static_cast<u64>(max_link_load) << "\n";
+        os << std::left << std::setw(36) << "Max PE endpoint load"
+           << ": " << std::right << std::setw(16) << static_cast<u64>(endpoint.max_load) << "\n";
+        os << std::left << std::setw(36) << "  busiest PE"
+           << ": " << std::right << std::setw(16) << endpoint.max_pe << "\n";
+        os << std::left << std::setw(36) << "  max neighbors of a PE"
+           << ": " << std::right << std::setw(16) << static_cast<u64>(endpoint.max_messages) << "\n";
         os << "max block w           : " << max(p_manager.get_bweights()) << std::endl;
         os << "#empty partitions     : " << n_empty_partitions << std::endl;
         os << "#oload partitions     : " << n_overloaded_partitions << std::endl;
         os << "Sum oload weights     : " << sum_too_much << std::endl;
-        if (vr.ran) {
-            os << "------- Input level (projection -> refined) -------" << std::endl;
-            os << "Message cost          : " << static_cast<u64>(vr.cost_before) << " -> " << static_cast<u64>(vr.cost_after)
-               << " (" << std::showpos << 100.0 * (vr.cost_after / vr.cost_before - 1.0) << std::noshowpos << "%)" << std::endl;
-            os << "Max link load         : " << static_cast<u64>(vr.max_link_before) << " -> " << static_cast<u64>(vr.max_link_after) << std::endl;
-            os << "Rows per PE           : max " << vr.max_rows_before << " -> " << vr.max_rows_after
-               << ", min after " << vr.min_rows_after << std::endl;
-            os << "Time (s)              : " << vr.seconds << std::endl;
-        }
         os << "------- Time -------" << std::endl;
         os << "Coarsening            : " << t.coarsening_ms << std::endl;
         os << "Contraction           : " << t.contraction_ms << std::endl;

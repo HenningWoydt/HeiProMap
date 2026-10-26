@@ -27,29 +27,24 @@
 #ifndef HEIPROMAP_WAVERHEIPROMAP_CONFIGURATION_H
 #define HEIPROMAP_WAVERHEIPROMAP_CONFIGURATION_H
 
+#include <cstdlib>
+#include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
 #include "../definitions.h"
-#include "../refinement/simple_label_propagation_refinement.h"
+#include "../coarsening/global_path_algorithm.h"
+#include "../coarsening/heavy_edge_matching.h"
+#include "../coarsening/size_constrained_lp.h"
 #include "../refinement/waver_label_propagation_refinement.h"
-#include "../refinement/waver_message_refinement.h"
-#include "../refinement/waver_swap_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
+#include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
-namespace HeiProMap {
+#include "../refinement/waver_swap_refinement.h"
+#include "../utility/utils.h"
 
-    class NegativeCycleConfiguration final {
-    public:
-        NegativeCycleConfiguration() = default;
-        explicit NegativeCycleConfiguration(const std::string &t_name) { name = t_name; }
-        std::string name = "Negative Cycle Refinement";
-        bool enabled = false;
-        u64 random_tries = 10;
-        u64 max_iterations = 10;
-        u64 max_path_length = 8;
-        u64 threshold = 10;
-    };
+namespace HeiProMap {
 
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
@@ -81,62 +76,6 @@ namespace HeiProMap {
         }
     }
 
-    enum PARTITIONING_ALGS {
-        PARTITIONING_ALG_UNDEFINED,
-        PARTITIONING_ALG_MULTISECTION,
-        PARTITIONING_ALG_RECURSIVE_BISECTION,
-        PARTITIONING_ALG_HEIPA,
-        PARTITIONING_ALG_GREEDY,
-        PARTITIONING_ALG_GREEDY_GRAPH_GROWING,
-        PARTITIONING_ALG_HYBRID,
-    };
-
-    inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
-        if (str == "UNDEFINED") return PARTITIONING_ALG_UNDEFINED;
-        if (str == "multisection") return PARTITIONING_ALG_MULTISECTION;
-        if (str == "recursive-bisection") return PARTITIONING_ALG_RECURSIVE_BISECTION;
-        if (str == "heipa") return PARTITIONING_ALG_HEIPA;
-        if (str == "greedy") return PARTITIONING_ALG_GREEDY;
-        if (str == "greedy-graph-growing") return PARTITIONING_ALG_GREEDY_GRAPH_GROWING;
-        if (str == "hybrid") return PARTITIONING_ALG_HYBRID;
-        return PARTITIONING_ALG_UNDEFINED;
-    }
-
-    inline std::string partitioning_algorithm_to_string(PARTITIONING_ALGS alg) {
-        switch (alg) {
-            case PARTITIONING_ALG_UNDEFINED: return "UNDEFINED";
-            case PARTITIONING_ALG_MULTISECTION: return "multisection";
-            case PARTITIONING_ALG_RECURSIVE_BISECTION: return "recursive-bisection";
-            case PARTITIONING_ALG_HEIPA: return "heipa";
-            case PARTITIONING_ALG_GREEDY: return "greedy";
-            case PARTITIONING_ALG_GREEDY_GRAPH_GROWING: return "greedy-graph-growing";
-            case PARTITIONING_ALG_HYBRID: return "hybrid";
-            default: return "UNDEFINED";
-        }
-    }
-
-    enum REBALANCING_ALGS {
-        REBALANCING_ALG_UNDEFINED,
-        REBALANCING_ALG_SIMPLE
-    };
-
-    inline REBALANCING_ALGS string_to_rebalancing_algorithm(const std::string &str) {
-        if (str == "UNDEFINED") return REBALANCING_ALG_UNDEFINED;
-        if (str == "simple") return REBALANCING_ALG_SIMPLE;
-        return REBALANCING_ALG_UNDEFINED;
-    }
-
-    inline std::string rebalancing_algorithm_to_string(REBALANCING_ALGS alg) {
-        switch (alg) {
-            case REBALANCING_ALG_UNDEFINED:
-                return "UNDEFINED";
-            case REBALANCING_ALG_SIMPLE:
-                return "simple";
-            default:
-                return "UNDEFINED";
-        }
-    }
-
     inline EdgeRatingFunction string_to_edge_rating_function(const std::string &str) {
         if (str == "weight") return EdgeRatingFunction::WEIGHT;
         if (str == "expansion") return EdgeRatingFunction::EXPANSION;
@@ -146,17 +85,9 @@ namespace HeiProMap {
         std::cout << "Error: Invalid rating function '" << str << "'. Allowed values: weight, expansion, expansion*, expansion**, innerouter" << std::endl;
         exit(EXIT_FAILURE);
     }
-}
 
-#include "../utility/utils.h"
-// #include "../init_partitioning/global_multisection.h"
-#include "../coarsening/global_path_algorithm.h"
-#include "../coarsening/size_constrained_lp.h"
-#include "../coarsening/heavy_edge_matching.h"
-#include "../init_partitioning/kaffpa_partitioner.h"
-
-
-namespace HeiProMap {
+    // All settings of Waver-HeiProMap. --config selects a preset (fast, eco, strong, super-strong) that sets the effort
+    // related settings; the options of the same names given on the command line override the preset.
     class WaverHeiProMapConfiguration {
     public:
         std::vector<CommandLineOption> options = {
@@ -164,26 +95,25 @@ namespace HeiProMap {
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--topology", "-tp", "Filepath to the topology graph for the distance oracle.", "", "", false},
-            {"--imbalance", "-e", "Allowed imbalance of the partition of the input graph into PEs, used by KaMinPar (for example 0.03). The mapping itself is always a bijection.", "0.03", "", false},
-            {"--swap-radius", "", "Neighborhood radius for swap refinement (1 = direct neighbors, 0 = disabled).", "0", "", false},
-            {"--swap-extended", "", "Also consider neighborhoods of communication partners for swaps.", "0", "", false},
-            {"--long-msg-padding", "", "Rectangle padding for long-message swap refinement (0 = disabled).", "1", "", false},
-            {"--sa-iterations", "", "Number of simulated annealing swap iterations (0 = disabled).", "1000", "", false},
-            {"--sa-radius", "", "Max swap radius for simulated annealing.", "10", "", false},
+            {"--config", "-c", "The preset: fast, eco, strong or super-strong (increasing effort). The options marked (preset) take their default from it.", "", "", false},
+            {"--mode", "", "How the mapping is found; the uncoarsening with refinement is the same for all: spectral (spectral Laplacian-RCB placement of the coarsest level), multilevel (greedy partition of the coarsest level), or both (greedy partition of the coarsest level). In spectral and both mode, the spectral placement of the finest level is computed independently and replaces the result if it is cheaper.", "spectral", "", false},
+            {"--imbalance", "-e", "Allowed imbalance of the PE weights (for example 0.03). It applies to the partition of the input graph into PEs (KaMinPar) and to the final level of the individual input vertices; all coarser levels map one vertex to each PE.", "0.03", "", false},
+            {"--prepartitioner", "", "Partitioner of the input graph into one block per PE if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "kaminpar", "", false},
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
-            {"--prepartitioner", "", "Partitioner of the input graph into k blocks if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "kaminpar", "", false},
-            {"--mode", "", "How the coarsest level is initialized; the uncoarsening with refinement is the same for all: spectral (spectral Laplacian-RCB placement), multilevel (greedy partition), or both (greedy partition; on every level the spectral placement is adopted whenever it is cheaper). Spectral also adopts the spectral placement of a level whenever it is cheaper than the refined partition.", "spectral", "", false},
-            {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "0", "", false},
-            {"--vcycle-swap-radius", "", "Neighborhood radius of the swap refinement used at every V-cycle level.", "2", "", false},
-            {"--vertex-refine", "", "Run the message-group refinement on every level, including the individual input vertices (0 = off). On the input level no PE may exceed --imbalance.", "1", "", false},
-            {"--vertex-refine-iters", "", "Maximum iterations of the message-group refinement on one level.", "10", "", false},
-            {"--topo-split-factor", "", "Split a coarse topology cell only if its block weight is at least this factor times its number of children.", "4", "", false},
-            {"--vmove-radius", "", "Neighborhood radius for vertex move refinement.", "5", "", false},
-            {"--vmove-extended", "", "Also consider neighborhoods of communication partners for vertex moves.", "1", "", false},
-            {"--config", "-c", "The configuration.", "", "", false},
-            {"--threads", "-t", "Number of threads.", "1", "", false},
-            {"--seed", "", "Seed for diversifying results.", "", "", false},
+            {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
+            {"--seed", "", "Seed for diversifying results (random if not given).", "", "", false},
+
+            {"--initial-kappa", "", "(preset) Greedy partitions tried on the coarsest level; the best is kept (multilevel and both mode).", "", "", false},
+            {"--topo-split-factor", "", "(preset) While graph levels are left, the topology is only uncoarsened if the graph has at least this many vertices per finer PE on average.", "", "", false},
+            {"--swap-radius", "", "(preset) Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
+            {"--swap-extended", "", "(preset) Also consider the neighborhoods of communication partners for swaps (0/1).", "", "", false},
+            {"--long-msg-padding", "", "(preset) Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
+            {"--sa-iterations", "", "(preset) Number of simulated annealing swap iterations on the finest level (0 = off).", "", "", false},
+            {"--sa-radius", "", "(preset) Max swap radius of the simulated annealing.", "", "", false},
+            {"--vertex-refine", "", "(preset) Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
+            {"--vertex-refine-iters", "", "(preset) Maximum iterations of the message-group refinement on one level.", "", "", false},
+            {"--vcycle", "", "(preset) After the mapping is found, run a V-cycle: coarsen topology and graph together (one vertex per PE on every level), then uncoarsen with the same legalization and refinements as the main uncoarsening on every level (0/1).", "", "", false},
 
             {"--alpha-send", "", "Fixed send-side overhead per message (alpha_send).", "100.0", "", false},
             {"--alpha-recv", "", "Fixed receive-side overhead per message (alpha_recv).", "100.0", "", false},
@@ -192,30 +122,17 @@ namespace HeiProMap {
             {"--beta-recv", "", "Volume-dependent receive overhead per byte (beta_recv).", "8.0", "", false},
             {"--beta-link", "", "Volume-dependent per-hop link cost per byte (beta_link).", "1.0", "", false},
 
-            {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
-            {"--gpa-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--gpa-random-level", "", "GPA random level.", "", "", false},
-            {"--gpa-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
-            {"--gpa-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
-            {"--sclp-max-rounds", "", "SCLP max rounds.", "", "", false},
-            {"--sclp-min-threshold", "", "SCLP min threshold.", "", "", false},
-            {"--sclp-f", "", "SCLP tuning parameter f.", "8.0", "", false},
-            {"--sclp-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--sclp-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
-            {"--hem-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-
-            {"--flow-refinement-enabled", "", "Enable flow based refinement (true/false).", "", "", false},
-            {"--flow-refinement-use-active-block-scheduling", "", "Use active block scheduling in flow based refinement (true/false).", "", "", false},
-            {"--flow-refinement-max-global-iteration", "", "Max global iteration for flow based refinement.", "", "", false},
-            {"--flow-refinement-max-local-iteration", "", "Max local iteration for flow based refinement.", "", "", false},
-            {"--flow-refinement-alpha", "", "Alpha parameter for flow based refinement.", "", "", false},
-            {"--flow-refinement-alpha-upper-bound", "", "Alpha upper bound for flow based refinement.", "", "", false},
-            {"--flow-refinement-alpha-modifier", "", "Alpha modifier for flow based refinement.", "", "", false},
-            {"--flow-refinement-use-closed-vertex-set", "", "Use closed vertex set in flow based refinement (true/false).", "", "", false},
-            {"--flow-refinement-closed-vertex-set-repeats", "", "Number of closed vertex set repeats for flow based refinement.", "", "", false},
-            {"--flow-refinement-enabled-edge-cut-optimization", "", "Enable lowest level edge cut optimization (true/false).", "true", "", false},
-
-            {"--initial-kappa", "", "Initial partitioning: number of attempts per thread, best is kept.", "10", "", false},
+            {"--coarsening", "", "(preset) Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
+            {"--gpa-rating-function", "", "(preset) GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-random-level", "", "(preset) GPA random level.", "", "", false},
+            {"--gpa-edge-rating-tiebreaking", "", "(preset) GPA use edge rating tiebreaking (true/false).", "", "", false},
+            {"--gpa-two-hop-threshold", "", "(preset) GPA two-hop threshold.", "", "", false},
+            {"--sclp-max-rounds", "", "(preset) SCLP max rounds.", "", "", false},
+            {"--sclp-min-threshold", "", "(preset) SCLP min threshold.", "", "", false},
+            {"--sclp-f", "", "(preset) SCLP tuning parameter f.", "", "", false},
+            {"--sclp-rating-function", "", "(preset) SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-use-degree-ordering", "", "(preset) SCLP use degree ordering (true/false).", "", "", false},
+            {"--hem-rating-function", "", "(preset) HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
         };
 
     public:
@@ -223,43 +140,17 @@ namespace HeiProMap {
         std::string graph_in;
         std::string topology_in;
         std::string mapping_out;
+        partition_t k = 0; // run state: the number of PEs of the current topology level (set by the solver)
 
-        // hierarchy information
-        std::string hierarchy_string;
-        std::vector<partition_t> hierarchy;
-        partition_t k = 0;
-
-        // distance information
-        std::string distance_string;
-        std::vector<weight_t> distance;
-
-        // balancing information
-        f64 imbalance = -1.0;
-        u64 vmove_radius = 2;
+        f64 imbalance = 0.03;
         std::string mode = "spectral"; // spectral | multilevel | both
-        bool do_spectral = true;     // derived from mode: solve the spectral placement (spectral, both)
-        bool do_multilevel = false;  // derived from mode: partition and refine multilevel (multilevel, both)
-        bool vcycle = true;
-        bool vertex_refine = true;
-        u64 vertex_refine_iters = 10;
-        std::string kaminpar_preset = "default";
-        u64 kaminpar_threads = 0;
+        bool do_spectral = true;       // derived from mode: spectral placement (spectral, both)
+        bool do_multilevel = false;    // derived from mode: greedy partition of the coarsest level (multilevel, both)
         std::string prepartitioner = "kaminpar";
-        u64 topo_split_factor = 4;
-        bool vmove_extended = false;
-        f64 per_level_imb_add = 0.005;
-
-        // random initialization
+        std::string kaminpar_preset = "largek";
+        u64 kaminpar_threads = 0;
         u64 seed = 0;
-
         u64 threads = 1;
-
-        bool collect_dataset = false;
-        std::string data_dir = std::string(HEIPROMAP_SOURCE_DIR) + "/data";
-
-        u64 hm_level = 0;
-
-        u64 initial_c = 8;
 
         // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
         //                                    + h(m) * alpha_link + h(m) * beta_link * S(m)
@@ -274,71 +165,28 @@ namespace HeiProMap {
         f64 alpha_end() const { return alpha_send + alpha_recv; }
         f64 beta_end()  const { return beta_send  + beta_recv;  }
 
+        // ---- set by the preset ----
         std::string config_name = "undefined";
+        u64 initial_c = 64;          // the graph is coarsened to about initial_c vertices per (coarse) PE
+        u64 initial_kappa = 10;      // greedy partitions of the coarsest level
+        u64 topo_split_factor = 4;
+        bool vcycle = false;
 
         // coarsening algorithm
         std::string coarsening_algorithm_string;
         COARSENING_ALGS coarsening_algorithm_id = COARSENING_ALG_UNDEFINED;
-
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
         SizeConstrainedLPConfiguration size_constrained_lp_config;
         HeavyEdgeMatchingConfiguration heavy_edge_matching_config;
 
-        // partitioning algorithm
-        std::string partitioning_algorithm_string;
-        PARTITIONING_ALGS partitioning_algorithm_id = PARTITIONING_ALG_UNDEFINED;
-
-        u64 initial_kappa = 100;
-        u64 rb_kappa = 1;
-        bool rb_use_full_refine = false;
-
-        std::string heipa_config_string = "strong";
-
-        // rebalance algorithm
-        std::string rebalancing_algorithm_string;
-        REBALANCING_ALGS rebalancing_algorithm_id = REBALANCING_ALG_UNDEFINED;
-
         // refinement algorithms
-        SimpleLabelPropagationConfiguration simple_label_propagation_config = SimpleLabelPropagationConfiguration("Label Propagation");
-        WaverLabelPropagationConfiguration   waver_label_propagation_config   = WaverLabelPropagationConfiguration("Waver Label Propagation");
-        WaverMessageRefinementConfiguration  waver_message_refinement_config  = WaverMessageRefinementConfiguration("Waver Message Refinement");
-        WaverSwapRefinementConfiguration     waver_swap_refinement_config     = WaverSwapRefinementConfiguration("Waver Swap Refinement");
-        WaverSwapRefinementConfiguration     waver_vcycle_swap_refinement_config = WaverSwapRefinementConfiguration("Waver V-Cycle Swap Refinement");
+        WaverLabelPropagationConfiguration      waver_label_propagation_config      = WaverLabelPropagationConfiguration("Waver Label Propagation");
+        WaverMessageRefinementConfiguration     waver_message_refinement_config     = WaverMessageRefinementConfiguration("Waver Message Refinement");
+        WaverSwapRefinementConfiguration        waver_swap_refinement_config        = WaverSwapRefinementConfiguration("Waver Swap Refinement");
         WaverLongMessageRefinementConfiguration waver_long_message_refinement_config = WaverLongMessageRefinementConfiguration("Waver Long Message Refinement");
-        WaverSARefinementConfiguration       waver_sa_refinement_config       = WaverSARefinementConfiguration("Waver Simulated Annealing");
-        NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
+        WaverSARefinementConfiguration          waver_sa_refinement_config          = WaverSARefinementConfiguration("Waver Simulated Annealing");
 
         WaverHeiProMapConfiguration() = default;
-
-        void set_hierarchy() {
-            hierarchy = convert<partition_t>(split(hierarchy_string, ':'));
-            k = prod<partition_t>(hierarchy);
-        }
-
-        void set_distance() {
-            distance = convert<weight_t>(split(distance_string, ':'));
-        }
-
-        void set_imbalance() {
-            imbalance = std::stod(get("--imbalance"));
-        }
-
-        void set_seed() {
-            if (is_set("--seed")) {
-                seed = std::stoull(get("--seed"));
-            } else {
-                seed = std::random_device{}();
-            }
-        }
-
-        void set_threads() {
-            if (is_set("--threads")) {
-                threads = std::stoull(get("--threads"));
-            } else {
-                threads = 1;
-            }
-        }
-
 
         WaverHeiProMapConfiguration(int argc, char *argv[]) {
             // read command lines into vector
@@ -356,6 +204,10 @@ namespace HeiProMap {
             for (int i = 1; i < argc; ++i) {
                 for (auto &[large_key, small_key, description, default_val, input, is_set]: options) {
                     if (large_key == args[i] || small_key == args[i]) {
+                        if (i + 1 >= argc) {
+                            std::cout << "Error: Command Line \"" << args[i] << "\" needs a value!" << std::endl;
+                            exit(EXIT_FAILURE);
+                        }
                         input = args[i + 1];
                         is_set = true;
                         i += 1;
@@ -366,21 +218,9 @@ namespace HeiProMap {
 
             graph_in = get("--graph");
             if (is_set("--topology")) { topology_in = get("--topology"); }
-            if (is_set("--mapping")) {
-                mapping_out = get("--mapping");
-            }
+            if (is_set("--mapping")) { mapping_out = get("--mapping"); }
 
-            set_hierarchy();
-            set_distance();
-            set_imbalance();
-            waver_swap_refinement_config.radius = std::stoull(get("--swap-radius"));
-            waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
-            waver_swap_refinement_config.extended = std::stoull(get("--swap-extended")) != 0;
-            waver_long_message_refinement_config.padding = std::stoull(get("--long-msg-padding"));
-            waver_long_message_refinement_config.enabled = waver_long_message_refinement_config.padding > 0;
-            waver_sa_refinement_config.iterations = std::stoull(get("--sa-iterations"));
-            waver_sa_refinement_config.enabled = waver_sa_refinement_config.iterations > 0;
-            waver_sa_refinement_config.radius = std::stoull(get("--sa-radius"));
+            imbalance = std::stod(get("--imbalance"));
             mode = get("--mode");
             if (mode != "spectral" && mode != "multilevel" && mode != "both") {
                 std::cout << "Error: Invalid --mode '" << mode
@@ -389,26 +229,16 @@ namespace HeiProMap {
             }
             do_spectral = mode != "multilevel";
             do_multilevel = mode != "spectral";
-            vcycle = std::stoull(get("--vcycle")) != 0;
-            vertex_refine = std::stoull(get("--vertex-refine")) != 0;
-            vertex_refine_iters = std::stoull(get("--vertex-refine-iters"));
-            waver_vcycle_swap_refinement_config.radius = std::stoull(get("--vcycle-swap-radius"));
-            waver_vcycle_swap_refinement_config.enabled = waver_vcycle_swap_refinement_config.radius > 0;
-            kaminpar_preset = get("--kaminpar-preset");
-            kaminpar_threads = std::stoull(get("--kaminpar-threads"));
             prepartitioner = get("--prepartitioner");
             if (prepartitioner != "kaminpar" && prepartitioner != "spectral3d") {
                 std::cout << "Error: Invalid --prepartitioner '" << prepartitioner
                           << "'. Allowed values: kaminpar, spectral3d" << std::endl;
                 exit(EXIT_FAILURE);
             }
-            topo_split_factor = std::stoull(get("--topo-split-factor"));
-            vmove_radius = std::stoull(get("--vmove-radius"));
-            vmove_extended = std::stoull(get("--vmove-extended")) != 0;
-            set_seed();
-            set_threads();
-
-            if (is_set("--initial-kappa")) initial_kappa = std::stoull(get("--initial-kappa"));
+            kaminpar_preset = get("--kaminpar-preset");
+            kaminpar_threads = std::stoull(get("--kaminpar-threads"));
+            seed = is_set("--seed") ? std::stoull(get("--seed")) : std::random_device{}();
+            threads = std::stoull(get("--threads"));
 
             if (is_set("--alpha-send")) alpha_send = std::stod(get("--alpha-send"));
             if (is_set("--alpha-recv")) alpha_recv = std::stod(get("--alpha-recv"));
@@ -423,51 +253,214 @@ namespace HeiProMap {
             }
             config_name = get("--config");
             if (config_name == "fast") {
-                if (threads == 1) {
-                    set_fast();
-                } else {
-                    set_fast_parallel();
-                }
+                set_fast();
             } else if (config_name == "eco") {
-                if (threads == 1) {
-                    set_eco();
-                } else {
-                    set_eco_parallel();
-                }
+                set_eco();
             } else if (config_name == "strong") {
-                if (threads == 1) {
-                    set_strong();
-                } else {
-                    set_strong_parallel();
-                }
+                set_strong();
             } else if (config_name == "super-strong") {
-                if (threads == 1) {
-                    set_super_strong();
-                } else {
-                    set_super_strong_parallel();
-                }
+                set_super_strong();
             } else {
                 std::cout << "Config " << config_name << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
             }
 
-            // The message-group refinement of the individual vertices is a regular refinement of every level.
-            waver_message_refinement_config.enabled = vertex_refine;
-            waver_message_refinement_config.max_iters = vertex_refine_iters;
+            apply_command_line_overrides();
 
             // Propagate cost-model parameters into the refinement configs
             waver_label_propagation_config.alpha_end  = alpha_end();
             waver_label_propagation_config.beta_end   = beta_end();
             waver_label_propagation_config.alpha_link = alpha_link;
             waver_label_propagation_config.beta_link  = beta_link;
+        }
 
-            // Override coarsening settings from CLI if they are set
+        // The presets differ in how much effort they put in; the settings of the effort scale are explained in
+        // set_effort. Everything else (the coarsening algorithms) is chosen per preset below.
+
+        void set_fast() {
+            config_name = "fast";
+            initial_c = 64;
+            set_effort(/*kappa*/ 10, /*swap radius*/ 0, /*swap extended*/ false, /*SA iterations*/ 1000,
+                       /*message refinement iterations*/ 10, /*V-cycle*/ false);
+            set_global_paths_coarsening();
+
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
+            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.05;
+            size_constrained_lp_config.f = 32.0;
+            size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
+            size_constrained_lp_config.use_degree_ordering = true;
+
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 25;
+        }
+
+        void set_eco() {
+            config_name = "eco";
+            initial_c = 64;
+            set_effort(25, 1, false, 2000, 10, false);
+            set_global_paths_coarsening();
+
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
+            global_path_algorithm_config.two_hop_threshold = 0.75;
+            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.05;
+            size_constrained_lp_config.f = 16.0;
+
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
+        }
+
+        void set_strong() {
+            config_name = "strong";
+            initial_c = 64;
+            set_effort(50, 2, false, 5000, 20, true);
+            set_global_paths_coarsening();
+
+            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            global_path_algorithm_config.random_level = 0;
+            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
+            global_path_algorithm_config.two_hop_threshold = 0.75;
+            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.05;
+            size_constrained_lp_config.f = 16.0;
+
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
+        }
+
+        void set_super_strong() {
+            config_name = "super-strong";
+            initial_c = 16;
+            set_effort(100, 2, true, 10000, 50, true);
+            set_global_paths_coarsening();
+
+            global_path_algorithm_config.random_level = 0;
+            size_constrained_lp_config.max_rounds = 5;
+            size_constrained_lp_config.min_threshold = 0.10;
+            size_constrained_lp_config.f = 8.0;
+
+            waver_label_propagation_config.enabled = true;
+            waver_label_propagation_config.max_iteration = 5;
+        }
+
+        /**
+         * Gets the entered input as a string.
+         *
+         * @param var The option in interest.
+         * @return The input.
+         */
+        std::string get(const std::string &var) {
+            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+                if (large_key == var || small_key == var) {
+                    if (input.empty() && default_val.empty()) {
+                        std::cout << "Command Line \"" << var << "\" not set!" << std::endl;
+                        exit(EXIT_FAILURE);
+                    } else if (input.empty()) {
+                        return default_val;
+                    }
+                    return input;
+                }
+            }
+            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        /**
+         * Returns whether the option was entered.
+         *
+         * @param var The option in interest.
+         * @return True if the option was entered, false else.
+         */
+        bool is_set(const std::string &var) {
+            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+                if (large_key == var || small_key == var) {
+                    return is_set;
+                }
+            }
+            std::cout << "Command Line \"" << var << "\" is not an allowed name!" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        /**
+         * Prints the help message.
+         */
+        void print_help_message() {
+            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
+                if (small_key.empty()) {
+                    std::cout << "[ " << large_key << "] - " << description << std::endl;
+                } else {
+                    std::cout << "[ " << large_key << ", " << small_key << "] - " << description << std::endl;
+                }
+            }
+        }
+
+    private:
+        void set_global_paths_coarsening() {
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+        }
+
+        // The effort related settings of a preset: the greedy attempts on the coarsest level, the swap refinement, the
+        // simulated annealing and the message-group refinement of every level, and the V-cycle. All presets keep the
+        // long-message refinement (padding 1) and message refinement on, because they matter most for the quality.
+        void set_effort(const u64 kappa, const u64 swap_radius, const bool swap_extended, const u64 sa_iterations,
+                        const u64 message_iterations, const bool use_vcycle) {
+            initial_kappa = kappa;
+            topo_split_factor = 4;
+
+            waver_swap_refinement_config.radius = swap_radius;
+            waver_swap_refinement_config.enabled = swap_radius > 0;
+            waver_swap_refinement_config.extended = swap_extended;
+
+            waver_long_message_refinement_config.padding = 1;
+            waver_long_message_refinement_config.enabled = true;
+
+            waver_sa_refinement_config.iterations = sa_iterations;
+            waver_sa_refinement_config.enabled = sa_iterations > 0;
+            waver_sa_refinement_config.radius = 10;
+
+            waver_message_refinement_config.enabled = true;
+            waver_message_refinement_config.max_iters = message_iterations;
+
+            vcycle = use_vcycle;
+        }
+
+        // The options of the same names as the preset's settings override the preset.
+        void apply_command_line_overrides() {
+            if (is_set("--initial-kappa")) initial_kappa = std::stoull(get("--initial-kappa"));
+            if (is_set("--topo-split-factor")) topo_split_factor = std::stoull(get("--topo-split-factor"));
+            if (is_set("--swap-radius")) {
+                waver_swap_refinement_config.radius = std::stoull(get("--swap-radius"));
+                waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
+            }
+            if (is_set("--swap-extended")) waver_swap_refinement_config.extended = std::stoull(get("--swap-extended")) != 0;
+            if (is_set("--long-msg-padding")) {
+                waver_long_message_refinement_config.padding = std::stoull(get("--long-msg-padding"));
+                waver_long_message_refinement_config.enabled = waver_long_message_refinement_config.padding > 0;
+            }
+            if (is_set("--sa-iterations")) {
+                waver_sa_refinement_config.iterations = std::stoull(get("--sa-iterations"));
+                waver_sa_refinement_config.enabled = waver_sa_refinement_config.iterations > 0;
+            }
+            if (is_set("--sa-radius")) waver_sa_refinement_config.radius = std::stoull(get("--sa-radius"));
+            if (is_set("--vertex-refine")) waver_message_refinement_config.enabled = std::stoull(get("--vertex-refine")) != 0;
+            if (is_set("--vertex-refine-iters")) waver_message_refinement_config.max_iters = std::stoull(get("--vertex-refine-iters"));
+            if (is_set("--vcycle")) vcycle = std::stoull(get("--vcycle")) != 0;
+
             if (is_set("--coarsening")) {
                 coarsening_algorithm_string = get("--coarsening");
                 coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
             }
 
-            // Override GPA configs
+            // GPA
             if (is_set("--gpa-rating-function")) {
                 global_path_algorithm_config.rating_function = string_to_edge_rating_function(get("--gpa-rating-function"));
             }
@@ -482,7 +475,7 @@ namespace HeiProMap {
                 global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-two-hop-threshold"));
             }
 
-            // Override SCLP configs
+            // SCLP
             if (is_set("--sclp-max-rounds")) {
                 size_constrained_lp_config.max_rounds = std::stoull(get("--sclp-max-rounds"));
             }
@@ -500,216 +493,9 @@ namespace HeiProMap {
                 size_constrained_lp_config.use_degree_ordering = (val == "true" || val == "1");
             }
 
-            // Override HEM configs
+            // HEM
             if (is_set("--hem-rating-function")) {
                 heavy_edge_matching_config.rating_function = string_to_edge_rating_function(get("--hem-rating-function"));
-            }
-
-        }
-
-        void set_fast() {
-            config_name = "fast";
-            collect_dataset = false;
-
-            initial_c = 64;
-
-            // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "heavy-edge";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-            global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
-
-            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSION;
-
-            size_constrained_lp_config.max_rounds = 5;
-            size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 32.0;
-            size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
-            size_constrained_lp_config.use_degree_ordering = true;
-
-            // set multisection
-            partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-
-
-            simple_label_propagation_config.enabled = false;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 25;
-
-            waver_message_refinement_config.enabled   = false;
-            waver_message_refinement_config.max_iters = 5;
-
-            negative_cycle_config.enabled = false;
-        }
-
-        void set_eco() {
-            config_name = "eco";
-            initial_c = 64;
-
-            // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "heavy-edge";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-            global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
-            global_path_algorithm_config.two_hop_threshold = 0.75;
-
-            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-
-            size_constrained_lp_config.max_rounds = 5;
-            size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 16.0;
-
-            // set multisection
-            partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-
-
-            simple_label_propagation_config.enabled = false;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
-
-            negative_cycle_config.enabled = false;
-        }
-
-        void set_strong() {
-            config_name = "strong";
-            initial_c = 64;
-
-            // set GPA matching algorithm
-            // coarsening_algorithm_string = "size-constrained-lp";
-            coarsening_algorithm_string = "global-paths";
-            // coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-            global_path_algorithm_config.random_level = 0;
-            global_path_algorithm_config.use_edge_rating_tiebreaking = false;
-            global_path_algorithm_config.two_hop_threshold = 0.75;
-
-            heavy_edge_matching_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
-
-            size_constrained_lp_config.max_rounds = 5;
-            size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 16.0;
-
-            // set multisection
-            partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-
-
-            simple_label_propagation_config.enabled = false;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
-
-            negative_cycle_config.enabled = false;
-        }
-
-        void set_super_strong() {
-            config_name = "super-strong";
-            initial_c = 16;
-
-            // set GPA matching algorithm
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-
-            // configurate global-paths algorithm
-            global_path_algorithm_config.random_level = 0;
-
-            size_constrained_lp_config.max_rounds = 5;
-            size_constrained_lp_config.min_threshold = 0.10;
-            size_constrained_lp_config.f = 8.0;
-
-            // set multisection
-            partitioning_algorithm_string = "multisection";
-            partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
-
-
-            simple_label_propagation_config.enabled = false;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
-
-            negative_cycle_config.enabled = false;
-        }
-
-        void set_fast_parallel() {
-            set_fast();
-        }
-
-        void set_eco_parallel() {
-            set_eco();
-        }
-
-        void set_strong_parallel() {
-            set_strong();
-        }
-
-        void set_super_strong_parallel() {
-            set_super_strong();
-        }
-
-        /**
-         * Gets the entered input as a string.
-         *
-         * @param var The option in interest.
-         * @return The input.
-         */
-        std::string get(const std::string &var) {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (large_key == var || small_key == var) {
-                    if (input.empty() && default_val.empty()) {
-                        std::cout << "Command Line "" << var << "" not set!" << std::endl;
-                        exit(EXIT_FAILURE);
-                    } else if (input.empty()) {
-                        return default_val;
-                    }
-                    return input;
-                }
-            }
-            std::cout << "Command Line "" << var << "" is not an allowed name!" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-
-        /**
-         * Returns whether the option was entered.
-         *
-         * @param var The option in interest.
-         * @return True if the option was entered, false else.
-         */
-        bool is_set(const std::string &var) {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (large_key == var || small_key == var) {
-                    return is_set;
-                }
-            }
-            std::cout << "Command Line " << var << " is not an allowed name!" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-
-        /**
-         * Prints the help message.
-         */
-        void print_help_message() {
-            for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (small_key.empty()) {
-                    std::cout << "[ " << large_key << "] - " << description << std::endl;
-                } else {
-                    std::cout << "[ " << large_key << ", " << small_key << "] - " << description << std::endl;
-                }
             }
         }
     };
