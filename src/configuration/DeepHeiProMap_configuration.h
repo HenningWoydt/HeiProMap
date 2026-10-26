@@ -245,6 +245,8 @@ namespace HeiProMap {
             {"--gpa-two-hop-threshold",   "",   "GPA: matching fraction below which two-hop fallbacks activate.",                    "0.75",                "", false},
             // Refinement overrides
             {"--lp-max-iteration",        "",   "Label propagation: maximum number of iterations.",                                  "25",                  "", false},
+            {"--simple-qg",               "",   "Enable simple quotient graph refinement (true/false).",                             "true",                "", false},
+            {"--simple-qg-max-iteration", "",   "Simple quotient graph: maximum number of iterations.",                              "2",                   "", false},
         };
 
         // =====================================================================
@@ -480,6 +482,13 @@ namespace HeiProMap {
             if (is_set("--lp-max-iteration")) {
                 deep_label_propagation_refinement_config.max_iteration = std::stoull(get("--lp-max-iteration"));
             }
+            if (is_set("--simple-qg")) {
+                std::string val = get("--simple-qg");
+                deep_simple_qg_refinement_config.enabled = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--simple-qg-max-iteration")) {
+                deep_simple_qg_refinement_config.max_iteration = std::stoull(get("--simple-qg-max-iteration"));
+            }
         }
 
         // =====================================================================
@@ -512,6 +521,12 @@ namespace HeiProMap {
             deep_quotient_graph_refinement_config.alpha = 5.0;
             deep_quotient_graph_refinement_config.min_n_steps = 3;
             deep_quotient_graph_refinement_config.use_preemptive_exit = true;
+
+            deep_simple_qg_refinement_config.enabled = true;
+            deep_simple_qg_refinement_config.max_iteration = 2;
+            deep_simple_qg_refinement_config.alpha = 5.0;
+            deep_simple_qg_refinement_config.min_n_steps = 3;
+            deep_simple_qg_refinement_config.use_preemptive_exit = true;
 
             deep_flow_based_refinement_config.enabled = false;
             deep_flow_based_refinement_config.max_global_iteration = 1;
@@ -552,7 +567,7 @@ namespace HeiProMap {
             deep_quotient_graph_refinement_config.enabled = false;
 
             deep_simple_qg_refinement_config.enabled = true;
-            deep_simple_qg_refinement_config.max_iteration = 3;
+            deep_simple_qg_refinement_config.max_iteration = 2;
             deep_simple_qg_refinement_config.alpha = 5.0;
             deep_simple_qg_refinement_config.min_n_steps = 3;
             deep_simple_qg_refinement_config.use_preemptive_exit = true;
