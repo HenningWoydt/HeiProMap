@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <unordered_map>
 #include <vector>
 
 #include <omp.h>
@@ -390,6 +391,51 @@ namespace HeiProMap {
             }
         }
 
+        template<bool t_uniform_v_weights, bool t_uniform_e_weights>
+        void merge_degree_one_siblings(const graph_t &g,
+                                      const p_manager_t &p_manager,
+                                      Mapping &mapping,
+                                      const weight_t max_w,
+                                      const u64 threads) {
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "merge_degree_one_siblings");
+            std::atomic<size_t> total_merged(0);
+
+            #pragma omp parallel for schedule(dynamic, 64) num_threads(threads)
+            for (vertex_t mid = 0; mid < g.n; ++mid) {
+                if (g.deg(mid) < 2) continue;
+
+                vertex_t leader = g.n;
+                weight_t cur_w = 0;
+                size_t local_merged = 0;
+
+                for (size_t i = g.neighborhoods[mid]; i < g.neighborhoods[mid + 1]; ++i) {
+                    const vertex_t v = g.edges_v[i];
+                    if (g.deg(v) != 1) continue;
+                    if (cluster_count[mapping.get(v)] != 1) continue;
+                    if (p_manager[v] != p_manager[mid]) continue;
+
+                    const weight_t v_w = t_uniform_v_weights ? 1 : g.v_weight(v);
+                    if (v_w > max_w) continue;
+
+                    if (leader == g.n) {
+                        leader = v;
+                        cur_w = v_w;
+                    } else if (cur_w + v_w <= max_w) {
+                        mapping.set(v, leader);
+                        cur_w += v_w;
+                        cluster_weights[leader] = cur_w;
+                        cluster_count[leader] += 1;
+                        cluster_count[v] = 0;
+                        local_merged++;
+                    } else {
+                        leader = v;
+                        cur_w = v_w;
+                    }
+                }
+                if (local_merged > 0) total_merged += local_merged;
+            }
+        }
+
         template<bool t_uniform_v_weights, bool t_uniform_e_weights, EdgeRatingFunction t_rating_function>
         void merge_singletons([[maybe_unused]] const size_t level,
                               const graph_t &g,
@@ -430,6 +476,7 @@ namespace HeiProMap {
             {
                 FlatMap<vertex_t, f32> flat_map;
                 flat_map.reserve(128);
+                std::unordered_map<vertex_t, f32> hash_map;
 
                 #pragma omp for schedule(static)
                 for (size_t i = 0; i < singletons_size; ++i) {
@@ -442,7 +489,11 @@ namespace HeiProMap {
                     const weight_t u_w = t_uniform_v_weights ? 1 : g.v_weight(u);
                     f32 current_id_w = 0;
 
-                    flat_map.clear();
+                    const size_t deg_u = g.deg(u);
+                    const bool use_hash = deg_u > 256;
+                    if (use_hash) { hash_map.clear(); }
+                    else { flat_map.clear(); }
+
                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                         const vertex_t v = g.edges_v[j];
                         if (u_id != p_manager[v]) { continue; }
@@ -455,16 +506,26 @@ namespace HeiProMap {
                         if (id == cur_id) {
                             current_id_w += edge_rating;
                         } else if (u_w + cluster_weights[id] <= max_w) {
-                            flat_map.add(id, edge_rating);
+                            if (use_hash) { hash_map[id] += edge_rating; }
+                            else { flat_map.add(id, edge_rating); }
                         }
                     }
 
                     vertex_t best_id = cur_id;
                     f32 best_weight = current_id_w;
-                    for (const auto &[id, w]: flat_map) {
-                        if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
-                            best_weight = w;
-                            best_id = id;
+                    if (use_hash) {
+                        for (const auto &[id, w]: hash_map) {
+                            if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
+                                best_weight = w;
+                                best_id = id;
+                            }
+                        }
+                    } else {
+                        for (const auto &[id, w]: flat_map) {
+                            if (w > best_weight && u_w + cluster_weights[id] <= max_w) {
+                                best_weight = w;
+                                best_id = id;
+                            }
                         }
                     }
 
@@ -501,6 +562,7 @@ namespace HeiProMap {
             {
                 FlatMap<vertex_t, f32> flat_map;
                 flat_map.reserve(128);
+                std::unordered_map<vertex_t, f32> hash_map;
 
                 #pragma omp for schedule(static) reduction(+:n_moved)
                 for (size_t i = 0; i < g.n; ++i) {
@@ -515,7 +577,11 @@ namespace HeiProMap {
                     vertex_t best_id = current_id;
                     f32 best_weight = 0;
 
-                    flat_map.clear();
+                    const size_t deg_u = g.deg(u);
+                    const bool use_hash = deg_u > 256;
+                    if (use_hash) { hash_map.clear(); }
+                    else { flat_map.clear(); }
+
                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                         const vertex_t v = g.edges_v[j];
                         if (u_id != p_manager[v]) { continue; }
@@ -528,10 +594,27 @@ namespace HeiProMap {
                         if (id == current_id) {
                             current_id_w += edge_rating;
                         } else if (u_w + cluster_weights[id] <= max_w) {
-                            const f32 new_w = flat_map.add_and_ret(id, edge_rating);
-                            if (new_w > best_weight) {
-                                best_weight = new_w;
-                                best_id = id;
+                            if (use_hash) {
+                                auto it = hash_map.find(id);
+                                if (it != hash_map.end()) {
+                                    it->second += edge_rating;
+                                    if (it->second > best_weight) {
+                                        best_weight = it->second;
+                                        best_id = id;
+                                    }
+                                } else {
+                                    hash_map.emplace(id, edge_rating);
+                                    if (edge_rating > best_weight) {
+                                        best_weight = edge_rating;
+                                        best_id = id;
+                                    }
+                                }
+                            } else {
+                                const f32 new_w = flat_map.add_and_ret(id, edge_rating);
+                                if (new_w > best_weight) {
+                                    best_weight = new_w;
+                                    best_id = id;
+                                }
                             }
                         }
                     }
@@ -571,6 +654,7 @@ namespace HeiProMap {
             u64 n_moved = 0;
             FlatMap<vertex_t, f32> flat_map;
             flat_map.reserve(128);
+            std::unordered_map<vertex_t, f32> hash_map;
 
             for (size_t i = 0; i < g.n; ++i) {
                 const vertex_t u = flat_vertices[i];
@@ -584,7 +668,11 @@ namespace HeiProMap {
                 vertex_t best_id = current_id;
                 f32 best_weight = 0;
 
-                flat_map.clear();
+                const size_t deg_u = g.deg(u);
+                const bool use_hash = deg_u > 256;
+                if (use_hash) { hash_map.clear(); }
+                else { flat_map.clear(); }
+
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                     const vertex_t v = g.edges_v[j];
                     if (u_id != p_manager[v]) { continue; }
@@ -597,10 +685,27 @@ namespace HeiProMap {
                     if (id == current_id) {
                         current_id_w += edge_rating;
                     } else if (u_w + cluster_weights[id] <= max_w) {
-                        const f32 new_w = flat_map.add_and_ret(id, edge_rating);
-                        if (new_w > best_weight) {
-                            best_weight = new_w;
-                            best_id = id;
+                        if (use_hash) {
+                            auto it = hash_map.find(id);
+                            if (it != hash_map.end()) {
+                                it->second += edge_rating;
+                                if (it->second > best_weight) {
+                                    best_weight = it->second;
+                                    best_id = id;
+                                }
+                            } else {
+                                hash_map.emplace(id, edge_rating);
+                                if (edge_rating > best_weight) {
+                                    best_weight = edge_rating;
+                                    best_id = id;
+                                }
+                            }
+                        } else {
+                            const f32 new_w = flat_map.add_and_ret(id, edge_rating);
+                            if (new_w > best_weight) {
+                                best_weight = new_w;
+                                best_id = id;
+                            }
                         }
                     }
                 }
@@ -754,6 +859,8 @@ namespace HeiProMap {
             }
 
             merge_singletons<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(level, g, p_manager, mapping, max_w, threads);
+
+            merge_degree_one_siblings<t_uniform_v_weights, t_uniform_e_weights>(g, p_manager, mapping, max_w, threads);
 
             // check for identity mapping
             bool ident_mapping = true;

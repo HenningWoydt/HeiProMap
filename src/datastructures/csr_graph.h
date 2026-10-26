@@ -439,31 +439,66 @@ namespace HeiProMap {
                     vertex_t len = end - beg;
                     if (len == 0) continue;
 
-                    for (size_t k = cursor_start[map_u]; k < cursor_start[map_u + 1]; ++k) {
-                        vertex_t u = mapped_vertices[k];
+                    if (len > 256) {
+                        // High degree: collect edges and sort+dedup to avoid pathological open-addressing collisions
+                        std::vector<std::pair<vertex_t, weight_t>> local_edges;
+                        local_edges.reserve(len);
 
-                        for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
-                            const vertex_t v = g.edges_v[i];
-                            vertex_t map_v = mapping.get(v);
-                            if (map_u == map_v) { continue; }
-                            weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
+                        for (size_t k = cursor_start[map_u]; k < cursor_start[map_u + 1]; ++k) {
+                            vertex_t u = mapped_vertices[k];
+                            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                                const vertex_t v = g.edges_v[i];
+                                vertex_t map_v = mapping.get(v);
+                                if (map_u == map_v) { continue; }
+                                weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
+                                local_edges.emplace_back(map_v, w);
+                            }
+                        }
 
-                            // insert map_v
-                            vertex_t j = beg + (map_v % len);
-                            while (true) {
-                                if (j == end) { j = beg; }
-                                if (temp_edges_v[j] == map_v) {
-                                    temp_edges_w[j] += w;
-                                    break;
+                        std::sort(local_edges.begin(), local_edges.end(), [](const auto &a, const auto &b) {
+                            return a.first < b.first;
+                        });
+
+                        vertex_t write_idx = beg;
+                        for (size_t i = 0; i < local_edges.size(); ++i) {
+                            if (write_idx > beg && temp_edges_v[write_idx - 1] == local_edges[i].first) {
+                                temp_edges_w[write_idx - 1] += local_edges[i].second;
+                            } else {
+                                temp_edges_v[write_idx] = local_edges[i].first;
+                                temp_edges_w[write_idx] = local_edges[i].second;
+                                write_idx++;
+                            }
+                        }
+                        vertex_t unique_cnt = write_idx - beg;
+                        sizes[map_u] = unique_cnt;
+                        local_m += unique_cnt;
+                    } else {
+                        for (size_t k = cursor_start[map_u]; k < cursor_start[map_u + 1]; ++k) {
+                            vertex_t u = mapped_vertices[k];
+
+                            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                                const vertex_t v = g.edges_v[i];
+                                vertex_t map_v = mapping.get(v);
+                                if (map_u == map_v) { continue; }
+                                weight_t w = t_uniform_e_weights ? 1 : g.edges_w[i];
+
+                                // insert map_v
+                                vertex_t j = beg + (map_v % len);
+                                while (true) {
+                                    if (j == end) { j = beg; }
+                                    if (temp_edges_v[j] == map_v) {
+                                        temp_edges_w[j] += w;
+                                        break;
+                                    }
+                                    if (temp_edges_v[j] == g.n) {
+                                        temp_edges_v[j] = map_v;
+                                        temp_edges_w[j] = w;
+                                        local_m += 1;
+                                        sizes[map_u] += 1;
+                                        break;
+                                    }
+                                    j += 1;
                                 }
-                                if (temp_edges_v[j] == g.n) {
-                                    temp_edges_v[j] = map_v;
-                                    temp_edges_w[j] = w;
-                                    local_m += 1;
-                                    sizes[map_u] += 1;
-                                    break;
-                                }
-                                j += 1;
                             }
                         }
                     }

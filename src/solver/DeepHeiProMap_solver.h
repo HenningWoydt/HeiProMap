@@ -446,9 +446,9 @@ namespace HeiProMap {
                     KaffpaPartitionMode km = (ac.initial_partitioner_id == INITIAL_PARTITIONER_KAFFPA_ECO)
                                              ? KAFFPA_PARTITION_ECO : KAFFPA_PARTITION_FAST;
 
-                    // Distribute kappa attempts across threads
-                    u64 trials_per_thread = (kappa + n_threads - 1) / n_threads;
-                    kaffpa_partition(const_cast<graph_t &>(g), block_k, imb, km, 42 + tid * trials_per_thread, kaffpa_part, trials_per_thread);
+                    // Each thread does kappa trials with unique seeds
+                    u64 thread_seed = ac.seed + tid * kappa;
+                    kaffpa_partition(const_cast<graph_t &>(g), block_k, imb, km, thread_seed, kaffpa_part, kappa);
 
                     for (vertex_t u = 0; u < g.n; ++u) {
                         best_pm.partition[u] = kaffpa_part[u];
