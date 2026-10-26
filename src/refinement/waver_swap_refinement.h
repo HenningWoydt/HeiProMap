@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #include "../definitions.h"
@@ -38,6 +39,20 @@
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
+
+    // Hyperparameters of the swap refinement (and of the vertex-move variant): every block is tried against the
+    // blocks within a Manhattan radius on the PE grid, and the best strictly improving swap is applied.
+    class WaverSwapRefinementConfiguration {
+    public:
+        explicit WaverSwapRefinementConfiguration(std::string t_name) : name(std::move(t_name)) {}
+
+        std::string name;
+        bool enabled = false;
+        u64 radius = 1;          // neighborhood radius around a block (1 = direct neighbors)
+        bool extended = false;   // also consider the neighborhoods of the block's communication partners
+        u64 max_rounds = 100;    // rounds over all blocks; stops earlier once a round finds no improvement
+        f64 min_gain = 1e-6;     // a swap/move must improve the cost by more than this
+    };
 
     class WaverSwapRefinement {
         using graph_t     = CSRGraph;
@@ -75,8 +90,7 @@ namespace HeiProMap {
         static void swap_refine(graph_t              &g,
                                 p_manager_t          &p_manager,
                                 const DistanceOracleT &d_oracle,
-                                size_t                neighbor_radius,
-                                bool                  extended,
+                                const WaverSwapRefinementConfiguration &config,
                                 f64                   alpha_end,
                                 f64                   beta_end,
                                 f64                   alpha_link,
@@ -94,14 +108,14 @@ namespace HeiProMap {
             auto get_candidates = [&](partition_t p, std::vector<partition_t> &nbrs,
                                       std::vector<bool> &seen) {
                 nbrs.clear();
-                add_radius_nbrs(p % W, p / W, neighbor_radius, p, W, H, k, nbrs, seen);
+                add_radius_nbrs(p % W, p / W, config.radius, p, W, H, k, nbrs, seen);
 
-                if (extended) {
+                if (config.extended) {
                     for (const vertex_t u : blk_verts[p]) {
                         for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                             const partition_t nb = p_manager.partition[g.edges_v[j]];
                             if (nb != p) {
-                                add_radius_nbrs(nb % W, nb / W, neighbor_radius, p, W, H, k, nbrs, seen);
+                                add_radius_nbrs(nb % W, nb / W, config.radius, p, W, H, k, nbrs, seen);
                             }
                         }
                     }
@@ -126,7 +140,7 @@ namespace HeiProMap {
                 return cost;
             };
 
-            const size_t max_rounds = 100;
+            const size_t max_rounds = config.max_rounds;
             size_t total_swaps = 0;
             bool progress = true;
             size_t round = 0;
@@ -141,7 +155,7 @@ namespace HeiProMap {
                     get_candidates(p, nbrs, seen);
 
                     partition_t best_q = NO_ID;
-                    f64 best_gain = 1e-6;
+                    f64 best_gain = config.min_gain;
                     const f64 cost_p = block_cost(blk_verts[p], p);
 
                     for (const partition_t q : nbrs) {
@@ -190,8 +204,7 @@ namespace HeiProMap {
         static void vertex_move_refine(graph_t              &g,
                                        p_manager_t          &p_manager,
                                        const DistanceOracleT &d_oracle,
-                                       size_t                neighbor_radius,
-                                       bool                  extended,
+                                       const WaverSwapRefinementConfiguration &config,
                                        f64                   alpha_end,
                                        f64                   beta_end,
                                        f64                   alpha_link,
@@ -210,13 +223,13 @@ namespace HeiProMap {
                                       std::vector<partition_t> &nbrs,
                                       std::vector<bool> &seen) {
                 nbrs.clear();
-                add_radius_nbrs(p % W, p / W, neighbor_radius, p, W, H, k, nbrs, seen);
+                add_radius_nbrs(p % W, p / W, config.radius, p, W, H, k, nbrs, seen);
 
-                if (extended) {
+                if (config.extended) {
                     for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                         const partition_t nb = p_manager.partition[g.edges_v[j]];
                         if (nb != p) {
-                            add_radius_nbrs(nb % W, nb / W, neighbor_radius, p, W, H, k, nbrs, seen);
+                            add_radius_nbrs(nb % W, nb / W, config.radius, p, W, H, k, nbrs, seen);
                         }
                     }
                 }
@@ -238,7 +251,7 @@ namespace HeiProMap {
                 return cost;
             };
 
-            const size_t max_rounds = 100;
+            const size_t max_rounds = config.max_rounds;
             size_t total_moves = 0;
             bool progress = true;
             size_t round = 0;
@@ -260,7 +273,7 @@ namespace HeiProMap {
 
                         const f64 cost_here = vertex_cost(u, p);
                         partition_t best_q = NO_ID;
-                        f64 best_gain = 1e-6;
+                        f64 best_gain = config.min_gain;
 
                         for (const partition_t q : nbrs) {
                             if (p_manager.bweights[q] + u_w > p_manager.get_lmax(q)) continue;

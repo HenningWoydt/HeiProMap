@@ -51,6 +51,9 @@ namespace HeiProMap {
         f64 refinement_ms = 0.0;
         f64 lp_refine_ms = 0.0;
         f64 msg_refine_ms = 0.0;
+        f64 swap_refine_ms = 0.0;
+        f64 long_msg_refine_ms = 0.0;
+        f64 sa_refine_ms = 0.0;
         f64 misc_ms = 0.0;
 
         f64 total_ms() const {
@@ -119,6 +122,9 @@ namespace HeiProMap {
         os << "Refinement            : " << t.refinement_ms << std::endl;
         os << "  Label Prop.         : " << t.lp_refine_ms << std::endl;
         os << "  Msg Refinement      : " << t.msg_refine_ms << std::endl;
+        os << "  Swap                : " << t.swap_refine_ms << std::endl;
+        os << "  Long Msg            : " << t.long_msg_refine_ms << std::endl;
+        os << "  Sim. Annealing      : " << t.sa_refine_ms << std::endl;
         os << "Misc                  : " << t.misc_ms << std::endl;
         os << "ALL                   : " << t.total_ms() << std::endl;
     }

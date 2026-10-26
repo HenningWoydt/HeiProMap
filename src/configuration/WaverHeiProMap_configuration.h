@@ -34,6 +34,9 @@
 #include "../refinement/simple_label_propagation_refinement.h"
 #include "../refinement/waver_label_propagation_refinement.h"
 #include "../refinement/waver_message_refinement.h"
+#include "../refinement/waver_swap_refinement.h"
+#include "../refinement/waver_long_message_refinement.h"
+#include "../refinement/waver_sa_refinement.h"
 namespace HeiProMap {
 
     class NegativeCycleConfiguration final {
@@ -170,7 +173,7 @@ namespace HeiProMap {
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
             {"--prepartitioner", "", "Partitioner of the input graph into k blocks if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "kaminpar", "", false},
-            {"--mode", "", "How the mapping is found: spectral (return the spectral Laplacian-RCB placement, then refine only the finished mapping), multilevel (coarsen, partition, uncoarsen with refinement), or both (multilevel, adopting the spectral placement at a level whenever it is cheaper).", "spectral", "", false},
+            {"--mode", "", "How the coarsest level is initialized; the uncoarsening with refinement is the same for all: spectral (spectral Laplacian-RCB placement), multilevel (greedy partition), or both (greedy partition; on every level the spectral placement is adopted whenever it is cheaper). Spectral also adopts the spectral placement of a level whenever it is cheaper than the refined partition.", "spectral", "", false},
             {"--vcycle", "", "After the bijection is found, run a V-cycle: coarsen topology and mapped vertices together, then uncoarsen with swap refinement at every level (0 = off).", "0", "", false},
             {"--vcycle-swap-radius", "", "Neighborhood radius of the swap refinement used at every V-cycle level.", "2", "", false},
             {"--vertex-refine", "", "After the mapping is propagated back to the input vertices, refine the individual vertex placement with message-group refinement within the allowed --imbalance (0 = off).", "1", "", false},
@@ -232,19 +235,13 @@ namespace HeiProMap {
 
         // balancing information
         f64 imbalance = -1.0;
-        u64 swap_radius = 0;
-        bool swap_extended = false;
         u64 vmove_radius = 2;
-        u64 long_msg_padding = 3;
-        u64 sa_iterations = 0;
-        u64 sa_radius = 10;
         std::string mode = "spectral"; // spectral | multilevel | both
         bool do_spectral = true;     // derived from mode: solve the spectral placement (spectral, both)
         bool do_multilevel = false;  // derived from mode: partition and refine multilevel (multilevel, both)
         bool vcycle = true;
         bool vertex_refine = true;
         u64 vertex_refine_iters = 10;
-        u64 vcycle_swap_radius = 2;
         std::string kaminpar_preset = "default";
         u64 kaminpar_threads = 0;
         std::string prepartitioner = "kaminpar";
@@ -305,6 +302,10 @@ namespace HeiProMap {
         SimpleLabelPropagationConfiguration simple_label_propagation_config = SimpleLabelPropagationConfiguration("Label Propagation");
         WaverLabelPropagationConfiguration   waver_label_propagation_config   = WaverLabelPropagationConfiguration("Waver Label Propagation");
         WaverMessageRefinementConfiguration  waver_message_refinement_config  = WaverMessageRefinementConfiguration("Waver Message Refinement");
+        WaverSwapRefinementConfiguration     waver_swap_refinement_config     = WaverSwapRefinementConfiguration("Waver Swap Refinement");
+        WaverSwapRefinementConfiguration     waver_vcycle_swap_refinement_config = WaverSwapRefinementConfiguration("Waver V-Cycle Swap Refinement");
+        WaverLongMessageRefinementConfiguration waver_long_message_refinement_config = WaverLongMessageRefinementConfiguration("Waver Long Message Refinement");
+        WaverSARefinementConfiguration       waver_sa_refinement_config       = WaverSARefinementConfiguration("Waver Simulated Annealing");
         NegativeCycleConfiguration negative_cycle_config = NegativeCycleConfiguration("Negative Cycle");
 
         WaverHeiProMapConfiguration() = default;
@@ -372,11 +373,14 @@ namespace HeiProMap {
             set_hierarchy();
             set_distance();
             set_imbalance();
-            swap_radius = std::stoull(get("--swap-radius"));
-            swap_extended = std::stoull(get("--swap-extended")) != 0;
-            long_msg_padding = std::stoull(get("--long-msg-padding"));
-            sa_iterations = std::stoull(get("--sa-iterations"));
-            sa_radius = std::stoull(get("--sa-radius"));
+            waver_swap_refinement_config.radius = std::stoull(get("--swap-radius"));
+            waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
+            waver_swap_refinement_config.extended = std::stoull(get("--swap-extended")) != 0;
+            waver_long_message_refinement_config.padding = std::stoull(get("--long-msg-padding"));
+            waver_long_message_refinement_config.enabled = waver_long_message_refinement_config.padding > 0;
+            waver_sa_refinement_config.iterations = std::stoull(get("--sa-iterations"));
+            waver_sa_refinement_config.enabled = waver_sa_refinement_config.iterations > 0;
+            waver_sa_refinement_config.radius = std::stoull(get("--sa-radius"));
             mode = get("--mode");
             if (mode != "spectral" && mode != "multilevel" && mode != "both") {
                 std::cout << "Error: Invalid --mode '" << mode
@@ -388,7 +392,8 @@ namespace HeiProMap {
             vcycle = std::stoull(get("--vcycle")) != 0;
             vertex_refine = std::stoull(get("--vertex-refine")) != 0;
             vertex_refine_iters = std::stoull(get("--vertex-refine-iters"));
-            vcycle_swap_radius = std::stoull(get("--vcycle-swap-radius"));
+            waver_vcycle_swap_refinement_config.radius = std::stoull(get("--vcycle-swap-radius"));
+            waver_vcycle_swap_refinement_config.enabled = waver_vcycle_swap_refinement_config.radius > 0;
             kaminpar_preset = get("--kaminpar-preset");
             kaminpar_threads = std::stoull(get("--kaminpar-threads"));
             prepartitioner = get("--prepartitioner");

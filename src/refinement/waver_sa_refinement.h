@@ -31,6 +31,7 @@
 #include <cmath>
 #include <iostream>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "../definitions.h"
@@ -39,6 +40,25 @@
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
+
+    // Hyperparameters of the simulated-annealing refinement: random block swaps within a radius, with blocks
+    // sampled in proportion to their cost. The start temperature is calibrated from sampled worsening swaps.
+    class WaverSARefinementConfiguration {
+    public:
+        explicit WaverSARefinementConfiguration(std::string t_name) : name(std::move(t_name)) {}
+
+        std::string name;
+        bool enabled = false;
+        u64 iterations = 1000;                  // annealing steps; the schedule cools from the start to the end temperature over these
+        u64 radius = 10;                        // max swap distance (per axis) on the PE grid
+        u64 seed_offset = 99999;                // added to the solver seed
+        u64 pick_attempts = 10;                 // tries to find a non-empty block within the radius
+        u64 calibration_samples = 2000;         // swaps sampled to calibrate the start temperature
+        u64 min_calibration_deltas = 10;        // fewer worsening samples than this: start temperature 1.0
+        u64 start_delta_percentile = 1;         // the start temperature accepts this percentile of the worsening deltas
+        f64 start_temperature_divisor = 1.609;  // ln(5): that delta is accepted with probability ~20%
+        f64 end_temperature_ratio = 1e-6;       // end temperature relative to the start temperature
+    };
 
     class WaverSARefinement {
         using graph_t     = CSRGraph;
@@ -49,8 +69,7 @@ namespace HeiProMap {
         static void refine(graph_t              &g,
                             p_manager_t          &p_manager,
                             const DistanceOracleT &d_oracle,
-                            size_t                max_iterations,
-                            size_t                max_radius,
+                            const WaverSARefinementConfiguration &config,
                             u64                   seed,
                             f64                   alpha_end,
                             f64                   beta_end,
@@ -87,7 +106,7 @@ namespace HeiProMap {
                 const size_t px = p % W, py = p / W;
                 std::uniform_int_distribution<int> offset_dist(
                     -static_cast<int>(radius), static_cast<int>(radius));
-                for (size_t attempt = 0; attempt < 10; ++attempt) {
+                for (size_t attempt = 0; attempt < config.pick_attempts; ++attempt) {
                     const int dx = offset_dist(rng_local);
                     const int dy = offset_dist(rng_local);
                     if (dx == 0 && dy == 0) continue;
@@ -113,7 +132,7 @@ namespace HeiProMap {
                 cumulative[b] = cumulative[b - 1] + blk_costs[b];
             }
 
-            std::mt19937_64 rng(seed);
+            std::mt19937_64 rng(seed + config.seed_offset);
             std::uniform_real_distribution<f64> unit_dist(0.0, 1.0);
 
             auto sample_block = [&]() -> partition_t {
@@ -124,10 +143,10 @@ namespace HeiProMap {
 
             // Calibrate: sample worsening deltas
             std::vector<f64> sample_deltas;
-            for (size_t i = 0; i < 2000; ++i) {
+            for (size_t i = 0; i < config.calibration_samples; ++i) {
                 const partition_t p = sample_block();
                 if (blk_verts[p].empty()) continue;
-                const partition_t q = pick_neighbor(p, rng, max_radius);
+                const partition_t q = pick_neighbor(p, rng, config.radius);
                 if (q == NO_ID) continue;
 
                 const f64 cost_before = block_cost(blk_verts[p], p) + block_cost(blk_verts[q], q);
@@ -142,21 +161,21 @@ namespace HeiProMap {
             }
 
             f64 T;
-            if (sample_deltas.size() < 10) {
+            if (sample_deltas.size() < config.min_calibration_deltas) {
                 T = 1.0;
             } else {
                 std::sort(sample_deltas.begin(), sample_deltas.end());
                 // Start from the very smallest worsening delta (P1),
                 // accept it with ~20% probability
                 f64 p1_delta = sample_deltas[std::max(static_cast<size_t>(1),
-                                             sample_deltas.size() / 100)];
+                                             sample_deltas.size() * config.start_delta_percentile / 100)];
                 // exp(-p1/T) = 0.2 => T = p1 / ln(5) = p1 / 1.609
-                T = p1_delta / 1.609;
+                T = p1_delta / config.start_temperature_divisor;
             }
 
             // Cool based on actual evaluated swaps, not loop iterations
-            const f64 T_min = T * 1e-6;
-            const f64 cooling = std::pow(T_min / T, 1.0 / static_cast<f64>(max_iterations));
+            const f64 T_min = T * config.end_temperature_ratio;
+            const f64 cooling = std::pow(T_min / T, 1.0 / static_cast<f64>(config.iterations));
 
             // Save best solution
             std::vector<partition_t> best_partition(g.n);
@@ -171,10 +190,10 @@ namespace HeiProMap {
 
             size_t accepted = 0, improved = 0, evaluated = 0;
 
-            for (size_t iter = 0; iter < max_iterations; ++iter) {
+            for (size_t iter = 0; iter < config.iterations; ++iter) {
                 const partition_t p = sample_block();
                 if (blk_verts[p].empty()) continue;
-                const partition_t q = pick_neighbor(p, rng, max_radius);
+                const partition_t q = pick_neighbor(p, rng, config.radius);
                 if (q == NO_ID) continue;
 
                 if (p_manager.bweights[q] > p_manager.get_lmax(p) ||

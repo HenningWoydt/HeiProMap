@@ -48,6 +48,29 @@ namespace HeiProMap {
         std::vector<Level> m_levels;
         std::vector<Mapping> m_mappings; // m_mappings[i]: level[i] (fine) -> level[i+1] (coarse)
 
+        // Smallest prime factor of n (1 for n <= 1).
+        static size_t smallest_prime_factor(const size_t n) {
+            if (n <= 1) { return 1; }
+            for (size_t p = 2; p * p <= n; ++p) {
+                if (n % p == 0) { return p; }
+            }
+            return n;
+        }
+
+        // Largest prime factor used as a block size. Beyond it (and for prime lengths, where the factor would
+        // merge the whole axis) an axis is halved instead, rounding up.
+        static constexpr size_t kMaxBlock = 5;
+
+        // Number of cells merged along an axis of the given length in one coarsening step: its smallest prime factor,
+        // so that the axis divides evenly, or 2 if that factor is too large or the length is prime.
+        static size_t block_size(const size_t length) {
+            if (length <= 1) { return 1; }
+            const size_t p = smallest_prime_factor(length);
+            return (p < length && p <= kMaxBlock) ? p : 2;
+        }
+
+        static size_t height(const Level &lvl) { return (lvl.topology.n + lvl.W - 1) / lvl.W; }
+
         static size_t infer_W(const CSRGraph &g) {
             for (size_t i = 1; i < g.n; ++i) {
                 if (g.neighborhoods[i + 1] - g.neighborhoods[i] == 2) {
@@ -92,22 +115,25 @@ namespace HeiProMap {
 
         bool can_coarsen() const { return m_levels.back().topology.n > 64; }
 
-        // Push one coarser level onto the stack.
+        // Push one coarser level onto the stack. Every axis is merged in blocks of its smallest prime factor (see
+        // block_size), so a W x H grid becomes ceil(W / bx) x ceil(H / by); each coarse cell has up to bx * by children.
         void coarsen() {
             HEIPROMAP_PROFILE_SCOPE("misc", "GridDistanceOracle", "coarsen");
             const Level &cur = m_levels.back();
-            size_t W_old = cur.W;
-            size_t H_old = (cur.topology.n + W_old - 1) / W_old;
-            size_t W_new = (W_old + 1) / 2;
-            size_t H_new = (H_old + 1) / 2;
-            size_t coarse_n = W_new * H_new;
+            const size_t W_old = cur.W;
+            const size_t H_old = height(cur);
+            const size_t bx = block_size(W_old);
+            const size_t by = block_size(H_old);
+            const size_t W_new = (W_old + bx - 1) / bx;
+            const size_t H_new = (H_old + by - 1) / by;
+            const size_t coarse_n = W_new * H_new;
 
             Mapping mapping;
             mapping.initialize(cur.topology.n);
             mapping.set_coarse_n(coarse_n);
             for (vertex_t u = 0; u < cur.topology.n; ++u) {
-                vertex_t x_new = (u % W_old) / 2;
-                vertex_t y_new = (u / W_old) / 2;
+                vertex_t x_new = (u % W_old) / bx;
+                vertex_t y_new = (u / W_old) / by;
                 mapping.set(u, y_new * W_new + x_new);
             }
 

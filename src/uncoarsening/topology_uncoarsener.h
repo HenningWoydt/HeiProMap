@@ -46,7 +46,7 @@ namespace HeiProMap {
     //   1. steal one vertex for each empty cell from its siblings,
     //   2. avalanche: move whole sender groups along the density gradient into the remaining empty cells,
     //   3. evacuate small islands of non-empty cells into the largest connected region,
-    //   4. try all assignments of the children's vertex groups to the child cells (2-4 children),
+    //   4. try all assignments of the children's vertex groups to the child cells (only for 2-4 children),
     //   5. diffuse from dense borders into empty regions.
     // The caller has already uncoarsened the oracle and re-initialized the partition manager for the finer k.
     class TopologyUncoarsener {

@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -39,6 +40,21 @@
 #include "../utility/profiler.h"
 
 namespace HeiProMap {
+
+    // Hyperparameters of the long-message refinement: the longest communication edges are shortened by swapping
+    // an endpoint's block into a rectangle around the other endpoint.
+    class WaverLongMessageRefinementConfiguration {
+    public:
+        explicit WaverLongMessageRefinementConfiguration(std::string t_name) : name(std::move(t_name)) {}
+
+        std::string name;
+        bool enabled = false;
+        u64 padding = 1;                // half-side of the searched rectangle around the other endpoint
+        u64 distance_percentile = 90;   // edges at least this long (percentile of all edge distances) count as long
+        u64 max_rounds = 3000;          // rounds over the long edges; stops earlier once a round swaps nothing
+        u64 max_edges = 5000;           // only the this many costliest long edges are considered
+        f64 min_gain = 1e-6;            // a swap must improve the cost by more than this
+    };
 
     class WaverLongMessageRefinement {
         using graph_t     = CSRGraph;
@@ -50,7 +66,7 @@ namespace HeiProMap {
         static size_t refine(graph_t              &g,
                             p_manager_t          &p_manager,
                             const DistanceOracleT &d_oracle,
-                            size_t                padding,
+                            const WaverLongMessageRefinementConfiguration &config,
                             f64                   alpha_end,
                             f64                   beta_end,
                             f64                   alpha_link,
@@ -100,7 +116,7 @@ namespace HeiProMap {
             }
             if (all_dists.empty()) return 0;
             std::sort(all_dists.begin(), all_dists.end());
-            const weight_t dist_threshold = all_dists[all_dists.size() * 90 / 100];
+            const weight_t dist_threshold = all_dists[all_dists.size() * config.distance_percentile / 100];
             if (dist_threshold <= 1) return 0;
 
             std::vector<LongEdge> long_edges;
@@ -130,8 +146,8 @@ namespace HeiProMap {
                           return a.weighted_dist > b.weighted_dist;
                       });
 
-            const size_t max_rounds = 3000;
-            const size_t max_edges = std::min(long_edges.size(), static_cast<size_t>(5000));
+            const size_t max_rounds = config.max_rounds;
+            const size_t max_edges = std::min(long_edges.size(), static_cast<size_t>(config.max_edges));
             size_t total_swaps = 0;
 
             for (size_t round = 0; round < max_rounds; ++round) {
@@ -154,14 +170,14 @@ namespace HeiProMap {
                         const size_t cx = (side == 0) ? bx : ax;
                         const size_t cy = (side == 0) ? by : ay;
 
-                        const size_t x_lo = (cx >= padding) ? cx - padding : 0;
-                        const size_t y_lo = (cy >= padding) ? cy - padding : 0;
-                        const size_t x_hi = std::min(cx + padding, W - 1);
-                        const size_t y_hi = std::min(cy + padding, H - 1);
+                        const size_t x_lo = (cx >= config.padding) ? cx - config.padding : 0;
+                        const size_t y_lo = (cy >= config.padding) ? cy - config.padding : 0;
+                        const size_t x_hi = std::min(cx + config.padding, W - 1);
+                        const size_t y_hi = std::min(cy + config.padding, H - 1);
 
                         const f64 cost_src = block_cost(blk_verts[src], src);
                         partition_t best_q = NO_ID;
-                        f64 best_gain = 1e-6;
+                        f64 best_gain = config.min_gain;
 
                         for (size_t y = y_lo; y <= y_hi; ++y) {
                             for (size_t x = x_lo; x <= x_hi; ++x) {
