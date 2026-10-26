@@ -111,6 +111,34 @@ namespace HeiProMap {
     }
     #endif
 
+    #ifndef HEIPROMAP_INTERMEDIATE_PARTITIONER_ALGS_DEFINED
+    #define HEIPROMAP_INTERMEDIATE_PARTITIONER_ALGS_DEFINED
+
+    enum INTERMEDIATE_PARTITIONER_ALGS {
+        INTERMEDIATE_PARTITIONER_GREEDY,
+        INTERMEDIATE_PARTITIONER_KAFFPA_FAST,
+        INTERMEDIATE_PARTITIONER_KAFFPA_ECO
+    };
+
+    inline INTERMEDIATE_PARTITIONER_ALGS string_to_intermediate_partitioner_algorithm(const std::string &str) {
+        if (str == "kaffpa-fast") return INTERMEDIATE_PARTITIONER_KAFFPA_FAST;
+        if (str == "kaffpa-eco") return INTERMEDIATE_PARTITIONER_KAFFPA_ECO;
+        return INTERMEDIATE_PARTITIONER_GREEDY;
+    }
+
+    inline std::string intermediate_partitioner_algorithm_to_string(INTERMEDIATE_PARTITIONER_ALGS alg) {
+        switch (alg) {
+            case INTERMEDIATE_PARTITIONER_KAFFPA_FAST:
+                return "kaffpa-fast";
+            case INTERMEDIATE_PARTITIONER_KAFFPA_ECO:
+                return "kaffpa-eco";
+            case INTERMEDIATE_PARTITIONER_GREEDY:
+            default:
+                return "greedy";
+        }
+    }
+    #endif
+
     enum DISTANCE_ORACLE_ALGS {
         DISTANCE_ORACLE_ALGS_UNDEFINED,
         DISTANCE_ORACLE_ALGS_DIVISION,
@@ -169,7 +197,8 @@ namespace HeiProMap {
             {"--initial-C",               "",   "Initial coarsening: stop when n <= k * C.",                                         "32",                  "", false},
             {"--initial-kappa",           "",   "Initial partitioning: number of attempts, best is kept.",                            "10",                  "", false},
             {"--intermediate-C",          "",   "Intermediate coarsening: stop when block size < C * h_i.",                           "32",                  "", false},
-            {"--intermediate-kappa",      "",   "Intermediate partitioning: number of attempts, best is kept.",                       "10",                   "", false},
+            {"--intermediate-kappa",      "",   "Intermediate partitioning: number of attempts, best is kept (defaults to initial-kappa).", "", "", false},
+            {"--intermediate-partitioner","",   "Intermediate partitioner algorithm {greedy, kaffpa-fast, kaffpa-eco}.",             "kaffpa-fast",         "", false},
             {"--force-parallel-contraction", "", "Force parallel graph contraction even with 1 thread (true/false).",                "false",                    "", false},
             {"--enable-q-graph",          "",   "Enable quotient graph datastructure (true/false).",                                  "false",                    "", false},
             {"--enable-block-conn",       "",   "Enable block connectivity datastructure (true/false).",                              "false",                    "", false},
@@ -221,7 +250,9 @@ namespace HeiProMap {
         vertex_t initial_C = 32;
         u64 initial_kappa = 10;
         vertex_t intermediate_C = 32;
-        u64 intermediate_kappa = 1;
+        u64 intermediate_kappa = 10;
+        std::string intermediate_partitioner_string = "kaffpa-fast";
+        INTERMEDIATE_PARTITIONER_ALGS intermediate_partitioner_id = INTERMEDIATE_PARTITIONER_KAFFPA_FAST;
 
         // coarsening: algorithm configs
         GlobalPathAlgorithmConfiguration global_path_algorithm_config;
@@ -336,12 +367,17 @@ namespace HeiProMap {
             }
             if (is_set("--initial-kappa")) {
                 initial_kappa = std::stoull(get("--initial-kappa"));
+                intermediate_kappa = initial_kappa;
             }
             if (is_set("--intermediate-C")) {
                 intermediate_C = std::stoul(get("--intermediate-C"));
             }
             if (is_set("--intermediate-kappa")) {
                 intermediate_kappa = std::stoull(get("--intermediate-kappa"));
+            }
+            if (is_set("--intermediate-partitioner")) {
+                intermediate_partitioner_string = get("--intermediate-partitioner");
+                intermediate_partitioner_id = string_to_intermediate_partitioner_algorithm(intermediate_partitioner_string);
             }
             if (is_set("--force-parallel-contraction")) {
                 std::string val = get("--force-parallel-contraction");

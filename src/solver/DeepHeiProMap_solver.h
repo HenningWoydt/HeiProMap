@@ -66,6 +66,7 @@
 #include "../refinement/simple_quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
 #include "../refinement/simple_label_propagation_refinement.h"
+#include "../init_partitioning/kaffpa_partitioner.h"
 #include "HeiPa_solver.h"
 
 namespace HeiProMap {
@@ -541,16 +542,33 @@ namespace HeiProMap {
                         PartitionManager best_pm(sub_g.n, block_k, sub_g.g_weight, &m_pool);
                         weight_t best_qap = std::numeric_limits<weight_t>::max();
 
-                        for (u64 trial = 0; trial < ac.intermediate_kappa; ++trial) {
-                            sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
-                            greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id + trial, sub_pm, thread_greedy_vertices[tid]);
-                            greedy_refine(sub_g, temp_d_oracle, imb, sub_pm);
-                            weight_t cur_qap = get_qap(sub_g, sub_pm, temp_d_oracle);
+                        if (ac.intermediate_partitioner_id == INTERMEDIATE_PARTITIONER_KAFFPA_FAST ||
+                            ac.intermediate_partitioner_id == INTERMEDIATE_PARTITIONER_KAFFPA_ECO) {
+                            AlignedArray<partition_t> kaffpa_part;
+                            kaffpa_part.set_pool(&m_pool);
+                            kaffpa_part.initialize(sub_g.n);
 
-                            if (trial == 0 || is_better_partition(sub_pm, cur_qap, best_pm, best_qap, block_k, child_lmax)) {
-                                best_qap = cur_qap;
-                                for (vertex_t u = 0; u < sub_g.n; ++u) { best_pm.partition[u] = sub_pm.partition[u]; }
-                                for (partition_t bi = 0; bi < block_k; ++bi) { best_pm.bweights[bi] = sub_pm.bweights[bi]; }
+                            KaffpaPartitionMode km = (ac.intermediate_partitioner_id == INTERMEDIATE_PARTITIONER_KAFFPA_ECO) 
+                                                     ? KAFFPA_PARTITION_ECO : KAFFPA_PARTITION_FAST;
+                            kaffpa_partition(sub_g, block_k, imb, km, 42 + block_id, kaffpa_part, ac.intermediate_kappa);
+
+                            for (vertex_t u = 0; u < sub_g.n; ++u) {
+                                best_pm.partition[u] = kaffpa_part[u];
+                            }
+                            kaffpa_part.free_memory();
+                            best_pm.recalculate_weights(sub_g);
+                        } else {
+                            for (u64 trial = 0; trial < ac.intermediate_kappa; ++trial) {
+                                sub_pm.initialize(sub_g.n, block_k, sub_g.g_weight, &m_pool);
+                                greedy_partition(sub_g, temp_d_oracle, imb, 42 + block_id + trial, sub_pm, thread_greedy_vertices[tid]);
+                                greedy_refine(sub_g, temp_d_oracle, imb, sub_pm);
+                                weight_t cur_qap = get_qap(sub_g, sub_pm, temp_d_oracle);
+
+                                if (trial == 0 || is_better_partition(sub_pm, cur_qap, best_pm, best_qap, block_k, child_lmax)) {
+                                    best_qap = cur_qap;
+                                    for (vertex_t u = 0; u < sub_g.n; ++u) { best_pm.partition[u] = sub_pm.partition[u]; }
+                                    for (partition_t bi = 0; bi < block_k; ++bi) { best_pm.bweights[bi] = sub_pm.bweights[bi]; }
+                                }
                             }
                         }
 
