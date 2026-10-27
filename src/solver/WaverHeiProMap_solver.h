@@ -47,6 +47,7 @@
 #include "../utility/random_engine.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
+#include "../utility/engine_load.h"
 #include "../utility/spectral_tracker.h"
 #include "../utility/kaminpar_partitioner.h"
 #include "../utility/spectral_prepartitioner.h"
@@ -65,6 +66,7 @@
 #include "../refinement/waver_label_propagation_refinement.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
+#include "../refinement/waver_engine_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
 #include "../distance_oracles/grid_distance_oracle.h"
@@ -172,7 +174,9 @@ namespace HeiProMap {
             const EndpointLoad endpoint = get_max_endpoint_load(q_graph, ac.k, ac.alpha_end(), ac.beta_end());
             const weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
-            print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, endpoint, p_manager, timings);
+            const EngineLoadStats engine_model = get_engine_load(graphs[0], p_manager, ac.k);
+
+            print_waver_summary(std::cout, ac, graphs[0], duration, lmax, cost, max_link_load, endpoint, engine_model, p_manager, timings);
 
             return result;
         }
@@ -539,6 +543,22 @@ namespace HeiProMap {
                                                ac.waver_message_refinement_config,
                                                ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 timings.msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
+            }
+
+            // On the individual input vertices of the final topology (more vertices than PEs), where a PE can lose a
+            // row. Before the refinements that swap whole PEs: they relabel p_manager only, so the quotient graph,
+            // block connectivity and boundary are stale afterwards.
+            if (mappings.empty() && d_oracle.depth() == 0 && graphs.back().n > ac.k) {
+                auto sp_local = get_time_point();
+                if (ac.waver_engine_refinement_config.pair_penalty > 0.0) {
+                    WaverEngineRefinement::refine_pairs(graphs.back(), p_manager, bv_manager, q_graph, block_conn,
+                                                        ac.waver_engine_refinement_config);
+                }
+                if (ac.waver_engine_refinement_config.enabled) {
+                    WaverEngineRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, block_conn,
+                                                  ac.waver_engine_refinement_config);
+                }
+                timings.engine_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
             if (ac.waver_swap_refinement_config.enabled) {

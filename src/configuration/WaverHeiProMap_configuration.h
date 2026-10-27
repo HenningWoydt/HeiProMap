@@ -39,6 +39,7 @@
 #include "../coarsening/size_constrained_lp.h"
 #include "../refinement/waver_label_propagation_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
+#include "../refinement/waver_engine_refinement.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
@@ -115,6 +116,12 @@ namespace HeiProMap {
             {"--vertex-refine", "", "(preset) Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
             {"--vertex-refine-iters", "", "(preset) Maximum iterations of the message-group refinement on one level.", "", "", false},
             {"--refine-verbose", "", "Print the statistics of every message-group refinement iteration (0/1).", "", "", false},
+            {"--engine-passes", "", "Passes of the engine-load refinement on the individual input vertices: moves rows out of the PEs with the busiest compute engine (0 = off).", "", "", false},
+            {"--engine-ratio", "", "PEs with at least this fraction of the maximum engine load are worked on by the engine-load refinement.", "", "", false},
+            {"--engine-verbose", "", "Print the statistics of the engine-load refinement (0/1).", "", "", false},
+            {"--pair-penalty", "", "Penalty per squared value above --pair-threshold of the message of a PE pair (0 = off): moves rows out of oversized messages on the individual input vertices.", "", "", false},
+            {"--pair-threshold", "", "Number of values of a message above which --pair-penalty applies.", "", "", false},
+            {"--pair-passes", "", "Maximum passes of the pair-volume refinement.", "", "", false},
             {"--vcycle", "", "(preset) After the mapping is found, run a V-cycle: coarsen topology and graph together (one vertex per PE on every level), then uncoarsen with the same legalization and refinements as the main uncoarsening on every level (0/1).", "", "", false},
 
             {"--spectral-rounds", "", "Re-smoothing rounds of the spectral embedding after each prolongation (levels up to --spectral-big-n vertices).", "3", "", false},
@@ -194,6 +201,7 @@ namespace HeiProMap {
         WaverSwapRefinementConfiguration        waver_swap_refinement_config        = WaverSwapRefinementConfiguration("Waver Swap Refinement");
         WaverLongMessageRefinementConfiguration waver_long_message_refinement_config = WaverLongMessageRefinementConfiguration("Waver Long Message Refinement");
         WaverSARefinementConfiguration          waver_sa_refinement_config          = WaverSARefinementConfiguration("Waver Simulated Annealing");
+        WaverEngineRefinementConfiguration      waver_engine_refinement_config      = WaverEngineRefinementConfiguration("Waver Engine Load");
 
         WaverHeiProMapConfiguration() = default;
 
@@ -475,6 +483,15 @@ namespace HeiProMap {
             if (is_set("--vertex-refine")) waver_message_refinement_config.enabled = std::stoull(get("--vertex-refine")) != 0;
             if (is_set("--vertex-refine-iters")) waver_message_refinement_config.max_iters = std::stoull(get("--vertex-refine-iters"));
             if (is_set("--refine-verbose")) waver_message_refinement_config.verbose = std::stoull(get("--refine-verbose")) != 0;
+            if (is_set("--engine-passes")) {
+                waver_engine_refinement_config.max_passes = std::stoull(get("--engine-passes"));
+                waver_engine_refinement_config.enabled = waver_engine_refinement_config.max_passes > 0;
+            }
+            if (is_set("--engine-ratio")) waver_engine_refinement_config.ratio = std::stod(get("--engine-ratio"));
+            if (is_set("--engine-verbose")) waver_engine_refinement_config.verbose = std::stoull(get("--engine-verbose")) != 0;
+            if (is_set("--pair-penalty")) waver_engine_refinement_config.pair_penalty = std::stod(get("--pair-penalty"));
+            if (is_set("--pair-threshold")) waver_engine_refinement_config.pair_threshold = std::stoull(get("--pair-threshold"));
+            if (is_set("--pair-passes")) waver_engine_refinement_config.pair_passes = std::stoull(get("--pair-passes"));
             if (is_set("--vcycle")) vcycle = std::stoull(get("--vcycle")) != 0;
 
             if (is_set("--coarsening")) {

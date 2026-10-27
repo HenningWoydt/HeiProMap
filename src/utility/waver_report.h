@@ -35,6 +35,7 @@
 #include "../datastructures/csr_graph.h"
 #include "../datastructures/partition_manager.h"
 #include "../definitions.h"
+#include "engine_load.h"
 #include "qap.h"
 #include "utils.h"
 
@@ -53,6 +54,7 @@ namespace HeiProMap {
         f64 swap_refine_ms = 0.0;
         f64 long_msg_refine_ms = 0.0;
         f64 sa_refine_ms = 0.0;
+        f64 engine_refine_ms = 0.0;
         f64 misc_ms = 0.0;
 
         f64 total_ms() const {
@@ -70,6 +72,7 @@ namespace HeiProMap {
                                     const MessageCostBreakdown &cost,
                                     const f64 max_link_load,
                                     const EndpointLoad &endpoint,
+                                    const EngineLoadStats &engine,
                                     const PartitionManager &p_manager,
                                     const WaverTimings &t) {
         size_t n_empty_partitions = 0;
@@ -118,7 +121,17 @@ namespace HeiProMap {
         os << std::left << std::setw(36) << "  link / endpoint load"
            << ": " << std::right << std::setw(16) << std::fixed << std::setprecision(3)
            << (endpoint.max_load > 0.0 ? max_link_load / endpoint.max_load : 0.0) << std::defaultfloat << "\n";
-        os << "max block w          : " << max(p_manager.get_bweights()) << std::endl;
+        // Busy cycles of the compute engine of a PE in the evaluator's timed model (see engine_load.h).
+        os << std::left << std::setw(36) << "Model engine load: max"
+           << ": " << std::right << std::setw(16) << static_cast<u64>(engine.max_load) << "\n";
+        os << std::left << std::setw(36) << "  mean"
+           << ": " << std::right << std::setw(16) << static_cast<u64>(engine.mean_load) << "\n";
+        os << std::left << std::setw(36) << "  busiest PE"
+           << ": " << std::right << std::setw(16) << engine.busiest_pe << "\n";
+        os << "    rows " << engine.rows << ", local nnz " << engine.local_nnz << ", startup "
+           << static_cast<u64>(engine.startup) << ", sends " << engine.sends << " (" << engine.sent_values
+           << " values), receives " << engine.receives << " (" << engine.received_values << " values)\n";
+        os << "max block w         : " << max(p_manager.get_bweights()) << std::endl;
         os << "#empty partitions     : " << n_empty_partitions << std::endl;
         os << "#oload partitions     : " << n_overloaded_partitions << std::endl;
         os << "Sum oload weights     : " << sum_too_much << std::endl;
@@ -134,6 +147,7 @@ namespace HeiProMap {
         os << "  Swap                : " << t.swap_refine_ms << std::endl;
         os << "  Long Msg            : " << t.long_msg_refine_ms << std::endl;
         os << "  Sim. Annealing      : " << t.sa_refine_ms << std::endl;
+        os << "  Engine Load         : " << t.engine_refine_ms << std::endl;
         os << "Misc                  : " << t.misc_ms << std::endl;
         os << "ALL                   : " << t.total_ms() << std::endl;
     }
