@@ -105,24 +105,18 @@ namespace HeiProMap {
         }
 #endif
 
-        // Compute the cost delta (positive = improvement) for moving all vertices in
-        // `group` from block A to block C.
+        // Compute the cost delta (positive = improvement) for moving all vertices of a group from block A to block C.
         //
-        // `weight_to_D` : sum of edge weights from group to each external block D (D != A,
-        //                 intra-group edges excluded).
-        // `weight_to_A` : sum of edge weights from group to non-group vertices in A.
+        // `ext_neighbors` : (D, w) for every block D != A that the group has edges to: their weight sum w (edges
+        //                   inside the group are not counted: both endpoints move).
+        // `weight_to_A`   : sum of edge weights from the group to vertices of A outside the group.
         template<typename DistanceOracleT>
-        static f64 compute_group_delta(const graph_t                         &g,
-                                       const partition_t                       A,
+        static f64 compute_group_delta(const partition_t                       A,
                                        const partition_t                       C,
-                                       const std::vector<vertex_t>            &group,
-                                       const std::vector<bool>                &in_group,
                                        const std::vector<std::pair<partition_t, weight_t>> &ext_neighbors,
                                        const weight_t                          weight_to_A,
-                                       const p_manager_t                      &p_manager,
                                        const q_graph_t                        &q_graph,
                                        const DistanceOracleT                  &d_oracle,
-                                       const block_conn_t                     &block_conn,
                                        const f64 alpha_end,
                                        const f64 beta_end,
                                        const f64 alpha_link,
@@ -163,31 +157,24 @@ namespace HeiProMap {
             }
 
             // ---------------------------------------------------------------
-            // beta_end, beta_link: per edge (volume), skip intra-group
+            // beta_end, beta_link: per unit of volume, summed per block instead of per edge
             // ---------------------------------------------------------------
-            for (const vertex_t u : group) {
-                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                    const vertex_t    v = g.edges_v[j];
-                    if (in_group[v]) { continue; } // both endpoints move — no change
-
-                    const partition_t D = p_manager[v];
-                    const f64         w = static_cast<f64>(g.edge_w(j));
-
-                    if (D == A) {
-                        // intra (A→A) becomes inter (C→A)
-                        delta -= beta_end  * w;
-                        delta -= beta_link * w * static_cast<f64>(d_oracle.get(C, A));
-                    } else if (D == C) {
-                        // inter (A→C) becomes intra (C→C)
-                        delta += beta_end  * w;
-                        delta += beta_link * w * static_cast<f64>(d_oracle.get(A, C));
-                    } else {
-                        // A→D becomes C→D: only distance changes, both cut
-                        const f64 d_old = static_cast<f64>(d_oracle.get(A, D));
-                        const f64 d_new = static_cast<f64>(d_oracle.get(C, D));
-                        delta += beta_link * w * (d_old - d_new);
-                    }
+            for (const auto &[D, w_group_to_D] : ext_neighbors) {
+                const f64 w = static_cast<f64>(w_group_to_D);
+                if (D == C) {
+                    // inter (A→C) becomes intra (C→C)
+                    delta += beta_end * w;
+                    delta += beta_link * w * static_cast<f64>(d_oracle.get(A, C));
+                } else {
+                    // A→D becomes C→D: only distance changes, both cut
+                    delta += beta_link * w * (static_cast<f64>(d_oracle.get(A, D)) - static_cast<f64>(d_oracle.get(C, D)));
                 }
+            }
+            if (weight_to_A > 0) {
+                // intra (A→A) becomes inter (C→A)
+                const f64 w = static_cast<f64>(weight_to_A);
+                delta -= beta_end * w;
+                delta -= beta_link * w * static_cast<f64>(d_oracle.get(C, A));
             }
 
             return delta;
@@ -377,18 +364,23 @@ namespace HeiProMap {
                         continue;
                     }
 
+                    // The weight from the group to every other block is the sum of the block connectivity of its
+                    // vertices (all neighbors outside A are outside the group). The weight to the vertices of A
+                    // outside the group needs the edges, but only those up to the last neighbor in A.
                     for (const vertex_t u : group) {
-                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                            const vertex_t    v = g.edges_v[j];
-                            if (in_group[v]) { continue; }
-                            const partition_t D = p_manager[v];
-                            const weight_t    w = g.edge_w(j);
-                            if (D == A) {
-                                weight_to_A += w;
-                            } else {
-                                if (!tmp_seen[D]) { tmp_seen[D] = 1; dirty.push_back(D); }
-                                tmp_weight[D] += w;
-                            }
+                        weight_t remaining = 0; // weight from u to A still to be found among its edges
+                        for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) {
+                            const partition_t D = block_conn.get_id(j);
+                            if (D == A) { remaining = block_conn.get_w(j); continue; }
+                            if (!tmp_seen[D]) { tmp_seen[D] = 1; dirty.push_back(D); }
+                            tmp_weight[D] += block_conn.get_w(j);
+                        }
+                        for (size_t j = g.neighborhoods[u]; remaining > 0 && j < g.neighborhoods[u + 1]; ++j) {
+                            const vertex_t v = g.edges_v[j];
+                            if (p_manager[v] != A) { continue; }
+                            const weight_t w = g.edge_w(j);
+                            remaining -= w;
+                            if (!in_group[v]) { weight_to_A += w; }
                         }
                     }
                     ext_neighbors.clear();
@@ -420,9 +412,7 @@ namespace HeiProMap {
 #if ENABLE_PROFILER
                         ++n_candidates;
 #endif
-                        f64 d = compute_group_delta(g, A, C, group, in_group,
-                                                    ext_neighbors, weight_to_A,
-                                                    p_manager, q_graph, d_oracle, block_conn,
+                        f64 d = compute_group_delta(A, C, ext_neighbors, weight_to_A, q_graph, d_oracle,
                                                     alpha_end, beta_end, alpha_link, beta_link);
                         if (d > best_delta + kMinGain) { best_delta = d; best_C = C; }
                     };
