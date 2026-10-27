@@ -106,6 +106,9 @@ namespace HeiProMap {
         LargeQuotientGraph q_graph;
         block_conn_t block_conn;
         GridDistanceOracle d_oracle;
+        // The boundary, quotient graph and block connectivity match the partition. Cleared whenever the partition
+        // changes without updating them (topology uncoarsening, loading a partition, the refinements that relabel PEs).
+        bool structures_fresh = false;
 
         // ---- spectral solution (follows the graph hierarchy) ----
         SpectralTracker spectral;
@@ -227,6 +230,7 @@ namespace HeiProMap {
         // arrays are sized for the input graph, the largest graph, so they fit every level. The weights and limits are
         // those of the graph with one vertex per PE (graphs[0]).
         void enter_topology_level() {
+            structures_fresh = false;
             const graph_t &g = graphs[0];
             p_manager.initialize(max_n, ac.k, g.g_weight);
             p_manager.activate_all();
@@ -480,6 +484,7 @@ namespace HeiProMap {
 
             q_graph.compute_from_scratch(graphs.back(), p_manager);
             block_conn.compute_from_scratch(graphs.back(), p_manager);
+            structures_fresh = true;
             timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
@@ -502,6 +507,7 @@ namespace HeiProMap {
             }
             q_graph.compute_from_scratch(g_cur, p_manager);
             block_conn.compute_from_scratch(g_cur, p_manager);
+            structures_fresh = true;
         }
 
         void rebalance(const u64 level) {
@@ -521,8 +527,10 @@ namespace HeiProMap {
         // level is the number of graph levels still to uncoarsen.
         void legalize(const u64 level) {
             rebalance(level);
-            EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()));
-            recompute_datastructures();
+            const size_t moved = EmptyBlockDiffusion::diffuse(graphs.back(), p_manager,
+                                                              static_cast<size_t>(d_oracle.current_W()));
+            // The rebalancer keeps the structures up to date; only the diffusion does not.
+            if (moved > 0 || !structures_fresh) { recompute_datastructures(); }
         }
 
         // All refinements, in order. Each is switched on by its configuration. Label propagation refines the
@@ -588,6 +596,7 @@ namespace HeiProMap {
                 timings.sa_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
+            structures_fresh = false; // the swap refinements relabel PEs in p_manager only
             timings.refinement_ms += get_milli_seconds(p, get_time_point());
             HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
         }
@@ -679,6 +688,7 @@ namespace HeiProMap {
         }
 
         void load_partition(const std::vector<partition_t> &part) {
+            structures_fresh = false;
             for (vertex_t u = 0; u < graphs.back().n; ++u) p_manager.partition[u] = part[u];
             p_manager.recalculate_weights(graphs.back());
         }

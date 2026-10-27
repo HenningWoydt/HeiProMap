@@ -214,6 +214,8 @@ namespace HeiProMap {
             std::vector<std::vector<vertex_t>> groups; // groups[i]: S_AB of the i-th quotient neighbor B of A
             std::vector<partition_t> targets;          // quotient neighbors of A
             std::vector<int32_t> slot_of;              // block -> index in targets, -1 if not a neighbor
+            std::vector<char> group_valid;             // groups[i] is built and up to date
+            weight_t min_vw = 1;                       // no group is lighter than this
 
             // Only pairs whose inputs changed are evaluated again. The evaluation of (A, B) reads the blocks A, B and
             // the quotient neighbors of B (the candidates), and the quotient weights between them and the blocks
@@ -236,6 +238,11 @@ namespace HeiProMap {
                 tmp_seen.assign(k, 0);
                 slot_of.assign(k, -1);
                 last_touched.assign(k, 0);
+                min_vw = 1;
+                if (!g.uniform_v_weights && g.n > 0) {
+                    min_vw = g.v_weight(0);
+                    for (vertex_t u = 1; u < g.n; ++u) { min_vw = std::min(min_vw, g.v_weight(u)); }
+                }
                 touched_prev.assign(k, 0);
                 near_touched.assign(k, 0);
             }
@@ -278,11 +285,27 @@ namespace HeiProMap {
                     }
                     if (targets.empty()) { continue; }
 
-                    bool groups_stale = true;
+                    group_valid.assign(targets.size(), 0);
+                    if (groups.size() < targets.size()) { groups.resize(targets.size()); }
+
+                    // A necessary condition for a move of S_AB (whose weight is at least min_vw): A can lose that
+                    // much, and B or a neighbor of B can take it. Most pairs fail this, so their groups are not built.
+                    auto may_move = [&](const partition_t B) {
+                        if (p_manager.bweights[A] - min_vw < p_manager.get_lmin(A)) { return false; }
+                        if (p_manager.bweights[B] + min_vw <= p_manager.get_lmax(B)) { return true; }
+                        for (const auto &he : q_graph.neighbors(B)) {
+                            if (he.target != A && p_manager.bweights[he.target] + min_vw <= p_manager.get_lmax(he.target)) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+
                     for (size_t idx = 0; idx < targets.size(); ++idx) {
                         const partition_t B = targets[idx];
                         // Skip if pair no longer exists (prior move may have dissolved it)
                         if (q_graph.get_weight(A, B) == 0) { continue; }
+                        if (!may_move(B)) { continue; }
 #if ENABLE_PROFILER
                         ++n_pairs;
                         auto t_prev = std::chrono::steady_clock::now();
@@ -290,13 +313,15 @@ namespace HeiProMap {
 
                         // -------------------------------------------------------
                         // Collect S_AB: boundary vertices in A connecting to B. One pass over the boundary of A
-                        // builds the groups of all neighbors; a move invalidates them.
+                        // builds the groups of this and all later neighbors that may move; a move invalidates them.
                         // -------------------------------------------------------
-                        if (groups_stale) {
-                            groups.resize(targets.size());
-                            for (size_t i = 0; i < targets.size(); ++i) {
-                                groups[i].clear();
-                                slot_of[targets[i]] = static_cast<int32_t>(i);
+                        if (!group_valid[idx]) {
+                            for (size_t i = idx; i < targets.size(); ++i) {
+                                group_valid[i] = i == idx || may_move(targets[i]);
+                                if (group_valid[i]) {
+                                    groups[i].clear();
+                                    slot_of[targets[i]] = static_cast<int32_t>(i);
+                                }
                             }
                             for (size_t i = 0; i < bv_manager.size(A); ++i) {
                                 const vertex_t u = bv_manager.get(A, i);
@@ -305,8 +330,7 @@ namespace HeiProMap {
                                     if (slot >= 0) { groups[slot].push_back(u); }
                                 }
                             }
-                            for (const partition_t T : targets) { slot_of[T] = -1; }
-                            groups_stale = false;
+                            for (size_t i = idx; i < targets.size(); ++i) { slot_of[targets[i]] = -1; }
                         }
                         const std::vector<vertex_t> &group = groups[idx];
                         if (group.empty()) {
@@ -334,8 +358,26 @@ namespace HeiProMap {
                     weight_t group_weight  = 0;
                     weight_t weight_to_A   = 0;
 
+                    for (const vertex_t u : group) { group_weight += g.v_weight(u); }
+
+                    // With the exact weight: is there any candidate that can take the group? Else skip the scan.
+                    bool any_candidate = p_manager.bweights[A] - group_weight >= p_manager.get_lmin(A)
+                                         && p_manager.bweights[B] + group_weight <= p_manager.get_lmax(B);
+                    if (!any_candidate && p_manager.bweights[A] - group_weight >= p_manager.get_lmin(A)) {
+                        for (const auto &he : q_graph.neighbors(B)) {
+                            if (he.target != A
+                                && p_manager.bweights[he.target] + group_weight <= p_manager.get_lmax(he.target)) {
+                                any_candidate = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!any_candidate) {
+                        for (const vertex_t u : group) { in_group[u] = false; }
+                        continue;
+                    }
+
                     for (const vertex_t u : group) {
-                        group_weight += g.v_weight(u);
                         for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                             const vertex_t    v = g.edges_v[j];
                             if (in_group[v]) { continue; }
@@ -409,7 +451,7 @@ namespace HeiProMap {
                         last_touched[A] = last_touched[best_C] = iter + 1;
                         for (const auto &[D, w_group_to_D] : ext_neighbors) { last_touched[D] = iter + 1; }
                         any_move = true;
-                        groups_stale = true;
+                        std::fill(group_valid.begin(), group_valid.end(), 0);
 #if ENABLE_PROFILER
                         ++n_moves;
 #endif

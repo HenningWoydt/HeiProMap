@@ -31,7 +31,6 @@
 #include <cmath>
 #include <iostream>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #include "../definitions.h"
@@ -76,75 +75,99 @@ namespace HeiProMap {
             const size_t H = (p_manager.get_k() + W - 1) / W;
             const partition_t k = p_manager.get_k();
 
-            std::vector<std::vector<vertex_t>> blk_verts(k);
+            // Only whole blocks change places, so the blocks (the "contents", named by their block at the start) and
+            // the edges between them never change: for every content the neighbor contents with the number of edges
+            // and their weight sum. A block's cost then needs one distance per neighbor instead of one per edge.
+            struct Nb {
+                partition_t c;
+                f64 cnt;   // edges to the neighbor content
+                f64 wsum;  // their weight sum
+            };
+            std::vector<std::vector<Nb>> nbs(k);
+            std::vector<u64> n_in(k, 0);
             for (vertex_t u = 0; u < g.n; ++u) {
-                blk_verts[p_manager.partition[u]].push_back(u);
+                const partition_t cu = p_manager.partition[u];
+                ++n_in[cu];
+                auto &lst = nbs[cu];
+                size_t last = 0; // consecutive edges of a vertex often go to the same block
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                    const partition_t cv = p_manager.partition[g.edges_v[j]];
+                    if (cv == cu) continue;
+                    const f64 w = static_cast<f64>(g.edge_w(j));
+                    size_t i = last;
+                    if (i >= lst.size() || lst[i].c != cv) {
+                        for (i = 0; i < lst.size() && lst[i].c != cv; ++i) {}
+                        if (i == lst.size()) lst.push_back({cv, 0.0, 0.0});
+                    }
+                    lst[i].cnt += 1.0;
+                    lst[i].wsum += w;
+                    last = i;
+                }
             }
 
-            auto block_cost = [&](const std::vector<vertex_t> &verts, partition_t block) -> f64 {
-                f64 cost = 0.0;
-                for (const vertex_t u : verts) {
-                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                        const partition_t nb = p_manager.partition[g.edges_v[j]];
-                        const f64 w = static_cast<f64>(g.edge_w(j));
-                        const f64 dist = static_cast<f64>(d_oracle.get(block, nb));
-                        if (block != nb) {
-                            cost += alpha_end + beta_end * w;
-                        }
-                        cost += alpha_link * dist + beta_link * w * dist;
-                    }
+            // Edge distance threshold: the distance_percentile of the distances of all (undirected) cut edges, from
+            // a histogram. A cut edge between the blocks c < c' is counted once, from the side of c.
+            std::vector<u64> hist;
+            u64 n_cut = 0;
+            for (partition_t c = 0; c < k; ++c) {
+                for (const Nb &nb : nbs[c]) {
+                    if (nb.c < c) continue;
+                    const auto d = static_cast<size_t>(d_oracle.get(c, nb.c));
+                    if (d >= hist.size()) hist.resize(d + 1, 0);
+                    hist[d] += static_cast<u64>(nb.cnt);
+                    n_cut += static_cast<u64>(nb.cnt);
                 }
-                return cost;
-            };
+            }
+            if (n_cut == 0) return 0;
+            const u64 rank = n_cut * config.distance_percentile / 100; // index into the sorted distances
+            weight_t dist_threshold = 0;
+            for (u64 d = 0, seen = 0; d < hist.size(); ++d) {
+                seen += hist[d];
+                if (seen > rank) { dist_threshold = static_cast<weight_t>(d); break; }
+            }
+            if (dist_threshold <= 1) return 0;
 
-            // Collect long edges with accumulated weighted distance
+            // Long edges: pairs of blocks at least that far apart, with their accumulated weighted distance.
             struct LongEdge {
                 partition_t p, q;
                 f64 weighted_dist;
             };
-
-            // P90 distance as threshold
-            std::vector<weight_t> all_dists;
-            for (vertex_t u = 0; u < g.n; ++u) {
-                const partition_t ub = p_manager.partition[u];
-                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                    const partition_t vb = p_manager.partition[g.edges_v[j]];
-                    if (ub < vb) {
-                        all_dists.push_back(d_oracle.get(ub, vb));
-                    }
-                }
-            }
-            if (all_dists.empty()) return 0;
-            std::sort(all_dists.begin(), all_dists.end());
-            const weight_t dist_threshold = all_dists[all_dists.size() * config.distance_percentile / 100];
-            if (dist_threshold <= 1) return 0;
-
             std::vector<LongEdge> long_edges;
-            std::unordered_map<u64, size_t> pair_to_idx;
-            for (vertex_t u = 0; u < g.n; ++u) {
-                const partition_t ub = p_manager.partition[u];
-                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                    const partition_t vb = p_manager.partition[g.edges_v[j]];
-                    if (ub >= vb) continue;
-                    const weight_t dist = d_oracle.get(ub, vb);
+            for (partition_t c = 0; c < k; ++c) {
+                for (const Nb &nb : nbs[c]) {
+                    if (nb.c < c) continue;
+                    const weight_t dist = d_oracle.get(c, nb.c);
                     if (dist < dist_threshold) continue;
-                    const u64 key = static_cast<u64>(ub) * k + vb;
-                    const f64 w = static_cast<f64>(g.edge_w(j));
-                    const f64 wd = static_cast<f64>(dist) * (alpha_link + beta_link * w);
-                    auto it = pair_to_idx.find(key);
-                    if (it == pair_to_idx.end()) {
-                        pair_to_idx[key] = long_edges.size();
-                        long_edges.push_back({ub, vb, wd});
-                    } else {
-                        long_edges[it->second].weighted_dist += wd;
-                    }
+                    long_edges.push_back({c, nb.c, static_cast<f64>(dist) * (alpha_link * nb.cnt + beta_link * nb.wsum)});
                 }
             }
-
             std::sort(long_edges.begin(), long_edges.end(),
                       [](const LongEdge &a, const LongEdge &b) {
-                          return a.weighted_dist > b.weighted_dist;
+                          if (a.weighted_dist != b.weighted_dist) return a.weighted_dist > b.weighted_dist;
+                          return a.p != b.p ? a.p < b.p : a.q < b.q;
                       });
+
+            // The placement: content at[p] sits at block (position) p, content c at pos[c]; bw[p] is the weight there.
+            std::vector<partition_t> at(k), pos(k);
+            std::vector<weight_t> bw(k);
+            for (partition_t p = 0; p < k; ++p) {
+                at[p] = p;
+                pos[p] = p;
+                bw[p] = p_manager.bweights[p];
+            }
+
+            // Cost of content c placed at position P, while the content `moved` is placed at `moved_pos` instead of
+            // pos[moved] (pass NO_ID for no change).
+            auto cost_of = [&](const partition_t c, const partition_t P, const partition_t moved,
+                               const partition_t moved_pos) -> f64 {
+                f64 cost = 0.0;
+                for (const Nb &nb : nbs[c]) {
+                    const partition_t Pn = nb.c == moved ? moved_pos : pos[nb.c];
+                    const f64 dist = static_cast<f64>(d_oracle.get(P, Pn));
+                    cost += nb.cnt * (alpha_end + alpha_link * dist) + nb.wsum * (beta_end + beta_link * dist);
+                }
+                return cost;
+            };
 
             const size_t max_rounds = config.max_rounds;
             const size_t max_edges = std::min(long_edges.size(), static_cast<size_t>(config.max_edges));
@@ -157,7 +180,7 @@ namespace HeiProMap {
                     const auto &le = long_edges[ei];
                     const partition_t pa = le.p;
                     const partition_t pb = le.q;
-                    if (blk_verts[pa].empty() || blk_verts[pb].empty()) continue;
+                    if (n_in[at[pa]] == 0 || n_in[at[pb]] == 0) continue;
                     if (d_oracle.get(pa, pb) < dist_threshold) continue;
 
                     const size_t ax = pa % W, ay = pa / W;
@@ -175,7 +198,8 @@ namespace HeiProMap {
                         const size_t x_hi = std::min(cx + config.padding, W - 1);
                         const size_t y_hi = std::min(cy + config.padding, H - 1);
 
-                        const f64 cost_src = block_cost(blk_verts[src], src);
+                        const partition_t c_src = at[src];
+                        const f64 cost_src = cost_of(c_src, src, NO_ID, NO_ID);
                         partition_t best_q = NO_ID;
                         f64 best_gain = config.min_gain;
 
@@ -183,21 +207,13 @@ namespace HeiProMap {
                             for (size_t x = x_lo; x <= x_hi; ++x) {
                                 const partition_t q = static_cast<partition_t>(y * W + x);
                                 if (q >= k || q == pa || q == pb) continue;
-                                if (blk_verts[q].empty()) continue;
-                                if (p_manager.bweights[q] > p_manager.get_lmax(src) ||
-                                    p_manager.bweights[src] > p_manager.get_lmax(q)) continue;
+                                const partition_t c_q = at[q];
+                                if (n_in[c_q] == 0) continue;
+                                if (bw[q] > p_manager.get_lmax(src) || bw[src] > p_manager.get_lmax(q)) continue;
 
-                                const f64 cost_q = block_cost(blk_verts[q], q);
-                                const f64 cost_before = cost_src + cost_q;
-
-                                for (const vertex_t u : blk_verts[src]) p_manager.partition[u] = q;
-                                for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = src;
-
-                                const f64 cost_after = block_cost(blk_verts[src], q) +
-                                                       block_cost(blk_verts[q], src);
-
-                                for (const vertex_t u : blk_verts[src]) p_manager.partition[u] = src;
-                                for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = q;
+                                const f64 cost_before = cost_src + cost_of(c_q, q, NO_ID, NO_ID);
+                                // the two contents trade places
+                                const f64 cost_after = cost_of(c_src, q, c_q, src) + cost_of(c_q, src, c_src, q);
 
                                 const f64 gain = cost_before - cost_after;
                                 if (gain > best_gain) {
@@ -208,13 +224,12 @@ namespace HeiProMap {
                         }
 
                         if (best_q != NO_ID) {
-                            for (const vertex_t u : blk_verts[src]) p_manager.partition[u] = best_q;
-                            for (const vertex_t v : blk_verts[best_q]) p_manager.partition[v] = src;
-                            const weight_t ws = p_manager.bweights[src];
-                            const weight_t wq = p_manager.bweights[best_q];
-                            p_manager.bweights[src] = wq;
-                            p_manager.bweights[best_q] = ws;
-                            std::swap(blk_verts[src], blk_verts[best_q]);
+                            const partition_t c_q = at[best_q];
+                            at[src] = c_q;
+                            at[best_q] = c_src;
+                            pos[c_src] = best_q;
+                            pos[c_q] = src;
+                            std::swap(bw[src], bw[best_q]);
                             swaps++;
                             break;
                         }
@@ -223,6 +238,11 @@ namespace HeiProMap {
 
                 total_swaps += swaps;
                 if (swaps == 0) break;
+            }
+
+            if (total_swaps > 0) {
+                for (vertex_t u = 0; u < g.n; ++u) { p_manager.partition[u] = pos[p_manager.partition[u]]; }
+                for (partition_t p = 0; p < k; ++p) { p_manager.bweights[p] = bw[p]; }
             }
             return total_swaps;
         }

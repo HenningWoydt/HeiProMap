@@ -39,14 +39,17 @@
 namespace HeiProMap {
     // Balancing step for grid mappings: fills empty PEs by moving vertices from their grid neighbors, then
     // equalizes below-average PEs from above-average neighbors. Respects lmax and keeps donors above lmin.
+    // Returns the number of vertices that changed their PE; only the partition and the block weights are updated.
     class EmptyBlockDiffusion {
     public:
-        static void diffuse(const CSRGraph &g, PartitionManager &p_manager, const size_t W) {
+        static size_t diffuse(const CSRGraph &g, PartitionManager &p_manager, const size_t W) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "EmptyBlockDiffusion", "diffuse");
             const partition_t k = p_manager.get_k();
 
             // Target weight: fair share per PE
             const weight_t avg_bw = g.g_weight / k;
+
+            size_t moved = 0;
 
             // Build per-block vertex lists
             std::vector<std::vector<vertex_t> > blk_v(k);
@@ -91,6 +94,7 @@ namespace HeiProMap {
 
                         p_manager.bweights[donor] -= uw;
                         p_manager.partition[u] = e;
+                        ++moved;
                         p_manager.bweights[e] += uw;
                         blk_v[e].push_back(u);
                         progress = true;
@@ -129,6 +133,7 @@ namespace HeiProMap {
 
                         p_manager.bweights[donor] -= uw;
                         p_manager.partition[u] = e;
+                        ++moved;
                         p_manager.bweights[e] += uw;
                         blk_v[e].push_back(u);
                         progress = true;
@@ -137,6 +142,7 @@ namespace HeiProMap {
                     }
                 }
             }
+            return moved;
         }
     };
 }
