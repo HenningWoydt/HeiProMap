@@ -42,6 +42,7 @@
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
+#include "../utility/spectral_tracker.h"
 #include "../utility/utils.h"
 
 namespace HeiProMap {
@@ -113,7 +114,14 @@ namespace HeiProMap {
             {"--sa-radius", "", "(preset) Max swap radius of the simulated annealing.", "", "", false},
             {"--vertex-refine", "", "(preset) Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
             {"--vertex-refine-iters", "", "(preset) Maximum iterations of the message-group refinement on one level.", "", "", false},
+            {"--refine-verbose", "", "Print the statistics of every message-group refinement iteration (0/1).", "", "", false},
             {"--vcycle", "", "(preset) After the mapping is found, run a V-cycle: coarsen topology and graph together (one vertex per PE on every level), then uncoarsen with the same legalization and refinements as the main uncoarsening on every level (0/1).", "", "", false},
+
+            {"--spectral-rounds", "", "Re-smoothing rounds of the spectral embedding after each prolongation (levels up to --spectral-big-n vertices).", "3", "", false},
+            {"--spectral-depth", "", "CG iterations per re-smoothing round (levels up to --spectral-big-n vertices).", "24", "", false},
+            {"--spectral-big-rounds", "", "Re-smoothing rounds on levels with more than --spectral-big-n vertices (the prepartitioner of a large input graph).", "1", "", false},
+            {"--spectral-big-depth", "", "CG iterations per round on levels with more than --spectral-big-n vertices.", "8", "", false},
+            {"--spectral-big-n", "", "Vertex count above which the --spectral-big-* settings apply.", "500000", "", false},
 
             {"--alpha-send", "", "Fixed send-side overhead per message (alpha_send).", "100.0", "", false},
             {"--alpha-recv", "", "Fixed receive-side overhead per message (alpha_recv).", "100.0", "", false},
@@ -151,6 +159,7 @@ namespace HeiProMap {
         u64 kaminpar_threads = 0;
         u64 seed = 0;
         u64 threads = 1;
+        SpectralSmoothing spectral_smoothing;
 
         // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
         //                                    + h(m) * alpha_link + h(m) * beta_link * S(m)
@@ -239,6 +248,18 @@ namespace HeiProMap {
             kaminpar_threads = std::stoull(get("--kaminpar-threads"));
             seed = is_set("--seed") ? std::stoull(get("--seed")) : std::random_device{}();
             threads = std::stoull(get("--threads"));
+
+            spectral_smoothing.rounds = std::stoi(get("--spectral-rounds"));
+            spectral_smoothing.depth = std::stoi(get("--spectral-depth"));
+            spectral_smoothing.big_rounds = std::stoi(get("--spectral-big-rounds"));
+            spectral_smoothing.big_depth = std::stoi(get("--spectral-big-depth"));
+            spectral_smoothing.big_n = std::stoull(get("--spectral-big-n"));
+            if (spectral_smoothing.rounds < 0 || spectral_smoothing.depth < 1
+                || spectral_smoothing.big_rounds < 0 || spectral_smoothing.big_depth < 1) {
+                std::cout << "Error: --spectral-rounds and --spectral-big-rounds must be >= 0, "
+                          << "--spectral-depth and --spectral-big-depth >= 1" << std::endl;
+                exit(EXIT_FAILURE);
+            }
 
             if (is_set("--alpha-send")) alpha_send = std::stod(get("--alpha-send"));
             if (is_set("--alpha-recv")) alpha_recv = std::stod(get("--alpha-recv"));
@@ -453,6 +474,7 @@ namespace HeiProMap {
             if (is_set("--sa-radius")) waver_sa_refinement_config.radius = std::stoull(get("--sa-radius"));
             if (is_set("--vertex-refine")) waver_message_refinement_config.enabled = std::stoull(get("--vertex-refine")) != 0;
             if (is_set("--vertex-refine-iters")) waver_message_refinement_config.max_iters = std::stoull(get("--vertex-refine-iters"));
+            if (is_set("--refine-verbose")) waver_message_refinement_config.verbose = std::stoull(get("--refine-verbose")) != 0;
             if (is_set("--vcycle")) vcycle = std::stoull(get("--vcycle")) != 0;
 
             if (is_set("--coarsening")) {

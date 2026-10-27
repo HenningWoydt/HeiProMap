@@ -47,6 +47,7 @@ namespace HeiProMap {
         std::string name;
         bool enabled  = false;
         u64  max_iters = 5000;
+        bool verbose   = false; // print the statistics of every iteration
 
         explicit WaverMessageRefinementConfiguration(std::string n) : name(std::move(n)) {}
     };
@@ -69,6 +70,9 @@ namespace HeiProMap {
     //   beta_end/alpha_link/beta_link terms: per-edge, skipping intra-group edges
     //
     class WaverMessageRefinement {
+        // A move must gain more than the floating point noise of the delta, or zero-gain moves cycle.
+        static constexpr f64 kMinGain = 1e-6;
+
         using graph_t      = CSRGraph;
         using p_manager_t  = PartitionManager;
         using bv_manager_t = BoundaryVertexManager;
@@ -124,9 +128,11 @@ namespace HeiProMap {
                                        const f64 alpha_link,
                                        const f64 beta_link) {
             f64 delta = 0.0;
+            bool pair_A_C_removed = false;
 
             // ---------------------------------------------------------------
-            // alpha_end: track block-pair appearances / disappearances
+            // alpha_end, alpha_link: per block pair (one message), so they are charged when a pair appears or
+            // disappears. A pair at distance h costs alpha_end + alpha_link * h.
             // ---------------------------------------------------------------
             // For each external block D that group connects to:
             //   A→D may disappear (if group carried all A→D weight)
@@ -135,13 +141,14 @@ namespace HeiProMap {
                 // A→D: disappears if group was the only A→D sender
                 weight_t w_A_D = q_graph.get_weight(A, D);
                 if (w_A_D > 0 && w_A_D == w_group_to_D) {
-                    delta += alpha_end; // A→D pair removed
+                    delta += alpha_end + alpha_link * static_cast<f64>(d_oracle.get(A, D)); // A→D pair removed
+                    if (D == C) { pair_A_C_removed = true; }
                 }
                 // C→D: appears if C had no prior connection to D (and D != C)
                 if (D != C) {
                     weight_t w_C_D = q_graph.get_weight(C, D);
                     if (w_C_D == 0) {
-                        delta -= alpha_end; // new C→D pair
+                        delta -= alpha_end + alpha_link * static_cast<f64>(d_oracle.get(C, D)); // new C→D pair
                     }
                 }
             }
@@ -149,13 +156,14 @@ namespace HeiProMap {
             // Group edges to non-group A-vertices become C→A (intra → inter)
             if (weight_to_A > 0) {
                 weight_t w_C_A = q_graph.get_weight(C, A);
-                if (w_C_A == 0) {
-                    delta -= alpha_end; // new C→A pair
+                if (w_C_A == 0 || pair_A_C_removed) {
+                    // new C→A pair, or the A→C pair removed above is recreated by these edges
+                    delta -= alpha_end + alpha_link * static_cast<f64>(d_oracle.get(C, A));
                 }
             }
 
             // ---------------------------------------------------------------
-            // beta_end, alpha_link, beta_link: per edge, skip intra-group
+            // beta_end, beta_link: per edge (volume), skip intra-group
             // ---------------------------------------------------------------
             for (const vertex_t u : group) {
                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
@@ -168,16 +176,16 @@ namespace HeiProMap {
                     if (D == A) {
                         // intra (A→A) becomes inter (C→A)
                         delta -= beta_end  * w;
-                        delta -= (alpha_link + beta_link * w) * static_cast<f64>(d_oracle.get(C, A));
+                        delta -= beta_link * w * static_cast<f64>(d_oracle.get(C, A));
                     } else if (D == C) {
                         // inter (A→C) becomes intra (C→C)
                         delta += beta_end  * w;
-                        delta += (alpha_link + beta_link * w) * static_cast<f64>(d_oracle.get(A, C));
+                        delta += beta_link * w * static_cast<f64>(d_oracle.get(A, C));
                     } else {
                         // A→D becomes C→D: only distance changes, both cut
                         const f64 d_old = static_cast<f64>(d_oracle.get(A, D));
                         const f64 d_new = static_cast<f64>(d_oracle.get(C, D));
-                        delta += (alpha_link + beta_link * w) * (d_old - d_new);
+                        delta += beta_link * w * (d_old - d_new);
                     }
                 }
             }
@@ -203,16 +211,33 @@ namespace HeiProMap {
             const partition_t k = p_manager.get_k();
 
             std::vector<bool>   in_group;
-            std::vector<vertex_t> group;
+            std::vector<std::vector<vertex_t>> groups; // groups[i]: S_AB of the i-th quotient neighbor B of A
+            std::vector<partition_t> targets;          // quotient neighbors of A
+            std::vector<int32_t> slot_of;              // block -> index in targets, -1 if not a neighbor
+
+            // Only pairs whose inputs changed are evaluated again. The evaluation of (A, B) reads the blocks A, B and
+            // the quotient neighbors of B (the candidates), and the quotient weights between them and the blocks
+            // adjacent to the group. A move from A0 to C0 changes the rows of A0, C0 and of the blocks adjacent to the
+            // group, so those are marked as touched. A pair is evaluated again in the next iteration if A is touched,
+            // or B or a neighbor of B is touched.
+            std::vector<u64>  last_touched;  // 1 + the iteration in which the block was last touched, 0 = never
+            std::vector<char> touched_prev;  // touched in the previous iteration
+            std::vector<char> near_touched;  // the block or one of its quotient neighbors is in touched_prev
 
             // per-run accumulator for external neighbor weights
             std::vector<std::pair<partition_t, weight_t>> ext_neighbors;
             std::vector<weight_t> tmp_weight; // scratch: D → total group→D weight
+            std::vector<char> tmp_seen;       // scratch: D is in dirty
             std::vector<partition_t> dirty; // blocks touched in tmp_weight
             {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "setup");
                 in_group.assign(g.n, false);
                 tmp_weight.assign(k, 0);
+                tmp_seen.assign(k, 0);
+                slot_of.assign(k, -1);
+                last_touched.assign(k, 0);
+                touched_prev.assign(k, 0);
+                near_touched.assign(k, 0);
             }
 
             bool any_move = true;
@@ -220,16 +245,21 @@ namespace HeiProMap {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "iteration");
                 any_move = false;
 
-                // Snapshot quotient edges to avoid iterator invalidation during moves
-                std::vector<std::pair<partition_t, partition_t>> edges;
-                {
-                    HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "snapshot_edges");
-                    for (partition_t A = 0; A < k; ++A) {
-                        for (const auto &he : q_graph.neighbors(A)) {
-                            if (A < he.target) { // process each undirected pair once
-                                edges.emplace_back(A, he.target);
-                            }
-                        }
+                // A group can only move into a block with room left. Without any, nothing can be accepted.
+                bool has_slack = false;
+                for (partition_t C = 0; C < k && !has_slack; ++C) {
+                    has_slack = p_manager.bweights[C] < p_manager.get_lmax(C);
+                }
+                if (!has_slack) { break; }
+
+                // The first iteration evaluates every pair.
+                if (iter > 0) {
+                    std::fill(near_touched.begin(), near_touched.end(), 0);
+                    for (partition_t X = 0; X < k; ++X) {
+                        touched_prev[X] = last_touched[X] >= iter; // touched in iteration iter - 1 (stored as iter)
+                        if (!touched_prev[X]) { continue; }
+                        near_touched[X] = 1;
+                        for (const auto &he : q_graph.neighbors(X)) { near_touched[he.target] = 1; }
                     }
                 }
 
@@ -239,48 +269,64 @@ namespace HeiProMap {
                 u64 n_pairs = 0, n_groups = 0, n_group_vertices = 0, n_candidates = 0, n_moves = 0;
 #endif
 
-                for (const auto &[A, B] : edges) {
-                    // Skip if pair no longer exists (prior move may have dissolved it)
-                    if (q_graph.get_weight(A, B) == 0) { continue; }
+                for (partition_t A = 0; A < k; ++A) {
+                    // Snapshot the neighbors: moves change the quotient graph. Both orientations of a quotient edge
+                    // are visited, so the sender group of either block can move.
+                    targets.clear();
+                    for (const auto &he : q_graph.neighbors(A)) {
+                        if (iter == 0 || touched_prev[A] || near_touched[he.target]) { targets.push_back(he.target); }
+                    }
+                    if (targets.empty()) { continue; }
+
+                    bool groups_stale = true;
+                    for (size_t idx = 0; idx < targets.size(); ++idx) {
+                        const partition_t B = targets[idx];
+                        // Skip if pair no longer exists (prior move may have dissolved it)
+                        if (q_graph.get_weight(A, B) == 0) { continue; }
 #if ENABLE_PROFILER
-                    ++n_pairs;
-                    auto t_prev = std::chrono::steady_clock::now();
+                        ++n_pairs;
+                        auto t_prev = std::chrono::steady_clock::now();
 #endif
 
-                    // -----------------------------------------------------------
-                    // Collect S_AB: boundary vertices in A connecting to B
-                    // -----------------------------------------------------------
-                    group.clear();
-                    for (size_t i = 0; i < bv_manager.size(A); ++i) {
-                        const vertex_t u = bv_manager.get(A, i);
-                        for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) {
-                            if (block_conn.get_id(j) == B) {
-                                group.push_back(u);
-                                in_group[u] = true;
-                                break;
+                        // -------------------------------------------------------
+                        // Collect S_AB: boundary vertices in A connecting to B. One pass over the boundary of A
+                        // builds the groups of all neighbors; a move invalidates them.
+                        // -------------------------------------------------------
+                        if (groups_stale) {
+                            groups.resize(targets.size());
+                            for (size_t i = 0; i < targets.size(); ++i) {
+                                groups[i].clear();
+                                slot_of[targets[i]] = static_cast<int32_t>(i);
                             }
+                            for (size_t i = 0; i < bv_manager.size(A); ++i) {
+                                const vertex_t u = bv_manager.get(A, i);
+                                for (size_t j = block_conn.start(u); j < block_conn.end(u); ++j) {
+                                    const int32_t slot = slot_of[block_conn.get_id(j)];
+                                    if (slot >= 0) { groups[slot].push_back(u); }
+                                }
+                            }
+                            for (const partition_t T : targets) { slot_of[T] = -1; }
+                            groups_stale = false;
                         }
-                    }
-                    if (group.empty()) {
-                        for (vertex_t u : group) { in_group[u] = false; }
+                        const std::vector<vertex_t> &group = groups[idx];
+                        if (group.empty()) {
 #if ENABLE_PROFILER
-                        t_collect += ms_between(t_prev, std::chrono::steady_clock::now());
+                            t_collect += ms_between(t_prev, std::chrono::steady_clock::now());
 #endif
-                        continue;
-                    }
+                            continue;
+                        }
+                        for (const vertex_t u : group) { in_group[u] = true; }
 #if ENABLE_PROFILER
-                    ++n_groups;
-                    n_group_vertices += group.size();
-                    {
-                        const auto t_now = std::chrono::steady_clock::now();
-                        t_collect += ms_between(t_prev, t_now);
-                        t_prev = t_now;
-                    }
+                        ++n_groups;
+                        n_group_vertices += group.size();
+                        {
+                            const auto t_now = std::chrono::steady_clock::now();
+                            t_collect += ms_between(t_prev, t_now);
+                            t_prev = t_now;
+                        }
 #endif
 
-                    // Also consider S_BA (vertices in B connecting to A) as a separate group
-                    // — handled in the next iteration when (B,A) is processed as (A,B) with A<B swapped.
-                    // Here we only move S_AB (group in A).
+                    // Only S_AB (the group in A) moves here; S_BA is tried when B is the outer block.
 
                     // -----------------------------------------------------------
                     // Build ext_neighbors and weight_to_A for this group
@@ -298,7 +344,7 @@ namespace HeiProMap {
                             if (D == A) {
                                 weight_to_A += w;
                             } else {
-                                if (tmp_weight[D] == 0) { dirty.push_back(D); }
+                                if (!tmp_seen[D]) { tmp_seen[D] = 1; dirty.push_back(D); }
                                 tmp_weight[D] += w;
                             }
                         }
@@ -307,6 +353,7 @@ namespace HeiProMap {
                     for (const partition_t D : dirty) {
                         ext_neighbors.emplace_back(D, tmp_weight[D]);
                         tmp_weight[D] = 0;
+                        tmp_seen[D] = 0;
                     }
                     dirty.clear();
 #if ENABLE_PROFILER
@@ -335,7 +382,7 @@ namespace HeiProMap {
                                                     ext_neighbors, weight_to_A,
                                                     p_manager, q_graph, d_oracle, block_conn,
                                                     alpha_end, beta_end, alpha_link, beta_link);
-                        if (d > best_delta) { best_delta = d; best_C = C; }
+                        if (d > best_delta + kMinGain) { best_delta = d; best_C = C; }
                     };
 
                     try_candidate(B); // move senders INTO the receiver block
@@ -359,7 +406,10 @@ namespace HeiProMap {
                             block_conn.move(g, u, A, best_C);
                             apply_move(g, bv_manager, p_manager, u, g.v_weight(u), A, best_C);
                         }
+                        last_touched[A] = last_touched[best_C] = iter + 1;
+                        for (const auto &[D, w_group_to_D] : ext_neighbors) { last_touched[D] = iter + 1; }
                         any_move = true;
+                        groups_stale = true;
 #if ENABLE_PROFILER
                         ++n_moves;
 #endif
@@ -369,6 +419,7 @@ namespace HeiProMap {
 #if ENABLE_PROFILER
                     t_apply += ms_between(t_prev, std::chrono::steady_clock::now());
 #endif
+                    }
                 }
 
 #if ENABLE_PROFILER
@@ -376,7 +427,7 @@ namespace HeiProMap {
                 record_phase("build_ext_neighbors", t_ext);
                 record_phase("evaluate_candidates", t_eval);
                 record_phase("apply_move", t_apply);
-                std::cout << "[WaverMessageRefinement] iteration " << iter << ": pairs " << n_pairs
+                if (config.verbose) std::cout << "[WaverMessageRefinement] iteration " << iter << ": pairs " << n_pairs
                           << ", groups " << n_groups << " (" << n_group_vertices << " vertices), candidates "
                           << n_candidates << ", moves " << n_moves << std::endl;
 #endif

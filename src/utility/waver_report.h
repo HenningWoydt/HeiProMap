@@ -89,6 +89,9 @@ namespace HeiProMap {
         os << "Lmax                  : " << lmax << std::endl;
         os << "Imbalance (input)     : " << ac.imbalance << std::endl;
         os << "Threads               : " << ac.threads << std::endl;
+        os << "Spectral smoothing    : " << ac.spectral_smoothing.rounds << " x " << ac.spectral_smoothing.depth
+           << " (> " << ac.spectral_smoothing.big_n << " vertices: " << ac.spectral_smoothing.big_rounds << " x "
+           << ac.spectral_smoothing.big_depth << ")" << std::endl;
         os << "alpha_send            : " << ac.alpha_send << std::endl;
         os << "alpha_recv            : " << ac.alpha_recv << std::endl;
         os << "alpha_link            : " << ac.alpha_link << std::endl;
@@ -105,7 +108,17 @@ namespace HeiProMap {
            << ": " << std::right << std::setw(16) << endpoint.max_pe << "\n";
         os << std::left << std::setw(36) << "  max neighbors of a PE"
            << ": " << std::right << std::setw(16) << static_cast<u64>(endpoint.max_messages) << "\n";
-        os << "max block w           : " << max(p_manager.get_bweights()) << std::endl;
+        // No schedule can finish before its busiest link or its busiest PE endpoint is done with its messages.
+        // Model units; the local computation of a PE (rows, nonzeros) is not part of the endpoint load here.
+        const bool link_bound = max_link_load >= endpoint.max_load;
+        os << std::left << std::setw(36) << "Resource LB (max of the two)"
+           << ": " << std::right << std::setw(16) << static_cast<u64>(std::max(max_link_load, endpoint.max_load)) << "\n";
+        os << std::left << std::setw(36) << "  bound by"
+           << ": " << std::right << std::setw(16) << (link_bound ? "link" : "PE endpoint") << "\n";
+        os << std::left << std::setw(36) << "  link / endpoint load"
+           << ": " << std::right << std::setw(16) << std::fixed << std::setprecision(3)
+           << (endpoint.max_load > 0.0 ? max_link_load / endpoint.max_load : 0.0) << std::defaultfloat << "\n";
+        os << "max block w          : " << max(p_manager.get_bweights()) << std::endl;
         os << "#empty partitions     : " << n_empty_partitions << std::endl;
         os << "#oload partitions     : " << n_overloaded_partitions << std::endl;
         os << "Sum oload weights     : " << sum_too_much << std::endl;

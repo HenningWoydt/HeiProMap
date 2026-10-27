@@ -137,6 +137,7 @@ namespace HeiProMap {
             input_graph = std::move(g);
             random_engine = RandomEngine(ac.seed);
 
+            spectral.set_smoothing(ac.spectral_smoothing);
             d_oracle.initialize(std::move(t_topology), ac.threads);
             ac.k = d_oracle.current_k();
 
@@ -250,7 +251,8 @@ namespace HeiProMap {
                             << ", inferred width " << W << ")" << std::endl;
                     exit(EXIT_FAILURE);
                 }
-                r.part = SpectralPrepartitioner::partition(input_graph, W, k / W, ac.seed, ac.threads);
+                r.part = SpectralPrepartitioner::partition(input_graph, W, k / W, ac.seed, ac.threads,
+                                                          ac.spectral_smoothing);
                 r.quotient = contract_into_quotient(input_graph, r.part, k, ac.threads);
             } else {
                 r = partition_into_quotient(input_graph, k, ac.imbalance, ac.kaminpar_threads,

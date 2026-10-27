@@ -44,6 +44,17 @@
 
 namespace HeiProMap {
 
+    // Effort of the re-smoothing after each prolongation: rounds of inexact inverse iteration, each with `depth` CG
+    // iterations. Levels with more than big_n vertices get their own, cheaper settings: they dominate the run time,
+    // never reach the residual tolerance anyway, and a single round gave the better partition on the 10M-row test.
+    struct SpectralSmoothing {
+        int rounds = 3;
+        int depth = 24;
+        int big_rounds = 1;
+        int big_depth = 8;
+        vertex_t big_n = 500000;
+    };
+
     // Bottom Laplacian subspace of the current graph level, carried along the
     // solver's own coarsening hierarchy (multilevel inverse iteration as in
     // Barnard & Simon 1994), plus recursive coordinate bisection onto the grid.
@@ -53,9 +64,10 @@ namespace HeiProMap {
         static constexpr vertex_t kDenseMaxN = 4096;
         static constexpr int kCoarseRounds = 20;
         static constexpr int kFallbackRounds = 30;
-        static constexpr int kMaxRounds = 3;
-        static constexpr int kCgDepth = 24;
+        static constexpr int kCgDepth = 24; // work budget of the CG fallback for the coarsest level
         static constexpr f64 kResidualTol = 0.03;
+
+        void set_smoothing(const SpectralSmoothing &smoothing) { smoothing_ = smoothing; }
 
         bool initialized() const { return !X.empty() && !X[0].empty(); }
 
@@ -87,7 +99,11 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < fine.n; ++u) F[k][u] = X[k][m.get(u)];
             }
             X.swap(F);
-            resmooth(fine, kMaxRounds, kCgDepth);
+            if (fine.n > smoothing_.big_n) {
+                resmooth(fine, smoothing_.big_rounds, smoothing_.big_depth);
+            } else {
+                resmooth(fine, smoothing_.rounds, smoothing_.depth);
+            }
         }
 
         // Recursive coordinate bisection onto the W x H grid described by topo
@@ -213,6 +229,7 @@ namespace HeiProMap {
 
     private:
         std::vector<std::vector<f64>> X; // kSubspace mean-free orthonormal vectors, X[0] smoothest
+        SpectralSmoothing smoothing_;
 
         static std::vector<f64> degrees(const CSRGraph &g) {
             std::vector<f64> deg(g.n, 0.0);

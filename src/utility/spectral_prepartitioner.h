@@ -143,7 +143,8 @@ namespace HeiProMap {
     public:
         // Returns part[u] in [0, W * H) for every vertex of g. Requires g.n >= W * H.
         static std::vector<partition_t> partition(const CSRGraph &g, const size_t W, const size_t H,
-                                                  const u64 seed, const u64 threads) {
+                                                  const u64 seed, const u64 threads,
+                                                  const SpectralSmoothing &smoothing = SpectralSmoothing()) {
             HEIPROMAP_PROFILE_SCOPE("partition", "SpectralPrepartitioner", "partition");
 
             // Heavy-edge coarsening hierarchy. Reserved so the graph references stay valid.
@@ -165,6 +166,7 @@ namespace HeiProMap {
             }
 
             SpectralTracker tracker;
+            tracker.set_smoothing(smoothing);
             tracker.init(level(maps.size()), seed);
             for (size_t i = maps.size(); i-- > 0;) { tracker.prolong(maps[i], level(i)); }
 
