@@ -32,7 +32,6 @@
 #include <cmath>
 #include <iostream>
 #include <numeric>
-#include <optional>
 #include <random>
 #include <string>
 #include <utility>
@@ -40,29 +39,11 @@
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
+#include "aligned_array.h"
 #include "mapping.h"
 #include "profiler.h"
 
 namespace HeiProMap {
-
-    // std::allocator that leaves the elements of a resized vector uninitialized. The large work vectors of the
-    // smoothing are written completely by parallel loops, and zero-filling them first would run on a single thread
-    // (the first touch of the memory included).
-    template<typename T>
-    struct NoInitAllocator : std::allocator<T> {
-        template<typename U>
-        struct rebind { using other = NoInitAllocator<U>; };
-
-        NoInitAllocator() = default;
-        template<typename U>
-        explicit NoInitAllocator(const NoInitAllocator<U> &) noexcept {}
-
-        template<typename U>
-        void construct(U *p) { ::new(static_cast<void *>(p)) U; }
-
-        template<typename U, typename... A>
-        void construct(U *p, A &&... a) { ::new(static_cast<void *>(p)) U(std::forward<A>(a)...); }
-    };
 
     // Effort of the re-smoothing after each prolongation: rounds of inexact inverse iteration, each with `depth` CG
     // iterations. Levels with more than big_n vertices get their own, cheaper settings: they dominate the run time,
@@ -81,8 +62,9 @@ namespace HeiProMap {
     // Barnard & Simon 1994), plus recursive coordinate bisection onto the grid.
     class SpectralTracker {
     public:
-        // A vector whose elements are not initialized by resize: every use writes it before reading it.
-        using Vec = std::vector<f64, NoInitAllocator<f64>>;
+        // A vector of the current number of vertices (n_) whose elements are not initialized: every use writes it
+        // before reading it. Its size() is rounded up, so the loops use n_.
+        using Vec = AlignedArray<f64>;
 
         static constexpr size_t kSubspace = 3;
         static constexpr vertex_t kDenseMaxN = 4096;
@@ -93,20 +75,20 @@ namespace HeiProMap {
 
         void set_smoothing(const SpectralSmoothing &smoothing) { smoothing_ = smoothing; }
 
-        bool initialized() const { return !X.empty() && !X[0].empty(); }
+        bool initialized() const { return n_ > 0; }
 
         // The kSubspace mean-free orthonormal vectors, X[0] smoothest.
         const std::vector<Vec> &basis() const { return X; }
 
-        vertex_t size() const { return initialized() ? static_cast<vertex_t>(X[0].size()) : 0; }
+        vertex_t size() const { return static_cast<vertex_t>(n_); }
 
         void init(const CSRGraph &g, u64 seed) {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "init");
-            const size_t n = g.n;
-            X = make_vecs(kSubspace, n);
+            n_ = g.n;
+            X = make_vecs(kSubspace, n_);
             std::mt19937_64 rng(seed ^ 0x5BEC7A1ull);
             std::uniform_real_distribution<f64> unif(-0.5, 0.5);
-            for (auto &x: X) for (auto &e: x) e = unif(rng);
+            for (auto &x: X) for (size_t i = 0; i < n_; ++i) x[i] = unif(rng);
 
             if (g.n <= kDenseMaxN) {
                 dense_solve(g);
@@ -118,13 +100,16 @@ namespace HeiProMap {
         // Piecewise-constant prolongation onto the finer graph, then re-smoothing.
         void prolong(const Mapping &m, const CSRGraph &fine) {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "prolong");
-            std::vector<Vec> F = make_vecs(kSubspace, fine.n);
+            const size_t n = fine.n;
+            std::vector<Vec> F = make_vecs(kSubspace, n);
             for (size_t k = 0; k < kSubspace; ++k) {
-                for_chunks(fine.n, [&](const size_t lo, const size_t hi) {
-                    for (size_t u = lo; u < hi; ++u) F[k][u] = X[k][m.get(static_cast<vertex_t>(u))];
-                });
+                #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+                for (size_t u = 0; u < n; ++u) {
+                    F[k][u] = X[k][m.get(static_cast<vertex_t>(u))];
+                }
             }
             X.swap(F);
+            n_ = n;
             if (fine.n > smoothing_.big_n) {
                 resmooth(fine, smoothing_.big_rounds, smoothing_.big_depth);
             } else {
@@ -152,11 +137,8 @@ namespace HeiProMap {
                                                           + cap_ps[(r + 1) * (W + 1) + c] - cap_ps[r * (W + 1) + c];
                 }
             }
-            auto rect_cap = [&](size_t c0, size_t r0, size_t w, size_t h) {
-                return cap_ps[(r0 + h) * (W + 1) + (c0 + w)] - cap_ps[r0 * (W + 1) + (c0 + w)]
-                       - cap_ps[(r0 + h) * (W + 1) + c0] + cap_ps[r0 * (W + 1) + c0];
-            };
 
+            // A rectangle of cells and the vertices perm[lo, hi) that are placed in it.
             struct Node {
                 size_t lo, hi, col0, row0, w, h;
             };
@@ -188,13 +170,11 @@ namespace HeiProMap {
                     b = {0, 0, nd.col0, nd.row0 + hA, nd.w, nd.h - hA};
                 }
 
-                const Vec &key = split_cols ? cx : cy;
-                std::sort(perm.begin() + nd.lo, perm.begin() + nd.hi, [&](vertex_t x, vertex_t y) {
-                    return key[x] != key[y] ? key[x] < key[y] : x < y;
-                });
+                const KeyLess less{split_cols ? &cx : &cy};
+                std::sort(perm.begin() + nd.lo, perm.begin() + nd.hi, less);
 
-                const f64 capA = rect_cap(a.col0, a.row0, a.w, a.h);
-                const f64 cap = capA + rect_cap(b.col0, b.row0, b.w, b.h);
+                const f64 capA = rect_capacity(cap_ps, W, a.col0, a.row0, a.w, a.h);
+                const f64 cap = capA + rect_capacity(cap_ps, W, b.col0, b.row0, b.w, b.h);
                 f64 total_w = 0.0;
                 for (size_t i = nd.lo; i < nd.hi; ++i) total_w += static_cast<f64>(g.v_weight(perm[i]));
                 const f64 target = cap > 0.0 ? total_w * capA / cap : 0.0;
@@ -255,42 +235,53 @@ namespace HeiProMap {
 
     private:
         std::vector<Vec> X; // kSubspace mean-free orthonormal vectors, X[0] smoothest
+        size_t n_ = 0;      // their length: the number of vertices of the current level
         SpectralSmoothing smoothing_;
 
-        // The vector operations work on chunks of fixed size, whatever the number of threads, so every result
-        // (including the reductions, which add the chunk sums in order) is the same for any number of threads.
+        // Reductions add the sums of chunks of fixed size in order, whatever the number of threads, so every result
+        // is the same for any number of threads. The other loops write independent elements.
         static constexpr size_t kChunk = size_t(1) << 14;
-        static constexpr size_t kParallelMin = size_t(1) << 16; // smaller vectors are handled by one thread
+        static constexpr size_t kParallelMin = size_t(1) << 16; // loops over fewer elements run on one thread
 
-        // Calls f(lo, hi) for the consecutive chunks [lo, hi) of [0, n).
-        template<typename F>
-        static void for_chunks(const size_t n, const int threads, F &&f) {
-            const size_t chunks = (n + kChunk - 1) / kChunk;
-            const int th = n >= kParallelMin ? std::max(1, threads) : 1;
-            #pragma omp parallel for num_threads(th) schedule(static)
-            for (size_t c = 0; c < chunks; ++c) { f(c * kChunk, std::min(n, (c + 1) * kChunk)); }
+        // Threads of a loop over n elements.
+        int threads_for(const size_t n) const { return n >= kParallelMin ? std::max(1, smoothing_.threads) : 1; }
+
+        static size_t num_chunks(const size_t n) { return (n + kChunk - 1) / kChunk; }
+
+        // Orders the vertices by one coordinate, ties by id.
+        struct KeyLess {
+            const Vec *key;
+
+            bool operator()(const vertex_t x, const vertex_t y) const {
+                return (*key)[x] != (*key)[y] ? (*key)[x] < (*key)[y] : x < y;
+            }
+        };
+
+        // Capacity of the w x h cells with the top left cell (c0, r0), from the 2D prefix sums.
+        static f64 rect_capacity(const std::vector<f64> &ps, const size_t W,
+                                 const size_t c0, const size_t r0, const size_t w, const size_t h) {
+            return ps[(r0 + h) * (W + 1) + (c0 + w)] - ps[r0 * (W + 1) + (c0 + w)]
+                   - ps[(r0 + h) * (W + 1) + c0] + ps[r0 * (W + 1) + c0];
         }
-
-        template<typename F>
-        void for_chunks(const size_t n, F &&f) const { for_chunks(n, smoothing_.threads, std::forward<F>(f)); }
 
         // count vectors of n elements each, not initialized.
         static std::vector<Vec> make_vecs(const size_t count, const size_t n) {
             std::vector<Vec> v(count);
-            for (auto &e: v) { e.resize(n); }
+            for (auto &e: v) { e.initialize(n); }
             return v;
         }
 
-        static Vec degrees(const CSRGraph &g, const int threads) {
+        // Weighted degree of every vertex.
+        Vec degrees(const CSRGraph &g) const {
+            HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "degrees");
             Vec deg;
-            deg.resize(g.n);
-            for_chunks(g.n, threads, [&](const size_t lo, const size_t hi) {
-                for (size_t u = lo; u < hi; ++u) {
-                    f64 d = 0.0;
-                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) d += static_cast<f64>(g.edge_w(j));
-                    deg[u] = d;
-                }
-            });
+            deg.initialize(g.n);
+            #pragma omp parallel for num_threads(threads_for(g.n)) schedule(static)
+            for (size_t u = 0; u < g.n; ++u) {
+                f64 d = 0.0;
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) d += static_cast<f64>(g.edge_w(j));
+                deg[u] = d;
+            }
             return deg;
         }
 
@@ -300,12 +291,14 @@ namespace HeiProMap {
         struct CompactCsr {
             vertex_t n = 0;
             const size_t *off = nullptr;
-            std::vector<u32, NoInitAllocator<u32>> adj;
-            std::vector<f32, NoInitAllocator<f32>> wf;
-            std::vector<f64, NoInitAllocator<f64>> wd;
+            AlignedArray<u32> adj;
+            AlignedArray<f32> wf;
+            AlignedArray<f64> wd;
             bool uniform = true;
+            bool weights_f32 = false; // otherwise wd holds the weights (if the graph is not unweighted)
 
             CompactCsr(const CSRGraph &g, const int threads) {
+                HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "compact_csr");
                 n = g.n;
                 off = &g.neighborhoods[0];
                 if (g.n >= (static_cast<vertex_t>(1) << 32)) {
@@ -313,61 +306,44 @@ namespace HeiProMap {
                     exit(EXIT_FAILURE);
                 }
                 const size_t m = g.neighborhoods[g.n];
-                adj.resize(m);
-                for_chunks(m, threads, [&](const size_t lo, const size_t hi) {
-                    for (size_t j = lo; j < hi; ++j) adj[j] = static_cast<u32>(g.edges_v[j]);
-                });
+                const int th = m >= kParallelMin ? std::max(1, threads) : 1;
+                adj.initialize(m);
+                #pragma omp parallel for num_threads(th) schedule(static)
+                for (size_t j = 0; j < m; ++j) adj[j] = static_cast<u32>(g.edges_v[j]);
+
                 uniform = g.uniform_e_weights;
                 if (uniform) return;
+
                 constexpr weight_t kExactF32 = static_cast<weight_t>(1) << 24;
-                std::vector<char> chunk_exact((m + kChunk - 1) / kChunk, 1);
-                for_chunks(m, threads, [&](const size_t lo, const size_t hi) {
-                    bool ok = true;
-                    for (size_t j = lo; j < hi && ok; ++j) ok = g.edges_w[j] >= 0 && g.edges_w[j] <= kExactF32;
-                    chunk_exact[lo / kChunk] = ok;
-                });
-                const bool exact = std::all_of(chunk_exact.begin(), chunk_exact.end(), [](const char e) { return e != 0; });
-                if (exact) {
-                    wf.resize(m);
-                    for_chunks(m, threads, [&](const size_t lo, const size_t hi) {
-                        for (size_t j = lo; j < hi; ++j) wf[j] = static_cast<f32>(g.edges_w[j]);
-                    });
+                size_t n_inexact = 0;
+                #pragma omp parallel for num_threads(th) schedule(static) reduction(+:n_inexact)
+                for (size_t j = 0; j < m; ++j) n_inexact += (g.edges_w[j] < 0 || g.edges_w[j] > kExactF32);
+                weights_f32 = n_inexact == 0;
+                if (weights_f32) {
+                    wf.initialize(m);
+                    #pragma omp parallel for num_threads(th) schedule(static)
+                    for (size_t j = 0; j < m; ++j) wf[j] = static_cast<f32>(g.edges_w[j]);
                 } else {
-                    wd.resize(m);
-                    for_chunks(m, threads, [&](const size_t lo, const size_t hi) {
-                        for (size_t j = lo; j < hi; ++j) wd[j] = static_cast<f64>(g.edges_w[j]);
-                    });
+                    wd.initialize(m);
+                    #pragma omp parallel for num_threads(th) schedule(static)
+                    for (size_t j = 0; j < m; ++j) wd[j] = static_cast<f64>(g.edges_w[j]);
                 }
             }
 
-            // Calls f with a weight accessor f(j) -> f64 matching the storage of this graph.
-            template<typename F>
-            void with_weights(F &&f) const {
-                if (uniform) {
-                    f([](size_t) { return 1.0; });
-                } else if (!wf.empty()) {
-                    const f32 *w = wf.data();
-                    f([w](size_t j) { return static_cast<f64>(w[j]); });
-                } else {
-                    const f64 *w = wd.data();
-                    f([w](size_t j) { return w[j]; });
-                }
+            f64 weight(const size_t j) const {
+                if (uniform) return 1.0;
+                return weights_f32 ? static_cast<f64>(wf[j]) : wd[j];
             }
         };
 
         // out = L in for one vector.
         void apply_L(const CompactCsr &c, const Vec &deg, const Vec &in, Vec &out) const {
-            c.with_weights([&](auto w) {
-                const u32 *adj = c.adj.data();
-                const f64 *x = in.data();
-                const int th = c.n >= kParallelMin ? std::max(1, smoothing_.threads) : 1;
-                #pragma omp parallel for num_threads(th) schedule(dynamic, 2048)
-                for (size_t u = 0; u < c.n; ++u) {
-                    f64 s = deg[u] * x[u];
-                    for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) s -= w(j) * x[adj[j]];
-                    out[u] = s;
-                }
-            });
+            #pragma omp parallel for num_threads(threads_for(c.n)) schedule(dynamic, 2048)
+            for (size_t u = 0; u < c.n; ++u) {
+                f64 s = deg[u] * in[u];
+                for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) s -= c.weight(j) * in[c.adj[j]];
+                out[u] = s;
+            }
         }
 
         // out_k = L in_k for the kSubspace vectors at once: the matrix is streamed once instead of kSubspace times.
@@ -376,32 +352,31 @@ namespace HeiProMap {
                            const std::array<const Vec *, kSubspace> &in,
                            const std::array<Vec *, kSubspace> &out) const {
             static_assert(kSubspace == 3, "apply_L_block is written for three vectors");
-            c.with_weights([&](auto w) {
-                const u32 *adj = c.adj.data();
-                const f64 *x0 = in[0]->data(), *x1 = in[1]->data(), *x2 = in[2]->data();
-                f64 *y0 = out[0]->data(), *y1 = out[1]->data(), *y2 = out[2]->data();
-                const int th = c.n >= kParallelMin ? std::max(1, smoothing_.threads) : 1;
-                #pragma omp parallel for num_threads(th) schedule(dynamic, 2048)
-                for (size_t u = 0; u < c.n; ++u) {
-                    f64 s0 = deg[u] * x0[u], s1 = deg[u] * x1[u], s2 = deg[u] * x2[u];
-                    for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) {
-                        const f64 wj = w(j);
-                        const u32 v = adj[j];
-                        s0 -= wj * x0[v];
-                        s1 -= wj * x1[v];
-                        s2 -= wj * x2[v];
-                    }
-                    y0[u] = s0;
-                    y1[u] = s1;
-                    y2[u] = s2;
+            const f64 *x0 = in[0]->get_ptr(), *x1 = in[1]->get_ptr(), *x2 = in[2]->get_ptr();
+            f64 *y0 = out[0]->get_ptr(), *y1 = out[1]->get_ptr(), *y2 = out[2]->get_ptr();
+            #pragma omp parallel for num_threads(threads_for(c.n)) schedule(dynamic, 2048)
+            for (size_t u = 0; u < c.n; ++u) {
+                f64 s0 = deg[u] * x0[u], s1 = deg[u] * x1[u], s2 = deg[u] * x2[u];
+                for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) {
+                    const f64 wj = c.weight(j);
+                    const u32 v = c.adj[j];
+                    s0 -= wj * x0[v];
+                    s1 -= wj * x1[v];
+                    s2 -= wj * x2[v];
                 }
-            });
+                y0[u] = s0;
+                y1[u] = s1;
+                y2[u] = s2;
+            }
         }
 
         f64 dot(const Vec &a, const Vec &b) const {
-            const size_t n = a.size();
-            std::vector<f64> partial((n + kChunk - 1) / kChunk);
-            for_chunks(n, [&](const size_t lo, const size_t hi) {
+            const size_t n = n_;
+            const size_t chunks = num_chunks(n);
+            std::vector<f64> partial(chunks);
+            #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+            for (size_t ch = 0; ch < chunks; ++ch) {
+                const size_t lo = ch * kChunk, hi = std::min(n, lo + kChunk);
                 f64 s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0;
                 size_t i = lo;
                 for (; i + 4 <= hi; i += 4) {
@@ -411,58 +386,67 @@ namespace HeiProMap {
                     s3 += a[i + 3] * b[i + 3];
                 }
                 for (; i < hi; ++i) s0 += a[i] * b[i];
-                partial[lo / kChunk] = (s0 + s1) + (s2 + s3);
-            });
+                partial[ch] = (s0 + s1) + (s2 + s3);
+            }
             f64 s = 0.0;
             for (const f64 p: partial) s += p;
             return s;
         }
 
         void subtract_mean(Vec &v) const {
-            if (v.empty()) return;
-            const size_t n = v.size();
-            std::vector<f64> partial((n + kChunk - 1) / kChunk);
-            for_chunks(n, [&](const size_t lo, const size_t hi) {
+            if (n_ == 0) return;
+            const size_t n = n_;
+            const size_t chunks = num_chunks(n);
+            std::vector<f64> partial(chunks);
+            #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+            for (size_t ch = 0; ch < chunks; ++ch) {
+                const size_t lo = ch * kChunk, hi = std::min(n, lo + kChunk);
                 f64 s = 0.0;
                 for (size_t i = lo; i < hi; ++i) s += v[i];
-                partial[lo / kChunk] = s;
-            });
+                partial[ch] = s;
+            }
             f64 sum = 0.0;
             for (const f64 p: partial) sum += p;
             const f64 mean = sum / static_cast<f64>(n);
-            for_chunks(n, [&](const size_t lo, const size_t hi) {
-                for (size_t i = lo; i < hi; ++i) v[i] -= mean;
-            });
+            #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+            for (size_t i = 0; i < n; ++i) v[i] -= mean;
+        }
+
+        // y += a * x
+        void axpy(Vec &y, const f64 a, const Vec &x) const {
+            const size_t n = n_;
+            #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+            for (size_t i = 0; i < n; ++i) y[i] += a * x[i];
+        }
+
+        // y *= a
+        void scale(Vec &y, const f64 a) const {
+            const size_t n = n_;
+            #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+            for (size_t i = 0; i < n; ++i) y[i] *= a;
+        }
+
+        // Removes the constant vector and the components along X[0..k) from X[k].
+        void project_out(const size_t k) {
+            subtract_mean(X[k]);
+            for (size_t j = 0; j < k; ++j) axpy(X[k], -dot(X[k], X[j]), X[j]);
         }
 
         // Modified Gram-Schmidt against the constant vector and each other;
         // a collapsed vector is re-seeded.
         void orthonormalise(u64 salt) {
             for (size_t k = 0; k < X.size(); ++k) {
-                auto &xk = X[k];
-                auto project_out = [&]() {
-                    subtract_mean(xk);
-                    for (size_t j = 0; j < k; ++j) {
-                        const f64 p = dot(xk, X[j]);
-                        for_chunks(xk.size(), [&](const size_t lo, const size_t hi) {
-                            for (size_t i = lo; i < hi; ++i) xk[i] -= p * X[j][i];
-                        });
-                    }
-                };
-                project_out();
-                f64 nk = std::sqrt(dot(xk, xk));
+                project_out(k);
+                f64 nk = std::sqrt(dot(X[k], X[k]));
                 if (!(nk > 1e-30)) {
                     std::mt19937_64 rng(salt * 31 + k);
                     std::uniform_real_distribution<f64> unif(-0.5, 0.5);
-                    for (auto &e: xk) e = unif(rng);
-                    project_out();
-                    nk = std::sqrt(dot(xk, xk));
+                    for (size_t i = 0; i < n_; ++i) X[k][i] = unif(rng);
+                    project_out(k);
+                    nk = std::sqrt(dot(X[k], X[k]));
                     if (!(nk > 0.0)) nk = 1.0;
                 }
-                const f64 inv = 1.0 / nk;
-                for_chunks(xk.size(), [&](const size_t lo, const size_t hi) {
-                    for (size_t i = lo; i < hi; ++i) xk[i] *= inv;
-                });
+                scale(X[k], 1.0 / nk);
             }
         }
 
@@ -513,22 +497,28 @@ namespace HeiProMap {
 
             std::vector<f64> V;
             small_sym_eig(s, B, V);
+
+            // Eigenvectors by ascending eigenvalue (ties by index): insertion sort of s indices.
             std::vector<size_t> ord(s);
             std::iota(ord.begin(), ord.end(), static_cast<size_t>(0));
-            std::sort(ord.begin(), ord.end(), [&](size_t a, size_t b) {
-                return B[a * s + a] != B[b * s + b] ? B[a * s + a] < B[b * s + b] : a < b;
-            });
+            for (size_t i = 1; i < s; ++i) {
+                for (size_t j = i; j > 0; --j) {
+                    const size_t a = ord[j], b = ord[j - 1];
+                    const f64 ea = B[a * s + a], eb = B[b * s + b];
+                    if (!(ea < eb || (ea == eb && a < b))) break;
+                    std::swap(ord[j], ord[j - 1]);
+                }
+            }
 
             std::vector<Vec> NX = make_vecs(s, g.n);
-            for_chunks(g.n, [&](const size_t lo, const size_t hi) {
-                for (size_t r = lo; r < hi; ++r) {
-                    for (size_t k = 0; k < s; ++k) {
-                        f64 acc = 0.0;
-                        for (size_t j = 0; j < s; ++j) acc += X[j][r] * V[j * s + ord[k]];
-                        NX[k][r] = acc;
-                    }
+            #pragma omp parallel for num_threads(threads_for(g.n)) schedule(static)
+            for (size_t r = 0; r < g.n; ++r) {
+                for (size_t k = 0; k < s; ++k) {
+                    f64 acc = 0.0;
+                    for (size_t j = 0; j < s; ++j) acc += X[j][r] * V[j * s + ord[k]];
+                    NX[k][r] = acc;
                 }
-            });
+            }
             X.swap(NX);
         }
 
@@ -542,16 +532,15 @@ namespace HeiProMap {
             std::array<f64, S> rsq{};
             std::array<bool, S> active{};
             for (size_t k = 0; k < S; ++k) {
-                r[k].resize(n);
-                p[k].resize(n);
-                Ap[k].resize(n);
-                for_chunks(n, [&](const size_t lo, const size_t hi) {
-                    for (size_t i = lo; i < hi; ++i) {
-                        r[k][i] = X[k][i];
-                        p[k][i] = X[k][i];
-                        X[k][i] = 0.0;
-                    }
-                });
+                r[k].initialize(n);
+                p[k].initialize(n);
+                Ap[k].initialize(n);
+                #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+                for (size_t i = 0; i < n; ++i) {
+                    r[k][i] = X[k][i];
+                    p[k][i] = X[k][i];
+                    X[k][i] = 0.0;
+                }
                 rsq[k] = dot(r[k], r[k]);
                 active[k] = rsq[k] > 0.0;
             }
@@ -566,18 +555,16 @@ namespace HeiProMap {
                         continue;
                     }
                     const f64 alpha = rsq[k] / pAp;
-                    for_chunks(n, [&](const size_t lo, const size_t hi) {
-                        for (size_t i = lo; i < hi; ++i) {
-                            X[k][i] += alpha * p[k][i];
-                            r[k][i] -= alpha * Ap[k][i];
-                        }
-                    });
+                    #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+                    for (size_t i = 0; i < n; ++i) {
+                        X[k][i] += alpha * p[k][i];
+                        r[k][i] -= alpha * Ap[k][i];
+                    }
                     const f64 nrsq = dot(r[k], r[k]);
                     const f64 beta = nrsq / rsq[k];
                     rsq[k] = nrsq;
-                    for_chunks(n, [&](const size_t lo, const size_t hi) {
-                        for (size_t i = lo; i < hi; ++i) p[k][i] = r[k][i] + beta * p[k][i];
-                    });
+                    #pragma omp parallel for num_threads(threads_for(n)) schedule(static)
+                    for (size_t i = 0; i < n; ++i) p[k][i] = r[k][i] + beta * p[k][i];
                 }
             }
         }
@@ -593,16 +580,10 @@ namespace HeiProMap {
         // Rounds of inexact inverse iteration + Rayleigh-Ritz; returns {rounds, residual}.
         std::pair<int, f64> resmooth(const CSRGraph &g, int budget, int cg_depth) {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "resmooth");
-            Vec deg;
-            std::optional<CompactCsr> compact_storage;
-            {
-                HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "resmooth_setup");
-                deg = degrees(g, smoothing_.threads);
-                compact_storage.emplace(g, smoothing_.threads);
-            }
-            const CompactCsr &compact = *compact_storage;
+            const Vec deg = degrees(g);
+            const CompactCsr compact(g, smoothing_.threads);
             Vec scratch;
-            scratch.resize(g.n);
+            scratch.initialize(g.n);
             orthonormalise(0xA110u);
             int rounds = 0;
             f64 res = 0.0;
@@ -631,12 +612,26 @@ namespace HeiProMap {
             return {rounds, res};
         }
 
+        // Solves (L + delta*I) x = b in place with the Cholesky factor f (lower triangle, row-major, n x n).
+        static void cholesky_solve(const std::vector<f64> &f, const size_t n, Vec &x) {
+            for (size_t i = 0; i < n; ++i) {
+                f64 s = x[i];
+                for (size_t k = 0; k < i; ++k) s -= f[i * n + k] * x[k];
+                x[i] = s / f[i * n + i];
+            }
+            for (size_t i = n; i-- > 0;) {
+                f64 s = x[i];
+                for (size_t k = i + 1; k < n; ++k) s -= f[k * n + i] * x[k];
+                x[i] = s / f[i * n + i];
+            }
+        }
+
         // Exact inverse subspace iteration with a dense Cholesky factor of L + delta*I.
         void dense_solve(const CSRGraph &g) {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "dense_solve");
             const size_t n = g.n;
-            const Vec deg = degrees(g, smoothing_.threads);
-            const f64 maxdeg = deg.empty() ? 0.0 : *std::max_element(deg.begin(), deg.end());
+            const Vec deg = degrees(g);
+            const f64 maxdeg = n == 0 ? 0.0 : *std::max_element(deg.begin(), deg.begin() + n);
             const f64 delta = std::max(1e-300, 1e-8 * maxdeg);
 
             std::vector<f64> f(n * n, 0.0);
@@ -664,22 +659,9 @@ namespace HeiProMap {
                 }
             }
 
-            auto chol_solve = [&](Vec &x) {
-                for (size_t i = 0; i < n; ++i) {
-                    f64 s = x[i];
-                    for (size_t k = 0; k < i; ++k) s -= f[i * n + k] * x[k];
-                    x[i] = s / f[i * n + i];
-                }
-                for (size_t i = n; i-- > 0;) {
-                    f64 s = x[i];
-                    for (size_t k = i + 1; k < n; ++k) s -= f[k * n + i] * x[k];
-                    x[i] = s / f[i * n + i];
-                }
-            };
-
             for (int r = 0; r < kCoarseRounds; ++r) {
                 for (auto &xk: X) {
-                    chol_solve(xk);
+                    cholesky_solve(f, n, xk);
                     subtract_mean(xk);
                 }
                 orthonormalise(static_cast<u64>(r));
