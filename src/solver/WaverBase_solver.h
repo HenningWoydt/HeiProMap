@@ -24,16 +24,18 @@
  * SOFTWARE.
  ******************************************************************************/
 
-#ifndef HEIPROMAP_WAVERHEIPROMAP_SOLVER_H
-#define HEIPROMAP_WAVERHEIPROMAP_SOLVER_H
+#ifndef HEIPROMAP_WAVERBASE_SOLVER_H
+#define HEIPROMAP_WAVERBASE_SOLVER_H
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <fstream>
 #include <thread>
 #include <iostream>
 #include <numeric>
+#include <type_traits>
 #include <vector>
 
 #include "../datastructures/block_conn.h"
@@ -60,10 +62,6 @@
 #include "../rebalance/rebalancer.h"
 #include "../rebalance/empty_block_diffusion.h"
 #include "../uncoarsening/topology_uncoarsener.h"
-#include "../init_partitioning/greedy_partitioner.h"
-#include "../init_partitioning/waver_greedy_partitioner.h"
-#include "../refinement/simple_label_propagation_refinement.h"
-#include "../refinement/waver_label_propagation_refinement.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
 #include "../refinement/waver_engine_refinement.h"
@@ -72,21 +70,22 @@
 #include "../distance_oracles/grid_distance_oracle.h"
 
 namespace HeiProMap {
-    // Maps a graph onto a PE grid, minimizing the message cost.
+    // Shared pipeline of the Waver solvers: maps a graph onto a PE grid, minimizing the message cost. The solvers differ
+    // only in how the coarsest level is mapped and in what runs besides the common refinements (see the hooks).
     //
     // Pipeline:
     //   1. prepartition   n > k: partition the input graph into k blocks and contract them into the quotient graph with
     //                     one vertex per PE. Everything up to 6. works on a graph with n == k.
     //   2. coarsen        the topology and the graph
-    //   3. initial        coarsest level: greedy partition (multilevel, both) or spectral placement (spectral), refined
+    //   3. initial        coarsest level: initial_partitioning() of the solver, then refined
     //   4. uncoarsen      level by level, legalize and refine on every level. The mapping is a bijection (one vertex
     //                     per PE) on the finest level.
-    //   5. compare        spectral and both: the spectral placement of the finest level competes with the result;
-    //                     the cheaper one is kept
+    //   5. after          after_uncoarsening() of the solver
     //   6. V-cycle        optional, on the finished bijection
     //   7. undo prepartition  projects the mapping onto the input vertices, which may differ in weight by --imbalance,
     //                     then legalizes and refines that level like any other
-    class WaverHeiProMapSolver {
+    class WaverSolverBase {
+    protected:
         // The pipeline always maps a bijection (one quotient vertex per PE): no imbalance, and every PE gets
         // exactly one vertex. ac.imbalance is the imbalance of the input graph's partition into PEs (KaMinPar).
         static constexpr f64 kImbalance = 0.0;
@@ -105,13 +104,16 @@ namespace HeiProMap {
         bv_manager_t bv_manager;
         LargeQuotientGraph q_graph;
         block_conn_t block_conn;
+        // block_conn is only kept up to date for the consumers that read it: label propagation and the engine-load
+        // refinements. The message refinement and the rebalancer work from the edges of the graph without it.
+        bool use_block_conn = false;
+        // Likewise q_graph: the message refinement builds its own quotient rows, so it is only kept up to date for
+        // label propagation and the engine-load refinements. solve() builds it once for the report.
+        bool use_q_graph = false;
         GridDistanceOracle d_oracle;
         // The boundary, quotient graph and block connectivity match the partition. Cleared whenever the partition
         // changes without updating them (topology uncoarsening, loading a partition, the refinements that relabel PEs).
         bool structures_fresh = false;
-
-        // ---- spectral solution (follows the graph hierarchy) ----
-        SpectralTracker spectral;
 
         // The input graph while its quotient is solved, and the contraction between them (see prepartition)
         graph_t input_graph;
@@ -127,11 +129,9 @@ namespace HeiProMap {
 
         // ---- rebalancing and refinement ----
         Rebalancer rebalancer;
-        WaverLabelPropagationRefinement lp_refine;
-        bool lp_active = false; // lp_refine is only set up (and run) in the multilevel and both modes
 
     public:
-        explicit WaverHeiProMapSolver(graph_t &&g, graph_t &&t_topology, const WaverHeiProMapConfiguration &t_ac) {
+        WaverSolverBase(graph_t &&g, graph_t &&t_topology, const WaverHeiProMapConfiguration &t_ac) {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "constructor");
             sp = std::chrono::high_resolution_clock::now();
 
@@ -142,7 +142,6 @@ namespace HeiProMap {
             input_graph = std::move(g);
             random_engine = RandomEngine(ac.seed);
 
-            spectral.set_smoothing(ac.spectral_smoothing);
             d_oracle.initialize(std::move(t_topology), ac.threads);
             ac.k = d_oracle.current_k();
 
@@ -150,25 +149,23 @@ namespace HeiProMap {
             // the smaller graphs and coarser topologies as well.
             gpa_matcher.initialize(max_n, max_m, ac.k, ac.threads, random_engine, ac.global_path_algorithm_config);
             size_constrained_lp.initialize(max_n, max_m, ac.k, random_engine.get_u64(), ac.size_constrained_lp_config);
-
-            // Note: the non-LARGE_K label propagation allocates a k x k table (10^10 entries at k = 99856),
-            // so it is not set up when it is not used.
-            lp_active = ac.waver_label_propagation_config.enabled && ac.do_multilevel;
-            if (lp_active) {
-                lp_refine.initialize(random_engine.get_u64(), ac.waver_label_propagation_config);
-            }
         }
+
+        virtual ~WaverSolverBase() = default;
 
         std::vector<vertex_t> solve() {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "solve");
+            use_block_conn = uses_label_propagation() || ac.waver_engine_refinement_config.enabled
+                             || ac.waver_engine_refinement_config.pair_penalty > 0.0;
+            use_q_graph = use_block_conn;
             std::vector<partition_t> result = internal_solve();
 
             const auto ep = std::chrono::high_resolution_clock::now();
             const f64 duration = get_seconds(sp, ep);
 
+            // The report only needs the quotient graph; the boundary is not kept up to date after the last refinement.
             q_graph.compute_from_scratch(graphs[0], p_manager);
-            block_conn.compute_from_scratch(graphs[0], p_manager);
-            HEAVYASSERT(assert_state_after_partitioning(graphs[0], p_manager, bv_manager, q_graph, block_conn, ac.k));
+            HEAVYASSERT(assert_bweights(graphs[0], p_manager, ac.k));
             const MessageCostBreakdown cost = get_message_cost(q_graph, ac.k, d_oracle,
                                                                ac.alpha_end(), ac.beta_end(),
                                                                ac.alpha_link, ac.beta_link);
@@ -184,7 +181,24 @@ namespace HeiProMap {
             return result;
         }
 
-    private:
+    protected:
+        // ------------------------------------------------------------------------------------------------
+        // hooks of the solvers
+        // ------------------------------------------------------------------------------------------------
+
+        // Maps the coarsest level (graphs.back()) and settles it: set the partition, then finish_initial_partition().
+        virtual void initial_partitioning() = 0;
+
+        // Called before a graph level is uncoarsened: the mapping maps the finer graph to the current one.
+        virtual void on_graph_uncoarsen(const Mapping &, const graph_t &) {}
+
+        // Called once on the finest level of the bijection, after the last level is settled.
+        virtual void after_uncoarsening() {}
+
+        // The label propagation of a coarse level is refined before everything else; it needs q_graph and block_conn.
+        virtual bool uses_label_propagation() const { return false; }
+        virtual void refine_before_message_refinement() {}
+
         // Runs the whole pipeline and returns the PE of every vertex of the input graph.
         std::vector<partition_t> internal_solve() {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "internal_solve");
@@ -214,7 +228,7 @@ namespace HeiProMap {
 
             while (uncoarsen_one_level()) { settle_level(); }
 
-            compare_with_spectral_placement();
+            after_uncoarsening();
 
             if (ac.vcycle) { vcycle(); }
 
@@ -244,6 +258,7 @@ namespace HeiProMap {
         // the graph has one vertex per PE (n == k) from here on. The input graph and the contraction are kept for
         // undo_prepartition.
         void prepartition() {
+            const auto t_start = get_time_point();
             const partition_t k = ac.k; // the topology is not coarsened yet
             if (input_graph.n <= k) {
                 graphs.emplace_back(std::move(input_graph));
@@ -271,6 +286,7 @@ namespace HeiProMap {
             input_mapping.set_coarse_n(k);
             for (vertex_t u = 0; u < input_graph.n; ++u) { input_mapping.set(u, r.part[u]); }
             graphs.emplace_back(std::move(r.quotient));
+            timings.prepartition_ms += get_milli_seconds(t_start, get_time_point());
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -310,22 +326,8 @@ namespace HeiProMap {
         // initial partition and uncoarsening
         // ------------------------------------------------------------------------------------------------
 
-        std::vector<partition_t> spectral_placement() {
-            std::vector<partition_t> part;
-            spectral.place(graphs.back(), d_oracle.current_topology(), d_oracle.current_W(), part);
-            return part;
-        }
-
-        // Partition of the coarsest level: greedy in the multilevel and both mode, the spectral placement in the
-        // spectral mode. Then the same steps as on every other level.
-        void initial_partitioning() {
-            if (ac.do_spectral) { spectral.init(graphs.back(), ac.seed); }
-
-            if (ac.do_multilevel) {
-                greedy_partitioning();
-            } else {
-                load_partition(spectral_placement());
-            }
+        // The same steps as on every other level, after the solver has set the partition of the coarsest level.
+        void finish_initial_partition() {
             recompute_datastructures();
             rebalance(mappings.size());
             refinement();
@@ -340,7 +342,7 @@ namespace HeiProMap {
             }
             if (mappings.empty()) { return false; }
 
-            if (ac.do_spectral) { spectral.prolong(mappings.back(), graphs[graphs.size() - 2]); }
+            on_graph_uncoarsen(mappings.back(), graphs[graphs.size() - 2]);
             uncoarsening();
             return true;
         }
@@ -349,66 +351,6 @@ namespace HeiProMap {
         void settle_level() {
             legalize(mappings.size());
             refinement();
-        }
-
-        // Spectral and both mode, once on the finest level (the graph with one vertex per PE): the spectral placement
-        // of that level is an independent candidate that ignores the partition found while uncoarsening. If it is
-        // cheaper than that partition, it is adopted (rebalanced and refined); if the refined placement is still not
-        // cheaper, the partition from uncoarsening is kept. The spectral tracker itself is never overwritten.
-        void compare_with_spectral_placement() {
-            const graph_t &g = graphs.back();
-            if (!ac.do_spectral || spectral.size() != g.n) { return; }
-            HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "compare_with_spectral_placement");
-
-            const std::vector<partition_t> spectral_part = spectral_placement();
-            const f64 multilevel_cost = placement_cost(p_manager.partition);
-            if (placement_cost(spectral_part) >= multilevel_cost) { return; }
-
-            const std::vector<partition_t> multilevel_part = snapshot();
-            load_partition(spectral_part);
-            recompute_datastructures();
-            legalize(mappings.size());
-            refinement();
-            if (current_message_cost() >= multilevel_cost) {
-                load_partition(multilevel_part);
-                recompute_datastructures();
-            }
-        }
-
-        // Greedy partition of the coarsest level: the best of initial_kappa attempts (the first one in natural vertex
-        // order, the others shuffled).
-        void greedy_partitioning() {
-            auto p = get_time_point();
-            HEIPROMAP_PROFILE_SCOPE("partition", "partition", "partition");
-
-            const graph_t &g = graphs.back();
-
-            // p_manager.n: the arrays keep the size of the finest graph. The working copy carries the PE limits the
-            // greedy partitioner respects.
-            PartitionManager cur_pm;
-            cur_pm.initialize(p_manager.n, ac.k, g.g_weight);
-            cur_pm.copy_from(p_manager);
-            PartitionManager best_pm;
-            best_pm.initialize(p_manager.n, ac.k, g.g_weight);
-            f64 best_cost = std::numeric_limits<f64>::max();
-            AlignedArray<vertex_t> vertices;
-            vertices.initialize(g.n);
-
-            for (u64 trial = 0; trial < ac.initial_kappa; ++trial) {
-                const u64 trial_seed = trial == 0 ? 0 : 1 + ac.seed + trial;
-                waver_greedy_partition(g, d_oracle, kImbalance, trial_seed, cur_pm, vertices, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                const f64 cur_cost = get_waver_cost(g, cur_pm, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-
-                if (trial == 0 || cur_cost < best_cost) {
-                    best_cost = cur_cost;
-                    best_pm.copy_from(cur_pm);
-                }
-            }
-
-            p_manager.copy_from(best_pm);
-            p_manager.recalculate_weights(g);
-
-            timings.initial_partitioning_ms += get_milli_seconds(p, get_time_point());
         }
 
         // True if the topology can be uncoarsened one level now: there is a level left, every coarse cell holds at
@@ -461,11 +403,14 @@ namespace HeiProMap {
             timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
         }
 
-        void uncoarsening() {
+        // recalculate_weights: the weights of the finer graph are not those of the coarser one (the prepartition level),
+        // so the PE weights are recomputed before the derived state is checked.
+        void uncoarsening(const bool recalculate_weights = false) {
             auto p = get_time_point();
 
             const graph_t &finer = graphs[graphs.size() - 2];
             p_manager.uncontract(mappings.back());
+            if (recalculate_weights) { p_manager.recalculate_weights(finer); }
 
             HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
             bv_manager.reset(finer.n);
@@ -482,11 +427,11 @@ namespace HeiProMap {
             graphs.pop_back();
             mappings.pop_back();
 
-            q_graph.compute_from_scratch(graphs.back(), p_manager);
-            block_conn.compute_from_scratch(graphs.back(), p_manager);
+            if (use_q_graph) { q_graph.compute_from_scratch(graphs.back(), p_manager); }
+            if (use_block_conn) { block_conn.compute_from_scratch(graphs.back(), p_manager); }
             structures_fresh = true;
             timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            HEAVYASSERT(state_is_consistent());
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -505,51 +450,65 @@ namespace HeiProMap {
                 }
                 bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
             }
-            q_graph.compute_from_scratch(g_cur, p_manager);
-            block_conn.compute_from_scratch(g_cur, p_manager);
+            if (use_q_graph) { q_graph.compute_from_scratch(g_cur, p_manager); }
+            if (use_block_conn) { block_conn.compute_from_scratch(g_cur, p_manager); }
             structures_fresh = true;
         }
 
         void rebalance(const u64 level) {
             auto p = get_time_point();
 
-            if (level == 0) {
-                rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
-            } else {
-                rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
-            }
+            const auto run = [&](auto q_tag, auto conn_tag) {
+                constexpr bool t_q = decltype(q_tag)::value;
+                constexpr bool t_conn = decltype(conn_tag)::value;
+                if (level == 0) {
+                    rebalancer.rebalance_last_layer<t_q, t_conn>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                } else {
+                    rebalancer.rebalance<t_q, t_conn>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                }
+            };
+            if (use_q_graph && use_block_conn) { run(std::true_type{}, std::true_type{}); }
+            else if (use_q_graph) { run(std::true_type{}, std::false_type{}); }
+            else if (use_block_conn) { run(std::false_type{}, std::true_type{}); }
+            else { run(std::false_type{}, std::false_type{}); }
 
             timings.rebalance_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            HEAVYASSERT(state_is_consistent());
         }
 
         // Makes the partition valid for the grid: rebalance, fill empty PEs, rebuild the derived state.
         // level is the number of graph levels still to uncoarsen.
         void legalize(const u64 level) {
+            // The rebalancer reads the boundary (and keeps all structures up to date while it moves vertices), so they
+            // have to match the partition first: they do not after a topology level or a refinement.
+            if (!structures_fresh) { recompute_datastructures(); }
             rebalance(level);
             const size_t moved = EmptyBlockDiffusion::diffuse(graphs.back(), p_manager,
                                                               static_cast<size_t>(d_oracle.current_W()));
-            // The rebalancer keeps the structures up to date; only the diffusion does not.
-            if (moved > 0 || !structures_fresh) { recompute_datastructures(); }
+            // The diffusion does not keep them up to date.
+            if (moved > 0) { recompute_datastructures(); }
         }
 
-        // All refinements, in order. Each is switched on by its configuration. Label propagation refines the
-        // partition of a coarse level and only exists in the multilevel and both modes; simulated annealing swaps
-        // whole PEs and therefore only runs on the finest level.
+        // All refinements, in order. Each is switched on by its configuration. Simulated annealing swaps whole PEs and
+        // therefore only runs on the finest level.
         void refinement() {
             auto p = get_time_point();
 
-            if (lp_active) {
-                auto sp_local = get_time_point();
-                lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
-                timings.lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
-            }
+            refine_before_message_refinement();
 
             if (ac.waver_message_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                WaverMessageRefinement::refine(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn,
-                                               ac.waver_message_refinement_config,
-                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                if (use_block_conn) {
+                    WaverMessageRefinement::refine<true>(graphs.back(), p_manager, bv_manager, d_oracle, block_conn,
+                                                         ac.waver_message_refinement_config,
+                                                         ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                } else {
+                    WaverMessageRefinement::refine<false>(graphs.back(), p_manager, bv_manager, d_oracle, block_conn,
+                                                          ac.waver_message_refinement_config,
+                                                          ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                }
+                // The message refinement keeps its own quotient rows, so q_graph is stale for the refinements below.
+                if (use_q_graph) { q_graph.compute_from_scratch(graphs.back(), p_manager); }
                 timings.msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
@@ -598,7 +557,9 @@ namespace HeiProMap {
 
             structures_fresh = false; // the swap refinements relabel PEs in p_manager only
             timings.refinement_ms += get_milli_seconds(p, get_time_point());
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            // The boundary, quotient graph and block connectivity are stale here by design, so only the partition
+            // and its weights can be checked.
+            HEAVYASSERT(assert_bweights(graphs.back(), p_manager, ac.k));
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -668,13 +629,22 @@ namespace HeiProMap {
 
             graphs.insert(graphs.begin(), std::move(input_graph));
             mappings.push_back(std::move(input_mapping));
-            uncoarsening();
+            uncoarsening(true);
 
             imbalance = ac.imbalance;
             const graph_t &input = graphs.back();
             p_manager.update_limits(d_oracle.current_topology(), input.g_weight, input.n, imbalance, kMinImbalance);
-            p_manager.recalculate_weights(input);
             settle_level();
+        }
+
+        // The structures that are kept up to date (see use_q_graph and use_block_conn) match the partition.
+        // p_manager.size() is not kept up to date by the swap refinements, so the vertices per PE are not checked.
+        bool state_is_consistent() const {
+            if (use_q_graph || use_block_conn) {
+                return assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k,
+                                                       1, use_q_graph, use_block_conn, false);
+            }
+            return assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, ac.k, 1, false);
         }
 
         // ------------------------------------------------------------------------------------------------
@@ -699,13 +669,12 @@ namespace HeiProMap {
                                                  ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
         }
 
+        // Computed from the graph and the partition: needs none of the derived structures, so they stay as they are.
         f64 current_message_cost() {
             HEIPROMAP_PROFILE_SCOPE("misc", "WaverSolver", "current_message_cost");
-            recompute_datastructures();
-            return get_message_cost(q_graph, ac.k, d_oracle, ac.alpha_end(), ac.beta_end(),
-                                    ac.alpha_link, ac.beta_link).total;
+            return placement_cost(p_manager.partition);
         }
     };
 }
 
-#endif //HEIPROMAP_WAVERHEIPROMAP_SOLVER_H
+#endif //HEIPROMAP_WAVERBASE_SOLVER_H

@@ -98,14 +98,15 @@ namespace HeiProMap {
             {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--topology", "-tp", "Filepath to the topology graph for the distance oracle.", "", "", false},
             {"--config", "-c", "The preset: fast, eco, strong or super-strong (increasing effort). The options marked (preset) take their default from it.", "", "", false},
-            {"--mode", "", "How the mapping is found; the uncoarsening with refinement is the same for all: spectral (spectral Laplacian-RCB placement of the coarsest level), multilevel (greedy partition of the coarsest level), or both (greedy partition of the coarsest level). In spectral and both mode, the spectral placement of the finest level is computed independently and replaces the result if it is cheaper.", "spectral", "", false},
+            {"--mode", "", "How the mapping is found; the uncoarsening with refinement is the same for both: spectral (spectral Laplacian-RCB placement of the coarsest level; the spectral placement of the finest level is computed independently and replaces the result if it is cheaper) or multilevel (greedy partition of the coarsest level, label propagation on the coarse levels).", "spectral", "", false},
             {"--imbalance", "-e", "Allowed imbalance of the PE weights (for example 0.03). It applies to the partition of the input graph into PEs (KaMinPar) and to the final level of the individual input vertices; all coarser levels map one vertex to each PE.", "0.03", "", false},
-            {"--prepartitioner", "", "Partitioner of the input graph into one block per PE if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "kaminpar", "", false},
+            {"--prepartitioner", "", "Partitioner of the input graph into one block per PE if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "spectral3d", "", false},
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
             {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
             {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
             {"--seed", "", "Seed for diversifying results (random if not given).", "", "", false},
 
+            {"--initial-c", "", "(preset) The graph is coarsened to about this many vertices per (coarse) PE.", "", "", false},
             {"--initial-kappa", "", "(preset) Greedy partitions tried on the coarsest level; the best is kept (multilevel and both mode).", "", "", false},
             {"--topo-split-factor", "", "(preset) While graph levels are left, the topology is only uncoarsened if the graph has at least this many vertices per finer PE on average.", "", "", false},
             {"--swap-radius", "", "(preset) Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
@@ -158,9 +159,7 @@ namespace HeiProMap {
         partition_t k = 0; // run state: the number of PEs of the current topology level (set by the solver)
 
         f64 imbalance = 0.03;
-        std::string mode = "spectral"; // spectral | multilevel | both
-        bool do_spectral = true;       // derived from mode: spectral placement (spectral, both)
-        bool do_multilevel = false;    // derived from mode: greedy partition of the coarsest level (multilevel, both)
+        std::string mode = "spectral"; // spectral | multilevel
         std::string prepartitioner = "kaminpar";
         std::string kaminpar_preset = "largek";
         u64 kaminpar_threads = 0;
@@ -239,13 +238,11 @@ namespace HeiProMap {
 
             imbalance = std::stod(get("--imbalance"));
             mode = get("--mode");
-            if (mode != "spectral" && mode != "multilevel" && mode != "both") {
+            if (mode != "spectral" && mode != "multilevel") {
                 std::cout << "Error: Invalid --mode '" << mode
-                          << "'. Allowed values: spectral, multilevel, both" << std::endl;
+                          << "'. Allowed values: spectral, multilevel" << std::endl;
                 exit(EXIT_FAILURE);
             }
-            do_spectral = mode != "multilevel";
-            do_multilevel = mode != "spectral";
             prepartitioner = get("--prepartitioner");
             if (prepartitioner != "kaminpar" && prepartitioner != "spectral3d") {
                 std::cout << "Error: Invalid --prepartitioner '" << prepartitioner
@@ -464,6 +461,7 @@ namespace HeiProMap {
 
         // The options of the same names as the preset's settings override the preset.
         void apply_command_line_overrides() {
+            if (is_set("--initial-c")) initial_c = std::stoull(get("--initial-c"));
             if (is_set("--initial-kappa")) initial_kappa = std::stoull(get("--initial-kappa"));
             if (is_set("--topo-split-factor")) topo_split_factor = std::stoull(get("--topo-split-factor"));
             if (is_set("--swap-radius")) {

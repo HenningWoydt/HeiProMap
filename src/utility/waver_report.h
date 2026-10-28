@@ -43,6 +43,8 @@ namespace HeiProMap {
 
     // Accumulated wall time (ms) per solver phase.
     struct WaverTimings {
+        f64 prepartition_ms = 0.0;
+        f64 spectral_ms = 0.0; // spectral solver: prolongation of the embedding and the placement of the finest level
         f64 coarsening_ms = 0.0;
         f64 contraction_ms = 0.0;
         f64 initial_partitioning_ms = 0.0;
@@ -58,7 +60,7 @@ namespace HeiProMap {
         f64 misc_ms = 0.0;
 
         f64 total_ms() const {
-            return misc_ms + coarsening_ms + contraction_ms + initial_partitioning_ms
+            return misc_ms + prepartition_ms + spectral_ms + coarsening_ms + contraction_ms + initial_partitioning_ms
                    + uncontraction_ms + rebalance_ms + refinement_ms;
         }
     };
@@ -136,6 +138,8 @@ namespace HeiProMap {
         os << "#oload partitions     : " << n_overloaded_partitions << std::endl;
         os << "Sum oload weights     : " << sum_too_much << std::endl;
         os << "------- Time -------" << std::endl;
+        os << "Prepartition          : " << t.prepartition_ms << std::endl;
+        os << "Spectral (solver)     : " << t.spectral_ms << std::endl;
         os << "Coarsening            : " << t.coarsening_ms << std::endl;
         os << "Contraction           : " << t.contraction_ms << std::endl;
         os << "Init. Part.           : " << t.initial_partitioning_ms << std::endl;

@@ -70,7 +70,7 @@ namespace HeiProMap {
 
         // Recursive coordinate bisection of the vertices onto the W x H grid with exact capacities (a side
         // receives members * cells_in_side / cells_in_rectangle vertices, rounded down). Block id = row * W + col.
-        static std::vector<partition_t> bisect(const std::vector<std::vector<f64>> &X, const vertex_t n,
+        static std::vector<partition_t> bisect(const std::vector<SpectralTracker::Vec> &X, const vertex_t n,
                                                const size_t W, const size_t H) {
             HEIPROMAP_PROFILE_SCOPE("partition", "SpectralPrepartitioner", "bisect");
             struct Node {
@@ -124,7 +124,7 @@ namespace HeiProMap {
                 const size_t cells = nd.w * nd.h;
                 const size_t cells_a = a.w * a.h;
                 const size_t count_a = static_cast<size_t>(static_cast<u64>(m) * cells_a / cells);
-                const std::vector<f64> &key = X[coord];
+                const SpectralTracker::Vec &key = X[coord];
                 std::nth_element(perm.begin() + nd.lo, perm.begin() + nd.lo + count_a, perm.begin() + nd.hi,
                                  [&](vertex_t x, vertex_t y) {
                                      return key[x] != key[y] ? key[x] < key[y] : x < y;
@@ -166,7 +166,9 @@ namespace HeiProMap {
             }
 
             SpectralTracker tracker;
-            tracker.set_smoothing(smoothing);
+            SpectralSmoothing tracker_smoothing = smoothing;
+            tracker_smoothing.threads = static_cast<int>(threads);
+            tracker.set_smoothing(tracker_smoothing);
             tracker.init(level(maps.size()), seed);
             for (size_t i = maps.size(); i-- > 0;) { tracker.prolong(maps[i], level(i)); }
 

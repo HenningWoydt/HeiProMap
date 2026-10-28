@@ -447,6 +447,28 @@ namespace HeiProMap {
         return true;
     }
 
+    // The state every solver keeps: graph, partition, block weights and boundary. The quotient graph and block
+    // connectivity are not checked, for solvers that do not maintain them. enable_partition_size: skip the check of the
+    // number of vertices per block, for solvers whose refinements do not keep it up to date.
+    inline bool assert_state_after_partitioning(const graph_t &g,
+                                                const p_manager_t &p_manager,
+                                                const bv_manager_t &bv_manager,
+                                                const partition_t k,
+                                                const u64 num_threads = 1,
+                                                const bool enable_partition_size = true) {
+        HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_after_partitioning");
+
+        ASSERT(assert_csr_structure(g, num_threads));
+        ASSERT(assert_no_self_loops(g, num_threads));
+        ASSERT(assert_no_double_edges(g, num_threads));
+        if (enable_partition_size) { ASSERT(assert_correct_partition_size(g, p_manager, k, num_threads)); }
+        ASSERT(assert_bweights(g, p_manager, k, num_threads));
+        ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager, num_threads));
+        ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k, num_threads));
+
+        return true;
+    }
+
     template<typename QGraphT>
     inline bool assert_state_after_partitioning(const graph_t &g,
                                                 const p_manager_t &p_manager,
@@ -456,16 +478,11 @@ namespace HeiProMap {
                                                 const partition_t k,
                                                 const u64 num_threads = 1,
                                                 const bool enable_q_graph = true,
-                                                const bool enable_block_conn = true) {
+                                                const bool enable_block_conn = true,
+                                                const bool enable_partition_size = true) {
         HEIPROMAP_PROFILE_SCOPE("assert", "misc", "assert_state_after_partitioning");
 
-        ASSERT(assert_csr_structure(g, num_threads));
-        ASSERT(assert_no_self_loops(g, num_threads));
-        ASSERT(assert_no_double_edges(g, num_threads));
-        ASSERT(assert_correct_partition_size(g, p_manager, k, num_threads));
-        ASSERT(assert_bweights(g, p_manager, k, num_threads));
-        ASSERT(assert_correct_vertices_boundary(g, p_manager, bv_manager, num_threads));
-        ASSERT(assert_correct_vertices_boundary_per_block(g, p_manager, bv_manager, k, num_threads));
+        ASSERT(assert_state_after_partitioning(g, p_manager, bv_manager, k, num_threads, enable_partition_size));
         if (enable_q_graph) { ASSERT(assert_correct_quotient_graph(g, p_manager, bv_manager, q_graph, k, num_threads)); }
         if (enable_block_conn) { ASSERT(assert_correct_block_conn(g, p_manager, block_conn, k, num_threads)); }
 

@@ -30,7 +30,8 @@
 #include <vector>
 
 #include "../src/configuration/WaverHeiProMap_configuration.h"
-#include "../src/solver/WaverHeiProMap_solver.h"
+#include "../src/solver/WaverMultilevel_solver.h"
+#include "../src/solver/WaverSpectral_solver.h"
 #include "../src/utility/profiler.h"
 #include "../src/utility/utils.h"
 
@@ -57,7 +58,7 @@ int main(const int argc, char *argv[]) {
     if (argc == 1) {
         HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
         std::vector<std::pair<std::string, std::string>> input = {
-            {"--topology", "../data/topologies/256_PEs.graph"},
+            {"--topology", "../data/heipromap_topology.graph"},
             {"--graph", "../data/heipromap_input.graph"},
             {"--mapping", "../data/out/heipromap_input.txt"},
             {"--imbalance", "0.03"},
@@ -93,8 +94,14 @@ int main(const int argc, char *argv[]) {
     auto t_read_end = HeiProMap::get_time_point();
     HeiProMap::f64 read_io_ms = HeiProMap::get_milli_seconds(t_read_start, t_read_end);
 
-    HeiProMap::WaverHeiProMapSolver solver(std::move(g), std::move(topology), ac);
-    std::vector<HeiProMap::partition_t> partition = solver.solve();
+    std::vector<HeiProMap::partition_t> partition;
+    if (ac.mode == "spectral") {
+        HeiProMap::WaverSpectralSolver solver(std::move(g), std::move(topology), ac);
+        partition = solver.solve();
+    } else {
+        HeiProMap::WaverMultilevelSolver solver(std::move(g), std::move(topology), ac);
+        partition = solver.solve();
+    }
 
     auto t_write_start = HeiProMap::get_time_point();
     HeiProMap::write_partition(partition, ac.mapping_out);

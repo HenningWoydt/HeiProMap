@@ -52,6 +52,7 @@ add_definitions(-DHEIPROMAP_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 if(ENABLE_ASSERTS)
     add_definitions(-DENABLE_ASSERTS=1)
+    add_definitions(-DASSERT_ENABLED=1)
     add_definitions(-DHEAVYASSERT_ENABLED=1)
 endif()
 
