@@ -37,9 +37,7 @@
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/heavy_edge_matching.h"
 #include "../coarsening/size_constrained_lp.h"
-#include "../refinement/waver_label_propagation_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
-#include "../refinement/waver_engine_refinement.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
@@ -89,48 +87,36 @@ namespace HeiProMap {
     }
 
     // All settings of Waver-HeiProMap. --config selects a preset (fast, eco, strong, super-strong) that sets the effort
-    // related settings; the options of the same names given on the command line override the preset.
+    // related settings; the options of the sections marked "overrides the preset" replace its settings.
     class WaverHeiProMapConfiguration {
     public:
         std::vector<CommandLineOption> options = {
+            {"# Input and output", "", "", "", "", false},
             {"--help", "", "Produces the help message", "", "", false},
             {"--graph", "-g", "Filepath to the graph.", "", "", false},
-            {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
             {"--topology", "-tp", "Filepath to the topology graph for the distance oracle.", "", "", false},
-            {"--config", "-c", "The preset: fast, eco, strong or super-strong (increasing effort). The options marked (preset) take their default from it.", "", "", false},
-            {"--mode", "", "How the mapping is found; the uncoarsening with refinement is the same for both: spectral (spectral Laplacian-RCB placement of the coarsest level; the spectral placement of the finest level is computed independently and replaces the result if it is cheaper) or multilevel (greedy partition of the coarsest level, label propagation on the coarse levels).", "spectral", "", false},
+            {"--mapping", "-m", "Output filepath to the generated mapping.", "", "", false},
+            {"--config", "-c", "The preset: fast, eco, strong or super-strong (increasing effort). The options of the sections marked \"overrides the preset\" replace its settings.", "", "", false},
+            {"--mode", "", "How the mapping is found; the uncoarsening with refinement is the same for both: spectral (spectral Laplacian-RCB placement of the coarsest level; the spectral placement of the finest level is computed independently and replaces the result if it is cheaper) or multilevel (greedy partition of the coarsest level).", "spectral", "", false},
+
+            {"# General", "", "", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance of the PE weights (for example 0.03). It applies to the partition of the input graph into PEs (KaMinPar) and to the final level of the individual input vertices; all coarser levels map one vertex to each PE.", "0.03", "", false},
-            {"--prepartitioner", "", "Partitioner of the input graph into one block per PE if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "spectral3d", "", false},
-            {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
-            {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
-            {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
             {"--seed", "", "Seed for diversifying results (random if not given).", "", "", false},
+            {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
 
-            {"--initial-c", "", "(preset) The graph is coarsened to about this many vertices per (coarse) PE.", "", "", false},
-            {"--initial-kappa", "", "(preset) Greedy partitions tried on the coarsest level; the best is kept (multilevel and both mode).", "", "", false},
-            {"--topo-split-factor", "", "(preset) While graph levels are left, the topology is only uncoarsened if the graph has at least this many vertices per finer PE on average.", "", "", false},
-            {"--swap-radius", "", "(preset) Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
-            {"--swap-extended", "", "(preset) Also consider the neighborhoods of communication partners for swaps (0/1).", "", "", false},
-            {"--long-msg-padding", "", "(preset) Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
-            {"--sa-iterations", "", "(preset) Number of simulated annealing swap iterations on the finest level (0 = off).", "", "", false},
-            {"--sa-radius", "", "(preset) Max swap radius of the simulated annealing.", "", "", false},
-            {"--vertex-refine", "", "(preset) Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
-            {"--vertex-refine-iters", "", "(preset) Maximum iterations of the message-group refinement on one level.", "", "", false},
-            {"--refine-verbose", "", "Print the statistics of every message-group refinement iteration (0/1).", "", "", false},
-            {"--engine-passes", "", "Passes of the engine-load refinement on the individual input vertices: moves rows out of the PEs with the busiest compute engine (0 = off).", "", "", false},
-            {"--engine-ratio", "", "PEs with at least this fraction of the maximum engine load are worked on by the engine-load refinement.", "", "", false},
-            {"--engine-verbose", "", "Print the statistics of the engine-load refinement (0/1).", "", "", false},
-            {"--pair-penalty", "", "Penalty per squared value above --pair-threshold of the message of a PE pair (0 = off): moves rows out of oversized messages on the individual input vertices.", "", "", false},
-            {"--pair-threshold", "", "Number of values of a message above which --pair-penalty applies.", "", "", false},
-            {"--pair-passes", "", "Maximum passes of the pair-volume refinement.", "", "", false},
-            {"--vcycle", "", "(preset) After the mapping is found, run a V-cycle: coarsen topology and graph together (one vertex per PE on every level), then uncoarsen with the same legalization and refinements as the main uncoarsening on every level (0/1).", "", "", false},
+            {"# Prepartition of the input graph", "", "", "", "", false},
+            {"--prepartitioner", "", "Partitioner of the input graph into one block per PE if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "spectral3d", "", false},
+            {"--kaminpar-preset", "", "KaMinPar preset used for that partition.", "largek", "", false},
+            {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
 
+            {"# Spectral embedding", "", "", "", "", false},
             {"--spectral-rounds", "", "Re-smoothing rounds of the spectral embedding after each prolongation (levels up to --spectral-big-n vertices).", "3", "", false},
             {"--spectral-depth", "", "CG iterations per re-smoothing round (levels up to --spectral-big-n vertices).", "24", "", false},
             {"--spectral-big-rounds", "", "Re-smoothing rounds on levels with more than --spectral-big-n vertices (the prepartitioner of a large input graph).", "1", "", false},
             {"--spectral-big-depth", "", "CG iterations per round on levels with more than --spectral-big-n vertices.", "8", "", false},
             {"--spectral-big-n", "", "Vertex count above which the --spectral-big-* settings apply.", "500000", "", false},
 
+            {"# Communication cost model", "", "", "", "", false},
             {"--alpha-send", "", "Fixed send-side overhead per message (alpha_send).", "100.0", "", false},
             {"--alpha-recv", "", "Fixed receive-side overhead per message (alpha_recv).", "100.0", "", false},
             {"--alpha-link", "", "Fixed per-hop router overhead per message (alpha_link).", "2.0", "", false},
@@ -138,17 +124,33 @@ namespace HeiProMap {
             {"--beta-recv", "", "Volume-dependent receive overhead per byte (beta_recv).", "8.0", "", false},
             {"--beta-link", "", "Volume-dependent per-hop link cost per byte (beta_link).", "1.0", "", false},
 
-            {"--coarsening", "", "(preset) Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
-            {"--gpa-rating-function", "", "(preset) GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--gpa-random-level", "", "(preset) GPA random level.", "", "", false},
-            {"--gpa-edge-rating-tiebreaking", "", "(preset) GPA use edge rating tiebreaking (true/false).", "", "", false},
-            {"--gpa-two-hop-threshold", "", "(preset) GPA two-hop threshold.", "", "", false},
-            {"--sclp-max-rounds", "", "(preset) SCLP max rounds.", "", "", false},
-            {"--sclp-min-threshold", "", "(preset) SCLP min threshold.", "", "", false},
-            {"--sclp-f", "", "(preset) SCLP tuning parameter f.", "", "", false},
-            {"--sclp-rating-function", "", "(preset) SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
-            {"--sclp-use-degree-ordering", "", "(preset) SCLP use degree ordering (true/false).", "", "", false},
-            {"--hem-rating-function", "", "(preset) HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"# Coarsening (overrides the preset)", "", "", "", "", false},
+            {"--coarsening-vertices-per-pe", "", "The graph is coarsened to about this many vertices per (coarse) PE.", "", "", false},
+            {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
+            {"--gpa-rating-function", "", "Global-paths coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-random-level", "", "Global-paths coarsening: the coarsening levels below this one use a random matching instead of the rating-based one.", "", "", false},
+            {"--gpa-edge-rating-tiebreaking", "", "Global-paths coarsening: also sort the edges of a thread when all its ratings are equal (true/false).", "", "", false},
+            {"--gpa-two-hop-threshold", "", "Global-paths coarsening: minimum matched fraction below which two-hop matching is tried.", "", "", false},
+            {"--sclp-max-rounds", "", "Size-constrained label propagation coarsening: maximum rounds.", "", "", false},
+            {"--sclp-min-threshold", "", "Size-constrained label propagation coarsening: stop when fewer than this fraction of the vertices move.", "", "", false},
+            {"--sclp-f", "", "Size-constrained label propagation coarsening: the cluster weight limit is the PE weight limit divided by f.", "", "", false},
+            {"--sclp-rating-function", "", "Size-constrained label propagation coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-use-degree-ordering", "", "Size-constrained label propagation coarsening: visit vertices by increasing degree (true/false).", "", "", false},
+            {"--hem-rating-function", "", "Heavy-edge matching coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+
+            {"# Initial mapping (overrides the preset)", "", "", "", "", false},
+            {"--greedy-attempts", "", "Greedy partitions tried on the coarsest level; the best is kept (multilevel mode).", "", "", false},
+
+            {"# Uncoarsening and refinement (overrides the preset)", "", "", "", "", false},
+            {"--topology-uncoarsening-factor", "", "While graph levels are left, the topology is only uncoarsened if the graph has at least this many vertices per finer PE on average.", "", "", false},
+            {"--message-refinement", "", "Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
+            {"--message-refinement-iterations", "", "Maximum iterations of the message-group refinement on one level.", "", "", false},
+            {"--long-message-padding", "", "Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
+            {"--swap-radius", "", "Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
+            {"--swap-extended-neighborhood", "", "Also consider the neighborhoods of communication partners for swaps (0/1).", "", "", false},
+            {"--annealing-iterations", "", "Number of simulated annealing swap iterations on every level (0 = off).", "0", "", false},
+            {"--annealing-radius", "", "Max swap radius of the simulated annealing.", "", "", false},
+            {"--vcycle", "", "After the mapping is found, run a V-cycle: coarsen topology and graph together (one vertex per PE on every level), then uncoarsen with the same legalization and refinements as the main uncoarsening on every level (0/1).", "", "", false},
         };
 
     public:
@@ -195,12 +197,10 @@ namespace HeiProMap {
         HeavyEdgeMatchingConfiguration heavy_edge_matching_config;
 
         // refinement algorithms
-        WaverLabelPropagationConfiguration      waver_label_propagation_config      = WaverLabelPropagationConfiguration("Waver Label Propagation");
         WaverMessageRefinementConfiguration     waver_message_refinement_config     = WaverMessageRefinementConfiguration("Waver Message Refinement");
         WaverSwapRefinementConfiguration        waver_swap_refinement_config        = WaverSwapRefinementConfiguration("Waver Swap Refinement");
         WaverLongMessageRefinementConfiguration waver_long_message_refinement_config = WaverLongMessageRefinementConfiguration("Waver Long Message Refinement");
         WaverSARefinementConfiguration          waver_sa_refinement_config          = WaverSARefinementConfiguration("Waver Simulated Annealing");
-        WaverEngineRefinementConfiguration      waver_engine_refinement_config      = WaverEngineRefinementConfiguration("Waver Engine Load");
 
         WaverHeiProMapConfiguration() = default;
 
@@ -293,22 +293,20 @@ namespace HeiProMap {
 
             apply_command_line_overrides();
 
-            // Propagate cost-model parameters into the refinement configs
-            waver_label_propagation_config.alpha_end  = alpha_end();
-            waver_label_propagation_config.beta_end   = beta_end();
-            waver_label_propagation_config.alpha_link = alpha_link;
-            waver_label_propagation_config.beta_link  = beta_link;
         }
 
-        // The presets differ in how much effort they put in; the settings of the effort scale are explained in
-        // set_effort. Everything else (the coarsening algorithms) is chosen per preset below.
+        // The presets differ in how much effort they put in (greedy attempts, refinements, V-cycle) and in the coarsening
+        // algorithm settings.
 
         void set_fast() {
             config_name = "fast";
             initial_c = 64;
-            set_effort(/*kappa*/ 10, /*swap radius*/ 0, /*swap extended*/ false, /*SA iterations*/ 1000,
-                       /*message refinement iterations*/ 10, /*V-cycle*/ false);
-            set_global_paths_coarsening();
+            initial_kappa = 10;
+            topo_split_factor = 4;
+            vcycle = false;
+
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id = COARSENING_ALG_GLOBAL_PATHS;
 
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
@@ -320,15 +318,41 @@ namespace HeiProMap {
             size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
             size_constrained_lp_config.use_degree_ordering = true;
 
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 25;
+            waver_message_refinement_config.enabled = true;
+            waver_message_refinement_config.max_iters = 1;
+
+            waver_long_message_refinement_config.enabled = false;
+            waver_long_message_refinement_config.padding = 1;
+
+            waver_swap_refinement_config.enabled = false;
+            waver_swap_refinement_config.radius = 0;
+            waver_swap_refinement_config.extended = false;
+
+            waver_sa_refinement_config.enabled = false;
+            waver_sa_refinement_config.iterations = 0;
+            waver_sa_refinement_config.radius = 10;
         }
 
         void set_eco() {
             config_name = "eco";
             initial_c = 64;
-            set_effort(25, 1, false, 2000, 10, false);
-            set_global_paths_coarsening();
+            initial_kappa = 25;
+            topo_split_factor = 4;
+            vcycle = false;
+
+            waver_message_refinement_config.enabled = true;
+            waver_message_refinement_config.max_iters = 10;
+            waver_long_message_refinement_config.padding = 1;
+            waver_long_message_refinement_config.enabled = false;
+            waver_swap_refinement_config.radius = 1;
+            waver_swap_refinement_config.enabled = true;
+            waver_swap_refinement_config.extended = false;
+            waver_sa_refinement_config.iterations = 2000;
+            waver_sa_refinement_config.enabled = true;
+            waver_sa_refinement_config.radius = 10;
+
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id = COARSENING_ALG_GLOBAL_PATHS;
 
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
@@ -338,16 +362,28 @@ namespace HeiProMap {
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.05;
             size_constrained_lp_config.f = 16.0;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
         }
 
         void set_strong() {
             config_name = "strong";
             initial_c = 64;
-            set_effort(50, 2, false, 5000, 20, true);
-            set_global_paths_coarsening();
+            initial_kappa = 50;
+            topo_split_factor = 4;
+            vcycle = true;
+
+            waver_message_refinement_config.enabled = true;
+            waver_message_refinement_config.max_iters = 20;
+            waver_long_message_refinement_config.padding = 1;
+            waver_long_message_refinement_config.enabled = false;
+            waver_swap_refinement_config.radius = 2;
+            waver_swap_refinement_config.enabled = true;
+            waver_swap_refinement_config.extended = false;
+            waver_sa_refinement_config.iterations = 5000;
+            waver_sa_refinement_config.enabled = true;
+            waver_sa_refinement_config.radius = 10;
+
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id = COARSENING_ALG_GLOBAL_PATHS;
 
             global_path_algorithm_config.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             global_path_algorithm_config.random_level = 0;
@@ -357,24 +393,33 @@ namespace HeiProMap {
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.05;
             size_constrained_lp_config.f = 16.0;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
         }
 
         void set_super_strong() {
             config_name = "super-strong";
             initial_c = 16;
-            set_effort(100, 2, true, 10000, 50, true);
-            set_global_paths_coarsening();
+            initial_kappa = 100;
+            topo_split_factor = 4;
+            vcycle = true;
+
+            waver_message_refinement_config.enabled = true;
+            waver_message_refinement_config.max_iters = 50;
+            waver_long_message_refinement_config.padding = 1;
+            waver_long_message_refinement_config.enabled = false;
+            waver_swap_refinement_config.radius = 2;
+            waver_swap_refinement_config.enabled = true;
+            waver_swap_refinement_config.extended = true;
+            waver_sa_refinement_config.iterations = 10000;
+            waver_sa_refinement_config.enabled = true;
+            waver_sa_refinement_config.radius = 10;
+
+            coarsening_algorithm_string = "global-paths";
+            coarsening_algorithm_id = COARSENING_ALG_GLOBAL_PATHS;
 
             global_path_algorithm_config.random_level = 0;
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.10;
             size_constrained_lp_config.f = 8.0;
-
-            waver_label_propagation_config.enabled = true;
-            waver_label_propagation_config.max_iteration = 5;
         }
 
         /**
@@ -420,76 +465,38 @@ namespace HeiProMap {
          */
         void print_help_message() {
             for (const auto &[large_key, small_key, description, default_val, input, is_set]: options) {
-                if (small_key.empty()) {
-                    std::cout << "[ " << large_key << "] - " << description << std::endl;
+                if (large_key[0] == '#') {
+                    std::cout << "\n" << large_key.substr(2) << ":" << std::endl;
+                } else if (small_key.empty()) {
+                    std::cout << "  " << large_key << " - " << description << std::endl;
                 } else {
-                    std::cout << "[ " << large_key << ", " << small_key << "] - " << description << std::endl;
+                    std::cout << "  " << large_key << ", " << small_key << " - " << description << std::endl;
                 }
             }
         }
 
     private:
-        void set_global_paths_coarsening() {
-            coarsening_algorithm_string = "global-paths";
-            coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
-        }
-
-        // The effort related settings of a preset: the greedy attempts on the coarsest level, the swap refinement, the
-        // simulated annealing and the message-group refinement of every level, and the V-cycle. All presets keep the
-        // long-message refinement (padding 1) and message refinement on, because they matter most for the quality.
-        void set_effort(const u64 kappa, const u64 swap_radius, const bool swap_extended, const u64 sa_iterations,
-                        const u64 message_iterations, const bool use_vcycle) {
-            initial_kappa = kappa;
-            topo_split_factor = 4;
-
-            waver_swap_refinement_config.radius = swap_radius;
-            waver_swap_refinement_config.enabled = swap_radius > 0;
-            waver_swap_refinement_config.extended = swap_extended;
-
-            waver_long_message_refinement_config.padding = 1;
-            waver_long_message_refinement_config.enabled = true;
-
-            waver_sa_refinement_config.iterations = sa_iterations;
-            waver_sa_refinement_config.enabled = sa_iterations > 0;
-            waver_sa_refinement_config.radius = 10;
-
-            waver_message_refinement_config.enabled = true;
-            waver_message_refinement_config.max_iters = message_iterations;
-
-            vcycle = use_vcycle;
-        }
-
         // The options of the same names as the preset's settings override the preset.
         void apply_command_line_overrides() {
-            if (is_set("--initial-c")) initial_c = std::stoull(get("--initial-c"));
-            if (is_set("--initial-kappa")) initial_kappa = std::stoull(get("--initial-kappa"));
-            if (is_set("--topo-split-factor")) topo_split_factor = std::stoull(get("--topo-split-factor"));
+            if (is_set("--coarsening-vertices-per-pe")) initial_c = std::stoull(get("--coarsening-vertices-per-pe"));
+            if (is_set("--greedy-attempts")) initial_kappa = std::stoull(get("--greedy-attempts"));
+            if (is_set("--topology-uncoarsening-factor")) topo_split_factor = std::stoull(get("--topology-uncoarsening-factor"));
             if (is_set("--swap-radius")) {
                 waver_swap_refinement_config.radius = std::stoull(get("--swap-radius"));
                 waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
             }
-            if (is_set("--swap-extended")) waver_swap_refinement_config.extended = std::stoull(get("--swap-extended")) != 0;
-            if (is_set("--long-msg-padding")) {
-                waver_long_message_refinement_config.padding = std::stoull(get("--long-msg-padding"));
+            if (is_set("--swap-extended-neighborhood")) waver_swap_refinement_config.extended = std::stoull(get("--swap-extended-neighborhood")) != 0;
+            if (is_set("--long-message-padding")) {
+                waver_long_message_refinement_config.padding = std::stoull(get("--long-message-padding"));
                 waver_long_message_refinement_config.enabled = waver_long_message_refinement_config.padding > 0;
             }
-            if (is_set("--sa-iterations")) {
-                waver_sa_refinement_config.iterations = std::stoull(get("--sa-iterations"));
+            if (is_set("--annealing-iterations")) {
+                waver_sa_refinement_config.iterations = std::stoull(get("--annealing-iterations"));
                 waver_sa_refinement_config.enabled = waver_sa_refinement_config.iterations > 0;
             }
-            if (is_set("--sa-radius")) waver_sa_refinement_config.radius = std::stoull(get("--sa-radius"));
-            if (is_set("--vertex-refine")) waver_message_refinement_config.enabled = std::stoull(get("--vertex-refine")) != 0;
-            if (is_set("--vertex-refine-iters")) waver_message_refinement_config.max_iters = std::stoull(get("--vertex-refine-iters"));
-            if (is_set("--refine-verbose")) waver_message_refinement_config.verbose = std::stoull(get("--refine-verbose")) != 0;
-            if (is_set("--engine-passes")) {
-                waver_engine_refinement_config.max_passes = std::stoull(get("--engine-passes"));
-                waver_engine_refinement_config.enabled = waver_engine_refinement_config.max_passes > 0;
-            }
-            if (is_set("--engine-ratio")) waver_engine_refinement_config.ratio = std::stod(get("--engine-ratio"));
-            if (is_set("--engine-verbose")) waver_engine_refinement_config.verbose = std::stoull(get("--engine-verbose")) != 0;
-            if (is_set("--pair-penalty")) waver_engine_refinement_config.pair_penalty = std::stod(get("--pair-penalty"));
-            if (is_set("--pair-threshold")) waver_engine_refinement_config.pair_threshold = std::stoull(get("--pair-threshold"));
-            if (is_set("--pair-passes")) waver_engine_refinement_config.pair_passes = std::stoull(get("--pair-passes"));
+            if (is_set("--annealing-radius")) waver_sa_refinement_config.radius = std::stoull(get("--annealing-radius"));
+            if (is_set("--message-refinement")) waver_message_refinement_config.enabled = std::stoull(get("--message-refinement")) != 0;
+            if (is_set("--message-refinement-iterations")) waver_message_refinement_config.max_iters = std::stoull(get("--message-refinement-iterations"));
             if (is_set("--vcycle")) vcycle = std::stoull(get("--vcycle")) != 0;
 
             if (is_set("--coarsening")) {

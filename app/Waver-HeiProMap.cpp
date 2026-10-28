@@ -26,6 +26,7 @@
 
 #include <csignal>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <vector>
 
@@ -108,11 +109,11 @@ int main(const int argc, char *argv[]) {
     auto t_write_end = HeiProMap::get_time_point();
     HeiProMap::f64 write_io_ms = HeiProMap::get_milli_seconds(t_write_start, t_write_end);
 
-    std::cout << "IO Read Time (ms)     : " << read_io_ms << std::endl;
-    std::cout << "IO Write Time (ms)    : " << write_io_ms << std::endl;
+    std::cout << std::fixed << std::setprecision(1) << std::left << std::setw(36) << "IO Read (ms)" << ": " << std::right << std::setw(16) << read_io_ms << std::endl;
+    std::cout << std::left << std::setw(36) << "IO Write (ms)" << ": " << std::right << std::setw(16) << write_io_ms << std::endl;
 
     auto ep = HeiProMap::get_time_point();
-    std::cout << "Total Time in Waver-HeiProMap.cpp (s): " << HeiProMap::get_seconds(sp, ep) << std::endl;
+    std::cout << std::left << std::setw(36) << "Total in Waver-HeiProMap.cpp (s)" << ": " << std::right << std::setw(16) << std::setprecision(3) << HeiProMap::get_seconds(sp, ep) << std::endl;
 
     HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
 

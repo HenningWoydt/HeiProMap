@@ -31,40 +31,19 @@
 
 #include "../init_partitioning/greedy_partitioner.h"
 #include "../init_partitioning/waver_greedy_partitioner.h"
-#include "../refinement/simple_label_propagation_refinement.h"
-#include "../refinement/waver_label_propagation_refinement.h"
 
 namespace HeiProMap {
-    // The coarsest level is mapped by a greedy partition (the best of several attempts), and the coarse levels are also
-    // refined by label propagation.
+    // The coarsest level is mapped by a greedy partition (the best of several attempts).
     class WaverMultilevelSolver : public WaverSolverBase {
-        WaverLabelPropagationRefinement lp_refine;
-        bool lp_active = false;
-
     public:
         WaverMultilevelSolver(graph_t &&g, graph_t &&t_topology, const WaverHeiProMapConfiguration &t_ac)
             : WaverSolverBase(std::move(g), std::move(t_topology), t_ac) {
-            // Note: the non-LARGE_K label propagation allocates a k x k table (10^10 entries at k = 99856),
-            // so it is not set up when it is not used.
-            lp_active = ac.waver_label_propagation_config.enabled;
-            if (lp_active) {
-                lp_refine.initialize(random_engine.get_u64(), ac.waver_label_propagation_config);
-            }
         }
 
     protected:
         void initial_partitioning() override {
             greedy_partitioning();
             finish_initial_partition();
-        }
-
-        bool uses_label_propagation() const override { return lp_active; }
-
-        void refine_before_message_refinement() override {
-            if (!lp_active) { return; }
-            auto sp_local = get_time_point();
-            lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
-            timings.lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
         }
 
     private:
