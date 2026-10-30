@@ -121,11 +121,28 @@ namespace HeiProMap {
         // (cell id = row * W + col, capacity = topo vertex weight). Column cuts use
         // the smoothest direction, row cuts the second, as in SpectralEmbeddingMapper.
         void place(const CSRGraph &g, const CSRGraph &topo, size_t W, std::vector<partition_t> &out) const {
+            const size_t H = (static_cast<size_t>(topo.n) + W - 1) / W;
+            place_with(g, topo, W, W >= H ? X[0] : X[1], W >= H ? X[1] : X[0], out);
+        }
+
+        // The same with the two smoothest vectors turned by the angle theta in their plane: when the two smallest
+        // eigenvalues are equal (a square domain) the vectors are an arbitrary turn of the axis-aligned ones, and
+        // recursive coordinate bisection is only good for the right turn.
+        void place_rotated(const CSRGraph &g, const CSRGraph &topo, size_t W, const f64 theta, std::vector<partition_t> &out) const {
+            const size_t H = (static_cast<size_t>(topo.n) + W - 1) / W;
+            std::vector<Vec> turned = make_vecs(2, n_);
+            const f64 cs = std::cos(theta), sn = std::sin(theta);
+            for (size_t i = 0; i < n_; ++i) {
+                turned[0][i] = cs * X[0][i] + sn * X[1][i];
+                turned[1][i] = -sn * X[0][i] + cs * X[1][i];
+            }
+            place_with(g, topo, W, W >= H ? turned[0] : turned[1], W >= H ? turned[1] : turned[0], out);
+        }
+
+        void place_with(const CSRGraph &g, const CSRGraph &topo, size_t W, const Vec &cx, const Vec &cy, std::vector<partition_t> &out) const {
             HEIPROMAP_PROFILE_SCOPE("spectral", "SpectralTracker", "place");
             const size_t k = topo.n;
             const size_t H = (k + W - 1) / W;
-            const Vec &cx = W >= H ? X[0] : X[1];
-            const Vec &cy = W >= H ? X[1] : X[0];
 
             // 2D prefix sums of cell capacities for O(1) rectangle sums.
             std::vector<f64> cap_ps((W + 1) * (H + 1), 0.0);

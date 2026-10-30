@@ -31,6 +31,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -171,7 +172,9 @@ namespace HeiProMap {
                 }
             }
 
+            if (!ac.dump_hierarchy.empty()) { dump_hierarchy(); }
             greedy_partitioning();
+            print_level("greedy partition");
             spectral_placement();
             print_level("initial partition (greedy / spectral)");
             finish_initial_partition();
@@ -356,10 +359,30 @@ namespace HeiProMap {
             spectral.init(g, ac.seed);
             std::vector<partition_t> part;
             spectral.place(g, d_oracle.current_topology(), d_oracle.current_W(), part);
+            // The turn of the two smoothest vectors with the lowest message cost (see place_rotated).
+            f64 turned_cost = SpectralTracker::message_cost(g, part, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            for (u64 step = 1; step < ac.spectral_rotations; ++step) {
+                const f64 theta = 0.5 * 3.14159265358979323846 * static_cast<f64>(step) / static_cast<f64>(ac.spectral_rotations);
+                std::vector<partition_t> candidate;
+                spectral.place_rotated(g, d_oracle.current_topology(), d_oracle.current_W(), theta, candidate);
+                const f64 c = SpectralTracker::message_cost(g, candidate, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                if (c < turned_cost) {
+                    turned_cost = c;
+                    part = std::move(candidate);
+                }
+            }
 
             const f64 greedy_cost = SpectralTracker::message_cost(g, p_manager.partition, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             const f64 spectral_cost = SpectralTracker::message_cost(g, part, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             const bool replace = spectral_cost < greedy_cost;
+            if (ac.level_stats) {
+                std::vector<partition_t> greedy(g.n);
+                for (vertex_t u = 0; u < g.n; ++u) { greedy[u] = p_manager.partition[u]; p_manager.partition[u] = part[u]; }
+                p_manager.recalculate_weights(g);
+                print_level("spectral placement");
+                for (vertex_t u = 0; u < g.n; ++u) { p_manager.partition[u] = greedy[u]; }
+                p_manager.recalculate_weights(g);
+            }
             if (replace) {
                 for (vertex_t u = 0; u < g.n; ++u) { p_manager.partition[u] = part[u]; }
                 p_manager.recalculate_weights(g);
@@ -518,6 +541,7 @@ namespace HeiProMap {
             legalize(mappings.size());
             refinement();
             print_level("settled");
+            dump_partition("k" + std::to_string(ac.k) + "_n" + std::to_string(graphs.back().n) + "_settled");
             // The refinements keep the lower limits only as a limit on what they take from a cell; they can still leave
             // one short, which the next topology level cannot be split from.
             fill_underfull_cells();
@@ -576,6 +600,7 @@ namespace HeiProMap {
             TopologyUncoarsener(graphs.back(), p_manager, d_oracle, costs, coarse_to_fine).run_from_assignment(assignment);
 
             if (ac.global_split) { try_global_split(); }
+            dump_partition("split" + std::to_string(ac.k) + "_n" + std::to_string(graphs.back().n) + "_raw");
             timings.uncontraction_ms += get_milli_seconds(p, get_time_point());
         }
 
@@ -919,6 +944,10 @@ namespace HeiProMap {
             // The rebalancer reads the boundary (and keeps all structures up to date while it moves vertices), so they
             // have to match the partition first: they do not after a topology level or a refinement.
             if (!structures_fresh) { recompute_datastructures(); }
+            if (ac.diffusion_rebalance) {
+                diffusion_rebalance();
+                print_step("flow");
+            }
             rebalance(level);
             print_step("rebalance");
             const size_t moved = EmptyBlockDiffusion::diffuse(graphs.back(), p_manager, static_cast<size_t>(d_oracle.current_W()), ac.diffusion_equalize);
@@ -927,6 +956,133 @@ namespace HeiProMap {
             const size_t filled = fill_underfull_cells();
             print_step("fill");
             if (moved > 0 || filled > 0) { recompute_datastructures(); }
+        }
+
+        // Writes the cell of every input vertex in the current state to <dump prefix>_<tag>.txt.
+        void dump_partition(const std::string &tag) const {
+            if (ac.dump_hierarchy.empty()) { return; }
+            std::vector<vertex_t> cluster(mappings.empty() ? graphs.back().n : mappings.front().get_old_n());
+            for (size_t i = 0; i < cluster.size(); ++i) { cluster[i] = static_cast<vertex_t>(i); }
+            for (const Mapping &m: mappings) { for (vertex_t &c: cluster) { c = m.get(c); } }
+            std::ofstream out(ac.dump_hierarchy + "_p_" + tag + ".txt");
+            for (const vertex_t c: cluster) { out << p_manager[c] << "\n"; }
+        }
+
+        // Writes, for every graph level, the cluster (vertex of that level) of every input vertex, one file per level.
+        void dump_hierarchy() const {
+            std::vector<vertex_t> cluster(mappings.empty() ? 0 : mappings.front().get_old_n());
+            for (size_t i = 0; i < cluster.size(); ++i) { cluster[i] = static_cast<vertex_t>(i); }
+            for (size_t level = 0; level < mappings.size(); ++level) {
+                for (vertex_t &c: cluster) { c = mappings[level].get(c); }
+                std::ofstream out(ac.dump_hierarchy + "_" + std::to_string(level + 1) + ".txt");
+                for (const vertex_t c: cluster) { out << c << "\n"; }
+            }
+        }
+
+        // Diffusion rebalancing: the cells outside their weight band get a flow towards the cells that have room, found as
+        // the minimum-norm flow on the grid (a conjugate gradient solve of the grid Laplacian), and every unit of flow
+        // across a grid edge is made by moving vertices of the sending cell into the receiving one, those with the best
+        // gain first. Each vertex moves one hop, so no message gets long; the cells are handled from the highest
+        // potential down, so a cell has received what it passes on. Does nothing if every cell is within its limits.
+        void diffusion_rebalance() {
+            HEIPROMAP_PROFILE_SCOPE("rebalance", "WaverSolver", "diffusion_rebalance");
+            const graph_t &g = graphs.back();
+            const size_t W = d_oracle.current_W();
+            const partition_t k = ac.k;
+            p_manager.recalculate_weights(g);
+            bool over = false;
+            for (partition_t x = 0; x < k && !over; ++x) { over = p_manager.bweights[x] > p_manager.get_lmax(x); }
+            if (!over) { return; }
+
+            // the right-hand side: the weight outside the band around the fair share
+            std::vector<f64> b(k);
+            f64 total_b = 0.0;
+            const std::vector<partition_t> &counts = cell_fine_counts.back();
+            f64 total_weight = 0.0, total_count = 0.0;
+            for (partition_t x = 0; x < k; ++x) {
+                total_weight += static_cast<f64>(p_manager.bweights[x]);
+                total_count += static_cast<f64>(counts[x]);
+            }
+            for (partition_t x = 0; x < k; ++x) {
+                const f64 fair = total_weight * static_cast<f64>(counts[x]) / total_count;
+                const f64 w = static_cast<f64>(p_manager.bweights[x]);
+                const f64 target = std::clamp(w, fair * (1.0 - 0.5 * ac.imbalance), fair * (1.0 + 0.5 * ac.imbalance));
+                b[x] = w - target;
+                total_b += b[x];
+            }
+            for (partition_t x = 0; x < k; ++x) { b[x] -= total_b / static_cast<f64>(k); }
+
+            // conjugate gradient on L phi = b
+            const auto multiply = [&](const std::vector<f64> &v, std::vector<f64> &out) {
+                partition_t nbrs[4];
+                for (partition_t x = 0; x < k; ++x) {
+                    const size_t n = grid_neighbors(x, W, k, nbrs);
+                    f64 sum = 0.0;
+                    for (size_t i = 0; i < n; ++i) { sum += v[x] - v[nbrs[i]]; }
+                    out[x] = sum;
+                }
+            };
+            std::vector<f64> phi(k, 0.0), res = b, dir = b, mv(k);
+            f64 rr = 0.0;
+            for (const f64 v: res) { rr += v * v; }
+            const f64 rr0 = rr;
+            for (int it = 0; it < 4000 && rr > 1e-12 * rr0 && rr0 > 0.0; ++it) {
+                multiply(dir, mv);
+                f64 dm = 0.0;
+                for (partition_t x = 0; x < k; ++x) { dm += dir[x] * mv[x]; }
+                if (dm <= 0.0) { break; }
+                const f64 step = rr / dm;
+                f64 rr_new = 0.0;
+                for (partition_t x = 0; x < k; ++x) {
+                    phi[x] += step * dir[x];
+                    res[x] -= step * mv[x];
+                    rr_new += res[x] * res[x];
+                }
+                const f64 beta = rr_new / rr;
+                for (partition_t x = 0; x < k; ++x) { dir[x] = res[x] + beta * dir[x]; }
+                rr = rr_new;
+            }
+
+            std::vector<std::vector<vertex_t> > blocks(k);
+            for (vertex_t u = 0; u < g.n; ++u) { blocks[p_manager[u]].push_back(u); }
+            std::vector<partition_t> order(k);
+            for (partition_t x = 0; x < k; ++x) { order[x] = x; }
+            std::sort(order.begin(), order.end(), [&](const partition_t a, const partition_t c) { return phi[a] > phi[c]; });
+            std::vector<std::pair<int64_t, vertex_t> > ranked;
+            size_t moved = 0;
+            for (const partition_t x: order) {
+                partition_t nbrs[4];
+                const size_t n = grid_neighbors(x, W, k, nbrs);
+                for (size_t i = 0; i < n; ++i) {
+                    const partition_t y = nbrs[i];
+                    f64 flow = phi[x] - phi[y];
+                    if (flow <= 0.5) { continue; }
+                    // the vertices of x by their gain of moving to y
+                    ranked.clear();
+                    for (const vertex_t u: blocks[x]) {
+                        if (p_manager[u] != x) { continue; }
+                        int64_t gain = 0;
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            const partition_t c = p_manager[g.edges_v[j]];
+                            gain += (c == y) - (c == x);
+                        }
+                        ranked.emplace_back(-gain, u);
+                    }
+                    std::sort(ranked.begin(), ranked.end());
+                    for (const auto &[neg_gain, u]: ranked) {
+                        if (flow <= 0.5) { break; }
+                        const weight_t w = g.v_weight(u);
+                        if (static_cast<f64>(w) > 2.0 * flow) { continue; } // would overshoot more than it helps
+                        if (p_manager.bweights[x] - w < p_manager.get_lmin(x)) { break; }
+                        p_manager.move_serial(u, w, x, y);
+                        blocks[y].push_back(u);
+                        flow -= static_cast<f64>(w);
+                        ++moved;
+                    }
+                }
+            }
+            if (ac.waver_busy_refinement_config.verbose) { std::cout << "[diffusion] moved " << moved << " vertices" << std::endl; }
+            recompute_datastructures();
         }
 
         // Brings every cell up to its lower limit (one unit of weight per finest PE it stands for). Without it, a coarse
