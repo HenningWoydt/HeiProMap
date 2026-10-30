@@ -54,6 +54,7 @@ namespace HeiProMap {
             g = &t_g;
             k = t_k;
             w = t_w;
+            track_regions = w.send_region != 0.0 || w.receive_region != 0.0;
             part.assign(g->n, 0);
             for (vertex_t u = 0; u < g->n; ++u) { part[u] = t_pm[u]; }
             internal.assign(k, 0);
@@ -145,6 +146,7 @@ namespace HeiProMap {
         std::vector<u64> zobrist;
         std::vector<u32> stamp;
         u32 epoch = 1;
+        bool track_regions = false; // the regions are only counted when the model weighs them (the fitted one does not)
         std::vector<partition_t> dirty;
 
         void touch(const partition_t x) {
@@ -181,15 +183,18 @@ namespace HeiProMap {
                 }
             }
             if (foreign == 0) { return; }
-            auto &map = regions[b];
-            Region &r = map[key];
-            const bool region_changes = sign > 0 ? r.count == 0 : r.count == 1;
-            if (sign > 0) {
-                ++r.count;
-            } else {
-                --r.count;
+            bool region_changes = false;
+            if (track_regions) {
+                auto &map = regions[b];
+                Region &r = map[key];
+                region_changes = sign > 0 ? r.count == 0 : r.count == 1;
+                if (sign > 0) {
+                    ++r.count;
+                } else {
+                    --r.count;
+                }
+                if (r.count == 0) { map.erase(key); }
             }
-            if (r.count == 0) { map.erase(key); }
             touch(b);
             sv[b] += sign * static_cast<int64_t>(foreign); // the value is in one message per receiving PE
             if (region_changes) { sr[b] += sign; }
