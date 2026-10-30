@@ -578,7 +578,7 @@ namespace HeiProMap {
             const graph_t &g = graphs.back();
             const partition_t k = ac.k;
             WaverRegionLoad tracker;
-            tracker.initialize(g, p_manager, k, WaverRegionLoad::Weights());
+            tracker.initialize(g, p_manager, k, ac.engine_costs);
             std::vector<std::vector<vertex_t> > blocks(k);
             std::vector<f64> weight(k, 0.0);
             for (vertex_t u = 0; u < g.n; ++u) {
@@ -1962,7 +1962,7 @@ namespace HeiProMap {
             const graph_t &g = graphs.back();
             const partition_t k = ac.k;
             WaverRegionLoad tracker;
-            tracker.initialize(g, p_manager, k, WaverRegionLoad::Weights());
+            tracker.initialize(g, p_manager, k, ac.engine_costs);
             std::vector<std::vector<vertex_t> > blocks(k);
             for (vertex_t u = 0; u < g.n; ++u) { blocks[p_manager[u]].push_back(u); }
             std::vector<partition_t> seen(k, NO_ID);

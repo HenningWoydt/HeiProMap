@@ -24,7 +24,8 @@ namespace HeiProMap {
         f64 alpha = 0.0;        // load per message; 0: the alpha_end of the cost model
         f64 beta = 0.0;         // load per unit of volume; 0: the beta_end of the cost model
         u64 max_tries = 8;      // sender groups tried per busy block and round
-        bool exact = false;     // the load of a block counts its regions and values (WaverRegionLoad), not only its messages
+        bool exact = false;     // the load of a block is the engine cost model (WaverRegionLoad with `costs`), not only its messages
+        WaverRegionLoad::Weights costs; // the engine cost model of the exact load
         bool verbose = false;
     };
 
@@ -55,7 +56,7 @@ namespace HeiProMap {
                        const f64 t_alpha_end, const f64 t_beta_end, const f64 t_alpha_link, const f64 t_beta_link)
                 : E(t_g, t_pm, t_bv, t_oracle, unused_config(), t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
                   busy(t_busy) {
-                if (busy.exact) { tracker.initialize(t_g, t_pm, this->k, WaverRegionLoad::Weights()); }
+                if (busy.exact) { tracker.initialize(t_g, t_pm, this->k, busy.costs); }
             }
 
             void run() {

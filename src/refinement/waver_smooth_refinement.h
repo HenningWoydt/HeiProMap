@@ -26,6 +26,7 @@ namespace HeiProMap {
         u64 max_rounds = 5;       // sweeps over the boundary vertices; stops earlier once a sweep moves nothing
         f64 hop_weight = 1.0;     // cost of one hop of one cut edge, next to the engine load weights
         f64 min_gain = 1e-6;      // a move must lower the cost by more than this
+        WaverRegionLoad::Weights costs; // the engine cost model of the load terms
         bool verbose = false;
     };
 
@@ -44,7 +45,7 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("refinement", "WaverSmoothRefinement", "refine");
             const partition_t k = p_manager.get_k();
             const int64_t W = static_cast<int64_t>(d_oracle.current_W());
-            const WaverRegionLoad::Weights weights;
+            const WaverRegionLoad::Weights &weights = config.costs;
 
             WaverRegionLoad tracker;
             tracker.initialize(g, p_manager, k, weights);

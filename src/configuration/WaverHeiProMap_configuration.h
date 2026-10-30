@@ -138,6 +138,15 @@ namespace HeiProMap {
             {"--beta-recv", "", "Volume-dependent receive overhead per byte (beta_recv).", "8.0", "", false},
             {"--beta-link", "", "Volume-dependent per-hop link cost per byte (beta_link).", "1.0", "", false},
 
+            {"# Engine cost model (busy refinement, smash and the level statistics; cycles of the scheduler's timed model)", "", "", "", "", false},
+            {"--engine-send-message", "", "Engine cost of sending one coalesced message.", "383", "", false},
+            {"--engine-recv-message", "", "Engine cost of receiving one coalesced message.", "272", "", false},
+            {"--engine-send-value", "", "Engine cost of every value in a message sent (a value sent to two PEs is in two messages).", "5.1", "", false},
+            {"--engine-recv-value", "", "Engine cost of every value in a message received.", "15.3", "", false},
+            {"--engine-local-nnz", "", "Engine cost of every matrix entry whose row and column are on the PE.", "4.5", "", false},
+            {"--engine-send-region", "", "Engine cost of every region (contiguous slice) sent; 0 in the fitted model.", "0", "", false},
+            {"--engine-recv-region", "", "Engine cost of every region received; 0 in the fitted model.", "0", "", false},
+
             {"# Coarsening (overrides the preset)", "", "", "", "", false},
             {"--coarsening-vertices-per-pe", "", "The graph is coarsened to about this many vertices per (coarse) PE.", "", "", false},
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
@@ -249,6 +258,8 @@ namespace HeiProMap {
         u64 prepartition_rotations = 1;
         size_t prepartition_dims = SpectralPrepartitionerAuto; // see --prepartition-dims
         SpectralSmoothing spectral_smoothing;
+
+        WaverRegionLoad::Weights engine_costs; // the engine cost model, see --engine-*
 
         // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
         //                                    + h(m) * alpha_link + h(m) * beta_link * S(m)
@@ -387,6 +398,15 @@ namespace HeiProMap {
             if (is_set("--beta-send"))  beta_send  = std::stod(get("--beta-send"));
             if (is_set("--beta-recv"))  beta_recv  = std::stod(get("--beta-recv"));
             if (is_set("--beta-link"))  beta_link  = std::stod(get("--beta-link"));
+
+            engine_costs.message = std::stod(get("--engine-send-message")) + std::stod(get("--engine-recv-message"));
+            engine_costs.send_value = std::stod(get("--engine-send-value"));
+            engine_costs.receive_value = std::stod(get("--engine-recv-value"));
+            engine_costs.local_nnz = std::stod(get("--engine-local-nnz"));
+            engine_costs.send_region = std::stod(get("--engine-send-region"));
+            engine_costs.receive_region = std::stod(get("--engine-recv-region"));
+            waver_busy_refinement_config.costs = engine_costs;
+            waver_smooth_refinement_config.costs = engine_costs;
 
             if (!is_set("--config")) {
                 std::cout << "Error: --config (or -c) must be specified." << std::endl;

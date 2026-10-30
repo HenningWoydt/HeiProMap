@@ -31,12 +31,18 @@ namespace HeiProMap {
         using p_manager_t = PartitionManager;
 
     public:
+        // The engine cost model of the scheduler's timed model, fitted to costs.json: a message costs the sender
+        // send_message and the receiver receive_message, every value in it send_value / receive_value on the engine
+        // that sends / receives it (a value sent to two PEs is in two messages), and every local nonzero local_nnz.
+        // The terms that do not depend on the mapping (startup, rows) are left out. The region terms are 0: they
+        // are not part of the fitted model (they can be set to count the regions of the messages).
         struct Weights {
-            f64 message = 514.0;        // per neighbor block: send and receive of one coalesced message
-            f64 send_region = 18.0;     // per send region
-            f64 receive_region = 56.0;  // per region received
-            f64 send_value = 4.0;       // per value sent
-            f64 receive_value = 9.0;    // per value received
+            f64 message = 655.0;        // per neighbor block: send (383) and receive (272) of one coalesced message
+            f64 send_region = 0.0;      // per send region
+            f64 receive_region = 0.0;   // per region received
+            f64 send_value = 5.1;       // per value sent (once per receiving PE)
+            f64 receive_value = 15.3;   // per value received
+            f64 local_nnz = 4.5;        // per matrix entry whose row and column are on the PE
         };
 
         void initialize(const graph_t &t_g, const p_manager_t &t_pm, const partition_t t_k, const Weights &t_w) {
@@ -45,6 +51,7 @@ namespace HeiProMap {
             w = t_w;
             part.assign(g->n, 0);
             for (vertex_t u = 0; u < g->n; ++u) { part[u] = t_pm[u]; }
+            internal.assign(k, 0);
             sr.assign(k, 0);
             rr.assign(k, 0);
             sv.assign(k, 0);
@@ -66,6 +73,11 @@ namespace HeiProMap {
             for (vertex_t u = 0; u < g->n; ++u) {
                 for (size_t j = g->neighborhoods[u]; j < g->neighborhoods[u + 1]; ++j) { add_edge(u, part[g->edges_v[j]], +1); }
             }
+            for (vertex_t u = 0; u < g->n; ++u) {
+                for (size_t j = g->neighborhoods[u]; j < g->neighborhoods[u + 1]; ++j) {
+                    if (part[g->edges_v[j]] == part[u]) { ++internal[part[u]]; }
+                }
+            }
             for (vertex_t u = 0; u < g->n; ++u) { reg(u, +1); }
             dirty.clear();
             ++epoch;
@@ -73,7 +85,7 @@ namespace HeiProMap {
 
         // The load of block x, given the number of its neighbor blocks.
         f64 load(const partition_t x, const size_t degree) const {
-            return w.message * static_cast<f64>(degree) + w.send_region * static_cast<f64>(sr[x]) +
+            return w.local_nnz * static_cast<f64>(internal[x]) + w.message * static_cast<f64>(degree) + w.send_region * static_cast<f64>(sr[x]) +
                    w.receive_region * static_cast<f64>(rr[x]) + w.send_value * static_cast<f64>(sv[x]) +
                    w.receive_value * static_cast<f64>(rv[x]);
         }
@@ -81,6 +93,14 @@ namespace HeiProMap {
         // Moves vertex u from block `from` to block `to`.
         void move(const vertex_t u, const partition_t from, const partition_t to) {
             const size_t begin = g->neighborhoods[u], end = g->neighborhoods[u + 1];
+            // the entries between u and the vertices of `from` stop being local, those with the vertices of `to` start
+            // to be (an edge is two entries)
+            for (const auto &[block, count]: conn[u]) {
+                if (block == from) { internal[from] -= 2 * static_cast<int64_t>(count); }
+                if (block == to) { internal[to] += 2 * static_cast<int64_t>(count); }
+            }
+            touch(from);
+            touch(to);
             reg(u, -1);
             for (size_t j = begin; j < end; ++j) { reg(g->edges_v[j], -1); }
             for (size_t j = begin; j < end; ++j) {
@@ -116,7 +136,7 @@ namespace HeiProMap {
             uint32_t count = 0;
         };
         std::vector<std::unordered_map<u64, Region> > regions; // block -> involved set (hash) -> separator vertices
-        std::vector<int64_t> sr, rr, sv, rv;
+        std::vector<int64_t> internal, sr, rr, sv, rv; // internal: local matrix entries of the block
         std::vector<u64> zobrist;
         std::vector<u32> stamp;
         u32 epoch = 1;
@@ -166,7 +186,7 @@ namespace HeiProMap {
             }
             if (r.count == 0) { map.erase(key); }
             touch(b);
-            sv[b] += sign;
+            sv[b] += sign * static_cast<int64_t>(foreign); // the value is in one message per receiving PE
             if (region_changes) { sr[b] += sign; }
             for (const auto &[block, count]: conn[v]) {
                 if (block == b) { continue; }
