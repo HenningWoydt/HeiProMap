@@ -23,6 +23,7 @@ namespace HeiProMap {
     struct WaverCornerRefinementConfiguration {
         bool enabled = false;
         u64 max_rounds = 10;
+        f64 round_gain = 1e-3;  // stop when a round lowers the objective by less than this share
         f64 power = 6.0;        // the engine loads are compared as sum(load^power): the busiest PEs count most
         f64 tau = 2.0;          // a contact of w cut edges costs a message 1 - exp(-w / tau): small contacts shrink first
         f64 message = 655.0;    // engine cost of a message (send + receive)
@@ -68,7 +69,7 @@ namespace HeiProMap {
                     std::cout << "[corner] round " << round << ": " << moves << " moves, objective " << before << " -> "
                               << s.objective() << ", max load " << s.max_load() << std::endl;
                 }
-                if (moves == 0) { break; }
+                if (moves == 0 || s.objective() > before * (1.0 - cfg.round_gain)) { break; }
             }
             return total_moves;
         }

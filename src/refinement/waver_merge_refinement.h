@@ -235,7 +235,6 @@ namespace HeiProMap {
 
             // The vertices of block x that have an edge to block e and have not been moved by the current chain.
             void collect_group(const partition_t x, const partition_t e, std::vector<vertex_t> &out) const {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "collect_group");
                 out.clear();
                 for (size_t i = 0; i < bv.size(x); ++i) {
                     const vertex_t u = bv.get(x, i);
@@ -252,7 +251,6 @@ namespace HeiProMap {
             // The weight of the sender group of x towards every neighbor block e (the vertices of x with an edge to e, not
             // moved by the current chain), for all e at once: one pass over the boundary of x. Returns the blocks e.
             void group_weights(const partition_t x, std::vector<partition_t> &blocks) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "group_weights");
                 blocks.clear();
                 for (size_t i = 0; i < bv.size(x); ++i) {
                     const vertex_t u = bv.get(x, i);
@@ -287,7 +285,6 @@ namespace HeiProMap {
 
             // The weight of the group, its edge weight to every other block, and to the vertices of x outside it.
             void measure(const partition_t x, Candidate &c) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "measure");
                 c.weight = 0;
                 c.weight_to_own = 0;
                 for (const vertex_t u: c.group) {
@@ -330,7 +327,6 @@ namespace HeiProMap {
             // external blocks of the group in one pass instead of one search per block.
             void deltas(const partition_t from, const std::vector<partition_t> &targets, const Candidate &c,
                         std::vector<f64> &out) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "deltas");
                 ext_sorted = c.ext;
                 std::sort(ext_sorted.begin(), ext_sorted.end());
                 const size_t ne = ext_sorted.size();
@@ -387,7 +383,6 @@ namespace HeiProMap {
             }
 
             void apply(const Candidate &c, const partition_t from, const partition_t to) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "apply");
                 for (const vertex_t u: c.group) {
                     WaverMessageRefinement::apply_move(g, bv, pm, u, g.v_weight(u), from, to);
                 }
@@ -429,7 +424,6 @@ namespace HeiProMap {
 
             // Moves a group back to the block it came from.
             void undo(Move &m) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "undo");
                 Candidate c;
                 c.group = std::move(m.group);
                 measure(m.to, c);
@@ -451,7 +445,6 @@ namespace HeiProMap {
             // least that much room (a itself has room for the group it just lost), found among the blocks that a group
             // of c can go to. With more moves left it is not decided here.
             bool can_resolve(const partition_t a, const partition_t c, const weight_t group_weight) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "can_resolve");
                 const weight_t over = pm.bweights[c] + group_weight - pm.get_lmax(c);
                 if (over <= 0) { return true; }
                 if (cfg.max_depth < 2) { return false; }
@@ -473,7 +466,6 @@ namespace HeiProMap {
             // One chain that starts with the sender group of a towards b. Returns 0 if there is no move to start
             // with, +1 if a chain was kept (its gain is in total), -1 if one was tried and undone.
             int try_chain(const partition_t a, const partition_t b, f64 &total) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "try_chain");
                 const weight_t group_weight = weight_for(a, b);
                 if (group_weight == 0 || pm.bweights[a] - group_weight < pm.get_lmin(a)) { return 0; }
                 Candidate first;
@@ -514,7 +506,6 @@ namespace HeiProMap {
 
             // Keeps the moves of a chain if it is valid and pays off, otherwise undoes them all.
             int finish(std::vector<Move> &chain, const bool resolved, const f64 total) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "finish");
                 for (const Move &m: chain) {
                     for (const vertex_t u: m.group) { locked[u] = 0; }
                 }
@@ -544,7 +535,6 @@ namespace HeiProMap {
             // like try_chain, without any overload: 0 if there is nothing to try, +1 if the move was kept, -1 if it
             // was made and undone.
             int try_scatter(const partition_t a, const partition_t b, f64 &total) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "try_scatter");
                 const weight_t group_weight = weight_for(a, b);
                 if (group_weight == 0 || pm.bweights[a] - group_weight < pm.get_lmin(a)) { return 0; }
                 std::vector<partition_t> targets;
@@ -705,7 +695,6 @@ namespace HeiProMap {
             // and its target are chosen by the cost (groups that fit the target are preferred); on the last step of a
             // chain only a move into a block with room is useful. Updates cur to the block that received the group.
             bool eject(const partition_t from, const bool last, std::vector<Move> &chain, f64 &total, partition_t &cur) {
-                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMergeRefinement", "eject");
                 const weight_t over = pm.bweights[from] - pm.get_lmax(from);
                 std::vector<partition_t> neighbors;
                 for (const auto &he: quotient.neighbors(from)) { neighbors.push_back(he.target); }

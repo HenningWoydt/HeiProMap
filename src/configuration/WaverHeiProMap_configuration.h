@@ -155,7 +155,9 @@ namespace HeiProMap {
             {"--corner-power", "", "Corner refinement: the engine loads are compared as sum(load^power).", "", "", false},
             {"--corner-tau", "", "Corner refinement: a contact of w cut edges counts as 1 - exp(-w / tau) messages.", "", "", false},
             {"--corner-top", "", "Corner refinement: the share of PEs, busiest first, whose vertices are tried in a round.", "", "", false},
+            {"--corner-pair", "", "Corner refinement: the objective is the sum over message pairs of (load_a + load_b)^power instead of sum(load^power), since a message needs both engines (0/1).", "", "", false},
             {"--corner-swaps", "", "Corner refinement: neighbors in a full PE a vertex may be swapped with.", "", "", false},
+            {"--corner-round-gain", "", "Corner refinement: stop when a round lowers the objective by less than this share (0: run all rounds).", "", "", false},
             {"--corner-verbose", "", "Print the statistics of every round of the corner refinement (0/1).", "", "", false},
 
             {"# Coarsening (overrides the preset)", "", "", "", "", false},
@@ -705,7 +707,9 @@ namespace HeiProMap {
             if (is_set("--corner-verbose")) waver_corner_refinement_config.verbose = std::stoull(get("--corner-verbose")) != 0;
             if (is_set("--busy-chain")) waver_busy_refinement_config.chain = std::stoull(get("--busy-chain")) != 0;
             if (is_set("--busy-wide")) waver_busy_refinement_config.wide = std::stoull(get("--busy-wide")) != 0;
+            if (is_set("--corner-pair")) waver_corner_refinement_config.pair_objective = std::stoull(get("--corner-pair")) != 0;
             if (is_set("--busy-verbose")) waver_busy_refinement_config.verbose = std::stoull(get("--busy-verbose")) != 0;
+            if (is_set("--corner-round-gain")) waver_corner_refinement_config.round_gain = std::stod(get("--corner-round-gain"));
             if (is_set("--merge-verbose")) waver_merge_refinement_config.verbose = std::stoull(get("--merge-verbose")) != 0;
             if (is_set("--long-message-padding")) {
                 waver_long_message_refinement_config.padding = std::stoull(get("--long-message-padding"));
