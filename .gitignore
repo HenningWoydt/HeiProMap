@@ -18,3 +18,4 @@ extern/*
 run_waver.sh
 run_qgraph_waver.sh
 partition.txt
+__pycache__/

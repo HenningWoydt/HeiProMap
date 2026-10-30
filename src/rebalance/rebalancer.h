@@ -84,8 +84,11 @@ namespace HeiProMap {
         partition_t m_k = 0;
         u64 m_threads = 1;
         mutable RandomEngine random_engine;
+        bool m_nearest = false; // an overloaded block with no neighbor with room sends to the nearest block with room
 
     public:
+        void set_nearest_fallback(const bool nearest) { m_nearest = nearest; }
+
         // =====================================================================
         // Public API
         // =====================================================================
@@ -412,7 +415,18 @@ namespace HeiProMap {
                     if (qap_delta > best_qap) { best_qap = qap_delta; best_id = v_id; }
                 }
 
-                if (best_id == m_k) {
+                if (best_id == m_k && m_nearest) {
+                    // No neighbor block has room: the nearest block that has, so the message stays short
+                    weight_t best_dist = std::numeric_limits<weight_t>::max();
+                    for (const partition_t c: underloaded) {
+                        if (p_manager.get_bweight(c) + u_w > p_manager.get_lmax(c)) { continue; }
+                        const weight_t d = d_oracle.get(u_id, c);
+                        if (d < best_dist) {
+                            best_dist = d;
+                            best_id = c;
+                        }
+                    }
+                } else if (best_id == m_k) {
                     while (ul_idx < underloaded.size() && p_manager.get_bweight(underloaded[ul_idx]) + u_w > p_manager.get_lmax(underloaded[ul_idx])) {
                         ul_idx++;
                     }

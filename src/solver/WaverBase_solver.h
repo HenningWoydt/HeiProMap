@@ -51,6 +51,7 @@
 #include "../utility/spectral_tracker.h"
 #include "../utility/kaminpar_partitioner.h"
 #include "../utility/spectral_prepartitioner.h"
+#include "../utility/rebalance_probe.h"
 #include "../utility/waver_report.h"
 #include "../utility/utils.h"
 
@@ -134,6 +135,7 @@ namespace HeiProMap {
             max_m = g.m;
             input_graph = std::move(g);
             random_engine = RandomEngine(ac.seed);
+            rebalancer.set_nearest_fallback(ac.rebalance_nearest);
 
             d_oracle.initialize(std::move(t_topology), ac.threads);
             ac.k = d_oracle.current_k();
@@ -439,6 +441,8 @@ namespace HeiProMap {
 
         void rebalance(const u64 level) {
             auto p = get_time_point();
+            RebalanceProbe probe;
+            if (ac.rebalance_verbose) { probe.begin(graphs.back(), p_manager); }
 
             if (level == 0) {
                 rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
@@ -447,6 +451,9 @@ namespace HeiProMap {
             }
 
             timings.rebalance_ms += get_milli_seconds(p, get_time_point());
+            if (ac.rebalance_verbose) {
+                probe.end(graphs.back(), p_manager, d_oracle, ac.k, level, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
             HEAVYASSERT(state_is_consistent());
         }
 

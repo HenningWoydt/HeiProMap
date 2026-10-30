@@ -4,6 +4,7 @@
 //   Waver-Schedule --graph g.graph --topology t.graph --mapping m.txt [--costs costs.json] [--schedule-seed 0]
 //                  [--chain 20]
 #include <algorithm>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -20,7 +21,8 @@ int main(int argc, char *argv[]) {
     std::string graph, topology, mapping, costs;
     u64 seed = 0, chain_print = 20, top_pes = 0, drop_hops = 0, drop_values = 0, seeds = 1, remap_rounds = 0, crit_orders = 0, remap_iters = 1;
     f64 imbalance = 0.03, power = 6.0, tau = 2.0, crit_lambda = 4.0;
-    std::string remap_out, order_name = "random";
+    bool pair_objective = false;
+    std::string remap_out, order_name = "random", analysis_out;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i], value = argv[i + 1];
         if (key == "--graph") graph = value;
@@ -29,6 +31,8 @@ int main(int argc, char *argv[]) {
         else if (key == "--costs") costs = value;
         else if (key == "--schedule-seed") seed = std::stoull(value);
         else if (key == "--chain") chain_print = std::stoull(value);
+        else if (key == "--remap-pair") pair_objective = value != "0";
+        else if (key == "--analysis-out") analysis_out = value;
         else if (key == "--crit-orders") crit_orders = std::stoull(value);
         else if (key == "--crit-lambda") crit_lambda = std::stod(value);
         else if (key == "--remap-iters") remap_iters = std::stoull(value);
@@ -71,6 +75,7 @@ int main(int argc, char *argv[]) {
         rc.max_rounds = remap_rounds;
         rc.power = power;
         rc.tau = tau;
+        rc.pair_objective = pair_objective;
         rc.verbose = false;
         std::cout << "makespan before (median of " << seeds << "): " << median_makespan(part) << std::endl;
         const weight_t lmax = static_cast<weight_t>(std::ceil((1.0 + imbalance) * static_cast<f64>(g.n) / K));
@@ -98,6 +103,23 @@ int main(int argc, char *argv[]) {
         std::cout << "corner refinement: " << moves << " moves\nmakespan after (median of " << seeds << "): "
                   << median_makespan(part) << std::endl;
         if (!remap_out.empty()) { write_partition(part, remap_out); }
+    }
+    if (!analysis_out.empty()) {
+        // per PE: engine load and how often it is on the critical chain over crit_orders random orders; and the messages
+        const auto base = WaverScheduler::run(g, part, cols, rows, C, seed, 0, 0, order_mode);
+        std::vector<f64> hits(K, 0.0), chain_msgs(K, 0.0);
+        for (u64 o = 0; o < crit_orders; ++o) {
+            const auto sr = WaverScheduler::run(g, part, cols, rows, C, 1000 + o, 0, 0, order_mode);
+            std::vector<char> seen(K, 0);
+            for (const u32 id: sr.chain) {
+                seen[sr.messages[id].src] = 1; seen[sr.messages[id].dst] = 1;
+                chain_msgs[sr.messages[id].src] += 1; chain_msgs[sr.messages[id].dst] += 1;
+            }
+            for (u32 p = 0; p < K; ++p) { hits[p] += seen[p]; }
+        }
+        std::ofstream pe_file(analysis_out + ".pe"), msg_file(analysis_out + ".msg");
+        for (u32 p = 0; p < K; ++p) { pe_file << p << " " << base.engine_load[p] << " " << hits[p] << " " << chain_msgs[p] << "\n"; }
+        for (const auto &m: base.messages) { msg_file << m.src << " " << m.dst << " " << m.count << "\n"; }
     }
     const auto r = WaverScheduler::run(g, part, cols, rows, C, seed, static_cast<u32>(drop_hops), static_cast<u32>(drop_values), order_mode);
     std::cout << "makespan " << r.makespan << "\nmessages " << r.messages.size() << "\nmax engine load " << r.max_engine_load

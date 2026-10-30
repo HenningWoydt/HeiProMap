@@ -51,6 +51,7 @@
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
 #include "../utility/spectral_tracker.h"
+#include "../utility/rebalance_probe.h"
 #include "../utility/waver_report.h"
 #include "../utility/utils.h"
 
@@ -139,6 +140,7 @@ namespace HeiProMap {
             max_m = g.m;
             graphs.emplace_back(std::move(g));
             random_engine = RandomEngine(ac.seed);
+            rebalancer.set_nearest_fallback(ac.rebalance_nearest);
 
             SpectralSmoothing smoothing = ac.spectral_smoothing;
             smoothing.threads = static_cast<int>(ac.threads);
@@ -1380,6 +1382,8 @@ namespace HeiProMap {
 
         void rebalance(const u64 level) {
             auto p = get_time_point();
+            RebalanceProbe probe;
+            if (ac.rebalance_verbose) { probe.begin(graphs.back(), p_manager); }
 
             if (level == 0) {
                 rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
@@ -1388,6 +1392,9 @@ namespace HeiProMap {
             }
 
             timings.rebalance_ms += get_milli_seconds(p, get_time_point());
+            if (ac.rebalance_verbose) {
+                probe.end(graphs.back(), p_manager, d_oracle, ac.k, level, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
             HEAVYASSERT(state_is_consistent());
         }
 

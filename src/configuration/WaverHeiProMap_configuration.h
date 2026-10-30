@@ -226,6 +226,8 @@ namespace HeiProMap {
             {"--smash-rounds", "", "Multilevel mode: rounds of smash and repair on the finished mapping: the windows around the busiest PEs are placed again from scratch and the mapping is repaired; kept if the busiest PE gets less load (0: off).", "", "", false},
             {"--smash-count", "", "Smash and repair: number of busiest PEs smashed per round.", "", "", false},
             {"--smash-radius", "", "Smash and repair: the window reaches this many PEs on every side of the busiest PE.", "", "", false},
+            {"--rebalance-verbose", "", "Print for every call of the rebalancer the overload before and after, the vertices it moved and how far, and the message cost (0/1).", "0", "", false},
+            {"--rebalance-nearest", "", "Rebalancer: a vertex of an overloaded block whose neighbors have no room goes to the nearest block with room instead of the first one by id (0/1).", "0", "", false},
             {"--level-stats", "", "Multilevel mode: print metrics of the mapping on every level, after the level change and after the refinement (0/1).", "", "", false},
             {"--diffusion-equalize", "", "Multilevel mode: after a level change also pull vertices from above-average into below-average PEs, without regard to the boundary (0/1, default 1).", "", "", false},
             {"--intense-max-n", "", "Multilevel mode: on the finest topology, graphs up to this many vertices use the --intense-* merge settings (0: off).", "", "", false},
@@ -301,6 +303,8 @@ namespace HeiProMap {
         u64 smash_rounds = 0;   // multilevel: rounds of smash and repair on the finished mapping (0: off)
         u64 smash_count = 10;   // busiest PEs smashed per round
         u64 smash_radius = 1;   // a smashed window reaches this many PEs on every side of the busiest one
+        bool rebalance_nearest = false;    // the residual overload goes to the nearest block with room
+        bool rebalance_verbose = false;    // print the effect of every call of the rebalancer
         bool level_stats = false;          // multilevel: print metrics of the mapping on every level
         bool diffusion_equalize = true;    // multilevel: the diffusion also equalizes the weights, not only fills empty PEs
         u64 intense_max_n = 0;             // multilevel: graphs up to this size, on the finest topology, merge more intensely
@@ -543,17 +547,17 @@ namespace HeiProMap {
 
             waver_merge_refinement_config.enabled = true;
             waver_merge_refinement_config.max_depth = 2;
+            waver_merge_refinement_config.max_rounds = 2;  // the third round gains under 10% of the first: 13% less time, same makespan
             waver_busy_refinement_config.enabled = true;
             waver_busy_refinement_config.max_rounds = 20;
             waver_busy_refinement_config.top_fraction = 0.5;
             waver_busy_refinement_config.power = 8.0;
-            waver_merge_refinement_config.max_rounds = 2;  // the third round gains under 10% of the first: 13% less time, same makespan
             waver_busy_refinement_config.max_tries = 30;
+            waver_busy_refinement_config.patience = 3;   // later rounds rarely lower the max load: 14% less time, same makespan
             waver_busy_refinement_config.exact = true;   // the load of a PE counts its regions and values
             waver_corner_refinement_config.enabled = true;  // single-vertex moves on the finished mapping
             waver_corner_refinement_config.max_rounds = 20;
             waver_corner_refinement_config.top_fraction = 0.3;  // the busiest third of the PEs: most of the gain for a third of the time
-            waver_busy_refinement_config.patience = 3;   // later rounds rarely lower the max load: 14% less time, same makespan
             split_kway = true;                           // multilevel: k-way local split (kaffpa eco) of a coarse PE
             split_partitioner = "kaffpa-eco";
             waver_long_message_refinement_config.padding = 1;
@@ -699,23 +703,23 @@ namespace HeiProMap {
             if (is_set("--busy-alpha")) waver_busy_refinement_config.alpha = std::stod(get("--busy-alpha"));
             if (is_set("--busy-beta")) waver_busy_refinement_config.beta = std::stod(get("--busy-beta"));
             if (is_set("--busy-exact")) waver_busy_refinement_config.exact = std::stoull(get("--busy-exact")) != 0;
+            if (is_set("--busy-patience")) waver_busy_refinement_config.patience = std::stoull(get("--busy-patience"));
+            if (is_set("--merge-round-gain")) waver_merge_refinement_config.min_round_gain = std::stod(get("--merge-round-gain"));
             if (is_set("--busy-tries")) waver_busy_refinement_config.max_tries = std::stoull(get("--busy-tries"));
             if (is_set("--corner-rounds")) {
                 waver_corner_refinement_config.max_rounds = std::stoull(get("--corner-rounds"));
                 waver_corner_refinement_config.enabled = waver_corner_refinement_config.max_rounds > 0;
-            if (is_set("--busy-patience")) waver_busy_refinement_config.patience = std::stoull(get("--busy-patience"));
-            if (is_set("--merge-round-gain")) waver_merge_refinement_config.min_round_gain = std::stod(get("--merge-round-gain"));
             }
             if (is_set("--corner-power")) waver_corner_refinement_config.power = std::stod(get("--corner-power"));
             if (is_set("--corner-tau")) waver_corner_refinement_config.tau = std::stod(get("--corner-tau"));
             if (is_set("--corner-top")) waver_corner_refinement_config.top_fraction = std::stod(get("--corner-top"));
+            if (is_set("--corner-pair")) waver_corner_refinement_config.pair_objective = std::stoull(get("--corner-pair")) != 0;
             if (is_set("--corner-swaps")) waver_corner_refinement_config.swap_tries = std::stoull(get("--corner-swaps"));
+            if (is_set("--corner-round-gain")) waver_corner_refinement_config.round_gain = std::stod(get("--corner-round-gain"));
             if (is_set("--corner-verbose")) waver_corner_refinement_config.verbose = std::stoull(get("--corner-verbose")) != 0;
             if (is_set("--busy-chain")) waver_busy_refinement_config.chain = std::stoull(get("--busy-chain")) != 0;
             if (is_set("--busy-wide")) waver_busy_refinement_config.wide = std::stoull(get("--busy-wide")) != 0;
-            if (is_set("--corner-pair")) waver_corner_refinement_config.pair_objective = std::stoull(get("--corner-pair")) != 0;
             if (is_set("--busy-verbose")) waver_busy_refinement_config.verbose = std::stoull(get("--busy-verbose")) != 0;
-            if (is_set("--corner-round-gain")) waver_corner_refinement_config.round_gain = std::stod(get("--corner-round-gain"));
             if (is_set("--merge-verbose")) waver_merge_refinement_config.verbose = std::stoull(get("--merge-verbose")) != 0;
             if (is_set("--long-message-padding")) {
                 waver_long_message_refinement_config.padding = std::stoull(get("--long-message-padding"));
@@ -731,6 +735,8 @@ namespace HeiProMap {
             if (is_set("--smash-rounds")) smash_rounds = std::stoull(get("--smash-rounds"));
             if (is_set("--smash-count")) smash_count = std::stoull(get("--smash-count"));
             if (is_set("--smash-radius")) smash_radius = std::stoull(get("--smash-radius"));
+            if (is_set("--rebalance-nearest")) rebalance_nearest = std::stoull(get("--rebalance-nearest")) != 0;
+            if (is_set("--rebalance-verbose")) rebalance_verbose = std::stoull(get("--rebalance-verbose")) != 0;
             if (is_set("--level-stats")) level_stats = std::stoull(get("--level-stats")) != 0;
             if (is_set("--diffusion-equalize")) diffusion_equalize = std::stoull(get("--diffusion-equalize")) != 0;
             if (is_set("--intense-max-n")) intense_max_n = std::stoull(get("--intense-max-n"));
