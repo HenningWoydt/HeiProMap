@@ -42,7 +42,7 @@ namespace HeiProMap {
     // Returns the number of vertices that changed their PE; only the partition and the block weights are updated.
     class EmptyBlockDiffusion {
     public:
-        static size_t diffuse(const CSRGraph &g, PartitionManager &p_manager, const size_t W) {
+        static size_t diffuse(const CSRGraph &g, PartitionManager &p_manager, const size_t W, const bool equalize = true) {
             HEIPROMAP_PROFILE_SCOPE("rebalance", "EmptyBlockDiffusion", "diffuse");
             const partition_t k = p_manager.get_k();
 
@@ -101,6 +101,8 @@ namespace HeiProMap {
                     }
                 }
             }
+
+            if (!equalize) { return moved; }
 
             // Phase 2: equalize — pull from above-average neighbors into
             // below-average blocks.

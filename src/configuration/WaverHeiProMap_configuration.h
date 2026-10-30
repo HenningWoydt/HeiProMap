@@ -38,6 +38,12 @@
 #include "../coarsening/heavy_edge_matching.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../refinement/waver_long_message_refinement.h"
+#include "../refinement/waver_merge_refinement.h"
+#include "../refinement/waver_busy_refinement.h"
+#include "../refinement/waver_cycle_refinement.h"
+#include "../refinement/waver_crowd_refinement.h"
+#include "../refinement/waver_shift_refinement.h"
+#include "../refinement/waver_smooth_refinement.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
@@ -101,6 +107,7 @@ namespace HeiProMap {
 
             {"# General", "", "", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance of the PE weights (for example 0.03). It applies to the partition of the input graph into PEs (KaMinPar) and to the final level of the individual input vertices; all coarser levels map one vertex to each PE.", "0.03", "", false},
+            {"--min-fill", "", "Multilevel mode: the lowest weight a PE may be refined down to, as a fraction of the average PE weight (for example 0.5). A coarse cell stands for several PEs and keeps that fraction of their total. Without a lower limit the refinement drains PEs to cut messages, and the topology can no longer be uncoarsened in time.", "0.5", "", false},
             {"--seed", "", "Seed for diversifying results (random if not given).", "", "", false},
             {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
 
@@ -146,11 +153,65 @@ namespace HeiProMap {
             {"--message-refinement", "", "Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
             {"--message-refinement-iterations", "", "Maximum iterations of the message-group refinement on one level.", "", "", false},
             {"--long-message-padding", "", "Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
+            {"--merge-refinement", "", "Multilevel mode: run the merge refinement, which moves a sender group into a block without room for it and passes the overload on along a chain of moves (0/1).", "", "", false},
+            {"--merge-depth", "", "Maximum number of moves in one chain of the merge refinement.", "", "", false},
+            {"--merge-rounds", "", "Maximum rounds of the merge refinement on one level.", "", "", false},
+            {"--merge-partial", "", "Merge refinement: an overloaded block may also give up only part of a sender group, the vertices tied most closely to the receiving block (0/1).", "", "", false},
+            {"--merge-split", "", "Merge refinement: a sender group may also be split among up to this many blocks, each vertex going to the block it has the most edge weight to (below 2: never).", "", "", false},
+            {"--merge-scatter", "", "Merge refinement without chains: the sender group is spread over the receiver and all its neighbors, within their room, and no block is overloaded (0/1).", "", "", false},
+            {"--shift-refinement", "", "Multilevel mode: run the shift refinement, which places the blocks of a long message next to each other and shifts the blocks on the way by one cell (0/1).", "", "", false},
+            {"--shift-rounds", "", "Maximum rounds of the shift refinement on one level.", "", "", false},
+            {"--shift-messages", "", "Shift refinement: the number of longest messages worked on per round.", "", "", false},
+            {"--smooth-refinement", "", "Multilevel mode: run the smooth refinement, which moves single boundary vertices to lower the neighbor cells, regions and hops (0/1).", "", "", false},
+            {"--smooth-rounds", "", "Maximum sweeps of the smooth refinement on one level.", "", "", false},
+            {"--smooth-hop-weight", "", "Smooth refinement: cost of one hop of one cut edge.", "", "", false},
+            {"--smooth-verbose", "", "Print the statistics of every sweep of the smooth refinement (0/1).", "", "", false},
+            {"--shift-verbose", "", "Print the statistics of every round of the shift refinement (0/1).", "", "", false},
+            {"--crowd-refinement", "", "Multilevel mode: run the crowd refinement, which shortens and separates the bounding boxes of the messages (0/1).", "", "", false},
+            {"--crowd-rounds", "", "Maximum rounds of the crowd refinement on one level.", "", "", false},
+            {"--crowd-top", "", "Crowd refinement: the share of messages, most crowded first, worked on per round.", "", "", false},
+            {"--crowd-verbose", "", "Print the statistics of every round of the crowd refinement (0/1).", "", "", false},
+            {"--cycle-refinement", "", "Multilevel mode: run the cycle refinement, which moves sender groups around a cycle of blocks so that every block gives one and receives one (0/1).", "", "", false},
+            {"--cycle-length", "", "Maximum number of blocks on a cycle of the cycle refinement.", "", "", false},
+            {"--cycle-rounds", "", "Maximum rounds of the cycle refinement on one level.", "", "", false},
+            {"--cycle-tries", "", "Cycle refinement: first moves tried per block and round.", "", "", false},
+            {"--cycle-verbose", "", "Print the statistics of every round of the cycle refinement (0/1).", "", "", false},
+            {"--busy-refinement", "", "Multilevel mode: run the busy-PE refinement, which moves sender groups away from the blocks with the highest engine load (0/1).", "", "", false},
+            {"--busy-rounds", "", "Maximum rounds of the busy-PE refinement on one level.", "", "", false},
+            {"--busy-top", "", "Busy-PE refinement: the share of blocks, busiest first, worked on per round.", "", "", false},
+            {"--busy-power", "", "Busy-PE refinement: the loads touched by a move are compared as sum(load^power).", "", "", false},
+            {"--busy-alpha", "", "Busy-PE refinement: load per message (0: the alpha of the cost model).", "", "", false},
+            {"--busy-beta", "", "Busy-PE refinement: load per unit of volume (0: the beta of the cost model).", "", "", false},
+            {"--busy-exact", "", "Busy-PE refinement: the load of a block counts its send and receive regions and its values as well as its messages (0/1).", "", "", false},
+            {"--busy-tries", "", "Busy-PE refinement: sender groups tried per busy block and round.", "", "", false},
+            {"--busy-verbose", "", "Print the statistics of every round of the busy-PE refinement (0/1).", "", "", false},
+            {"--merge-verbose", "", "Print the statistics of every round of the merge refinement (0/1).", "", "", false},
             {"--swap-radius", "", "Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
             {"--swap-extended-neighborhood", "", "Also consider the neighborhoods of communication partners for swaps (0/1).", "", "", false},
             {"--annealing-iterations", "", "Number of simulated annealing swap iterations on every level (0 = off).", "0", "", false},
             {"--annealing-radius", "", "Max swap radius of the simulated annealing.", "", "", false},
-            {"--vcycle", "", "After the mapping is found, run a V-cycle: coarsen topology and graph together (one vertex per PE on every level), then uncoarsen with the same legalization and refinements as the main uncoarsening on every level (0/1).", "", "", false},
+            {"--smash-rounds", "", "Multilevel mode: rounds of smash and repair on the finished mapping: the windows around the busiest PEs are placed again from scratch and the mapping is repaired; kept if the busiest PE gets less load (0: off).", "", "", false},
+            {"--smash-count", "", "Smash and repair: number of busiest PEs smashed per round.", "", "", false},
+            {"--smash-radius", "", "Smash and repair: the window reaches this many PEs on every side of the busiest PE.", "", "", false},
+            {"--level-stats", "", "Multilevel mode: print metrics of the mapping on every level, after the level change and after the refinement (0/1).", "", "", false},
+            {"--diffusion-equalize", "", "Multilevel mode: after a level change also pull vertices from above-average into below-average PEs, without regard to the boundary (0/1, default 1).", "", "", false},
+            {"--intense-max-n", "", "Multilevel mode: on the finest topology, graphs up to this many vertices use the --intense-* merge settings (0: off).", "", "", false},
+            {"--intense-depth", "", "Merge depth on the intense levels.", "", "", false},
+            {"--intense-rounds", "", "Merge rounds on the intense levels.", "", "", false},
+            {"--intense-partial", "", "Partial moves on the intense levels (0/1).", "", "", false},
+            {"--intense-split", "", "Merge split parts on the intense levels.", "", "", false},
+            {"--window-rounds", "", "Multilevel mode: rounds of the window re-embedding on every level of the finest topology (0: off).", "", "", false},
+            {"--window-size", "", "Window re-embedding: cells per side of a window.", "", "", false},
+            {"--window-min-n", "", "Window re-embedding: only on graphs with at least this many vertices.", "", "", false},
+            {"--window-max-n", "", "Window re-embedding: only on graphs with at most this many vertices (0: no limit).", "", "", false},
+            {"--relax-rounds", "", "Multilevel mode: rounds of the warm-started relaxation on every level of the finest topology (0: off).", "", "", false},
+            {"--relax-sweeps", "", "Relaxation: smoothing sweeps of the vertex positions per round.", "", "", false},
+            {"--relax-anchor", "", "Relaxation: weight of the pull back to the current cell, relative to the pull of the neighbors.", "", "", false},
+            {"--relax-min-n", "", "Relaxation: only on graphs with at least this many vertices.", "", "", false},
+            {"--global-split", "", "Multilevel mode: at every topology split also place the whole current graph spectrally onto the finer grid, and keep it if its message cost is lower than that of the local splits (0/1).", "", "", false},
+            {"--terminal-propagation", "", "Multilevel mode: when a coarse PE is split, pull the placement of its vertices towards their neighbors in the neighboring cells (0/1).", "", "", false},
+            {"--vcycle-vertices-per-pe", "", "Multilevel mode: the V-cycle coarsens the graph to about this many vertices per PE.", "", "", false},
+            {"--vcycle", "", "Multilevel mode: after the mapping is found, run a V-cycle: coarsen the graph again within the PEs of the current mapping, then uncoarsen with legalization and refinement on every level; the old mapping is kept if the cost does not drop (0/1).", "", "", false},
         };
 
     public:
@@ -161,6 +222,7 @@ namespace HeiProMap {
         partition_t k = 0; // run state: the number of PEs of the current topology level (set by the solver)
 
         f64 imbalance = 0.03;
+        f64 min_fill = 0.5;
         std::string mode = "spectral"; // spectral | multilevel
         std::string prepartitioner = "kaminpar";
         std::string kaminpar_preset = "largek";
@@ -188,6 +250,20 @@ namespace HeiProMap {
         u64 initial_kappa = 10;      // greedy partitions of the coarsest level
         u64 topo_split_factor = 4;
         bool vcycle = false;
+        u64 smash_rounds = 0;   // multilevel: rounds of smash and repair on the finished mapping (0: off)
+        u64 smash_count = 10;   // busiest PEs smashed per round
+        u64 smash_radius = 1;   // a smashed window reaches this many PEs on every side of the busiest one
+        bool level_stats = false;          // multilevel: print metrics of the mapping on every level
+        bool diffusion_equalize = true;    // multilevel: the diffusion also equalizes the weights, not only fills empty PEs
+        u64 intense_max_n = 0;             // multilevel: graphs up to this size, on the finest topology, merge more intensely
+        u64 intense_depth = 3, intense_rounds = 6, intense_split = 3;
+        bool intense_partial = true;
+        u64 window_rounds = 0, window_size = 3, window_min_n = 0, window_max_n = 0; // multilevel: window re-embedding
+        u64 relax_rounds = 0, relax_sweeps = 8, relax_min_n = 0; // multilevel: warm-started relaxation
+        f64 relax_anchor = 0.5;
+        bool global_split = false;         // multilevel: a global spectral placement competes with the local splits
+        bool terminal_propagation = false; // multilevel: the split of a coarse cell is pulled towards the neighbors outside it
+        u64 vcycle_c = 8;                 // the V-cycle coarsens the graph to about this many vertices per PE
 
         // coarsening algorithm
         std::string coarsening_algorithm_string;
@@ -200,6 +276,12 @@ namespace HeiProMap {
         WaverMessageRefinementConfiguration     waver_message_refinement_config     = WaverMessageRefinementConfiguration("Waver Message Refinement");
         WaverSwapRefinementConfiguration        waver_swap_refinement_config        = WaverSwapRefinementConfiguration("Waver Swap Refinement");
         WaverLongMessageRefinementConfiguration waver_long_message_refinement_config = WaverLongMessageRefinementConfiguration("Waver Long Message Refinement");
+        WaverShiftRefinementConfiguration       waver_shift_refinement_config       = WaverShiftRefinementConfiguration("Waver Shift Refinement");
+        WaverSmoothRefinementConfiguration      waver_smooth_refinement_config      = WaverSmoothRefinementConfiguration("Waver Smooth Refinement");
+        WaverCrowdRefinementConfiguration       waver_crowd_refinement_config       = WaverCrowdRefinementConfiguration("Waver Crowd Refinement");
+        WaverCycleRefinementConfiguration       waver_cycle_refinement_config       = WaverCycleRefinementConfiguration("Waver Cycle Refinement");
+        WaverBusyRefinementConfiguration        waver_busy_refinement_config        = WaverBusyRefinementConfiguration("Waver Busy Refinement");
+        WaverMergeRefinementConfiguration       waver_merge_refinement_config       = WaverMergeRefinementConfiguration("Waver Merge Refinement");
         WaverSARefinementConfiguration          waver_sa_refinement_config          = WaverSARefinementConfiguration("Waver Simulated Annealing");
 
         WaverHeiProMapConfiguration() = default;
@@ -237,6 +319,7 @@ namespace HeiProMap {
             if (is_set("--mapping")) { mapping_out = get("--mapping"); }
 
             imbalance = std::stod(get("--imbalance"));
+            min_fill = std::stod(get("--min-fill"));
             mode = get("--mode");
             if (mode != "spectral" && mode != "multilevel") {
                 std::cout << "Error: Invalid --mode '" << mode
@@ -321,15 +404,19 @@ namespace HeiProMap {
             waver_message_refinement_config.enabled = true;
             waver_message_refinement_config.max_iters = 1;
 
+            waver_merge_refinement_config.enabled = true;
+            waver_merge_refinement_config.max_depth = 2;
+
             waver_long_message_refinement_config.enabled = false;
-            waver_long_message_refinement_config.padding = 1;
+            waver_long_message_refinement_config.padding = 2;
 
             waver_swap_refinement_config.enabled = false;
-            waver_swap_refinement_config.radius = 0;
+            waver_swap_refinement_config.radius = 3;
+            waver_swap_refinement_config.max_rounds = 3;
             waver_swap_refinement_config.extended = false;
 
             waver_sa_refinement_config.enabled = false;
-            waver_sa_refinement_config.iterations = 0;
+            waver_sa_refinement_config.iterations = 1;
             waver_sa_refinement_config.radius = 10;
         }
 
@@ -369,10 +456,18 @@ namespace HeiProMap {
             initial_c = 64;
             initial_kappa = 50;
             topo_split_factor = 4;
-            vcycle = true;
+            vcycle = false;
 
             waver_message_refinement_config.enabled = true;
             waver_message_refinement_config.max_iters = 20;
+
+            waver_merge_refinement_config.enabled = true;
+            waver_merge_refinement_config.max_depth = 2;
+            waver_busy_refinement_config.enabled = true;
+            waver_busy_refinement_config.max_rounds = 20;
+            waver_busy_refinement_config.top_fraction = 0.5;
+            waver_busy_refinement_config.power = 8.0;
+            waver_busy_refinement_config.max_tries = 30;
             waver_long_message_refinement_config.padding = 1;
             waver_long_message_refinement_config.enabled = false;
             waver_swap_refinement_config.radius = 2;
@@ -486,6 +581,39 @@ namespace HeiProMap {
                 waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
             }
             if (is_set("--swap-extended-neighborhood")) waver_swap_refinement_config.extended = std::stoull(get("--swap-extended-neighborhood")) != 0;
+            if (is_set("--merge-refinement")) waver_merge_refinement_config.enabled = std::stoull(get("--merge-refinement")) != 0;
+            if (is_set("--merge-depth")) waver_merge_refinement_config.max_depth = std::stoull(get("--merge-depth"));
+            if (is_set("--merge-rounds")) waver_merge_refinement_config.max_rounds = std::stoull(get("--merge-rounds"));
+            if (is_set("--merge-partial")) waver_merge_refinement_config.partial = std::stoull(get("--merge-partial")) != 0;
+            if (is_set("--merge-split")) waver_merge_refinement_config.split_parts = std::stoull(get("--merge-split"));
+            if (is_set("--merge-scatter")) waver_merge_refinement_config.scatter = std::stoull(get("--merge-scatter")) != 0;
+            if (is_set("--smooth-refinement")) waver_smooth_refinement_config.enabled = std::stoull(get("--smooth-refinement")) != 0;
+            if (is_set("--smooth-rounds")) waver_smooth_refinement_config.max_rounds = std::stoull(get("--smooth-rounds"));
+            if (is_set("--smooth-hop-weight")) waver_smooth_refinement_config.hop_weight = std::stod(get("--smooth-hop-weight"));
+            if (is_set("--smooth-verbose")) waver_smooth_refinement_config.verbose = std::stoull(get("--smooth-verbose")) != 0;
+            if (is_set("--shift-refinement")) waver_shift_refinement_config.enabled = std::stoull(get("--shift-refinement")) != 0;
+            if (is_set("--shift-rounds")) waver_shift_refinement_config.max_rounds = std::stoull(get("--shift-rounds"));
+            if (is_set("--shift-messages")) waver_shift_refinement_config.max_messages = std::stoull(get("--shift-messages"));
+            if (is_set("--shift-verbose")) waver_shift_refinement_config.verbose = std::stoull(get("--shift-verbose")) != 0;
+            if (is_set("--crowd-refinement")) waver_crowd_refinement_config.enabled = std::stoull(get("--crowd-refinement")) != 0;
+            if (is_set("--crowd-rounds")) waver_crowd_refinement_config.max_rounds = std::stoull(get("--crowd-rounds"));
+            if (is_set("--crowd-top")) waver_crowd_refinement_config.top_fraction = std::stod(get("--crowd-top"));
+            if (is_set("--crowd-verbose")) waver_crowd_refinement_config.verbose = std::stoull(get("--crowd-verbose")) != 0;
+            if (is_set("--cycle-refinement")) waver_cycle_refinement_config.enabled = std::stoull(get("--cycle-refinement")) != 0;
+            if (is_set("--cycle-length")) waver_cycle_refinement_config.max_length = std::stoull(get("--cycle-length"));
+            if (is_set("--cycle-rounds")) waver_cycle_refinement_config.max_rounds = std::stoull(get("--cycle-rounds"));
+            if (is_set("--cycle-tries")) waver_cycle_refinement_config.max_tries = std::stoull(get("--cycle-tries"));
+            if (is_set("--cycle-verbose")) waver_cycle_refinement_config.verbose = std::stoull(get("--cycle-verbose")) != 0;
+            if (is_set("--busy-refinement")) waver_busy_refinement_config.enabled = std::stoull(get("--busy-refinement")) != 0;
+            if (is_set("--busy-rounds")) waver_busy_refinement_config.max_rounds = std::stoull(get("--busy-rounds"));
+            if (is_set("--busy-top")) waver_busy_refinement_config.top_fraction = std::stod(get("--busy-top"));
+            if (is_set("--busy-power")) waver_busy_refinement_config.power = std::stod(get("--busy-power"));
+            if (is_set("--busy-alpha")) waver_busy_refinement_config.alpha = std::stod(get("--busy-alpha"));
+            if (is_set("--busy-beta")) waver_busy_refinement_config.beta = std::stod(get("--busy-beta"));
+            if (is_set("--busy-exact")) waver_busy_refinement_config.exact = std::stoull(get("--busy-exact")) != 0;
+            if (is_set("--busy-tries")) waver_busy_refinement_config.max_tries = std::stoull(get("--busy-tries"));
+            if (is_set("--busy-verbose")) waver_busy_refinement_config.verbose = std::stoull(get("--busy-verbose")) != 0;
+            if (is_set("--merge-verbose")) waver_merge_refinement_config.verbose = std::stoull(get("--merge-verbose")) != 0;
             if (is_set("--long-message-padding")) {
                 waver_long_message_refinement_config.padding = std::stoull(get("--long-message-padding"));
                 waver_long_message_refinement_config.enabled = waver_long_message_refinement_config.padding > 0;
@@ -497,6 +625,27 @@ namespace HeiProMap {
             if (is_set("--annealing-radius")) waver_sa_refinement_config.radius = std::stoull(get("--annealing-radius"));
             if (is_set("--message-refinement")) waver_message_refinement_config.enabled = std::stoull(get("--message-refinement")) != 0;
             if (is_set("--message-refinement-iterations")) waver_message_refinement_config.max_iters = std::stoull(get("--message-refinement-iterations"));
+            if (is_set("--smash-rounds")) smash_rounds = std::stoull(get("--smash-rounds"));
+            if (is_set("--smash-count")) smash_count = std::stoull(get("--smash-count"));
+            if (is_set("--smash-radius")) smash_radius = std::stoull(get("--smash-radius"));
+            if (is_set("--level-stats")) level_stats = std::stoull(get("--level-stats")) != 0;
+            if (is_set("--diffusion-equalize")) diffusion_equalize = std::stoull(get("--diffusion-equalize")) != 0;
+            if (is_set("--intense-max-n")) intense_max_n = std::stoull(get("--intense-max-n"));
+            if (is_set("--intense-depth")) intense_depth = std::stoull(get("--intense-depth"));
+            if (is_set("--intense-rounds")) intense_rounds = std::stoull(get("--intense-rounds"));
+            if (is_set("--intense-partial")) intense_partial = std::stoull(get("--intense-partial")) != 0;
+            if (is_set("--intense-split")) intense_split = std::stoull(get("--intense-split"));
+            if (is_set("--window-rounds")) window_rounds = std::stoull(get("--window-rounds"));
+            if (is_set("--window-size")) window_size = std::stoull(get("--window-size"));
+            if (is_set("--window-min-n")) window_min_n = std::stoull(get("--window-min-n"));
+            if (is_set("--window-max-n")) window_max_n = std::stoull(get("--window-max-n"));
+            if (is_set("--relax-rounds")) relax_rounds = std::stoull(get("--relax-rounds"));
+            if (is_set("--relax-sweeps")) relax_sweeps = std::stoull(get("--relax-sweeps"));
+            if (is_set("--relax-anchor")) relax_anchor = std::stod(get("--relax-anchor"));
+            if (is_set("--relax-min-n")) relax_min_n = std::stoull(get("--relax-min-n"));
+            if (is_set("--global-split")) global_split = std::stoull(get("--global-split")) != 0;
+            if (is_set("--terminal-propagation")) terminal_propagation = std::stoull(get("--terminal-propagation")) != 0;
+            if (is_set("--vcycle-vertices-per-pe")) vcycle_c = std::stoull(get("--vcycle-vertices-per-pe"));
             if (is_set("--vcycle")) vcycle = std::stoull(get("--vcycle")) != 0;
 
             if (is_set("--coarsening")) {

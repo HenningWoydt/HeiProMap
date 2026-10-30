@@ -68,7 +68,11 @@ namespace HeiProMap {
     //   alpha_end terms: track which block pairs appear/disappear via the quotient weights
     //   beta_end/alpha_link/beta_link terms: per-edge, skipping intra-group edges
     //
+    class WaverMergeRefinement;
+
     class WaverMessageRefinement {
+        friend class WaverMergeRefinement; // uses the quotient rows, the move and its cost delta
+
         // A move must gain more than the floating point noise of the delta, or zero-gain moves cycle.
         static constexpr f64 kMinGain = 1e-6;
 

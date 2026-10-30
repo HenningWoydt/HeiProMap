@@ -83,11 +83,14 @@ namespace HeiProMap {
         // old_partition[u]: coarse cell of vertex u.
         void run(const std::vector<partition_t> &old_partition) {
             expand(old_partition);
-            steal_for_empty_cells();
-            avalanche_into_empty_cells();
-            evacuate_islands();
-            optimize_sibling_permutations();
-            EmptyBlockDiffusion::diffuse(g, p_manager, static_cast<size_t>(oracle.current_W()));
+            repair();
+        }
+
+        // Like run, but the caller has already assigned every vertex to a child cell of its coarse block:
+        // assignment[u] is the fine cell of vertex u. Only the repair passes remain.
+        void run_from_assignment(const std::vector<partition_t> &assignment) {
+            adopt(assignment);
+            repair();
         }
 
     private:
@@ -101,6 +104,23 @@ namespace HeiProMap {
 
         // blk_verts[b]: vertices assigned to fine cell b (may contain stale entries; check p_manager.partition).
         std::vector<std::vector<vertex_t> > blk_verts;
+
+        void repair() {
+            steal_for_empty_cells();
+            avalanche_into_empty_cells();
+            evacuate_islands();
+            optimize_sibling_permutations();
+            EmptyBlockDiffusion::diffuse(g, p_manager, static_cast<size_t>(oracle.current_W()));
+        }
+
+        // Takes the assignment of the caller as it is, without looking at the capacities.
+        void adopt(const std::vector<partition_t> &assignment) {
+            blk_verts.assign(fine_k, {});
+            for (vertex_t u = 0; u < g.n; ++u) {
+                p_manager.set(u, g.v_weight(u), assignment[u]);
+                blk_verts[assignment[u]].push_back(u);
+            }
+        }
 
         // Assign each vertex of a coarse block to its cheapest child cell (capacity permitting).
         void expand(const std::vector<partition_t> &old_partition) {

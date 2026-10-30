@@ -58,11 +58,12 @@ int main(const int argc, char *argv[]) {
 
     if (argc == 1) {
         HEIPROMAP_PROFILE_SCOPE("io", "main", "read_args");
-        std::vector<std::pair<std::string, std::string>> input = {
+        std::vector<std::pair<std::string, std::string> > input = {
             {"--topology", "../data/heipromap_topology.graph"},
             {"--graph", "../data/heipromap_input.graph"},
             {"--mapping", "../data/out/heipromap_input.txt"},
             {"--imbalance", "0.03"},
+            {"--mode", "multilevel"},
             {"--config", "fast"},
             {"--seed", "0"},
             {"--threads", "1"},
