@@ -2,6 +2,7 @@
 #define HEIPROMAP_SPECTRAL_PREPARTITIONER_H
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <iostream>
 #include <numeric>
@@ -71,7 +72,7 @@ namespace HeiProMap {
         // Recursive coordinate bisection of the vertices onto the W x H grid with exact capacities (a side
         // receives members * cells_in_side / cells_in_rectangle vertices, rounded down). Block id = row * W + col.
         static std::vector<partition_t> bisect(const std::vector<SpectralTracker::Vec> &X, const vertex_t n,
-                                               const size_t W, const size_t H) {
+                                               const size_t W, const size_t H, const size_t dims) {
             HEIPROMAP_PROFILE_SCOPE("partition", "SpectralPrepartitioner", "bisect");
             struct Node {
                 size_t lo, hi, col0, row0, w, h;
@@ -107,7 +108,10 @@ namespace HeiProMap {
                 const size_t m = nd.hi - nd.lo;
                 size_t coord = 0;
                 f64 best_var = -1.0;
-                for (size_t c = 0; c < X.size(); ++c) {
+                // dims 0: column cuts use the smoothest vector, row cuts the second (the longer side of the grid gets
+                // the smoothest), as in SpectralTracker::place, so that the blocks line up with the rows and columns.
+                if (dims == 0) { coord = (split_cols == (W >= H)) ? 0 : 1; }
+                for (size_t c = 0; dims > 0 && c < std::min(dims, X.size()); ++c) {
                     f64 sum = 0.0, sumsq = 0.0;
                     for (size_t i = nd.lo; i < nd.hi; ++i) {
                         const f64 x = X[c][perm[i]];
@@ -140,11 +144,24 @@ namespace HeiProMap {
             return out;
         }
 
+        static f64 cut_weight(const CSRGraph &g, const std::vector<partition_t> &part) {
+            f64 cut = 0.0;
+            for (vertex_t u = 0; u < g.n; ++u) {
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                    if (part[u] != part[g.edges_v[j]]) { cut += static_cast<f64>(g.edge_w(j)); }
+                }
+            }
+            return cut;
+        }
+
     public:
+        static constexpr size_t kAuto = static_cast<size_t>(-1);
+
         // Returns part[u] in [0, W * H) for every vertex of g. Requires g.n >= W * H.
         static std::vector<partition_t> partition(const CSRGraph &g, const size_t W, const size_t H,
                                                   const u64 seed, const u64 threads,
-                                                  const SpectralSmoothing &smoothing = SpectralSmoothing()) {
+                                                  const SpectralSmoothing &smoothing = SpectralSmoothing(),
+                                                  const u64 rotations = 1, const size_t dims = 3) {
             HEIPROMAP_PROFILE_SCOPE("partition", "SpectralPrepartitioner", "partition");
 
             // Heavy-edge coarsening hierarchy. Reserved so the graph references stay valid.
@@ -172,7 +189,38 @@ namespace HeiProMap {
             tracker.init(level(maps.size()), seed);
             for (size_t i = maps.size(); i-- > 0;) { tracker.prolong(maps[i], level(i)); }
 
-            return bisect(tracker.basis(), g.n, W, H);
+            // dims kAuto: the cuts by largest spread of all three vectors (3D-like graphs) and the cuts along the rows
+            // and columns by the two smoothest (2D-like graphs) compete, the smaller cut wins.
+            std::vector<partition_t> best = bisect(tracker.basis(), g.n, W, H, dims == kAuto ? 3 : dims);
+            if (dims == kAuto) {
+                std::vector<partition_t> aligned = bisect(tracker.basis(), g.n, W, H, 0);
+                if (cut_weight(g, aligned) < cut_weight(g, best)) { best = std::move(aligned); }
+            }
+            if (rotations <= 1) { return best; }
+
+            // The two smoothest vectors of a (nearly) square domain are an arbitrary turn of the axis-aligned ones, and
+            // cutting along a turned pair gives slanted blocks: try turns of that pair over a quarter turn and keep the
+            // partition with the smallest cut.
+            f64 best_cut = cut_weight(g, best);
+            const std::vector<SpectralTracker::Vec> &X = tracker.basis();
+            std::vector<SpectralTracker::Vec> turned(X.size());
+            for (auto &t: turned) { t.initialize(g.n); }
+            for (size_t c = 2; c < X.size(); ++c) { for (vertex_t u = 0; u < g.n; ++u) { turned[c][u] = X[c][u]; } }
+            for (u64 step = 1; step < rotations; ++step) {
+                const f64 theta = 0.5 * 3.14159265358979323846 * static_cast<f64>(step) / static_cast<f64>(rotations);
+                const f64 cs = std::cos(theta), sn = std::sin(theta);
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    turned[0][u] = cs * X[0][u] + sn * X[1][u];
+                    turned[1][u] = -sn * X[0][u] + cs * X[1][u];
+                }
+                std::vector<partition_t> candidate = bisect(turned, g.n, W, H, dims == kAuto ? 3 : dims);
+                const f64 c = cut_weight(g, candidate);
+                if (c < best_cut) {
+                    best_cut = c;
+                    best = std::move(candidate);
+                }
+            }
+            return best;
         }
     };
 

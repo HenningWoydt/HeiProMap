@@ -42,6 +42,18 @@ def write_graph(side, path):
     return edges
 
 
+def write_topology(path):
+    """The GRID x GRID PE grid (4-neighborhood, unit weights), METIS format."""
+    with open(path, "w") as f:
+        f.write(f"{GRID * GRID} {2 * GRID * (GRID - 1)}\n")
+        for r in range(GRID):
+            for c in range(GRID):
+                nb = [(r + dr) * GRID + c + dc + 1
+                      for dr, dc in ((-1, 0), (0, -1), (0, 1), (1, 0))
+                      if 0 <= r + dr < GRID and 0 <= c + dc < GRID]
+                f.write(" ".join(map(str, nb)) + "\n")
+
+
 def metrics(side, edges, part):
     n = side * side
     tile = side // GRID
@@ -94,10 +106,12 @@ def main():
     ap.add_argument("--no-run", action="store_true")
     known, extra = ap.parse_known_args()
     graph = "/tmp/grid2d.graph"
+    topology = "/tmp/grid2d_topology.graph"
     mapping = "/tmp/grid2d_mapping.txt"
     edges = write_graph(known.side, graph)
     if not known.no_run:
-        env = dict(os.environ, GRAPH=graph, MAPPING=mapping)
+        write_topology(topology)
+        env = dict(os.environ, GRAPH=graph, TOPOLOGY=topology, OUT=mapping)
         subprocess.run([os.path.join(HERE, "run_waver.sh"), "--level-stats", "1", *extra], env=env, check=True)
     part = np.loadtxt(mapping, dtype=np.int64)
     metrics(known.side, edges, part)

@@ -624,6 +624,85 @@ namespace HeiProMap {
             timings.spectral_ms += get_milli_seconds(p, get_time_point());
         }
 
+        // Spectral placement with fixed outside neighbors: the cell's vertices are placed where the quadratic wire length
+        //   sum_inside w (x_i - x_j)^2 + sum_outside w (x_i - t)^2
+        // is smallest, with the outside neighbors fixed at their positions t (a Dirichlet problem, the harmonic
+        // coordinates), separately for the grid row and the grid column. Each is the solution of (L + D) x = b, where D
+        // holds the weight of the edges leaving the cell, found by Jacobi-preconditioned CG. The coordinates are then
+        // cut by recursive coordinate bisection with exact capacities, as in the plain spectral placement, so only
+        // their order matters and the pull towards the terminals does not need to be scaled.
+        void fixed_terminal_placement(const graph_t &local, const size_t nv, const std::vector<vertex_t> &out_vertex,
+                                      const std::vector<f64> &out_w, const std::vector<f64> &term_row,
+                                      const std::vector<f64> &term_col, const graph_t &sub_grid, const size_t w,
+                                      std::vector<partition_t> &cell) const {
+            std::vector<f64> diag(nv, 0.0), rhs_row(nv, 0.0), rhs_col(nv, 0.0), degree(nv, 0.0);
+            f64 mean_row = 0.0, mean_col = 0.0, total_out = 0.0;
+            for (size_t e = 0; e < out_vertex.size(); ++e) {
+                diag[out_vertex[e]] += out_w[e];
+                rhs_row[out_vertex[e]] += out_w[e] * term_row[e];
+                rhs_col[out_vertex[e]] += out_w[e] * term_col[e];
+                mean_row += out_w[e] * term_row[e];
+                mean_col += out_w[e] * term_col[e];
+                total_out += out_w[e];
+            }
+            mean_row /= total_out;
+            mean_col /= total_out;
+            f64 max_degree = 0.0;
+            for (size_t i = 0; i < nv; ++i) {
+                for (size_t j = local.neighborhoods[i]; j < local.neighborhoods[i + 1]; ++j) {
+                    degree[i] += static_cast<f64>(local.edge_w(j));
+                }
+                max_degree = std::max(max_degree, degree[i] + diag[i]);
+            }
+            // a small pull to the mean terminal position keeps parts without outside edges determined
+            const f64 ridge = 1e-6 * std::max(max_degree, 1.0);
+            for (size_t i = 0; i < nv; ++i) {
+                diag[i] += ridge;
+                rhs_row[i] += ridge * mean_row;
+                rhs_col[i] += ridge * mean_col;
+            }
+
+            const auto solve = [&](const std::vector<f64> &b, SpectralTracker::Vec &x_out) {
+                std::vector<f64> x(nv, 0.0), r = b, z(nv), p, Ap(nv);
+                for (size_t i = 0; i < nv; ++i) { z[i] = r[i] / (degree[i] + diag[i]); }
+                p = z;
+                f64 rz = 0.0, rr0 = 0.0;
+                for (size_t i = 0; i < nv; ++i) { rz += r[i] * z[i]; rr0 += r[i] * r[i]; }
+                for (int it = 0; it < 200 && rz > 0.0; ++it) {
+                    f64 pAp = 0.0;
+                    for (size_t i = 0; i < nv; ++i) {
+                        f64 s = (degree[i] + diag[i]) * p[i];
+                        for (size_t j = local.neighborhoods[i]; j < local.neighborhoods[i + 1]; ++j) {
+                            s -= static_cast<f64>(local.edge_w(j)) * p[local.edges_v[j]];
+                        }
+                        Ap[i] = s;
+                        pAp += p[i] * s;
+                    }
+                    if (!(pAp > 0.0)) { break; }
+                    const f64 alpha = rz / pAp;
+                    f64 rz_new = 0.0, rr = 0.0;
+                    for (size_t i = 0; i < nv; ++i) {
+                        x[i] += alpha * p[i];
+                        r[i] -= alpha * Ap[i];
+                        z[i] = r[i] / (degree[i] + diag[i]);
+                        rz_new += r[i] * z[i];
+                        rr += r[i] * r[i];
+                    }
+                    if (rr <= 1e-12 * rr0) { break; }
+                    const f64 beta = rz_new / rz;
+                    for (size_t i = 0; i < nv; ++i) { p[i] = z[i] + beta * p[i]; }
+                    rz = rz_new;
+                }
+                x_out.initialize(nv);
+                for (size_t i = 0; i < nv; ++i) { x_out[i] = x[i]; }
+            };
+            SpectralTracker::Vec row, col;
+            solve(rhs_row, row);
+            solve(rhs_col, col);
+            SpectralTracker tracker;
+            tracker.place_with(local, sub_grid, w, col, row, cell);
+        }
+
         // Places the vertices verts (nv of them) onto the rectangle of fine cells with the top left cell
         // (row0_cell, col0_cell) and h rows and w columns, every cell about the same weight: a spectral placement of the
         // subgraph the vertices induce, the mirrored or transposed variant that puts the vertices with edges out of the
@@ -671,16 +750,35 @@ namespace HeiProMap {
         graph_t local;
         local.initialize(static_cast<vertex_t>(nv), static_cast<vertex_t>(ev.size()), vw.data(), nb.data(), ew.data(), ev.data());
 
-        SpectralTracker tracker;
-        tracker.set_smoothing(smoothing);
-        tracker.init(local, seed);
+        // Where the outside neighbor of every edge leaving the cell is: its cell if that is split already, otherwise
+        // the centre of its coarse cell.
+        std::vector<f64> term_row(out_vertex.size()), term_col(out_vertex.size());
+        for (size_t e = 0; e < out_vertex.size(); ++e) {
+            const vertex_t v = out_neighbor[e];
+            if (assignment[v] != NO_ID) {
+                term_row[e] = static_cast<f64>(assignment[v] / fine_w);
+                term_col[e] = static_cast<f64>(assignment[v] % fine_w);
+            } else {
+                term_row[e] = out_row[e];
+                term_col[e] = out_col[e];
+            }
+        }
+
         graph_t sub_grid; // only its number of cells matters: every child cell has the same capacity
         sub_grid.n = static_cast<vertex_t>(h * w);
         std::vector<partition_t> cell;
-        tracker.place(local, sub_grid, w, cell);
+        const bool fixed = ac.fixed_split && !out_vertex.empty();
+        if (fixed) {
+            fixed_terminal_placement(local, nv, out_vertex, out_w, term_row, term_col, sub_grid, w, cell);
+        } else {
+            SpectralTracker tracker;
+            tracker.set_smoothing(smoothing);
+            tracker.init(local, seed);
+            tracker.place(local, sub_grid, w, cell);
+        }
 
         // The best of the mirrored and transposed variants of the placement.
-        const size_t variants = h == w ? 8 : 4;
+        const size_t variants = fixed ? 1 : (h == w ? 8 : 4); // fixed terminals decide the orientation
         const auto position = [&](const partition_t p, const size_t variant) {
             size_t r = p / w, q = p % w;
             if (variant & 4) { std::swap(r, q); }
@@ -712,17 +810,6 @@ namespace HeiProMap {
             chosen[i] = static_cast<partition_t>(pos.first * fine_w + pos.second);
         }
         if (ac.terminal_propagation) {
-            std::vector<f64> term_row(out_vertex.size()), term_col(out_vertex.size());
-            for (size_t e = 0; e < out_vertex.size(); ++e) {
-                const vertex_t v = out_neighbor[e];
-                if (assignment[v] != NO_ID) {
-                    term_row[e] = static_cast<f64>(assignment[v] / fine_w);
-                    term_col[e] = static_cast<f64>(assignment[v] % fine_w);
-                } else {
-                    term_row[e] = out_row[e];
-                    term_col[e] = out_col[e];
-                }
-            }
             // The message cost of a placement: every pair of cells that exchange values is one message (alpha_end
             // and the link cost of its distance), every cut edge adds its volume. A neighbor outside the cell
             // counts as its cell if that is split already, otherwise as its coarse cell.

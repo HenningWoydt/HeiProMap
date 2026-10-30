@@ -260,7 +260,7 @@ namespace HeiProMap {
                     exit(EXIT_FAILURE);
                 }
                 r.part = SpectralPrepartitioner::partition(input_graph, W, k / W, ac.seed, ac.threads,
-                                                           ac.spectral_smoothing);
+                                                           ac.spectral_smoothing, ac.prepartition_rotations, ac.prepartition_dims);
                 r.quotient = contract_into_quotient(input_graph, r.part, k, ac.threads);
             } else {
                 r = partition_into_quotient(input_graph, k, ac.imbalance, ac.kaminpar_threads,

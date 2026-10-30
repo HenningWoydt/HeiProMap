@@ -52,6 +52,8 @@
 
 namespace HeiProMap {
 
+    constexpr size_t SpectralPrepartitionerAuto = static_cast<size_t>(-1); // equals SpectralPrepartitioner::kAuto
+
     enum COARSENING_ALGS {
         COARSENING_ALG_UNDEFINED,
         COARSENING_ALG_GLOBAL_PATHS,
@@ -117,6 +119,8 @@ namespace HeiProMap {
             {"--kaminpar-threads", "", "Threads for the KaMinPar partition (0 = all hardware threads). Independent of --threads.", "0", "", false},
 
             {"# Spectral embedding", "", "", "", "", false},
+            {"--prepartition-rotations", "", "Spectral prepartitioner: turns of the two smoothest vectors tried over a quarter turn (1: no turn); the partition with the smallest cut is kept.", "1", "", false},
+            {"--prepartition-dims", "", "Spectral prepartitioner: eigenvectors the cuts use: 1-3 (every cut takes the one with the largest spread of those), 0 (column cuts the smoothest, row cuts the second: blocks line up with the grid, for 2D-like graphs) or auto (0 and 3 compete, the smaller cut wins).", "auto", "", false},
             {"--spectral-rounds", "", "Re-smoothing rounds of the spectral embedding after each prolongation (levels up to --spectral-big-n vertices).", "3", "", false},
             {"--spectral-depth", "", "CG iterations per re-smoothing round (levels up to --spectral-big-n vertices).", "24", "", false},
             {"--spectral-big-rounds", "", "Re-smoothing rounds on levels with more than --spectral-big-n vertices (the prepartitioner of a large input graph).", "1", "", false},
@@ -213,6 +217,7 @@ namespace HeiProMap {
             {"--spectral-rotations", "", "Multilevel mode: turns of the two smoothest vectors tried in the spectral placement of the coarsest level, evenly over a quarter turn (1: no turn).", "", "", false},
             {"--global-split", "", "Multilevel mode: at every topology split also place the whole current graph spectrally onto the finer grid, and keep it if its message cost is lower than that of the local splits (0/1).", "", "", false},
             {"--terminal-propagation", "", "Multilevel mode: when a coarse PE is split, pull the placement of its vertices towards their neighbors in the neighboring cells (0/1).", "", "", false},
+            {"--fixed-split", "", "Multilevel mode: the local spectral split places the vertices of a coarse PE with the neighbors outside it held fixed at their positions (harmonic coordinates, cut by recursive bisection) instead of the eigenvectors of the cell alone (0/1).", "", "", false},
             {"--vcycle-vertices-per-pe", "", "Multilevel mode: the V-cycle coarsens the graph to about this many vertices per PE.", "", "", false},
             {"--vcycle", "", "Multilevel mode: after the mapping is found, run a V-cycle: coarsen the graph again within the PEs of the current mapping, then uncoarsen with legalization and refinement on every level; the old mapping is kept if the cost does not drop (0/1).", "", "", false},
         };
@@ -232,6 +237,8 @@ namespace HeiProMap {
         u64 kaminpar_threads = 0;
         u64 seed = 0;
         u64 threads = 1;
+        u64 prepartition_rotations = 1;
+        size_t prepartition_dims = SpectralPrepartitionerAuto; // see --prepartition-dims
         SpectralSmoothing spectral_smoothing;
 
         // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
@@ -268,6 +275,7 @@ namespace HeiProMap {
         std::string dump_hierarchy;        // multilevel: prefix of the files the clusters of every level are written to
         u64 spectral_rotations = 1;        // multilevel: turns of the two smoothest vectors tried in the coarsest spectral placement
         bool global_split = false;         // multilevel: a global spectral placement competes with the local splits
+        bool fixed_split = false;          // multilevel: the split of a coarse cell is computed with the outside neighbors fixed
         bool terminal_propagation = false; // multilevel: the split of a coarse cell is pulled towards the neighbors outside it
         u64 vcycle_c = 8;                 // the V-cycle coarsens the graph to about this many vertices per PE
 
@@ -343,6 +351,9 @@ namespace HeiProMap {
             seed = is_set("--seed") ? std::stoull(get("--seed")) : std::random_device{}();
             threads = std::stoull(get("--threads"));
 
+            prepartition_rotations = std::stoull(get("--prepartition-rotations"));
+            prepartition_dims = get("--prepartition-dims") == "auto" ? SpectralPrepartitionerAuto
+                                                                     : std::stoull(get("--prepartition-dims"));
             spectral_smoothing.rounds = std::stoi(get("--spectral-rounds"));
             spectral_smoothing.depth = std::stoi(get("--spectral-depth"));
             spectral_smoothing.big_rounds = std::stoi(get("--spectral-big-rounds"));
@@ -653,6 +664,7 @@ namespace HeiProMap {
             if (is_set("--dump-hierarchy")) dump_hierarchy = get("--dump-hierarchy");
             if (is_set("--spectral-rotations")) spectral_rotations = std::stoull(get("--spectral-rotations"));
             if (is_set("--global-split")) global_split = std::stoull(get("--global-split")) != 0;
+            if (is_set("--fixed-split")) fixed_split = std::stoull(get("--fixed-split")) != 0;
             if (is_set("--terminal-propagation")) terminal_propagation = std::stoull(get("--terminal-propagation")) != 0;
             if (is_set("--vcycle-vertices-per-pe")) vcycle_c = std::stoull(get("--vcycle-vertices-per-pe"));
             if (is_set("--vcycle")) vcycle = std::stoull(get("--vcycle")) != 0;
