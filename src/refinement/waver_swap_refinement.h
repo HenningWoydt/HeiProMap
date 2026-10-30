@@ -112,39 +112,55 @@ namespace HeiProMap {
                 blk_verts[p_manager.partition[u]].push_back(u);
             }
 
+            // The quotient graph: for every block the other blocks it has edges to, with the link cost of those edges
+            // (alpha_link * count + beta_link * weight; the cost of an edge is linear in its distance). Swapping the
+            // contents of p and q only changes the distance of their edges to third blocks, so the gain of a swap is
+            // computed from the two lists instead of from the vertices.
+            struct QEntry { partition_t block; f64 cost; };
+            std::vector<std::vector<QEntry>> quot(k);
+            {
+                std::vector<f64> acc(k, 0.0);
+                std::vector<partition_t> touched;
+                for (partition_t p = 0; p < k; ++p) {
+                    for (const vertex_t u : blk_verts[p]) {
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            const partition_t nb = p_manager.partition[g.edges_v[j]];
+                            if (nb == p) continue;
+                            if (acc[nb] == 0.0) touched.push_back(nb);
+                            acc[nb] += alpha_link + beta_link * static_cast<f64>(g.edge_w(j));
+                        }
+                    }
+                    for (const partition_t nb : touched) { quot[p].push_back({nb, acc[nb]}); acc[nb] = 0.0; }
+                    touched.clear();
+                }
+            }
+
             auto get_candidates = [&](partition_t p, std::vector<partition_t> &nbrs,
                                       std::vector<bool> &seen) {
                 nbrs.clear();
                 add_radius_nbrs(p % W, p / W, config.radius, p, W, H, k, nbrs, seen);
 
                 if (config.extended) {
-                    for (const vertex_t u : blk_verts[p]) {
-                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                            const partition_t nb = p_manager.partition[g.edges_v[j]];
-                            if (nb != p) {
-                                add_radius_nbrs(nb % W, nb / W, config.radius, p, W, H, k, nbrs, seen);
-                            }
-                        }
+                    for (const QEntry &e : quot[p]) {
+                        add_radius_nbrs(e.block % W, e.block / W, config.radius, p, W, H, k, nbrs, seen);
                     }
                 }
 
                 for (const partition_t q : nbrs) seen[q] = false;
             };
 
-            auto block_cost = [&](const std::vector<vertex_t> &verts, partition_t block) -> f64 {
-                f64 cost = 0.0;
-                for (const vertex_t u : verts) {
-                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                        const partition_t nb = p_manager.partition[g.edges_v[j]];
-                        const f64 w = static_cast<f64>(g.edge_w(j));
-                        const f64 dist = static_cast<f64>(d_oracle.get(block, nb));
-                        if (block != nb) {
-                            cost += alpha_end + beta_end * w;
-                        }
-                        cost += alpha_link * dist + beta_link * w * dist;
-                    }
+            // cost before minus cost after of exchanging the contents of the blocks p and q
+            auto swap_gain = [&](partition_t p, partition_t q) -> f64 {
+                f64 gain = 0.0;
+                for (const QEntry &e : quot[p]) {
+                    if (e.block == q) continue;
+                    gain += (static_cast<f64>(d_oracle.get(p, e.block)) - static_cast<f64>(d_oracle.get(q, e.block))) * e.cost;
                 }
-                return cost;
+                for (const QEntry &e : quot[q]) {
+                    if (e.block == p) continue;
+                    gain += (static_cast<f64>(d_oracle.get(q, e.block)) - static_cast<f64>(d_oracle.get(p, e.block))) * e.cost;
+                }
+                return gain;
             };
 
             const size_t max_rounds = config.max_rounds;
@@ -163,7 +179,6 @@ namespace HeiProMap {
 
                     partition_t best_q = NO_ID;
                     f64 best_gain = config.min_gain;
-                    const f64 cost_p = block_cost(blk_verts[p], p);
 
                     for (const partition_t q : nbrs) {
                         if (blk_verts[q].empty()) continue;
@@ -172,18 +187,7 @@ namespace HeiProMap {
                         const weight_t wq = p_manager.bweights[q];
                         if (wq > p_manager.get_lmax(p) || wp > p_manager.get_lmax(q)) continue;
 
-                        const f64 cost_q = block_cost(blk_verts[q], q);
-                        const f64 cost_before = cost_p + cost_q;
-
-                        for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = q;
-                        for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = p;
-
-                        const f64 cost_after = block_cost(blk_verts[p], q) + block_cost(blk_verts[q], p);
-
-                        for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = p;
-                        for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = q;
-
-                        const f64 gain = cost_before - cost_after;
+                        const f64 gain = swap_gain(p, q);
                         if (gain > best_gain) {
                             best_gain = gain;
                             best_q = q;
@@ -191,13 +195,30 @@ namespace HeiProMap {
                     }
 
                     if (best_q != NO_ID) {
-                        for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = best_q;
-                        for (const vertex_t v : blk_verts[best_q]) p_manager.partition[v] = p;
+                        const partition_t q = best_q;
+                        for (const vertex_t u : blk_verts[p]) p_manager.partition[u] = q;
+                        for (const vertex_t v : blk_verts[q]) p_manager.partition[v] = p;
                         const weight_t wp = p_manager.bweights[p];
-                        const weight_t wq = p_manager.bweights[best_q];
+                        const weight_t wq = p_manager.bweights[q];
                         p_manager.bweights[p] = wq;
-                        p_manager.bweights[best_q] = wp;
-                        std::swap(blk_verts[p], blk_verts[best_q]);
+                        p_manager.bweights[q] = wp;
+                        std::swap(blk_verts[p], blk_verts[q]);
+                        // the lists move with the contents; every entry that names p or q is renamed
+                        std::swap(quot[p], quot[q]);
+                        std::vector<partition_t> thirds;
+                        for (const partition_t x : {p, q}) {
+                            for (QEntry &e : quot[x]) {
+                                if (e.block == p) { e.block = q; } else if (e.block == q) { e.block = p; }
+                                else { thirds.push_back(e.block); }
+                            }
+                        }
+                        std::sort(thirds.begin(), thirds.end());
+                        thirds.erase(std::unique(thirds.begin(), thirds.end()), thirds.end());
+                        for (const partition_t b : thirds) {
+                            for (QEntry &f : quot[b]) {
+                                if (f.block == p) { f.block = q; } else if (f.block == q) { f.block = p; }
+                            }
+                        }
                         swaps++;
                         progress = true;
                     }
