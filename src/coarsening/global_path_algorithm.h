@@ -70,6 +70,8 @@ namespace HeiProMap {
     public:
         size_t random_level = 0;
         EdgeRatingFunction rating_function = EdgeRatingFunction::EXPANSIONSTAR;
+        f32 rating_alpha = 0.f; // message / message-sum rating: cost of a message (alpha_end of the cost model)
+        f32 rating_beta = 0.f;  // and of a unit of volume (beta_end + beta_link)
         bool use_edge_rating_tiebreaking = true;
         f64 two_hop_threshold = 0.75;
     };
@@ -220,6 +222,8 @@ namespace HeiProMap {
                 case EdgeRatingFunction::EXPANSIONSTAR:     dispatch.template operator()<EdgeRatingFunction::EXPANSIONSTAR>(); break;
                 case EdgeRatingFunction::EXPANSIONSTARSTAR: dispatch.template operator()<EdgeRatingFunction::EXPANSIONSTARSTAR>(); break;
                 case EdgeRatingFunction::INNEROUTER:        dispatch.template operator()<EdgeRatingFunction::INNEROUTER>(); break;
+                case EdgeRatingFunction::MESSAGE:           dispatch.template operator()<EdgeRatingFunction::MESSAGE>(); break;
+                case EdgeRatingFunction::MESSAGESUM:        dispatch.template operator()<EdgeRatingFunction::MESSAGESUM>(); break;
             }
             release_memory();
         }
@@ -330,7 +334,7 @@ namespace HeiProMap {
                     if (u_w + v_w > lmax) { continue; }
 
                     weight_t ew = t_uniform_e_weights ? 1 : g.edges_w[j];
-                    f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew);
+                    f32 edge_rating = compute_edge_rating<t_uniform_v_weights, t_uniform_e_weights, t_rating_function>(g, u, v, u_w, v_w, ew, config->rating_alpha, config->rating_beta);
 
                     local_min = std::min(local_min, edge_rating);
                     local_max = std::max(local_max, edge_rating);

@@ -84,6 +84,10 @@ namespace HeiProMap {
                 case EdgeRatingFunction::INNEROUTER:
                     dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::INNEROUTER>{});
                     break;
+                case EdgeRatingFunction::MESSAGE:     // only the path matching has the costs of the message ratings
+                case EdgeRatingFunction::MESSAGESUM:
+                    dispatch_with_rating(std::integral_constant<EdgeRatingFunction, EdgeRatingFunction::EXPANSIONSTAR>{});
+                    break;
             }
         }
 

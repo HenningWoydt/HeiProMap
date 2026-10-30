@@ -136,7 +136,9 @@ namespace HeiProMap {
         EXPANSION,
         EXPANSIONSTAR,
         EXPANSIONSTARSTAR,
-        INNEROUTER
+        INNEROUTER,
+        MESSAGE,     // (beta * w + alpha * (1 + common neighbors)) / (weight(u) * weight(v)): the cost of the messages saved
+        MESSAGESUM   // the same, divided by weight(u) + weight(v)
     };
 
     class EdgeUVW {

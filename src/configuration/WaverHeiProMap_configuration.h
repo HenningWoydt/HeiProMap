@@ -90,7 +90,9 @@ namespace HeiProMap {
         if (str == "expansion*") return EdgeRatingFunction::EXPANSIONSTAR;
         if (str == "expansion**") return EdgeRatingFunction::EXPANSIONSTARSTAR;
         if (str == "innerouter") return EdgeRatingFunction::INNEROUTER;
-        std::cout << "Error: Invalid rating function '" << str << "'. Allowed values: weight, expansion, expansion*, expansion**, innerouter" << std::endl;
+        if (str == "message") return EdgeRatingFunction::MESSAGE;
+        if (str == "message-sum") return EdgeRatingFunction::MESSAGESUM;
+        std::cout << "Error: Invalid rating function '" << str << "'. Allowed values: weight, expansion, expansion*, expansion**, innerouter, message, message-sum" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -150,16 +152,16 @@ namespace HeiProMap {
             {"# Coarsening (overrides the preset)", "", "", "", "", false},
             {"--coarsening-vertices-per-pe", "", "The graph is coarsened to about this many vertices per (coarse) PE.", "", "", false},
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
-            {"--gpa-rating-function", "", "Global-paths coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-rating-function", "", "Global-paths coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter, message, message-sum).", "", "", false},
             {"--gpa-random-level", "", "Global-paths coarsening: the coarsening levels below this one use a random matching instead of the rating-based one.", "", "", false},
             {"--gpa-edge-rating-tiebreaking", "", "Global-paths coarsening: also sort the edges of a thread when all its ratings are equal (true/false).", "", "", false},
             {"--gpa-two-hop-threshold", "", "Global-paths coarsening: minimum matched fraction below which two-hop matching is tried.", "", "", false},
             {"--sclp-max-rounds", "", "Size-constrained label propagation coarsening: maximum rounds.", "", "", false},
             {"--sclp-min-threshold", "", "Size-constrained label propagation coarsening: stop when fewer than this fraction of the vertices move.", "", "", false},
             {"--sclp-f", "", "Size-constrained label propagation coarsening: the cluster weight limit is the PE weight limit divided by f.", "", "", false},
-            {"--sclp-rating-function", "", "Size-constrained label propagation coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-rating-function", "", "Size-constrained label propagation coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter, message, message-sum).", "", "", false},
             {"--sclp-use-degree-ordering", "", "Size-constrained label propagation coarsening: visit vertices by increasing degree (true/false).", "", "", false},
-            {"--hem-rating-function", "", "Heavy-edge matching coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--hem-rating-function", "", "Heavy-edge matching coarsening: rating function (weight, expansion, expansion*, expansion**, innerouter, message, message-sum).", "", "", false},
 
             {"# Initial mapping (overrides the preset)", "", "", "", "", false},
             {"--greedy-attempts", "", "Greedy partitions tried on the coarsest level; the best is kept (multilevel mode).", "", "", false},
@@ -200,6 +202,8 @@ namespace HeiProMap {
             {"--busy-beta", "", "Busy-PE refinement: load per unit of volume (0: the beta of the cost model).", "", "", false},
             {"--busy-exact", "", "Busy-PE refinement: the load of a block counts its send and receive regions and its values as well as its messages (0/1).", "", "", false},
             {"--busy-tries", "", "Busy-PE refinement: sender groups tried per busy block and round.", "", "", false},
+            {"--busy-chain", "", "Busy-PE refinement (exact load): a sender group may also move to a block without room if that block gives a group back (0/1).", "", "", false},
+            {"--busy-wide", "", "Busy-PE refinement: a sender group may also move to any block it has edges to, which can end the message to its receiver (0/1).", "", "", false},
             {"--busy-verbose", "", "Print the statistics of every round of the busy-PE refinement (0/1).", "", "", false},
             {"--merge-verbose", "", "Print the statistics of every round of the merge refinement (0/1).", "", "", false},
             {"--swap-radius", "", "Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
@@ -427,6 +431,10 @@ namespace HeiProMap {
             }
 
             apply_command_line_overrides();
+
+            // the message ratings of the coarsening use the costs of the communication model
+            global_path_algorithm_config.rating_alpha = static_cast<f32>(alpha_end());
+            global_path_algorithm_config.rating_beta = static_cast<f32>(beta_end() + beta_link);
 
         }
 
@@ -667,6 +675,8 @@ namespace HeiProMap {
             if (is_set("--busy-beta")) waver_busy_refinement_config.beta = std::stod(get("--busy-beta"));
             if (is_set("--busy-exact")) waver_busy_refinement_config.exact = std::stoull(get("--busy-exact")) != 0;
             if (is_set("--busy-tries")) waver_busy_refinement_config.max_tries = std::stoull(get("--busy-tries"));
+            if (is_set("--busy-chain")) waver_busy_refinement_config.chain = std::stoull(get("--busy-chain")) != 0;
+            if (is_set("--busy-wide")) waver_busy_refinement_config.wide = std::stoull(get("--busy-wide")) != 0;
             if (is_set("--busy-verbose")) waver_busy_refinement_config.verbose = std::stoull(get("--busy-verbose")) != 0;
             if (is_set("--merge-verbose")) waver_merge_refinement_config.verbose = std::stoull(get("--merge-verbose")) != 0;
             if (is_set("--long-message-padding")) {
