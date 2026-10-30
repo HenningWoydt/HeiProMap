@@ -184,6 +184,7 @@ namespace HeiProMap {
             {"--long-message-padding", "", "Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
             {"--merge-refinement", "", "Multilevel mode: run the merge refinement, which moves a sender group into a block without room for it and passes the overload on along a chain of moves (0/1).", "", "", false},
             {"--merge-depth", "", "Maximum number of moves in one chain of the merge refinement.", "", "", false},
+            {"--merge-round-gain", "", "Merge refinement: stop when a round gains less than this share of the gain of the first round (0: off).", "", "", false},
             {"--merge-rounds", "", "Maximum rounds of the merge refinement on one level.", "", "", false},
             {"--merge-partial", "", "Merge refinement: an overloaded block may also give up only part of a sender group, the vertices tied most closely to the receiving block (0/1).", "", "", false},
             {"--merge-split", "", "Merge refinement: a sender group may also be split among up to this many blocks, each vertex going to the block it has the most edge weight to (below 2: never).", "", "", false},
@@ -212,6 +213,7 @@ namespace HeiProMap {
             {"--busy-alpha", "", "Busy-PE refinement: load per message (0: the alpha of the cost model).", "", "", false},
             {"--busy-beta", "", "Busy-PE refinement: load per unit of volume (0: the beta of the cost model).", "", "", false},
             {"--busy-exact", "", "Busy-PE refinement: the load of a block counts its send and receive regions and its values as well as its messages (0/1).", "", "", false},
+            {"--busy-patience", "", "Busy-PE refinement: stop after this many rounds in a row that do not lower the max load (0: only when no move is kept).", "", "", false},
             {"--busy-tries", "", "Busy-PE refinement: sender groups tried per busy block and round.", "", "", false},
             {"--busy-chain", "", "Busy-PE refinement (exact load): a sender group may also move to a block without room if that block gives a group back (0/1).", "", "", false},
             {"--busy-wide", "", "Busy-PE refinement: a sender group may also move to any block it has edges to, which can end the message to its receiver (0/1).", "", "", false},
@@ -550,6 +552,7 @@ namespace HeiProMap {
             waver_corner_refinement_config.enabled = true;  // single-vertex moves on the finished mapping
             waver_corner_refinement_config.max_rounds = 20;
             waver_corner_refinement_config.top_fraction = 0.3;  // the busiest third of the PEs: most of the gain for a third of the time
+            waver_busy_refinement_config.patience = 3;   // later rounds rarely lower the max load: 14% less time, same makespan
             split_kway = true;                           // multilevel: k-way local split (kaffpa eco) of a coarse PE
             split_partitioner = "kaffpa-eco";
             waver_long_message_refinement_config.padding = 1;
@@ -699,6 +702,8 @@ namespace HeiProMap {
             if (is_set("--corner-rounds")) {
                 waver_corner_refinement_config.max_rounds = std::stoull(get("--corner-rounds"));
                 waver_corner_refinement_config.enabled = waver_corner_refinement_config.max_rounds > 0;
+            if (is_set("--busy-patience")) waver_busy_refinement_config.patience = std::stoull(get("--busy-patience"));
+            if (is_set("--merge-round-gain")) waver_merge_refinement_config.min_round_gain = std::stod(get("--merge-round-gain"));
             }
             if (is_set("--corner-power")) waver_corner_refinement_config.power = std::stod(get("--corner-power"));
             if (is_set("--corner-tau")) waver_corner_refinement_config.tau = std::stod(get("--corner-tau"));

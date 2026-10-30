@@ -33,6 +33,7 @@ namespace HeiProMap {
         f64 alpha = 0.0;        // load per message; 0: the alpha_end of the cost model
         f64 beta = 0.0;         // load per unit of volume; 0: the beta_end of the cost model
         u64 max_tries = 8;      // sender groups tried per busy block and round
+        u64 patience = 0;       // stop after this many rounds in a row that do not lower the max load (0: only when no move is kept)
         bool exact = false;     // the load of a block is the engine cost model (WaverRegionLoad with `costs`), not only its messages
         WaverRegionLoad::Weights costs; // the engine cost model of the exact load
         bool chain = false;     // a group may also go to a block without room if that block gives a group back (exact load only)
@@ -72,6 +73,7 @@ namespace HeiProMap {
             }
 
             void run() {
+                u64 stale = 0;
                 for (u64 round = 0; round < busy.max_rounds; ++round) {
                     std::vector<f64> loads(k);
                     for (partition_t x = 0; x < k; ++x) { loads[x] = load(x); }
@@ -91,13 +93,19 @@ namespace HeiProMap {
                         tried += result.first;
                         kept += result.second;
                     }
-                    if (busy.verbose) {
-                        f64 max_after = 0.0;
+                    f64 max_after = 0.0;
+                    if (busy.verbose || busy.patience > 0) {
                         for (partition_t x = 0; x < k; ++x) { max_after = std::max(max_after, load(x)); }
+                    }
+                    if (busy.verbose) {
                         std::cout << "[busy] round " << round << ": max load " << max_before << " -> " << max_after
                                   << ", " << tried << " moves tried, " << kept << " kept" << std::endl;
                     }
                     if (kept == 0) { break; }
+                    if (busy.patience > 0) {
+                        stale = max_after < max_before * (1.0 - 1e-9) ? 0 : stale + 1;
+                        if (stale >= busy.patience) { break; }
+                    }
                 }
             }
 

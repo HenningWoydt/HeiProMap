@@ -58,6 +58,7 @@ namespace HeiProMap {
         std::string name;
         bool enabled = false;
         u64 max_depth = 3;       // moves in one chain
+        f64 min_round_gain = 0.0; // stop when a round gains less than this share of the gain of the first round (0: off)
         u64 max_rounds = 3;      // rounds over all quotient edges; stops earlier once a round commits no chain
         f64 min_gain = 1e-6;     // a chain must improve the cost by more than this
         bool partial = false;    // an overloaded block may also give up only part of a sender group
@@ -139,6 +140,7 @@ namespace HeiProMap {
             }
 
             void run() {
+                f64 first_gain = 0.0;
                 std::vector<partition_t> order(k);
                 std::vector<partition_t> targets;
                 for (u64 round = 0; round < cfg.max_rounds; ++round) {
@@ -200,6 +202,8 @@ namespace HeiProMap {
                                   << " tried, " << split_kept << " kept" << std::endl;
                     }
                     if (committed == 0) { break; }
+                    if (round == 0) { first_gain = gain; }
+                    if (cfg.min_round_gain > 0.0 && gain < cfg.min_round_gain * first_gain) { break; }
                 }
             }
 
