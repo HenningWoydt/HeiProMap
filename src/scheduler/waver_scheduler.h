@@ -111,8 +111,10 @@ namespace HeiProMap {
 
         static constexpr u32 kEast = 0, kWest = 1, kSouth = 2, kNorth = 3;
 
+        // drop_hops / drop_values: an experiment, messages of at most drop_values values over more than drop_hops hops are
+        // left out, as if the vertices behind them had been moved to where their neighbors are (0: keep all).
         static Result run(const CSRGraph &g, const std::vector<partition_t> &part, const u32 cols, const u32 rows,
-                          const SchedulerCosts &C, const u64 seed) {
+                          const SchedulerCosts &C, const u64 seed, const u32 drop_hops = 0, const u32 drop_values = 0) {
             const u32 K = cols * rows;
             Result res;
             std::vector<Message> &msgs = res.messages;
@@ -161,6 +163,10 @@ namespace HeiProMap {
                 }
                 m.hops = static_cast<u32>(std::abs(static_cast<int>(m.src % cols) - static_cast<int>(m.dst % cols))
                                           + std::abs(static_cast<int>(m.src / cols) - static_cast<int>(m.dst / cols)));
+                if (drop_hops > 0 && m.hops > drop_hops && m.count <= drop_values) {
+                    i = j;
+                    continue;
+                }
                 msgs.push_back(m);
                 i = j;
             }

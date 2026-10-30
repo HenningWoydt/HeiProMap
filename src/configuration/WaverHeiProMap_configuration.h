@@ -40,6 +40,7 @@
 #include "../refinement/waver_long_message_refinement.h"
 #include "../refinement/waver_merge_refinement.h"
 #include "../refinement/waver_busy_refinement.h"
+#include "../refinement/waver_corner_refinement.h"
 #include "../refinement/waver_cycle_refinement.h"
 #include "../refinement/waver_crowd_refinement.h"
 #include "../refinement/waver_shift_refinement.h"
@@ -148,6 +149,14 @@ namespace HeiProMap {
             {"--engine-local-nnz", "", "Engine cost of every matrix entry whose row and column are on the PE.", "4.5", "", false},
             {"--engine-send-region", "", "Engine cost of every region (contiguous slice) sent; 0 in the fitted model.", "0", "", false},
             {"--engine-recv-region", "", "Engine cost of every region received; 0 in the fitted model.", "0", "", false},
+
+            {"# Corner refinement (overrides the preset)", "", "", "", "", false},
+            {"--corner-rounds", "", "Rounds of the corner refinement on the finished mapping: single vertices move (or swap) between neighboring PEs so that the busiest engines get less work, small contacts between PEs shrink until the message is gone (0: off).", "", "", false},
+            {"--corner-power", "", "Corner refinement: the engine loads are compared as sum(load^power).", "", "", false},
+            {"--corner-tau", "", "Corner refinement: a contact of w cut edges counts as 1 - exp(-w / tau) messages.", "", "", false},
+            {"--corner-top", "", "Corner refinement: the share of PEs, busiest first, whose vertices are tried in a round.", "", "", false},
+            {"--corner-swaps", "", "Corner refinement: neighbors in a full PE a vertex may be swapped with.", "", "", false},
+            {"--corner-verbose", "", "Print the statistics of every round of the corner refinement (0/1).", "", "", false},
 
             {"# Coarsening (overrides the preset)", "", "", "", "", false},
             {"--coarsening-vertices-per-pe", "", "The graph is coarsened to about this many vertices per (coarse) PE.", "", "", false},
@@ -264,6 +273,7 @@ namespace HeiProMap {
         SpectralSmoothing spectral_smoothing;
 
         WaverRegionLoad::Weights engine_costs; // the engine cost model, see --engine-*
+        WaverCornerRefinementConfiguration waver_corner_refinement_config; // run on the finished mapping
 
         // communication cost model: Cost(m) = (alpha_send + alpha_recv) + (beta_send + beta_recv)*S(m)
         //                                    + h(m) * alpha_link + h(m) * beta_link * S(m)
@@ -432,6 +442,12 @@ namespace HeiProMap {
 
             apply_command_line_overrides();
 
+            // the corner refinement weighs the engine work like the exact load: a message, a cut edge (a value sent and
+            // received), an internal edge (two local matrix entries)
+            waver_corner_refinement_config.message = engine_costs.message;
+            waver_corner_refinement_config.cut_edge = engine_costs.send_value + engine_costs.receive_value;
+            waver_corner_refinement_config.internal_edge = 2.0 * engine_costs.local_nnz;
+
             // the message ratings of the coarsening use the costs of the communication model
             global_path_algorithm_config.rating_alpha = static_cast<f32>(alpha_end());
             global_path_algorithm_config.rating_beta = static_cast<f32>(beta_end() + beta_link);
@@ -529,6 +545,9 @@ namespace HeiProMap {
             waver_busy_refinement_config.power = 8.0;
             waver_busy_refinement_config.max_tries = 30;
             waver_busy_refinement_config.exact = true;   // the load of a PE counts its regions and values
+            waver_corner_refinement_config.enabled = true;  // single-vertex moves on the finished mapping
+            waver_corner_refinement_config.max_rounds = 20;
+            waver_corner_refinement_config.top_fraction = 0.3;  // the busiest third of the PEs: most of the gain for a third of the time
             split_kway = true;                           // multilevel: k-way local split (kaffpa eco) of a coarse PE
             split_partitioner = "kaffpa-eco";
             waver_long_message_refinement_config.padding = 1;
@@ -675,6 +694,15 @@ namespace HeiProMap {
             if (is_set("--busy-beta")) waver_busy_refinement_config.beta = std::stod(get("--busy-beta"));
             if (is_set("--busy-exact")) waver_busy_refinement_config.exact = std::stoull(get("--busy-exact")) != 0;
             if (is_set("--busy-tries")) waver_busy_refinement_config.max_tries = std::stoull(get("--busy-tries"));
+            if (is_set("--corner-rounds")) {
+                waver_corner_refinement_config.max_rounds = std::stoull(get("--corner-rounds"));
+                waver_corner_refinement_config.enabled = waver_corner_refinement_config.max_rounds > 0;
+            }
+            if (is_set("--corner-power")) waver_corner_refinement_config.power = std::stod(get("--corner-power"));
+            if (is_set("--corner-tau")) waver_corner_refinement_config.tau = std::stod(get("--corner-tau"));
+            if (is_set("--corner-top")) waver_corner_refinement_config.top_fraction = std::stod(get("--corner-top"));
+            if (is_set("--corner-swaps")) waver_corner_refinement_config.swap_tries = std::stoull(get("--corner-swaps"));
+            if (is_set("--corner-verbose")) waver_corner_refinement_config.verbose = std::stoull(get("--corner-verbose")) != 0;
             if (is_set("--busy-chain")) waver_busy_refinement_config.chain = std::stoull(get("--busy-chain")) != 0;
             if (is_set("--busy-wide")) waver_busy_refinement_config.wide = std::stoull(get("--busy-wide")) != 0;
             if (is_set("--busy-verbose")) waver_busy_refinement_config.verbose = std::stoull(get("--busy-verbose")) != 0;

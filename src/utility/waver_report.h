@@ -63,11 +63,12 @@ namespace HeiProMap {
         f64 smash_ms = 0.0;
         f64 cycle_refine_ms = 0.0;
         f64 sa_refine_ms = 0.0;
+        f64 corner_refine_ms = 0.0;
         f64 misc_ms = 0.0;
 
         f64 total_ms() const {
             return misc_ms + prepartition_ms + spectral_ms + coarsening_ms + contraction_ms + initial_partitioning_ms
-                   + uncontraction_ms + rebalance_ms + refinement_ms;
+                   + uncontraction_ms + rebalance_ms + refinement_ms + corner_refine_ms;
         }
     };
 
@@ -159,6 +160,7 @@ namespace HeiProMap {
         time_row("  V-cycle (incl.)", t.vcycle_ms);
         time_row("  Smash (incl.)", t.smash_ms);
         time_row("  Sim. Annealing", t.sa_refine_ms);
+        time_row("  Corner (final)", t.corner_refine_ms);
         time_row("Misc (setup, rebuilds, other)", t.misc_ms);
         time_row("ALL", t.total_ms());
         os << std::flush;

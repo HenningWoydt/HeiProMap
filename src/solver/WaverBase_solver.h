@@ -218,6 +218,7 @@ namespace HeiProMap {
             if (ac.vcycle) { vcycle(); }
 
             undo_prepartition();
+            corner_refinement();
             return snapshot();
         }
 
@@ -505,6 +506,20 @@ namespace HeiProMap {
             // The boundary, quotient graph and block connectivity are stale here by design, so only the partition
             // and its weights can be checked.
             HEAVYASSERT(assert_bweights(graphs.back(), p_manager, ac.k));
+        }
+
+        // The finished mapping of the input graph: single vertices move or swap between neighboring PEs, so that the
+        // busiest engines get less work (see WaverCornerRefinement).
+        void corner_refinement() {
+            if (!ac.waver_corner_refinement_config.enabled) { return; }
+            HEIPROMAP_PROFILE_SCOPE("refinement", "WaverSolver", "corner_refinement");
+            const auto t_start = get_time_point();
+            const graph_t &g = graphs.back();
+            std::vector<partition_t> part = snapshot();
+            const weight_t lmax = static_cast<weight_t>(std::ceil((1.0 + imbalance) * static_cast<f64>(g.g_weight) / static_cast<f64>(ac.k)));
+            WaverCornerRefinement::refine(g, part, ac.k, lmax, ac.waver_corner_refinement_config);
+            load_partition(part);
+            timings.corner_refine_ms += get_milli_seconds(t_start, get_time_point());
         }
 
         // ------------------------------------------------------------------------------------------------

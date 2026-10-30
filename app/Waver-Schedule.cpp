@@ -11,13 +11,16 @@
 
 #include "../src/datastructures/csr_graph.h"
 #include "../src/distance_oracles/grid_distance_oracle.h"
+#include "../src/refinement/waver_corner_refinement.h"
 #include "../src/scheduler/waver_scheduler.h"
 #include "../src/utility/utils.h"
 
 int main(int argc, char *argv[]) {
     using namespace HeiProMap;
     std::string graph, topology, mapping, costs;
-    u64 seed = 0, chain_print = 20, top_pes = 0;
+    u64 seed = 0, chain_print = 20, top_pes = 0, drop_hops = 0, drop_values = 0, seeds = 1, remap_rounds = 0;
+    f64 imbalance = 0.03, power = 6.0, tau = 2.0;
+    std::string remap_out;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i], value = argv[i + 1];
         if (key == "--graph") graph = value;
@@ -26,6 +29,14 @@ int main(int argc, char *argv[]) {
         else if (key == "--costs") costs = value;
         else if (key == "--schedule-seed") seed = std::stoull(value);
         else if (key == "--chain") chain_print = std::stoull(value);
+        else if (key == "--seeds") seeds = std::stoull(value);
+        else if (key == "--remap-rounds") remap_rounds = std::stoull(value);
+        else if (key == "--remap-out") remap_out = value;
+        else if (key == "--remap-power") power = std::stod(value);
+        else if (key == "--remap-tau") tau = std::stod(value);
+        else if (key == "--imbalance") imbalance = std::stod(value);
+        else if (key == "--drop-hops") drop_hops = std::stoull(value);
+        else if (key == "--drop-values") drop_values = std::stoull(value);
         else if (key == "--top-pes") top_pes = std::stoull(value);
         else { std::cerr << "unknown option " << key << std::endl; return 1; }
     }
@@ -42,7 +53,27 @@ int main(int argc, char *argv[]) {
     SchedulerCosts C;
     if (!costs.empty() && !C.load(costs)) { std::cerr << "cannot read " << costs << std::endl; return 1; }
 
-    const auto r = WaverScheduler::run(g, part, cols, rows, C, seed);
+    const auto median_makespan = [&](const std::vector<partition_t> &p) {
+        std::vector<s64> v;
+        for (u64 s = 0; s < seeds; ++s) { v.push_back(WaverScheduler::run(g, p, cols, rows, C, seed + s).makespan); }
+        std::sort(v.begin(), v.end());
+        return v[v.size() / 2];
+    };
+    if (remap_rounds > 0) {
+        WaverCornerRefinementConfiguration rc;
+        rc.enabled = true;
+        rc.max_rounds = remap_rounds;
+        rc.power = power;
+        rc.tau = tau;
+        rc.verbose = true;
+        std::cout << "makespan before (median of " << seeds << "): " << median_makespan(part) << std::endl;
+        const weight_t lmax = static_cast<weight_t>(std::ceil((1.0 + imbalance) * static_cast<f64>(g.n) / K));
+        const u64 moves = WaverCornerRefinement::refine(g, part, K, lmax, rc);
+        std::cout << "corner refinement: " << moves << " moves\nmakespan after (median of " << seeds << "): "
+                  << median_makespan(part) << std::endl;
+        if (!remap_out.empty()) { write_partition(part, remap_out); }
+    }
+    const auto r = WaverScheduler::run(g, part, cols, rows, C, seed, static_cast<u32>(drop_hops), static_cast<u32>(drop_values));
     std::cout << "makespan " << r.makespan << "\nmessages " << r.messages.size() << "\nmax engine load " << r.max_engine_load
               << "\nmax link load " << r.max_link_load << "\ncritical chain " << r.chain.size() << " messages ("
               << r.chain_engine_edges << " engine, " << r.chain_link_edges << " link dependencies)\n";

@@ -227,6 +227,17 @@ namespace HeiProMap {
             if (ac.smash_rounds > 0) { smash(); }
             if (ac.vcycle) { vcycle(); }
 
+            if (ac.waver_corner_refinement_config.enabled) {
+                // single vertices move or swap between neighboring PEs so that the busiest engines get less work
+                const auto t_corner = get_time_point();
+                std::vector<partition_t> part = snapshot();
+                const graph_t &g = graphs.back();
+                const weight_t lmax = static_cast<weight_t>(std::ceil((1.0 + ac.imbalance) * static_cast<f64>(g.g_weight) / static_cast<f64>(ac.k)));
+                WaverCornerRefinement::refine(g, part, ac.k, lmax, ac.waver_corner_refinement_config);
+                load_partition(part);
+                timings.corner_refine_ms += get_milli_seconds(t_corner, get_time_point());
+            }
+
             std::vector<partition_t> result = snapshot();
 
             const auto ep = std::chrono::high_resolution_clock::now();
