@@ -109,6 +109,9 @@ namespace HeiProMap {
 
             {"# General", "", "", "", "", false},
             {"--imbalance", "-e", "Allowed imbalance of the PE weights (for example 0.03). It applies to the partition of the input graph into PEs (KaMinPar) and to the final level of the individual input vertices; all coarser levels map one vertex to each PE.", "0.03", "", false},
+            {"--coarse-slack", "", "Multilevel mode: on a coarse graph a PE may hold one heaviest vertex above its average weight if --imbalance cannot be met with such heavy vertices (0/1).", "0", "", false},
+            {"--kway-start", "", "Multilevel mode: cut the input graph into one block per coarsest PE with KaMinPar (minimum edge cut), map the blocks 1-1 onto the PEs, and coarsen the graph within the blocks, instead of coarsening freely and partitioning the coarsest graph (0/1).", "0", "", false},
+            {"--kway-partition-file", "", "With --kway-start: read the k-way partition (one block id per line) from this file instead of calling KaMinPar.", "", "", false},
             {"--min-fill", "", "Multilevel mode: the lowest weight a PE may be refined down to, as a fraction of the average PE weight (for example 0.5). A coarse cell stands for several PEs and keeps that fraction of their total. Without a lower limit the refinement drains PEs to cut messages, and the topology can no longer be uncoarsened in time.", "0.5", "", false},
             {"--seed", "", "Seed for diversifying results (random if not given).", "", "", false},
             {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
@@ -217,6 +220,9 @@ namespace HeiProMap {
             {"--spectral-rotations", "", "Multilevel mode: turns of the two smoothest vectors tried in the spectral placement of the coarsest level, evenly over a quarter turn (1: no turn).", "", "", false},
             {"--global-split", "", "Multilevel mode: at every topology split also place the whole current graph spectrally onto the finer grid, and keep it if its message cost is lower than that of the local splits (0/1).", "", "", false},
             {"--terminal-propagation", "", "Multilevel mode: when a coarse PE is split, pull the placement of its vertices towards their neighbors in the neighboring cells (0/1).", "", "", false},
+            {"--split-refine-passes", "", "Multilevel mode: right after a coarse PE is split into its child cells, its vertices move between them for up to this many passes while that lowers the message cost, before the next PE is split (0: off).", "0", "", false},
+            {"--split-kway", "", "Multilevel mode: the local split of a coarse PE cuts its vertices into one block per child cell with KaMinPar (minimum edge cut) and maps the blocks 1-1 onto the child cells by message cost, including the edges to the outside neighbors, instead of the spectral placement (0/1).", "0", "", false},
+            {"--split-partitioner", "", "With --split-kway: the partitioner of the local split: kaminpar, kaffpa-strong or kaffpa-eco.", "kaminpar", "", false},
             {"--fixed-split", "", "Multilevel mode: the local spectral split places the vertices of a coarse PE with the neighbors outside it held fixed at their positions (harmonic coordinates, cut by recursive bisection) instead of the eigenvectors of the cell alone (0/1).", "", "", false},
             {"--vcycle-vertices-per-pe", "", "Multilevel mode: the V-cycle coarsens the graph to about this many vertices per PE.", "", "", false},
             {"--vcycle", "", "Multilevel mode: after the mapping is found, run a V-cycle: coarsen the graph again within the PEs of the current mapping, then uncoarsen with legalization and refinement on every level; the old mapping is kept if the cost does not drop (0/1).", "", "", false},
@@ -231,6 +237,9 @@ namespace HeiProMap {
 
         f64 imbalance = 0.03;
         f64 min_fill = 0.5;
+        bool coarse_slack = false;
+        bool kway_start = false;
+        std::string kway_partition_file;
         std::string mode = "spectral"; // spectral | multilevel
         std::string prepartitioner = "kaminpar";
         std::string kaminpar_preset = "largek";
@@ -275,6 +284,9 @@ namespace HeiProMap {
         std::string dump_hierarchy;        // multilevel: prefix of the files the clusters of every level are written to
         u64 spectral_rotations = 1;        // multilevel: turns of the two smoothest vectors tried in the coarsest spectral placement
         bool global_split = false;         // multilevel: a global spectral placement competes with the local splits
+        u64 split_refine_passes = 0;       // multilevel: passes of vertex moves over the child cells right after a coarse PE is split
+        std::string split_partitioner = "kaminpar";
+        bool split_kway = false;           // multilevel: the local split is a k-way partition and a 1-1 mapping
         bool fixed_split = false;          // multilevel: the split of a coarse cell is computed with the outside neighbors fixed
         bool terminal_propagation = false; // multilevel: the split of a coarse cell is pulled towards the neighbors outside it
         u64 vcycle_c = 8;                 // the V-cycle coarsens the graph to about this many vertices per PE
@@ -334,6 +346,9 @@ namespace HeiProMap {
 
             imbalance = std::stod(get("--imbalance"));
             min_fill = std::stod(get("--min-fill"));
+            coarse_slack = std::stoull(get("--coarse-slack")) != 0;
+            kway_start = std::stoull(get("--kway-start")) != 0;
+            if (is_set("--kway-partition-file")) { kway_partition_file = get("--kway-partition-file"); }
             mode = get("--mode");
             if (mode != "spectral" && mode != "multilevel") {
                 std::cout << "Error: Invalid --mode '" << mode
@@ -485,6 +500,9 @@ namespace HeiProMap {
             waver_busy_refinement_config.top_fraction = 0.5;
             waver_busy_refinement_config.power = 8.0;
             waver_busy_refinement_config.max_tries = 30;
+            waver_busy_refinement_config.exact = true;   // the load of a PE counts its regions and values
+            split_kway = true;                           // multilevel: k-way local split (kaffpa eco) of a coarse PE
+            split_partitioner = "kaffpa-eco";
             waver_long_message_refinement_config.padding = 1;
             waver_long_message_refinement_config.enabled = false;
             waver_swap_refinement_config.radius = 2;
@@ -664,6 +682,15 @@ namespace HeiProMap {
             if (is_set("--dump-hierarchy")) dump_hierarchy = get("--dump-hierarchy");
             if (is_set("--spectral-rotations")) spectral_rotations = std::stoull(get("--spectral-rotations"));
             if (is_set("--global-split")) global_split = std::stoull(get("--global-split")) != 0;
+            if (is_set("--split-refine-passes")) split_refine_passes = std::stoull(get("--split-refine-passes"));
+            if (is_set("--split-partitioner")) {
+                split_partitioner = get("--split-partitioner");
+                if (split_partitioner != "kaminpar" && split_partitioner != "kaffpa-strong" && split_partitioner != "kaffpa-eco") {
+                    std::cout << "Error: Invalid --split-partitioner '" << split_partitioner << "'" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+            }
+            if (is_set("--split-kway")) split_kway = std::stoull(get("--split-kway")) != 0;
             if (is_set("--fixed-split")) fixed_split = std::stoull(get("--fixed-split")) != 0;
             if (is_set("--terminal-propagation")) terminal_propagation = std::stoull(get("--terminal-propagation")) != 0;
             if (is_set("--vcycle-vertices-per-pe")) vcycle_c = std::stoull(get("--vcycle-vertices-per-pe"));

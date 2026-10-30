@@ -35,6 +35,9 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <random>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "../datastructures/boundary_vertex_manger.h"
@@ -57,6 +60,9 @@
 #include "../rebalance/rebalancer.h"
 #include "../rebalance/empty_block_diffusion.h"
 #include "../utility/grid_utils.h"
+#include <kaHIP_interface.h>
+
+#include "../utility/kaminpar_partitioner.h"
 #include "../uncoarsening/topology_uncoarsener.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
@@ -161,6 +167,10 @@ namespace HeiProMap {
             }
             enter_topology_level(); // the coarsest one
 
+            // With --kway-start the input graph is cut into one block per coarse PE first (minimum edge cut), the blocks
+            // are mapped 1-1 onto the PEs, and the graph is coarsened within the blocks, so the coarsest graph carries
+            // that mapping and needs no initial partitioning.
+            if (ac.kway_start) { kway_start_mapping(); }
             for (u64 level = 0; graphs.back().n > d_oracle.current_k() * ac.initial_c; ++level) {
                 coarsening(level);
                 contraction();
@@ -173,10 +183,14 @@ namespace HeiProMap {
             }
 
             if (!ac.dump_hierarchy.empty()) { dump_hierarchy(); }
-            greedy_partitioning();
-            print_level("greedy partition");
-            spectral_placement();
-            print_level("initial partition (greedy / spectral)");
+            if (ac.kway_start) {
+                print_level("k-way partition, mapped");
+            } else {
+                greedy_partitioning();
+                print_level("greedy partition");
+                spectral_placement();
+                print_level("initial partition (greedy / spectral)");
+            }
             finish_initial_partition();
             print_level("coarsest level refined");
 
@@ -246,7 +260,7 @@ namespace HeiProMap {
             const graph_t &g = graphs[0];
             p_manager.initialize(max_n, ac.k, g.g_weight);
             p_manager.activate_all();
-            set_cell_limits(g.g_weight);
+            set_cell_limits(g.g_weight, graphs.back());
             bv_manager.initialize(max_n, ac.k);
             rebalancer.initialize(max_n, max_m, ac.k, random_engine.get_u64());
         }
@@ -264,14 +278,22 @@ namespace HeiProMap {
         // limit each, and at least --min-fill of the average weight each (but one unit). Without the lower limit the
         // refinement drains cells to save messages, and a drained cell has too few vertices to be split into its child
         // cells, so the topology could only be uncoarsened on the finest graph.
-        void set_cell_limits(const weight_t total_weight) {
+        void set_cell_limits(const weight_t total_weight, const graph_t &level) {
             const std::vector<partition_t> &counts = cell_fine_counts.back();
             const f64 finest_k = static_cast<f64>(cell_fine_counts.front().size());
             const weight_t finest_lmax = std::ceil((1.0 + ac.imbalance) * (static_cast<f64>(total_weight) / finest_k));
             const f64 finest_avg = static_cast<f64>(total_weight) / finest_k;
+            // On a coarse graph the vertices are heavy, and a balance of --imbalance cannot be reached with them: the
+            // rebalancer would then force vertices into far-away cells. A cell may hold one heaviest vertex above its
+            // average instead, which is the --imbalance limit once the vertices are light.
+            weight_t heaviest = 1;
+            if (ac.coarse_slack) {
+                for (vertex_t u = 0; u < level.n; ++u) { heaviest = std::max(heaviest, level.v_weight(u)); }
+            }
             for (partition_t c = 0; c < ac.k; ++c) {
                 const weight_t floor_weight = std::max<weight_t>(1, std::floor(ac.min_fill * finest_avg));
-                p_manager.set_lmax(c, counts[c] * finest_lmax);
+                const weight_t slack_lmax = static_cast<weight_t>(std::ceil(static_cast<f64>(counts[c]) * finest_avg)) + heaviest;
+                p_manager.set_lmax(c, std::max<weight_t>(counts[c] * finest_lmax, ac.coarse_slack ? slack_lmax : 0));
                 p_manager.set_lmin(c, counts[c] * std::min(floor_weight, finest_lmax));
             }
         }
@@ -312,6 +334,103 @@ namespace HeiProMap {
         // ------------------------------------------------------------------------------------------------
         // initial partition
         // ------------------------------------------------------------------------------------------------
+
+        // Cuts graphs[0] into one block per cell of the coarsest topology with KaMinPar, maps the blocks 1-1 onto the
+        // cells (spectral placement of the quotient graph, then swaps of two blocks while the message cost drops),
+        // and stores the mapping as the partition of graphs[0]. The coarsening that follows only merges vertices of
+        // one cell.
+        void kway_start_mapping() {
+            HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "kway_start_mapping");
+            const auto t_start = get_time_point();
+            const graph_t &g = graphs[0];
+            const partition_t k = ac.k;
+            QuotientResult r;
+            if (ac.kway_partition_file.empty()) {
+                r = partition_into_quotient(g, k, ac.imbalance, ac.kaminpar_threads, ac.threads, ac.seed,
+                                            ac.kaminpar_preset);
+            } else {
+                // the partition of another partitioner (one block id per line), e.g. kaffpa
+                std::ifstream in(ac.kway_partition_file);
+                r.part.resize(g.n);
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    u64 b = 0;
+                    if (!(in >> b) || b >= k) {
+                        std::cerr << "Error: --kway-partition-file needs " << g.n << " block ids below " << k << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
+                    r.part[u] = static_cast<partition_t>(b);
+                }
+                r.quotient = contract_into_quotient(g, r.part, k, ac.threads);
+            }
+            const graph_t &q = r.quotient;
+
+            // block -> cell
+            std::vector<partition_t> cell_of(k);
+            {
+                SpectralTracker tracker;
+                SpectralSmoothing smoothing = ac.spectral_smoothing;
+                smoothing.threads = static_cast<int>(ac.threads);
+                tracker.set_smoothing(smoothing);
+                tracker.init(q, ac.seed);
+                tracker.place(q, d_oracle.current_topology(), d_oracle.current_W(), cell_of);
+                std::vector<char> used(k, 0);
+                bool bijection = true;
+                for (partition_t b = 0; b < k; ++b) {
+                    if (cell_of[b] >= k || used[cell_of[b]]) { bijection = false; break; }
+                    used[cell_of[b]] = 1;
+                }
+                if (!bijection) { for (partition_t b = 0; b < k; ++b) { cell_of[b] = b; } }
+            }
+            // cost of a block with its cell, over its edges (every pair of blocks is counted once, from the lower id)
+            const auto pair_cost = [&](const partition_t a, const partition_t b, const f64 w) {
+                const f64 h = static_cast<f64>(d_oracle.get(cell_of[a], cell_of[b]));
+                return ac.alpha_end() + ac.beta_end() * w + ac.alpha_link * h + ac.beta_link * h * w;
+            };
+            const auto block_cost = [&](const partition_t a, const partition_t skip) {
+                f64 c = 0.0;
+                for (size_t j = q.neighborhoods[a]; j < q.neighborhoods[a + 1]; ++j) {
+                    const partition_t b = q.edges_v[j];
+                    if (b == skip) { continue; }
+                    c += pair_cost(a, b, static_cast<f64>(q.edge_w(j)));
+                }
+                return c;
+            };
+            const auto edge_between = [&](const partition_t a, const partition_t b) {
+                for (size_t j = q.neighborhoods[a]; j < q.neighborhoods[a + 1]; ++j) {
+                    if (q.edges_v[j] == b) { return pair_cost(a, b, static_cast<f64>(q.edge_w(j))); }
+                }
+                return 0.0;
+            };
+            // swaps of two blocks, for as long as one lowers the cost; all pairs for few blocks, else the blocks whose
+            // cells are at most 3 hops apart
+            std::vector<partition_t> block_at(k);
+            for (partition_t b = 0; b < k; ++b) { block_at[cell_of[b]] = b; }
+            const partition_t W = d_oracle.current_W();
+            bool improved = true;
+            for (int round = 0; round < 50 && improved; ++round) {
+                improved = false;
+                for (partition_t a = 0; a < k; ++a) {
+                    for (partition_t c = a + 1; c < k; ++c) {
+                        if (k > 64 && d_oracle.get(cell_of[a], cell_of[c]) > 3) { continue; }
+                        const f64 before = block_cost(a, c) + block_cost(c, a) + edge_between(a, c);
+                        std::swap(cell_of[a], cell_of[c]);
+                        const f64 after = block_cost(a, c) + block_cost(c, a) + edge_between(a, c);
+                        if (after < before - 1e-9) {
+                            improved = true;
+                        } else {
+                            std::swap(cell_of[a], cell_of[c]);
+                        }
+                    }
+                }
+            }
+            (void) W;
+            (void) block_at;
+
+            for (vertex_t u = 0; u < g.n; ++u) { p_manager.partition[u] = cell_of[r.part[u]]; }
+            p_manager.recalculate_weights(g);
+            recompute_datastructures();
+            timings.initial_partitioning_ms += get_milli_seconds(t_start, get_time_point());
+        }
 
         // Greedy partition of the coarsest level: the best of initial_kappa attempts (the first one in natural vertex
         // order, the others shuffled).
@@ -624,6 +743,131 @@ namespace HeiProMap {
             timings.spectral_ms += get_milli_seconds(p, get_time_point());
         }
 
+        // Places the vertices of a coarse PE on its h x w child cells by a k-way partition of the subgraph they induce
+        // (KaMinPar, minimum edge cut) into one block per child cell and a 1-1 mapping of the blocks to the cells that
+        // minimizes the message cost: the messages between the blocks, and those to the outside neighbors, which are
+        // fixed at term_row / term_col. All permutations are tried for up to 8 cells, otherwise swaps of two blocks from
+        // several random starts. cell[i] = r * w + q for the child cell (r, q) of vertex i.
+        void kway_local_placement(const graph_t &local, const size_t nv, const size_t h, const size_t w,
+                                  const size_t row0, const size_t col0, const std::vector<vertex_t> &out_vertex,
+                                  const std::vector<f64> &out_w, const std::vector<f64> &term_row,
+                                  const std::vector<f64> &term_col, const u64 seed,
+                                  std::vector<partition_t> &cell) const {
+            HEIPROMAP_PROFILE_SCOPE("partition", "WaverSolver", "kway_local_placement");
+            const size_t nc = h * w;
+            std::vector<partition_t> block;
+            if (ac.split_partitioner == "kaminpar") {
+                block = kaminpar_partition(local, static_cast<partition_t>(nc), ac.imbalance, 1, seed, ac.kaminpar_preset);
+            } else {
+                // kaffpa (KaHIP): strong or eco
+                int n = static_cast<int>(nv), nparts = static_cast<int>(nc), edge_cut = 0;
+                std::vector<int> vwgt(nv), xadj(nv + 1), adjwgt(local.neighborhoods[nv]), adjncy(local.neighborhoods[nv]), part(nv);
+                for (size_t i = 0; i < nv; ++i) { vwgt[i] = static_cast<int>(local.v_weight(static_cast<vertex_t>(i))); }
+                for (size_t i = 0; i <= nv; ++i) { xadj[i] = static_cast<int>(local.neighborhoods[i]); }
+                for (size_t e = 0; e < adjncy.size(); ++e) {
+                    adjncy[e] = static_cast<int>(local.edges_v[e]);
+                    adjwgt[e] = static_cast<int>(local.edge_w(e));
+                }
+                double imbalance = std::max(ac.imbalance, 0.0);
+                const int mode = ac.split_partitioner == "kaffpa-strong" ? STRONG : ECO;
+                kaffpa(&n, vwgt.data(), xadj.data(), adjwgt.data(), adjncy.data(), &nparts, &imbalance, true,
+                       static_cast<int>(seed), mode, &edge_cut, part.data());
+                block.assign(part.begin(), part.end());
+            }
+            // weights between blocks, and from each block to each outside position
+            std::vector<f64> between(nc * nc, 0.0);
+            for (size_t i = 0; i < nv; ++i) {
+                for (size_t j = local.neighborhoods[i]; j < local.neighborhoods[i + 1]; ++j) {
+                    const size_t a = block[i], b = block[local.edges_v[j]];
+                    if (a != b) { between[std::min(a, b) * nc + std::max(a, b)] += 0.5 * static_cast<f64>(local.edge_w(j)); }
+                }
+            }
+            struct Terminal {
+                size_t block;
+                f64 row, col, weight;
+            };
+            std::vector<Terminal> terminals;
+            {
+                std::vector<std::tuple<size_t, f64, f64, f64> > raw;
+                for (size_t e = 0; e < out_vertex.size(); ++e) {
+                    raw.emplace_back(block[out_vertex[e]], term_row[e], term_col[e], out_w[e]);
+                }
+                std::sort(raw.begin(), raw.end());
+                for (size_t e = 0; e < raw.size(); ++e) {
+                    const auto &[b, r, c, wt] = raw[e];
+                    if (!terminals.empty() && terminals.back().block == b && terminals.back().row == r && terminals.back().col == c) {
+                        terminals.back().weight += wt;
+                    } else {
+                        terminals.push_back({b, r, c, wt});
+                    }
+                }
+            }
+            // the distance between two child cells, and the cost of a pair / terminal message
+            const auto message = [&](const f64 d, const f64 weight) {
+                return ac.alpha_end() + ac.alpha_link * d + (ac.beta_end() + ac.beta_link * d) * weight;
+            };
+            const auto cost = [&](const std::vector<size_t> &where) {
+                f64 total = 0.0;
+                for (size_t a = 0; a < nc; ++a) {
+                    for (size_t b = a + 1; b < nc; ++b) {
+                        const f64 wt = between[a * nc + b];
+                        if (wt <= 0.0) { continue; }
+                        const f64 d = std::abs(static_cast<f64>(where[a] / w) - static_cast<f64>(where[b] / w))
+                                      + std::abs(static_cast<f64>(where[a] % w) - static_cast<f64>(where[b] % w));
+                        total += message(d, wt);
+                    }
+                }
+                for (const Terminal &t: terminals) {
+                    const f64 d = std::abs(static_cast<f64>(row0 + where[t.block] / w) - t.row)
+                                  + std::abs(static_cast<f64>(col0 + where[t.block] % w) - t.col);
+                    total += message(d, t.weight);
+                }
+                return total;
+            };
+
+            std::vector<size_t> best(nc), cur(nc);
+            for (size_t b = 0; b < nc; ++b) { best[b] = cur[b] = b; }
+            f64 best_cost = cost(best);
+            if (nc <= 8) {
+                std::vector<size_t> perm(nc);
+                for (size_t b = 0; b < nc; ++b) { perm[b] = b; }
+                do {
+                    const f64 c = cost(perm);
+                    if (c < best_cost) {
+                        best_cost = c;
+                        best = perm;
+                    }
+                } while (std::next_permutation(perm.begin(), perm.end()));
+            } else {
+                std::mt19937_64 rng(seed * 7919 + 13);
+                for (int start = 0; start < 20; ++start) {
+                    if (start > 0) { std::shuffle(cur.begin(), cur.end(), rng); }
+                    f64 c = cost(cur);
+                    for (bool improved = true; improved;) {
+                        improved = false;
+                        for (size_t a = 0; a < nc; ++a) {
+                            for (size_t b = a + 1; b < nc; ++b) {
+                                std::swap(cur[a], cur[b]);
+                                const f64 c2 = cost(cur);
+                                if (c2 < c - 1e-9) {
+                                    c = c2;
+                                    improved = true;
+                                } else {
+                                    std::swap(cur[a], cur[b]);
+                                }
+                            }
+                        }
+                    }
+                    if (c < best_cost) {
+                        best_cost = c;
+                        best = cur;
+                    }
+                }
+            }
+            cell.resize(nv);
+            for (size_t i = 0; i < nv; ++i) { cell[i] = static_cast<partition_t>(best[block[i]]); }
+        }
+
         // Spectral placement with fixed outside neighbors: the cell's vertices are placed where the quadratic wire length
         //   sum_inside w (x_i - x_j)^2 + sum_outside w (x_i - t)^2
         // is smallest, with the outside neighbors fixed at their positions t (a Dirichlet problem, the harmonic
@@ -767,8 +1011,11 @@ namespace HeiProMap {
         graph_t sub_grid; // only its number of cells matters: every child cell has the same capacity
         sub_grid.n = static_cast<vertex_t>(h * w);
         std::vector<partition_t> cell;
-        const bool fixed = ac.fixed_split && !out_vertex.empty();
-        if (fixed) {
+        const bool kway = ac.split_kway && h * w > 1 && nv >= 2 * h * w;
+        const bool fixed = !kway && ac.fixed_split && !out_vertex.empty();
+        if (kway) {
+            kway_local_placement(local, nv, h, w, row0, col0, out_vertex, out_w, term_row, term_col, seed, cell);
+        } else if (fixed) {
             fixed_terminal_placement(local, nv, out_vertex, out_w, term_row, term_col, sub_grid, w, cell);
         } else {
             SpectralTracker tracker;
@@ -778,7 +1025,7 @@ namespace HeiProMap {
         }
 
         // The best of the mirrored and transposed variants of the placement.
-        const size_t variants = fixed ? 1 : (h == w ? 8 : 4); // fixed terminals decide the orientation
+        const size_t variants = (fixed || kway) ? 1 : (h == w ? 8 : 4); // the terminals decide the orientation
         const auto position = [&](const partition_t p, const size_t variant) {
             size_t r = p / w, q = p % w;
             if (variant & 4) { std::swap(r, q); }
@@ -891,6 +1138,108 @@ namespace HeiProMap {
 
         }
 
+        // Refines the placement of one coarse PE right after it was split, before the next one is: its vertices move
+        // between its child cells (within their weight limits) while that lowers the message cost of the edges they
+        // have. The neighbors outside the PE count at their cell if they are split already, otherwise at the centre
+        // of their coarse PE, so a message to a PE that is not split yet is priced by its centre.
+        void refine_split_cell(const partition_t c, const std::vector<partition_t> &children, const vertex_t *verts,
+                               const size_t nv, const std::vector<partition_t> &old_partition,
+                               const std::vector<f64> &centre_row, const std::vector<f64> &centre_col,
+                               const size_t fine_w, std::vector<partition_t> &assignment) const {
+            HEIPROMAP_PROFILE_SCOPE("refinement", "WaverSolver", "refine_split_cell");
+            const graph_t &g = graphs.back();
+            constexpr u64 kCoarse = 1ULL << 31; // keys at or above this are coarse PEs that are not split yet
+            const auto key_of = [&](const vertex_t v) -> u64 {
+                return assignment[v] != NO_ID ? static_cast<u64>(assignment[v]) : kCoarse + old_partition[v];
+            };
+            const auto row_of = [&](const u64 key) {
+                return key >= kCoarse ? centre_row[key - kCoarse] : static_cast<f64>(key / fine_w);
+            };
+            const auto col_of = [&](const u64 key) {
+                return key >= kCoarse ? centre_col[key - kCoarse] : static_cast<f64>(key % fine_w);
+            };
+            const auto pair_key = [](const u64 a, const u64 b) { return std::min(a, b) * 4294967296ULL + std::max(a, b); };
+            const auto pair_cost = [&](const u64 key, const f64 weight) {
+                if (weight <= 0.0) { return 0.0; }
+                const u64 a = key / 4294967296ULL, b = key % 4294967296ULL;
+                const f64 d = std::abs(row_of(a) - row_of(b)) + std::abs(col_of(a) - col_of(b));
+                return ac.alpha_end() + ac.alpha_link * d + (ac.beta_end() + ac.beta_link * d) * weight;
+            };
+
+            // the weight between every pair of cells that has an edge of the PE's vertices
+            std::unordered_map<u64, f64> volume;
+            for (size_t i = 0; i < nv; ++i) {
+                const vertex_t u = verts[i];
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                    const vertex_t v = g.edges_v[j];
+                    const u64 ku = assignment[u], kv = key_of(v);
+                    if (ku == kv) { continue; }
+                    volume[pair_key(ku, kv)] += static_cast<f64>(g.edge_w(j)) * (old_partition[v] == c ? 0.5 : 1.0);
+                }
+            }
+            std::unordered_map<partition_t, weight_t> load;
+            for (const partition_t t: children) { load[t] = 0; }
+            for (size_t i = 0; i < nv; ++i) { load[assignment[verts[i]]] += g.v_weight(verts[i]); }
+
+            std::vector<std::pair<u64, f64> > change;
+            for (u64 pass = 0; pass < ac.split_refine_passes; ++pass) {
+                size_t moved = 0;
+                for (size_t i = 0; i < nv; ++i) {
+                    const vertex_t u = verts[i];
+                    const partition_t a = assignment[u];
+                    const weight_t uw = g.v_weight(u);
+                    if (load[a] - uw < p_manager.get_lmin(a)) { continue; }
+                    bool boundary = false;
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                        if (key_of(g.edges_v[j]) != a) { boundary = true; break; }
+                    }
+                    if (!boundary) { continue; }
+
+                    partition_t best = NO_ID;
+                    f64 best_delta = -1e-9;
+                    for (const partition_t t: children) {
+                        if (t == a || load[t] + uw > p_manager.get_lmax(t)) { continue; }
+                        // the change of the volume of every pair the edges of u are in
+                        change.clear();
+                        for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                            const vertex_t v = g.edges_v[j];
+                            const u64 kv = key_of(v);
+                            const f64 w = static_cast<f64>(g.edge_w(j));
+                            if (kv != a) { change.emplace_back(pair_key(a, kv), -w); }
+                            if (kv != t) { change.emplace_back(pair_key(t, kv), w); }
+                        }
+                        std::sort(change.begin(), change.end());
+                        f64 delta = 0.0;
+                        for (size_t x = 0; x < change.size();) {
+                            size_t y = x;
+                            f64 d = 0.0;
+                            while (y < change.size() && change[y].first == change[x].first) { d += change[y++].second; }
+                            const auto it = volume.find(change[x].first);
+                            const f64 before = it == volume.end() ? 0.0 : it->second;
+                            delta += pair_cost(change[x].first, before + d) - pair_cost(change[x].first, before);
+                            x = y;
+                        }
+                        if (delta < best_delta) {
+                            best_delta = delta;
+                            best = t;
+                        }
+                    }
+                    if (best == NO_ID) { continue; }
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                        const u64 kv = key_of(g.edges_v[j]);
+                        const f64 w = static_cast<f64>(g.edge_w(j));
+                        if (kv != a) { volume[pair_key(a, kv)] -= w; }
+                        if (kv != best) { volume[pair_key(best, kv)] += w; }
+                    }
+                    load[a] -= uw;
+                    load[best] += uw;
+                    assignment[u] = best;
+                    ++moved;
+                }
+                if (moved == 0) { break; }
+            }
+        }
+
         // Splits every coarse cell into its child cells: the vertices of the cell, and only those, are placed onto the
         // child cells by a spectral placement of the subgraph they induce (Laplacian eigenvectors cut by recursive
         // coordinate bisection onto the sub-grid of the children). The sign and the axes of such a placement are
@@ -963,6 +1312,10 @@ namespace HeiProMap {
                                 [&](const vertex_t v) { return static_cast<unsigned long long>(old_partition[v]); },
                                 assignment, local_id, ac.seed + c, placed);
                 for (size_t i = 0; i < nv; ++i) { assignment[members[first[c] + i]] = placed[i]; }
+                if (ac.split_refine_passes > 0) {
+                    refine_split_cell(c, children, &members[first[c]], nv, old_partition, centre_row, centre_col,
+                                      fine_w, assignment);
+                }
             }
             return assignment;
         }
@@ -972,6 +1325,8 @@ namespace HeiProMap {
 
             const graph_t &finer = graphs[graphs.size() - 2];
             p_manager.uncontract(mappings.back());
+            // the limits follow the heaviest vertex of the finer graph
+            if (ac.coarse_slack) { set_cell_limits(graphs[0].g_weight, finer); }
 
             HEIPROMAP_PROFILE_SCOPE("uncontraction", "misc", "compute_from_scratch");
             bv_manager.reset(finer.n);
