@@ -30,6 +30,8 @@ namespace HeiProMap {
         f64 internal_edge = 9.0; // engine cost of an edge inside a PE (two local matrix entries)
         f64 min_gain = 1e-9;    // relative improvement of the objective a move needs
         f64 top_fraction = 1.0; // the share of PEs, busiest first, whose vertices are tried in a round
+        const std::vector<f64> *weights = nullptr; // per PE: weight of its load in the objective (null: 1 for all), e.g. how
+                                                  // often the PE is on the critical chain of a schedule
         u64 swap_tries = 4;     // neighbors in the target block a vertex may be swapped with if the block is full
         bool verbose = false;
     };
@@ -117,7 +119,7 @@ namespace HeiProMap {
                 }
                 for (u32 p = 0; p < K; ++p) {
                     load[p] = compute_load(p);
-                    sum_power += std::pow(load[p], cfg.power);
+                    sum_power += omega(p) * std::pow(load[p], cfg.power);
                 }
             }
 
@@ -125,6 +127,8 @@ namespace HeiProMap {
                 for (auto &m: members) { m.clear(); }
                 for (vertex_t u = 0; u < g.n; ++u) { members[part[u]].push_back(u); }
             }
+
+            f64 omega(const u32 p) const { return cfg.weights ? (*cfg.weights)[p] : 1.0; }
 
             u64 key(const u32 a, const u32 b) const { return static_cast<u64>(std::min(a, b)) * K + std::max(a, b); }
             f64 smooth(const s64 w) const { return w <= 0 ? 0.0 : 1.0 - std::exp(-static_cast<f64>(w) / cfg.tau); }
@@ -177,9 +181,9 @@ namespace HeiProMap {
                 std::sort(touched.begin(), touched.end());
                 touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
                 for (const u32 p: touched) {
-                    sum_power -= std::pow(load[p], cfg.power);
+                    sum_power -= omega(p) * std::pow(load[p], cfg.power);
                     load[p] = compute_load(p);
-                    sum_power += std::pow(load[p], cfg.power);
+                    sum_power += omega(p) * std::pow(load[p], cfg.power);
                 }
             }
 

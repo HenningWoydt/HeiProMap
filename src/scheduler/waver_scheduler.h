@@ -111,10 +111,18 @@ namespace HeiProMap {
 
         static constexpr u32 kEast = 0, kWest = 1, kSouth = 2, kNorth = 3;
 
+        // The order in which the messages are placed.
+        enum class Order {
+            Random,   // a random permutation (the default of wse-spmv's flat placement)
+            Rounds,   // greedy edge coloring: messages that share an engine get different rounds, round after round
+            Longest,  // the messages with the most engine work first
+        };
+
         // drop_hops / drop_values: an experiment, messages of at most drop_values values over more than drop_hops hops are
         // left out, as if the vertices behind them had been moved to where their neighbors are (0: keep all).
         static Result run(const CSRGraph &g, const std::vector<partition_t> &part, const u32 cols, const u32 rows,
-                          const SchedulerCosts &C, const u64 seed, const u32 drop_hops = 0, const u32 drop_values = 0) {
+                          const SchedulerCosts &C, const u64 seed, const u32 drop_hops = 0, const u32 drop_values = 0,
+                          const Order order_mode = Order::Random) {
             const u32 K = cols * rows;
             Result res;
             std::vector<Message> &msgs = res.messages;
@@ -252,6 +260,30 @@ namespace HeiProMap {
             for (u32 i = 0; i < order.size(); ++i) { order[i] = i; }
             std::mt19937_64 rng(seed * 0x9E3779B97F4A7C15ULL + 12345);
             std::shuffle(order.begin(), order.end(), rng);
+            if (order_mode == Order::Rounds) {
+                // colors: no PE is the sender or the receiver of two messages of one color; the busiest PEs color first
+                std::vector<u32> events(K, 0);
+                for (const Message &m: msgs) { ++events[m.src]; ++events[m.dst]; }
+                std::stable_sort(order.begin(), order.end(), [&](u32 a, u32 b) {
+                    return std::max(events[msgs[a].src], events[msgs[a].dst]) > std::max(events[msgs[b].src], events[msgs[b].dst]);
+                });
+                std::vector<std::vector<char> > used(K);
+                std::vector<u32> color(msgs.size(), 0);
+                for (const u32 id: order) {
+                    const Message &m = msgs[id];
+                    u32 c = 0;
+                    while ((c < used[m.src].size() && used[m.src][c]) || (c < used[m.dst].size() && used[m.dst][c])) { ++c; }
+                    for (const u32 p: {m.src, m.dst}) {
+                        if (used[p].size() <= c) { used[p].resize(c + 1, 0); }
+                        used[p][c] = 1;
+                    }
+                    color[id] = c;
+                }
+                std::shuffle(order.begin(), order.end(), rng);
+                std::stable_sort(order.begin(), order.end(), [&](u32 a, u32 b) { return color[a] < color[b]; });
+            } else if (order_mode == Order::Longest) {
+                std::stable_sort(order.begin(), order.end(), [&](u32 a, u32 b) { return msgs[a].count > msgs[b].count; });
+            }
 
             res.makespan = 0;
             for (const u32 id: order) {

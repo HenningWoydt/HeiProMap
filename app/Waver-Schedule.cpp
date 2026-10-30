@@ -18,9 +18,9 @@
 int main(int argc, char *argv[]) {
     using namespace HeiProMap;
     std::string graph, topology, mapping, costs;
-    u64 seed = 0, chain_print = 20, top_pes = 0, drop_hops = 0, drop_values = 0, seeds = 1, remap_rounds = 0;
-    f64 imbalance = 0.03, power = 6.0, tau = 2.0;
-    std::string remap_out;
+    u64 seed = 0, chain_print = 20, top_pes = 0, drop_hops = 0, drop_values = 0, seeds = 1, remap_rounds = 0, crit_orders = 0, remap_iters = 1;
+    f64 imbalance = 0.03, power = 6.0, tau = 2.0, crit_lambda = 4.0;
+    std::string remap_out, order_name = "random";
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i], value = argv[i + 1];
         if (key == "--graph") graph = value;
@@ -29,6 +29,10 @@ int main(int argc, char *argv[]) {
         else if (key == "--costs") costs = value;
         else if (key == "--schedule-seed") seed = std::stoull(value);
         else if (key == "--chain") chain_print = std::stoull(value);
+        else if (key == "--crit-orders") crit_orders = std::stoull(value);
+        else if (key == "--crit-lambda") crit_lambda = std::stod(value);
+        else if (key == "--remap-iters") remap_iters = std::stoull(value);
+        else if (key == "--order") order_name = value;
         else if (key == "--seeds") seeds = std::stoull(value);
         else if (key == "--remap-rounds") remap_rounds = std::stoull(value);
         else if (key == "--remap-out") remap_out = value;
@@ -53,9 +57,11 @@ int main(int argc, char *argv[]) {
     SchedulerCosts C;
     if (!costs.empty() && !C.load(costs)) { std::cerr << "cannot read " << costs << std::endl; return 1; }
 
+    const WaverScheduler::Order order_mode = order_name == "rounds" ? WaverScheduler::Order::Rounds
+                                           : order_name == "longest" ? WaverScheduler::Order::Longest : WaverScheduler::Order::Random;
     const auto median_makespan = [&](const std::vector<partition_t> &p) {
         std::vector<s64> v;
-        for (u64 s = 0; s < seeds; ++s) { v.push_back(WaverScheduler::run(g, p, cols, rows, C, seed + s).makespan); }
+        for (u64 s = 0; s < seeds; ++s) { v.push_back(WaverScheduler::run(g, p, cols, rows, C, seed + s, 0, 0, order_mode).makespan); }
         std::sort(v.begin(), v.end());
         return v[v.size() / 2];
     };
@@ -65,15 +71,35 @@ int main(int argc, char *argv[]) {
         rc.max_rounds = remap_rounds;
         rc.power = power;
         rc.tau = tau;
-        rc.verbose = true;
+        rc.verbose = false;
         std::cout << "makespan before (median of " << seeds << "): " << median_makespan(part) << std::endl;
         const weight_t lmax = static_cast<weight_t>(std::ceil((1.0 + imbalance) * static_cast<f64>(g.n) / K));
-        const u64 moves = WaverCornerRefinement::refine(g, part, K, lmax, rc);
+        u64 moves = 0;
+        std::vector<f64> crit_weights;
+        for (u64 it = 0; it < remap_iters; ++it) {
+            if (crit_orders > 0) {
+                // how often each PE is on the critical chain, over orders other than the ones the result is measured with
+                std::vector<f64> hits(K, 0.0);
+                for (u64 o = 0; o < crit_orders; ++o) {
+                    const auto sr = WaverScheduler::run(g, part, cols, rows, C, 1000 + o, 0, 0, order_mode);
+                    std::vector<char> seen(K, 0);
+                    for (const u32 id: sr.chain) { seen[sr.messages[id].src] = 1; seen[sr.messages[id].dst] = 1; }
+                    for (u32 p = 0; p < K; ++p) { hits[p] += seen[p]; }
+                }
+                crit_weights.assign(K, 1.0);
+                for (u32 p = 0; p < K; ++p) { crit_weights[p] = 1.0 + crit_lambda * hits[p] / static_cast<f64>(crit_orders); }
+                rc.weights = &crit_weights;
+                u32 critical = 0;
+                for (u32 p = 0; p < K; ++p) { critical += hits[p] > 0; }
+                std::cout << "iteration " << it << ": " << critical << " PEs were on a critical chain at least once" << std::endl;
+            }
+            moves += WaverCornerRefinement::refine(g, part, K, lmax, rc);
+        }
         std::cout << "corner refinement: " << moves << " moves\nmakespan after (median of " << seeds << "): "
                   << median_makespan(part) << std::endl;
         if (!remap_out.empty()) { write_partition(part, remap_out); }
     }
-    const auto r = WaverScheduler::run(g, part, cols, rows, C, seed, static_cast<u32>(drop_hops), static_cast<u32>(drop_values));
+    const auto r = WaverScheduler::run(g, part, cols, rows, C, seed, static_cast<u32>(drop_hops), static_cast<u32>(drop_values), order_mode);
     std::cout << "makespan " << r.makespan << "\nmessages " << r.messages.size() << "\nmax engine load " << r.max_engine_load
               << "\nmax link load " << r.max_link_load << "\ncritical chain " << r.chain.size() << " messages ("
               << r.chain_engine_edges << " engine, " << r.chain_link_edges << " link dependencies)\n";
