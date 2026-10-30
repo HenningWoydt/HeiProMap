@@ -1,3 +1,8 @@
+// Engine load tracker (Waver). Not a refiner itself: it keeps, for every block, the engine cost model of the
+// scheduler (messages, values sent and received, regions, local matrix entries) up to date while single vertices move, so the
+// busy, smooth and corner refinements, smash and the level statistics can read the load of a block after a move. The weights
+// are the fitted costs (--engine-*). A region is a group of vertices of one block with the same set of foreign neighbor blocks.
+
 #ifndef HEIPROMAP_WAVER_REGION_LOAD_H
 #define HEIPROMAP_WAVER_REGION_LOAD_H
 

@@ -1,3 +1,9 @@
+// Cycle refinement (Waver). With the blocks as full as they are, no single group move has room to go to. Along a
+// cycle of blocks every block gives one sender group away and receives one from the previous block, so the weights stay
+// (nearly) the same. The cycle is built greedily from a start block: each step moves the group of the current block that
+// pays off most to a block not yet on the cycle, or back to the start, which closes it. It is kept if it closes and the
+// total message cost went down; otherwise all its moves are undone. Unit of work: whole sender groups.
+
 #ifndef HEIPROMAP_WAVER_CYCLE_REFINEMENT_H
 #define HEIPROMAP_WAVER_CYCLE_REFINEMENT_H
 

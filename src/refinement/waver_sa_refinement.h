@@ -24,6 +24,13 @@
  * SOFTWARE.
  ******************************************************************************/
 
+// Simulated-annealing refinement (Waver). Swaps whole blocks (the contents of two PEs) within a radius on the PE
+// grid, accepting a worsening swap with a probability that falls as the temperature cools. Blocks are sampled in proportion to
+// their cost, so the worst-mapped blocks are tried most; the start temperature is calibrated from sampled worsening swaps
+// (about 20% acceptance of the smallest) and the best mapping seen is restored at the end. Changes the PE labels
+// (p_manager only). Options: --annealing-iterations, --annealing-radius.
+
+
 #ifndef HEIPROMAP_WAVER_SA_REFINEMENT_H
 #define HEIPROMAP_WAVER_SA_REFINEMENT_H
 

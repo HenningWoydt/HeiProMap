@@ -1,3 +1,9 @@
+// Crowd refinement (Waver). The scheduler places a message against everything its bounding box on the PE grid can
+// touch, so messages whose boxes overlap compete. This refiner shortens and separates the boxes: for the most crowded
+// messages (highest mean cover inside the box) it moves the sender group of either end to the other end or a neighbor of
+// it, if that lowers the sum of squared covers of the grid cells. A move may not create more messages than it removes and
+// no block may get more neighbors than the busiest had at the start of the round. Unit of work: whole sender groups.
+
 #ifndef HEIPROMAP_WAVER_CROWD_REFINEMENT_H
 #define HEIPROMAP_WAVER_CROWD_REFINEMENT_H
 

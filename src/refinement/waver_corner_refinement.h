@@ -1,3 +1,11 @@
+// Corner refinement (Waver). Run once on the finished mapping of the input graph. Single vertices move, or swap with
+// an adjacent vertex of a full PE, between neighboring PEs when that lowers sum(engine load^power) over the PEs (the
+// busiest count most). The load of a PE is the engine cost model: a cost per message (neighbor PE), per cut edge and per
+// internal edge. The number of neighbors enters smoothly, as sum over neighbors of 1 - exp(-w / tau) for a cut weight w,
+// so every vertex moved out of a small contact lowers the objective a little and a corner contact of a few edges, which
+// costs a whole message on two engines, shrinks until it is gone. Unit of work: single vertices (all weights 1, PE limit
+// lmax). Options: --corner-rounds, --corner-power, --corner-tau, --corner-top, --corner-swaps.
+
 #ifndef HEIPROMAP_WAVER_CORNER_REFINEMENT_H
 #define HEIPROMAP_WAVER_CORNER_REFINEMENT_H
 

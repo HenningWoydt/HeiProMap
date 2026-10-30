@@ -1,3 +1,9 @@
+// Shift refinement (Waver). Places the two blocks of a long message next to each other. One block is moved to a PE
+// next to the other; the block that was there and every block on an L-shaped path from there to the PE the moved block left
+// shift by one PE, so the vacated PE is filled again. Both ends, the four cells around the other end and both L paths
+// (horizontal first or vertical first) are tried, and the shift with the largest drop of the hop cost is made. Only the
+// placement of the blocks changes: messages, volume and contents stay. Changes the PE labels. Option: --shift-refinement.
+
 #ifndef HEIPROMAP_WAVER_SHIFT_REFINEMENT_H
 #define HEIPROMAP_WAVER_SHIFT_REFINEMENT_H
 

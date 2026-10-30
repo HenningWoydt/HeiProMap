@@ -24,6 +24,14 @@
  * SOFTWARE.
  ******************************************************************************/
 
+// Message-group refinement (Waver). For every quotient edge (A, B), the sender group S_AB is the set of vertices of
+// block A with an edge to block B; it makes up the single coalesced message A -> B. The refiner tries to move S_AB as a unit
+// to B or to a quotient neighbor of B, with room, which can remove the A -> B message or shorten it, and applies the move with
+// the largest drop of the message cost (alpha_end per pair, beta_end per unit of volume, alpha_link / beta_link per hop).
+// Both orientations of every edge are visited, and only pairs whose inputs changed are evaluated again. It keeps its own
+// quotient rows, so no quotient graph has to be maintained outside. Unit of work: whole sender groups; runs on every level.
+
+
 #ifndef HEIPROMAP_WAVER_MESSAGE_REFINEMENT_H
 #define HEIPROMAP_WAVER_MESSAGE_REFINEMENT_H
 

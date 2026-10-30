@@ -1,3 +1,12 @@
+// Busy-PE refinement (Waver). The makespan follows the busiest PE engine, not the total message cost, so this refiner
+// works on the blocks (PEs) with the highest engine load. For such a block it takes the sender groups that are cheapest to get
+// rid of (the vertices that send to one neighbor), and moves one to the receiver or a neighbor of the receiver that has room,
+// if the loads of all blocks the move touches go down, compared as sum(load^power) so that the busiest block counts most.
+// The load is either the cost of the messages, or (--busy-exact) the engine cost model of the scheduler (WaverRegionLoad:
+// per message, value and local entry). Options: --busy-wide (the group may also go to any block it has edges to),
+// --busy-chain (a full block may take the group if it gives one back).
+// Unit of work: whole sender groups; vertices move, the PE grid is not touched. Runs on every level.
+
 #ifndef HEIPROMAP_WAVER_BUSY_REFINEMENT_H
 #define HEIPROMAP_WAVER_BUSY_REFINEMENT_H
 

@@ -24,6 +24,14 @@
  * SOFTWARE.
  ******************************************************************************/
 
+// Long-message refinement (Waver). Shortens the longest messages by swapping whole blocks (the contents of two
+// PEs) on the PE grid: for the cut edges whose endpoints are farthest apart (a percentile of the distances), each endpoint's
+// block is tried at every position in a rectangle around the other endpoint, and the swap is made if the message cost drops.
+// Only blocks change places, so the contents and the edges between them never change; the cost of a position needs one
+// distance per neighbor content. Changes the PE labels (p_manager only), so it must run after the refiners that need
+// the boundary and quotient structures. Option: --long-message-padding.
+
+
 #ifndef HEIPROMAP_WAVER_LONG_MESSAGE_REFINEMENT_H
 #define HEIPROMAP_WAVER_LONG_MESSAGE_REFINEMENT_H
 

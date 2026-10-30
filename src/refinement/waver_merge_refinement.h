@@ -24,6 +24,15 @@
  * SOFTWARE.
  ******************************************************************************/
 
+// Merge refinement (Waver). Combines messages by moving a sender group into a block that has no room for it. The
+// message refinement only moves a group into a block with room left, and the blocks are nearly always full. Here the move is
+// made anyway and the block may exceed its upper limit for a moment; it then passes load on by moving one of its own sender
+// groups to another block, and so on, along a chain. The chain is kept if every block is within its limits again and the
+// message cost went down in total, otherwise all its moves are undone. Variants: scatter (spread the group over the receiver
+// and its neighbors within their room), partial groups, and splitting the group among several blocks. This is also the
+// engine (quotient rows, group measuring, delta, undo) the busy, cycle and crowd refinements are built on.
+
+
 #ifndef HEIPROMAP_WAVER_MERGE_REFINEMENT_H
 #define HEIPROMAP_WAVER_MERGE_REFINEMENT_H
 

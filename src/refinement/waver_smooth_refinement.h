@@ -1,3 +1,8 @@
+// Smooth refinement (Waver). Single boundary vertices move to another block where they have neighbors, if that lowers
+// (neighbor cells) * message weight + (send regions, receive regions, values) * their weights + hops of cut edges. This is
+// what the group moves cannot reach: a block that touches another through a single vertex loses that neighbor by giving the
+// vertex away. Uses WaverRegionLoad for the region and value terms. Option: --smooth-refinement.
+
 #ifndef HEIPROMAP_WAVER_SMOOTH_REFINEMENT_H
 #define HEIPROMAP_WAVER_SMOOTH_REFINEMENT_H
 

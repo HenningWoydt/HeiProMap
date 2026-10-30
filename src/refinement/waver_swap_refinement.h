@@ -24,6 +24,13 @@
  * SOFTWARE.
  ******************************************************************************/
 
+// Swap refinement (Waver). Every block is tried against the blocks within a Manhattan radius on the PE grid, and the
+// best strictly improving swap of the two blocks' contents is applied; rounds repeat until no swap improves. Optionally the
+// neighborhoods of the block's communication partners are searched too. A vertex-move variant (vertex_move_refine) moves
+// single vertices between blocks instead. Changes the PE labels (p_manager only). Options: --swap-radius,
+// --swap-extended-neighborhood.
+
+
 #ifndef HEIPROMAP_WAVER_SWAP_REFINEMENT_H
 #define HEIPROMAP_WAVER_SWAP_REFINEMENT_H
 
