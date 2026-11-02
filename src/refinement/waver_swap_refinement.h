@@ -112,25 +112,30 @@ namespace HeiProMap {
                 blk_verts[p_manager.partition[u]].push_back(u);
             }
 
-            // The quotient graph: for every block the other blocks it has edges to, with the link cost of those edges
-            // (alpha_link * count + beta_link * weight; the cost of an edge is linear in its distance). Swapping the
-            // contents of p and q only changes the distance of their edges to third blocks, so the gain of a swap is
-            // computed from the two lists instead of from the vertices.
+            // The quotient graph: for every block the other blocks it has edges to, with the cost of one hop of that
+            // message (alpha_link + beta_link * the weight of the edges between the two blocks; the cost of a message is
+            // linear in its distance). Swapping the contents of p and q only changes the distance of their messages to
+            // third blocks, so the gain of a swap is computed from the two lists instead of from the vertices.
             struct QEntry { partition_t block; f64 cost; };
             std::vector<std::vector<QEntry>> quot(k);
             {
-                std::vector<f64> acc(k, 0.0);
+                std::vector<f64> weight(k, 0.0);
+                std::vector<char> is_touched(k, 0);
                 std::vector<partition_t> touched;
                 for (partition_t p = 0; p < k; ++p) {
                     for (const vertex_t u : blk_verts[p]) {
                         for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                             const partition_t nb = p_manager.partition[g.edges_v[j]];
                             if (nb == p) continue;
-                            if (acc[nb] == 0.0) touched.push_back(nb);
-                            acc[nb] += alpha_link + beta_link * static_cast<f64>(g.edge_w(j));
+                            if (!is_touched[nb]) { is_touched[nb] = 1; touched.push_back(nb); }
+                            weight[nb] += static_cast<f64>(g.edge_w(j));
                         }
                     }
-                    for (const partition_t nb : touched) { quot[p].push_back({nb, acc[nb]}); acc[nb] = 0.0; }
+                    for (const partition_t nb : touched) {
+                        quot[p].push_back({nb, alpha_link + beta_link * weight[nb]});
+                        weight[nb] = 0.0;
+                        is_touched[nb] = 0;
+                    }
                     touched.clear();
                 }
             }
@@ -185,7 +190,10 @@ namespace HeiProMap {
 
                         const weight_t wp = p_manager.bweights[p];
                         const weight_t wq = p_manager.bweights[q];
+                        // each block takes the weight of the other: within its upper limit, and not below its lower limit
+                        // unless it is not lower than before
                         if (wq > p_manager.get_lmax(p) || wp > p_manager.get_lmax(q)) continue;
+                        if ((wq < p_manager.get_lmin(p) && wq < wp) || (wp < p_manager.get_lmin(q) && wp < wq)) continue;
 
                         const f64 gain = swap_gain(p, q);
                         if (gain > best_gain) {

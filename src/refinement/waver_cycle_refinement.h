@@ -35,8 +35,9 @@ namespace HeiProMap {
     // group to A2, A2 gives one to A3, and so on until the last block gives one back to A1. The cycle is built
     // greedily from A1: each step moves the group of the current block that pays off most (a single step may cost
     // something) to a block that is not yet on the cycle, or back to A1, which closes it. Every block that gives a group
-    // away has to stay within its limits after giving, and A1 within its limits after receiving. The cycle is kept if it
-    // closes and the total cost went down, otherwise all its moves are undone.
+    // away has to end within its limits (a block that was outside them already may not get worse): after giving the group,
+    // when it holds the one it received, and A1 after receiving the last group. The cycle is kept if it closes and the
+    // total cost went down, otherwise all its moves are undone.
     class WaverCycleRefinement {
         using graph_t = CSRGraph;
         using p_manager_t = PartitionManager;
@@ -100,23 +101,34 @@ namespace HeiProMap {
             const WaverCycleRefinementConfiguration &cycle;
 
 
-            // The best move of a group of `from` with edges to e: its target, delta and group. A move to `home`
-            // (closing the cycle) needs room in home; a move to another block is only allowed if that block is not yet
-            // on the cycle. The block `from` must stay within its limits.
-            bool best_move(const partition_t from, const partition_t e, const partition_t home,
-                           const std::vector<partition_t> &on_cycle, const bool allow_open, const bool allow_close,
+            // The band a block may end in: its limits, widened to the weight it had before the cycle, so that a block that
+            // was outside its limits already does not get worse.
+            weight_t band_low(const partition_t b, const weight_t before) const { return std::min(pm.get_lmin(b), before); }
+            weight_t band_high(const partition_t b, const weight_t before) const { return std::max(pm.get_lmax(b), before); }
+
+            // The best move of a group of `from` with edges to e: its target, delta and group. `on_cycle` are the blocks of
+            // the cycle so far (the first is the start, the last is `from`) and `before` the weight each had before the
+            // cycle. `from` has to end within its band after giving the group (it holds the group it received already). A
+            // move to the start block closes the cycle and needs the start block to end within its band; a move to another
+            // block is only allowed if that block is not yet on the cycle.
+            bool best_move(const partition_t from, const partition_t e, const std::vector<partition_t> &on_cycle,
+                           const std::vector<weight_t> &before, const bool allow_open, const bool allow_close,
                            Base::Candidate &out, partition_t &to, f64 &best_delta) {
+                const partition_t home = on_cycle.front();
                 Base::Candidate group;
                 collect_group(from, e, group.group);
                 if (group.group.empty()) { return false; }
                 measure(from, group);
-                if (pm.bweights[from] - group.weight < pm.get_lmin(from)) { return false; }
+                const weight_t after = pm.bweights[from] - group.weight;
+                if (after < band_low(from, before.back()) || after > band_high(from, before.back())) { return false; }
                 std::vector<partition_t> targets;
                 targets_of(from, e, targets);
                 bool found = false;
                 for (const partition_t c: targets) {
                     if (c == home) {
-                        if (!allow_close || pm.bweights[home] + group.weight > pm.get_lmax(home)) { continue; }
+                        if (!allow_close) { continue; }
+                        const weight_t end = pm.bweights[home] + group.weight;
+                        if (end < band_low(home, before.front()) || end > band_high(home, before.front())) { continue; }
                     } else {
                         if (!allow_open || std::find(on_cycle.begin(), on_cycle.end(), c) != on_cycle.end()) { continue; }
                     }
@@ -136,11 +148,13 @@ namespace HeiProMap {
             int try_cycle(const partition_t a, const partition_t e, f64 &total, u64 &length) {
                 std::vector<Base::Move> path;
                 std::vector<partition_t> on_cycle{a};
+                std::vector<weight_t> before{pm.bweights[a]};
                 Base::Candidate group;
                 partition_t to = NO_ID;
                 f64 d = 0.0;
-                if (!best_move(a, e, a, on_cycle, true, false, group, to, d)) { return 0; }
+                if (!best_move(a, e, on_cycle, before, true, false, group, to, d)) { return 0; }
                 total = d;
+                before.push_back(pm.bweights[to]);
                 apply(group, a, to);
                 for (const vertex_t u: group.group) { locked[u] = 1; }
                 path.push_back(Base::Move{group.group, a, to});
@@ -162,7 +176,7 @@ namespace HeiProMap {
                         Base::Candidate cand;
                         partition_t cand_to = NO_ID;
                         f64 cand_delta = 0.0;
-                        if (!best_move(cur, n, a, on_cycle, !last, true, cand, cand_to, cand_delta)) { continue; }
+                        if (!best_move(cur, n, on_cycle, before, !last, true, cand, cand_to, cand_delta)) { continue; }
                         const bool closes = cand_to == a;
                         // closing moves win over open ones
                         if (!found || (closes && !best_closes) || (closes == best_closes && cand_delta > best_delta)) {
@@ -174,6 +188,7 @@ namespace HeiProMap {
                         }
                     }
                     if (!found) { break; }
+                    if (!best_closes) { before.push_back(pm.bweights[best_to]); }
                     apply(best, cur, best_to);
                     for (const vertex_t u: best.group) { locked[u] = 1; }
                     total += best_delta;
