@@ -118,6 +118,7 @@ namespace HeiProMap {
             {"--min-fill", "", "Multilevel mode: the lowest weight a PE may be refined down to, as a fraction of the average PE weight (for example 0.5). A coarse cell stands for several PEs and keeps that fraction of their total. Without a lower limit the refinement drains PEs to cut messages, and the topology can no longer be uncoarsened in time.", "0.5", "", false},
             {"--seed", "", "Seed for diversifying results (random if not given).", "", "", false},
             {"--threads", "-t", "Number of threads of the coarsening and the prepartitioner (the rest of the pipeline is single-threaded).", "1", "", false},
+            {"--verbose", "", "Print diagnostics of the multilevel mode: the effect of the level changes, the global split, the diffusion, the relaxation, the windows, smash and repair and the V-cycle (0/1).", "0", "", false},
 
             {"# Prepartition of the input graph", "", "", "", "", false},
             {"--prepartitioner", "", "Partitioner of the input graph into one block per PE if it has more vertices than PEs: kaminpar or spectral3d (multilevel three-eigenvector spectral embedding cut by recursive coordinate bisection).", "spectral3d", "", false},
@@ -305,6 +306,7 @@ namespace HeiProMap {
         u64 smash_radius = 1;   // a smashed window reaches this many PEs on every side of the busiest one
         bool rebalance_nearest = false;    // the residual overload goes to the nearest block with room
         bool rebalance_verbose = false;    // print the effect of every call of the rebalancer
+        bool verbose = false;              // print the diagnostics of the multilevel mode
         bool level_stats = false;          // multilevel: print metrics of the mapping on every level
         bool diffusion_equalize = true;    // multilevel: the diffusion also equalizes the weights, not only fills empty PEs
         u64 intense_max_n = 0;             // multilevel: graphs up to this size, on the finest topology, merge more intensely
@@ -737,6 +739,7 @@ namespace HeiProMap {
             if (is_set("--smash-radius")) smash_radius = std::stoull(get("--smash-radius"));
             if (is_set("--rebalance-nearest")) rebalance_nearest = std::stoull(get("--rebalance-nearest")) != 0;
             if (is_set("--rebalance-verbose")) rebalance_verbose = std::stoull(get("--rebalance-verbose")) != 0;
+            if (is_set("--verbose")) verbose = std::stoull(get("--verbose")) != 0;
             if (is_set("--level-stats")) level_stats = std::stoull(get("--level-stats")) != 0;
             if (is_set("--diffusion-equalize")) diffusion_equalize = std::stoull(get("--diffusion-equalize")) != 0;
             if (is_set("--intense-max-n")) intense_max_n = std::stoull(get("--intense-max-n"));

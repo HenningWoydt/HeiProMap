@@ -59,6 +59,7 @@ namespace HeiProMap {
         f64 busy_refine_ms = 0.0;
         f64 crowd_refine_ms = 0.0;
         f64 shift_refine_ms = 0.0;
+        f64 smooth_refine_ms = 0.0;
         f64 vcycle_ms = 0.0;
         f64 smash_ms = 0.0;
         f64 cycle_refine_ms = 0.0;
@@ -157,6 +158,7 @@ namespace HeiProMap {
         time_row("  Busy", t.busy_refine_ms);
         time_row("  Crowd", t.crowd_refine_ms);
         time_row("  Shift", t.shift_refine_ms);
+        time_row("  Smooth", t.smooth_refine_ms);
         time_row("  V-cycle (incl.)", t.vcycle_ms);
         time_row("  Smash (incl.)", t.smash_ms);
         time_row("  Sim. Annealing", t.sa_refine_ms);

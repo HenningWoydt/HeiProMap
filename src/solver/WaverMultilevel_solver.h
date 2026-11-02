@@ -416,9 +416,6 @@ namespace HeiProMap {
             };
             // swaps of two blocks, for as long as one lowers the cost; all pairs for few blocks, else the blocks whose
             // cells are at most 3 hops apart
-            std::vector<partition_t> block_at(k);
-            for (partition_t b = 0; b < k; ++b) { block_at[cell_of[b]] = b; }
-            const partition_t W = d_oracle.current_W();
             bool improved = true;
             for (int round = 0; round < 50 && improved; ++round) {
                 improved = false;
@@ -436,8 +433,6 @@ namespace HeiProMap {
                     }
                 }
             }
-            (void) W;
-            (void) block_at;
 
             for (vertex_t u = 0; u < g.n; ++u) { p_manager.partition[u] = cell_of[r.part[u]]; }
             p_manager.recalculate_weights(g);
@@ -577,7 +572,7 @@ namespace HeiProMap {
                 print_level_stats(what);
                 return;
             }
-            if (!ac.waver_busy_refinement_config.verbose) { return; }
+            if (!ac.verbose) { return; }
             std::cout << "[level] " << what << ": graph n=" << graphs.back().n << " cells k=" << ac.k
                       << " mean neighbor cells " << mean_block_degree() << std::endl;
         }
@@ -746,7 +741,7 @@ namespace HeiProMap {
             spectral.place(g, d_oracle.current_topology(), d_oracle.current_W(), part);
             const f64 local_cost = SpectralTracker::message_cost(g, p_manager.partition, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
             const f64 global_cost = SpectralTracker::message_cost(g, part, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-            if (ac.waver_busy_refinement_config.verbose) {
+            if (ac.verbose) {
                 std::cout << "[level] global split: local cost " << local_cost << ", global cost " << global_cost << std::endl;
             }
             if (global_cost < local_cost) {
@@ -978,176 +973,176 @@ namespace HeiProMap {
             smoothing.threads = 1;
             const size_t row0 = row0_cell, col0 = col0_cell;
             result.assign(nv, NO_ID);
-        // The subgraph induced by the cell, and the edges that leave it.
-        for (size_t i = 0; i < nv; ++i) { local_id[verts[i]] = static_cast<vertex_t>(i); }
-        std::vector<weight_t> vw(nv), ew;
-        std::vector<size_t> nb(nv + 1, 0);
-        std::vector<vertex_t> ev;
-        std::vector<vertex_t> out_vertex; // local vertex of every edge leaving the cell
-        std::vector<f64> out_row, out_col, out_w;
-        std::vector<vertex_t> out_neighbor; // the vertex outside the cell of every edge leaving it
-        for (size_t i = 0; i < nv; ++i) {
-            const vertex_t u = verts[i];
-            vw[i] = g.v_weight(u);
-            for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
-                const vertex_t v = g.edges_v[j];
-                if (inside(v)) {
-                    ev.push_back(local_id[v]);
-                    ew.push_back(g.edge_w(j));
-                } else {
-                    out_vertex.push_back(static_cast<vertex_t>(i));
-                    out_row.push_back(outside_centre(v).first);
-                    out_col.push_back(outside_centre(v).second);
-                    out_w.push_back(static_cast<f64>(g.edge_w(j)));
-                    out_neighbor.push_back(v);
-                }
-            }
-            nb[i + 1] = ev.size();
-        }
-        graph_t local;
-        local.initialize(static_cast<vertex_t>(nv), static_cast<vertex_t>(ev.size()), vw.data(), nb.data(), ew.data(), ev.data());
-
-        // Where the outside neighbor of every edge leaving the cell is: its cell if that is split already, otherwise
-        // the centre of its coarse cell.
-        std::vector<f64> term_row(out_vertex.size()), term_col(out_vertex.size());
-        for (size_t e = 0; e < out_vertex.size(); ++e) {
-            const vertex_t v = out_neighbor[e];
-            if (assignment[v] != NO_ID) {
-                term_row[e] = static_cast<f64>(assignment[v] / fine_w);
-                term_col[e] = static_cast<f64>(assignment[v] % fine_w);
-            } else {
-                term_row[e] = out_row[e];
-                term_col[e] = out_col[e];
-            }
-        }
-
-        graph_t sub_grid; // only its number of cells matters: every child cell has the same capacity
-        sub_grid.n = static_cast<vertex_t>(h * w);
-        std::vector<partition_t> cell;
-        const bool kway = ac.split_kway && h * w > 1 && nv >= 2 * h * w;
-        const bool fixed = !kway && ac.fixed_split && !out_vertex.empty();
-        if (kway) {
-            kway_local_placement(local, nv, h, w, row0, col0, out_vertex, out_w, term_row, term_col, seed, cell);
-        } else if (fixed) {
-            fixed_terminal_placement(local, nv, out_vertex, out_w, term_row, term_col, sub_grid, w, cell);
-        } else {
-            SpectralTracker tracker;
-            tracker.set_smoothing(smoothing);
-            tracker.init(local, seed);
-            tracker.place(local, sub_grid, w, cell);
-        }
-
-        // The best of the mirrored and transposed variants of the placement.
-        const size_t variants = (fixed || kway) ? 1 : (h == w ? 8 : 4); // the terminals decide the orientation
-        const auto position = [&](const partition_t p, const size_t variant) {
-            size_t r = p / w, q = p % w;
-            if (variant & 4) { std::swap(r, q); }
-            if (variant & 1) { r = h - 1 - r; }
-            if (variant & 2) { q = w - 1 - q; }
-            return std::pair<size_t, size_t>(row0 + r, col0 + q);
-        };
-        size_t best_variant = 0;
-        f64 best_cost = std::numeric_limits<f64>::max();
-        for (size_t variant = 0; variant < variants; ++variant) {
-            f64 cost = 0.0;
-            for (size_t e = 0; e < out_vertex.size(); ++e) {
-                const auto pos = position(cell[out_vertex[e]], variant);
-                cost += out_w[e] * (std::abs(static_cast<f64>(pos.first) - out_row[e])
-                                    + std::abs(static_cast<f64>(pos.second) - out_col[e]));
-            }
-            if (cost < best_cost) {
-                best_cost = cost;
-                best_variant = variant;
-            }
-        }
-        // Terminal propagation: the vertices are pulled towards their neighbors, inside the cell and outside it,
-        // starting from the spectral placement; the neighbors in cells that are split already count at their
-        // cell, the others at the centre of their coarse cell. The result is spread over the child cells again
-        // by rank, and it replaces the spectral placement if it has a lower cost.
-        std::vector<partition_t> chosen(nv);
-        for (size_t i = 0; i < nv; ++i) {
-            const auto pos = position(cell[i], best_variant);
-            chosen[i] = static_cast<partition_t>(pos.first * fine_w + pos.second);
-        }
-        if (ac.terminal_propagation) {
-            // The message cost of a placement: every pair of cells that exchange values is one message (alpha_end
-            // and the link cost of its distance), every cut edge adds its volume. A neighbor outside the cell
-            // counts as its cell if that is split already, otherwise as its coarse cell.
-            const auto placement_cost = [&](const std::vector<partition_t> &where) {
-                std::vector<std::pair<unsigned long long, f64> > pairs;
-                f64 total = 0.0;
-                const auto edge = [&](const unsigned long long id_a, const f64 ra, const f64 qa, const unsigned long long id_b, const f64 rb,
-                                      const f64 qb, const f64 weight) {
-                    if (id_a == id_b) { return; }
-                    const f64 d = std::abs(ra - rb) + std::abs(qa - qb);
-                    pairs.emplace_back(std::min(id_a, id_b) * 4294967296ULL + std::max(id_a, id_b), ac.alpha_end() + ac.alpha_link * d);
-                    total += (ac.beta_end() + ac.beta_link * d) * weight;
-                };
-                for (size_t i = 0; i < nv; ++i) {
-                    const f64 r = static_cast<f64>(where[i] / fine_w), q = static_cast<f64>(where[i] % fine_w);
-                    for (size_t j = nb[i]; j < nb[i + 1]; ++j) {
-                        const partition_t o = where[ev[j]];
-                        edge(where[i], r, q, o, static_cast<f64>(o / fine_w), static_cast<f64>(o % fine_w), 0.5 * static_cast<f64>(ew[j]));
-                    }
-                }
-                for (size_t e = 0; e < out_vertex.size(); ++e) {
-                    const partition_t o = where[out_vertex[e]];
-                    const vertex_t v = out_neighbor[e];
-                    const unsigned long long other = assignment[v] != NO_ID ? assignment[v] : (1ULL << 31) + outside_group(v);
-                    edge(o, static_cast<f64>(o / fine_w), static_cast<f64>(o % fine_w), other, term_row[e], term_col[e], out_w[e]);
-                }
-                std::sort(pairs.begin(), pairs.end());
-                for (size_t t = 0; t < pairs.size(); ++t) {
-                    if (t == 0 || pairs[t].first != pairs[t - 1].first) { total += pairs[t].second; }
-                }
-                return total;
-            };
-
-            std::vector<f64> row(nv), col(nv), row0(nv), col0(nv), degree(nv, 0.0);
+            // The subgraph induced by the cell, and the edges that leave it.
+            for (size_t i = 0; i < nv; ++i) { local_id[verts[i]] = static_cast<vertex_t>(i); }
+            std::vector<weight_t> vw(nv), ew;
+            std::vector<size_t> nb(nv + 1, 0);
+            std::vector<vertex_t> ev;
+            std::vector<vertex_t> out_vertex; // local vertex of every edge leaving the cell
+            std::vector<f64> out_row, out_col, out_w;
+            std::vector<vertex_t> out_neighbor; // the vertex outside the cell of every edge leaving it
             for (size_t i = 0; i < nv; ++i) {
-                row0[i] = row[i] = static_cast<f64>(chosen[i] / fine_w);
-                col0[i] = col[i] = static_cast<f64>(chosen[i] % fine_w);
-                for (size_t j = nb[i]; j < nb[i + 1]; ++j) { degree[i] += static_cast<f64>(ew[j]); }
+                const vertex_t u = verts[i];
+                vw[i] = g.v_weight(u);
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                    const vertex_t v = g.edges_v[j];
+                    if (inside(v)) {
+                        ev.push_back(local_id[v]);
+                        ew.push_back(g.edge_w(j));
+                    } else {
+                        out_vertex.push_back(static_cast<vertex_t>(i));
+                        out_row.push_back(outside_centre(v).first);
+                        out_col.push_back(outside_centre(v).second);
+                        out_w.push_back(static_cast<f64>(g.edge_w(j)));
+                        out_neighbor.push_back(v);
+                    }
+                }
+                nb[i + 1] = ev.size();
             }
-            for (size_t e = 0; e < out_vertex.size(); ++e) { degree[out_vertex[e]] += out_w[e]; }
-            std::vector<std::vector<size_t> > out_of(nv);
-            for (size_t e = 0; e < out_vertex.size(); ++e) { out_of[out_vertex[e]].push_back(e); }
-            for (int sweep = 0; sweep < 20; ++sweep) {
+            graph_t local;
+            local.initialize(static_cast<vertex_t>(nv), static_cast<vertex_t>(ev.size()), vw.data(), nb.data(), ew.data(), ev.data());
+
+            // Where the outside neighbor of every edge leaving the cell is: its cell if that is split already, otherwise
+            // the centre of its coarse cell.
+            std::vector<f64> term_row(out_vertex.size()), term_col(out_vertex.size());
+            for (size_t e = 0; e < out_vertex.size(); ++e) {
+                const vertex_t v = out_neighbor[e];
+                if (assignment[v] != NO_ID) {
+                    term_row[e] = static_cast<f64>(assignment[v] / fine_w);
+                    term_col[e] = static_cast<f64>(assignment[v] % fine_w);
+                } else {
+                    term_row[e] = out_row[e];
+                    term_col[e] = out_col[e];
+                }
+            }
+
+            graph_t sub_grid; // only its number of cells matters: every child cell has the same capacity
+            sub_grid.n = static_cast<vertex_t>(h * w);
+            std::vector<partition_t> cell;
+            const bool kway = ac.split_kway && h * w > 1 && nv >= 2 * h * w;
+            const bool fixed = !kway && ac.fixed_split && !out_vertex.empty();
+            if (kway) {
+                kway_local_placement(local, nv, h, w, row0, col0, out_vertex, out_w, term_row, term_col, seed, cell);
+            } else if (fixed) {
+                fixed_terminal_placement(local, nv, out_vertex, out_w, term_row, term_col, sub_grid, w, cell);
+            } else {
+                SpectralTracker tracker;
+                tracker.set_smoothing(smoothing);
+                tracker.init(local, seed);
+                tracker.place(local, sub_grid, w, cell);
+            }
+
+            // The best of the mirrored and transposed variants of the placement.
+            const size_t variants = (fixed || kway) ? 1 : (h == w ? 8 : 4); // the terminals decide the orientation
+            const auto position = [&](const partition_t p, const size_t variant) {
+                size_t r = p / w, q = p % w;
+                if (variant & 4) { std::swap(r, q); }
+                if (variant & 1) { r = h - 1 - r; }
+                if (variant & 2) { q = w - 1 - q; }
+                return std::pair<size_t, size_t>(row0 + r, col0 + q);
+            };
+            size_t best_variant = 0;
+            f64 best_cost = std::numeric_limits<f64>::max();
+            for (size_t variant = 0; variant < variants; ++variant) {
+                f64 cost = 0.0;
+                for (size_t e = 0; e < out_vertex.size(); ++e) {
+                    const auto pos = position(cell[out_vertex[e]], variant);
+                    cost += out_w[e] * (std::abs(static_cast<f64>(pos.first) - out_row[e])
+                                        + std::abs(static_cast<f64>(pos.second) - out_col[e]));
+                }
+                if (cost < best_cost) {
+                    best_cost = cost;
+                    best_variant = variant;
+                }
+            }
+            // Terminal propagation: the vertices are pulled towards their neighbors, inside the cell and outside it,
+            // starting from the spectral placement; the neighbors in cells that are split already count at their
+            // cell, the others at the centre of their coarse cell. The result is spread over the child cells again
+            // by rank, and it replaces the spectral placement if it has a lower cost.
+            std::vector<partition_t> chosen(nv);
+            for (size_t i = 0; i < nv; ++i) {
+                const auto pos = position(cell[i], best_variant);
+                chosen[i] = static_cast<partition_t>(pos.first * fine_w + pos.second);
+            }
+            if (ac.terminal_propagation) {
+                // The message cost of a placement: every pair of cells that exchange values is one message (alpha_end
+                // and the link cost of its distance), every cut edge adds its volume. A neighbor outside the cell
+                // counts as its cell if that is split already, otherwise as its coarse cell.
+                const auto placement_cost = [&](const std::vector<partition_t> &where) {
+                    std::vector<std::pair<unsigned long long, f64> > pairs;
+                    f64 total = 0.0;
+                    const auto edge = [&](const unsigned long long id_a, const f64 ra, const f64 qa, const unsigned long long id_b, const f64 rb,
+                                          const f64 qb, const f64 weight) {
+                        if (id_a == id_b) { return; }
+                        const f64 d = std::abs(ra - rb) + std::abs(qa - qb);
+                        pairs.emplace_back(std::min(id_a, id_b) * 4294967296ULL + std::max(id_a, id_b), ac.alpha_end() + ac.alpha_link * d);
+                        total += (ac.beta_end() + ac.beta_link * d) * weight;
+                    };
+                    for (size_t i = 0; i < nv; ++i) {
+                        const f64 r = static_cast<f64>(where[i] / fine_w), q = static_cast<f64>(where[i] % fine_w);
+                        for (size_t j = nb[i]; j < nb[i + 1]; ++j) {
+                            const partition_t o = where[ev[j]];
+                            edge(where[i], r, q, o, static_cast<f64>(o / fine_w), static_cast<f64>(o % fine_w), 0.5 * static_cast<f64>(ew[j]));
+                        }
+                    }
+                    for (size_t e = 0; e < out_vertex.size(); ++e) {
+                        const partition_t o = where[out_vertex[e]];
+                        const vertex_t v = out_neighbor[e];
+                        const unsigned long long other = assignment[v] != NO_ID ? assignment[v] : (1ULL << 31) + outside_group(v);
+                        edge(o, static_cast<f64>(o / fine_w), static_cast<f64>(o % fine_w), other, term_row[e], term_col[e], out_w[e]);
+                    }
+                    std::sort(pairs.begin(), pairs.end());
+                    for (size_t t = 0; t < pairs.size(); ++t) {
+                        if (t == 0 || pairs[t].first != pairs[t - 1].first) { total += pairs[t].second; }
+                    }
+                    return total;
+                };
+
+                std::vector<f64> row(nv), col(nv), row0(nv), col0(nv), degree(nv, 0.0);
                 for (size_t i = 0; i < nv; ++i) {
-                    // the anchor to the spectral position keeps the cell from collapsing onto its terminals
-                    const f64 anchor = std::max(degree[i], 1.0);
-                    f64 sr = anchor * row0[i], sc = anchor * col0[i], sw = anchor;
-                    for (size_t j = nb[i]; j < nb[i + 1]; ++j) {
-                        sr += static_cast<f64>(ew[j]) * row[ev[j]];
-                        sc += static_cast<f64>(ew[j]) * col[ev[j]];
-                        sw += static_cast<f64>(ew[j]);
-                    }
-                    for (const size_t e: out_of[i]) {
-                        sr += out_w[e] * term_row[e];
-                        sc += out_w[e] * term_col[e];
-                        sw += out_w[e];
-                    }
-                    row[i] = sr / sw;
-                    col[i] = sc / sw;
+                    row0[i] = row[i] = static_cast<f64>(chosen[i] / fine_w);
+                    col0[i] = col[i] = static_cast<f64>(chosen[i] % fine_w);
+                    for (size_t j = nb[i]; j < nb[i + 1]; ++j) { degree[i] += static_cast<f64>(ew[j]); }
                 }
-            }
-            // spread by rank: the child rows by the row coordinate, then the cells of a row by the column
-            std::vector<size_t> by_row(nv);
-            for (size_t i = 0; i < nv; ++i) { by_row[i] = i; }
-            std::stable_sort(by_row.begin(), by_row.end(), [&](const size_t x, const size_t y) { return row[x] < row[y]; });
-            std::vector<partition_t> moved(nv);
-            for (size_t r = 0; r < h; ++r) {
-                const size_t lo = r * nv / h, hi = (r + 1) * nv / h;
-                std::vector<size_t> line(by_row.begin() + lo, by_row.begin() + hi);
-                std::stable_sort(line.begin(), line.end(), [&](const size_t x, const size_t y) { return col[x] < col[y]; });
-                for (size_t t = 0; t < line.size(); ++t) {
-                    const size_t q = t * w / line.size();
-                    moved[line[t]] = static_cast<partition_t>((row0_cell + r) * fine_w + col0_cell + q);
+                for (size_t e = 0; e < out_vertex.size(); ++e) { degree[out_vertex[e]] += out_w[e]; }
+                std::vector<std::vector<size_t> > out_of(nv);
+                for (size_t e = 0; e < out_vertex.size(); ++e) { out_of[out_vertex[e]].push_back(e); }
+                for (int sweep = 0; sweep < 20; ++sweep) {
+                    for (size_t i = 0; i < nv; ++i) {
+                        // the anchor to the spectral position keeps the cell from collapsing onto its terminals
+                        const f64 anchor = std::max(degree[i], 1.0);
+                        f64 sr = anchor * row0[i], sc = anchor * col0[i], sw = anchor;
+                        for (size_t j = nb[i]; j < nb[i + 1]; ++j) {
+                            sr += static_cast<f64>(ew[j]) * row[ev[j]];
+                            sc += static_cast<f64>(ew[j]) * col[ev[j]];
+                            sw += static_cast<f64>(ew[j]);
+                        }
+                        for (const size_t e: out_of[i]) {
+                            sr += out_w[e] * term_row[e];
+                            sc += out_w[e] * term_col[e];
+                            sw += out_w[e];
+                        }
+                        row[i] = sr / sw;
+                        col[i] = sc / sw;
+                    }
                 }
+                // spread by rank: the child rows by the row coordinate, then the cells of a row by the column
+                std::vector<size_t> by_row(nv);
+                for (size_t i = 0; i < nv; ++i) { by_row[i] = i; }
+                std::stable_sort(by_row.begin(), by_row.end(), [&](const size_t x, const size_t y) { return row[x] < row[y]; });
+                std::vector<partition_t> moved(nv);
+                for (size_t r = 0; r < h; ++r) {
+                    const size_t lo = r * nv / h, hi = (r + 1) * nv / h;
+                    std::vector<size_t> line(by_row.begin() + lo, by_row.begin() + hi);
+                    std::stable_sort(line.begin(), line.end(), [&](const size_t x, const size_t y) { return col[x] < col[y]; });
+                    for (size_t t = 0; t < line.size(); ++t) {
+                        const size_t q = t * w / line.size();
+                        moved[line[t]] = static_cast<partition_t>((row0_cell + r) * fine_w + col0_cell + q);
+                    }
+                }
+                if (placement_cost(moved) < placement_cost(chosen)) { chosen = std::move(moved); }
             }
-            if (placement_cost(moved) < placement_cost(chosen)) { chosen = std::move(moved); }
-        }
-        for (size_t i = 0; i < nv; ++i) { result[i] = chosen[i]; }
+            for (size_t i = 0; i < nv; ++i) { result[i] = chosen[i]; }
 
         }
 
@@ -1541,7 +1536,7 @@ namespace HeiProMap {
                     }
                 }
             }
-            if (ac.waver_busy_refinement_config.verbose) { std::cout << "[diffusion] moved " << moved << " vertices" << std::endl; }
+            if (ac.verbose) { std::cout << "[diffusion] moved " << moved << " vertices" << std::endl; }
             recompute_datastructures();
         }
 
@@ -1725,7 +1720,7 @@ namespace HeiProMap {
                 }
                 const f64 before = SpectralTracker::message_cost(g, p_manager.partition, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 const f64 after = SpectralTracker::message_cost(g, part, d_oracle, ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                if (ac.waver_busy_refinement_config.verbose) {
+                if (ac.verbose) {
                     std::cout << "[relax] round " << round << ": cost " << before << " -> " << after << std::endl;
                 }
                 if (!(after < before)) { break; }
@@ -1837,7 +1832,7 @@ namespace HeiProMap {
                 }
                 if (round_kept == 0) { break; }
             }
-            if (ac.waver_busy_refinement_config.verbose) {
+            if (ac.verbose) {
                 std::cout << "[window] kept " << kept << " of " << tried << " windows" << std::endl;
             }
             recompute_datastructures();
@@ -1896,8 +1891,8 @@ namespace HeiProMap {
                 auto sp_local = get_time_point();
                 WaverSmoothRefinement::refine(graphs.back(), p_manager, d_oracle, ac.waver_smooth_refinement_config);
                 recompute_datastructures(); // the smoothing moved vertices without telling the boundary structures
-                timings.shift_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                print_step("shift");
+                timings.smooth_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                print_step("smooth");
             }
 
             if (ac.waver_cycle_refinement_config.enabled) {
@@ -2119,7 +2114,7 @@ namespace HeiProMap {
                 const std::vector<f64> repaired = exact_loads();
                 const auto [peak_after, power_after] = score(repaired);
                 const bool better = peak_after < peak_before || (peak_after == peak_before && power_after < power_before);
-                if (ac.waver_busy_refinement_config.verbose || ac.waver_merge_refinement_config.verbose) {
+                if (ac.verbose) {
                     std::cout << "[smash] round " << round << ": " << windows.size() << " windows, busiest PE " << peak_before
                               << " -> (smashed) " << score(smashed).first << " -> (repaired) " << peak_after
                               << (better ? ", kept" : ", restored") << std::endl;
@@ -2163,7 +2158,7 @@ namespace HeiProMap {
             }
 
             const f64 cost_after = current_message_cost();
-            if (ac.waver_busy_refinement_config.verbose || ac.waver_merge_refinement_config.verbose) {
+            if (ac.verbose) {
                 std::cout << "[vcycle] message cost " << cost_before << " -> " << cost_after << std::endl;
             }
             if (cost_after >= cost_before) { load_partition(saved); }
