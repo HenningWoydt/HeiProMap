@@ -216,7 +216,7 @@ namespace HeiProMap {
             {"--cycle-rounds", "", "Maximum rounds of the cycle refinement on one level.", "", "", false},
             {"--cycle-tries", "", "Cycle refinement: first moves tried per block and round.", "", "", false},
             {"--cycle-verbose", "", "Print the statistics of every round of the cycle refinement (0/1).", "", "", false},
-            {"--busy-refinement", "", "Multilevel mode: run the busy-PE refinement, which moves sender groups away from the blocks with the highest engine load (0/1).", "", "", false},
+            {"--busy-refinement", "", "Run the busy-PE refinement, which moves sender groups away from the blocks with the highest engine load (0/1).", "", "", false},
             {"--busy-rounds", "", "Maximum rounds of the busy-PE refinement on one level.", "", "", false},
             {"--busy-top", "", "Busy-PE refinement: the share of blocks, busiest first, worked on per round.", "", "", false},
             {"--busy-power", "", "Busy-PE refinement: the loads touched by a move are compared as sum(load^power).", "", "", false},
@@ -467,10 +467,14 @@ namespace HeiProMap {
 
             // The spectral mode can run the group refinements too, but they gain little there (about 2% makespan in
             // fast, nothing in strong) for 2 to 3 seconds more: they are off unless a command line option asks for them.
+            // The busy refinement pays there, mostly on graphs that are not meshes (on 25 synthetic instances fast is
+            // 19% and strong 5% better in makespan with it, for 0.1 to 1.4 s on a graph with a million vertices), so it
+            // is on in strong, as in the preset, and in fast.
             if (mode == "spectral") {
                 waver_scatter_refinement_config.enabled = false;
                 waver_chain_refinement_config.enabled = false;
                 waver_split_refinement_config.enabled = false;
+                if (config_name == "fast") { waver_busy_refinement_config.enabled = true; }
             }
 
             apply_command_line_overrides();

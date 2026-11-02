@@ -66,6 +66,7 @@
 #include "../refinement/waver_chain_refinement.h"
 #include "../refinement/waver_split_refinement.h"
 #include "../refinement/waver_smooth_refinement.h"
+#include "../refinement/waver_busy_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
@@ -521,6 +522,13 @@ namespace HeiProMap {
                 WaverSmoothRefinement::refine(graphs.back(), p_manager, d_oracle, ac.waver_smooth_refinement_config);
                 recompute_datastructures(); // the smoothing moved vertices without telling the boundary structures
                 timings.smooth_refine_ms += get_milli_seconds(sp_local, get_time_point());
+            }
+
+            if (ac.waver_busy_refinement_config.enabled) {
+                auto sp_local = get_time_point();
+                WaverBusyRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, ac.waver_busy_refinement_config,
+                                            ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                timings.busy_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
 
             if (ac.waver_swap_refinement_config.enabled) {
