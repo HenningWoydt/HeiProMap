@@ -62,6 +62,9 @@
 #include "../rebalance/empty_block_diffusion.h"
 #include "../uncoarsening/topology_uncoarsener.h"
 #include "../refinement/waver_message_refinement.h"
+#include "../refinement/waver_scatter_refinement.h"
+#include "../refinement/waver_chain_refinement.h"
+#include "../refinement/waver_split_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
@@ -469,6 +472,34 @@ namespace HeiProMap {
             if (moved > 0) { recompute_datastructures(); }
         }
 
+        // Sender groups move as a unit (see WaverGroupMoves): scatter, then chains and splits, then scatter again (they free
+        // room again). They keep the boundary up to date, so they run before the refinements that relabel PEs.
+        void group_refinement() {
+            const bool scatter = ac.waver_scatter_refinement_config.enabled;
+            const bool chain = ac.waver_chain_refinement_config.enabled;
+            const bool split = ac.waver_split_refinement_config.enabled;
+            if (!scatter && !chain && !split) { return; }
+            auto sp_local = get_time_point();
+            graph_t &g = graphs.back();
+            if (scatter) {
+                WaverScatterRefinement::refine(g, p_manager, bv_manager, d_oracle, ac.waver_scatter_refinement_config,
+                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
+            if (chain) {
+                WaverChainRefinement::refine(g, p_manager, bv_manager, d_oracle, ac.waver_chain_refinement_config,
+                                             ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
+            if (split) {
+                WaverSplitRefinement::refine(g, p_manager, bv_manager, d_oracle, ac.waver_split_refinement_config,
+                                             ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
+            if (scatter && (chain || split)) {
+                WaverScatterRefinement::refine(g, p_manager, bv_manager, d_oracle, ac.waver_scatter_refinement_config,
+                                               ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+            }
+            timings.group_refine_ms += get_milli_seconds(sp_local, get_time_point());
+        }
+
         // All refinements, in order. Each is switched on by its configuration. Simulated annealing swaps whole PEs.
         void refinement() {
             auto p = get_time_point();
@@ -480,6 +511,8 @@ namespace HeiProMap {
                                                ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 timings.msg_refine_ms += get_milli_seconds(sp_local, get_time_point());
             }
+
+            group_refinement();
 
             if (ac.waver_swap_refinement_config.enabled) {
                 auto sp_local = get_time_point();

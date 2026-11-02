@@ -185,16 +185,16 @@ namespace HeiProMap {
             {"--message-refinement", "", "Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
             {"--message-refinement-iterations", "", "Maximum iterations of the message-group refinement on one level.", "", "", false},
             {"--long-message-padding", "", "Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
-            {"--scatter-refinement", "", "Multilevel mode: run the scatter refinement, which spreads a sender group over the receiver and its neighbors, within their room, so that no block is overloaded (0/1).", "", "", false},
+            {"--scatter-refinement", "", "Run the scatter refinement, which spreads a sender group over the receiver and its neighbors, within their room, so that no block is overloaded (0/1). On in the presets, but off in the spectral mode unless set.", "", "", false},
             {"--scatter-rounds", "", "Maximum rounds of the scatter refinement on one level.", "", "", false},
             {"--scatter-verbose", "", "Print the statistics of every round of the scatter refinement (0/1).", "", "", false},
-            {"--chain-refinement", "", "Multilevel mode: run the chain refinement, which moves a sender group into a block without room for it and passes the overload on along a chain of moves (0/1).", "", "", false},
+            {"--chain-refinement", "", "Run the chain refinement, which moves a sender group into a block without room for it and passes the overload on along a chain of moves (0/1). On in the presets, but off in the spectral mode unless set.", "", "", false},
             {"--chain-depth", "", "Maximum number of moves in one chain of the chain refinement.", "", "", false},
             {"--chain-rounds", "", "Maximum rounds of the chain refinement on one level.", "", "", false},
             {"--chain-round-gain", "", "Chain refinement: stop when a round gains less than this share of the gain of the first round (0: off).", "", "", false},
             {"--chain-partial", "", "Chain refinement: an overloaded block may also give up only part of a sender group, the vertices tied most closely to the receiving block (0/1).", "", "", false},
             {"--chain-verbose", "", "Print the statistics of every round of the chain refinement (0/1).", "", "", false},
-            {"--group-split-parts", "", "Multilevel mode: run the split refinement, which splits a sender group among up to this many blocks, each vertex going to the block it has the most edge weight to (below 2: off).", "", "", false},
+            {"--group-split-parts", "", "Run the split refinement, which splits a sender group among up to this many blocks, each vertex going to the block it has the most edge weight to (below 2: off). Off in the presets.", "", "", false},
             {"--group-split-depth", "", "Maximum number of moves that pass the load of overloaded blocks on in the split refinement.", "", "", false},
             {"--group-split-rounds", "", "Maximum rounds of the split refinement on one level.", "", "", false},
             {"--group-split-partial", "", "Split refinement: an overloaded block may also give up only part of a sender group (0/1).", "", "", false},
@@ -458,6 +458,14 @@ namespace HeiProMap {
             } else {
                 std::cout << "Config " << config_name << " not recognized!" << std::endl;
                 exit(EXIT_FAILURE);
+            }
+
+            // The spectral mode can run the group refinements too, but they gain little there (about 2% makespan in
+            // fast, nothing in strong) for 2 to 3 seconds more: they are off unless a command line option asks for them.
+            if (mode == "spectral") {
+                waver_scatter_refinement_config.enabled = false;
+                waver_chain_refinement_config.enabled = false;
+                waver_split_refinement_config.enabled = false;
             }
 
             apply_command_line_overrides();
