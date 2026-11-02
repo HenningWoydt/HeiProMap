@@ -125,6 +125,7 @@ SUMMARY = {
     "ms_group": r"^  Scatter/Chain/Split\s*:\s*([0-9.e+]+)",
     "ms_busy": r"^  Busy\s*:\s*([0-9.e+]+)",
     "ms_annealing": r"^  Sim\. Annealing\s*:\s*([0-9.e+]+)",
+    "ms_smooth": r"^  Smooth\s*:\s*([0-9.e+]+)",
     "ms_corner": r"^  Corner \(final\)\s*:\s*([0-9.e+]+)",
 }
 # the time of the refinements: the part of the run that the switches change

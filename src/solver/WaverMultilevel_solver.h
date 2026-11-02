@@ -77,6 +77,7 @@
 #include "../refinement/waver_smooth_refinement.h"
 #include "../refinement/waver_sa_refinement.h"
 #include "../refinement/waver_swap_refinement.h"
+#include "../refinement/waver_group_swap_refinement.h"
 #include "../distance_oracles/grid_distance_oracle.h"
 #include "../init_partitioning/waver_greedy_partitioner.h"
 
@@ -1970,10 +1971,21 @@ namespace HeiProMap {
 
             if (ac.waver_swap_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle,
-                                                 ac.waver_swap_refinement_config,
-                                                 ac.alpha_end(), ac.beta_end(),
-                                                 ac.alpha_link, ac.beta_link);
+                const WaverSwapRefinementConfiguration &swaps = ac.waver_swap_refinement_config;
+                // all PEs, then all sender groups, then all vertices; the swap of PEs leaves the boundary stale
+                if (swaps.max_pe_swaps > 0) {
+                    WaverSwapRefinement::swap_refine(graphs.back(), p_manager, d_oracle, swaps, ac.alpha_end(), ac.beta_end(),
+                                                     ac.alpha_link, ac.beta_link);
+                    if (swaps.max_group_swaps > 0 || swaps.max_vertex_swaps > 0) { recompute_datastructures(); }
+                }
+                if (swaps.max_group_swaps > 0) {
+                    WaverGroupSwapRefinement::refine_groups(graphs.back(), p_manager, bv_manager, d_oracle, swaps,
+                                                            ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                }
+                if (swaps.max_vertex_swaps > 0) {
+                    WaverGroupSwapRefinement::refine_vertices(graphs.back(), p_manager, bv_manager, d_oracle, swaps,
+                                                              ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                }
                 timings.swap_refine_ms += get_milli_seconds(sp_local, get_time_point());
                 print_step("swap");
             }

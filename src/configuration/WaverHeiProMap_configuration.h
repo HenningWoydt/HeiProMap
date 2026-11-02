@@ -202,7 +202,7 @@ namespace HeiProMap {
             {"--shift-refinement", "", "Multilevel mode: run the shift refinement, which places the blocks of a long message next to each other and shifts the blocks on the way by one cell (0/1).", "", "", false},
             {"--shift-rounds", "", "Maximum rounds of the shift refinement on one level.", "", "", false},
             {"--shift-messages", "", "Shift refinement: the number of longest messages worked on per round.", "", "", false},
-            {"--smooth-refinement", "", "Multilevel mode: run the smooth refinement, which moves single boundary vertices to lower the neighbor cells, regions and hops (0/1).", "", "", false},
+            {"--smooth-refinement", "", "Run the smooth refinement, which moves single boundary vertices to lower the neighbor cells, regions and hops (0/1).", "", "", false},
             {"--smooth-rounds", "", "Maximum sweeps of the smooth refinement on one level.", "", "", false},
             {"--smooth-hop-weight", "", "Smooth refinement: cost of one hop of one cut edge.", "", "", false},
             {"--smooth-verbose", "", "Print the statistics of every sweep of the smooth refinement (0/1).", "", "", false},
@@ -230,6 +230,9 @@ namespace HeiProMap {
             {"--busy-verbose", "", "Print the statistics of every round of the busy-PE refinement (0/1).", "", "", false},
             {"--swap-radius", "", "Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
             {"--swap-extended-neighborhood", "", "Also consider the neighborhoods of communication partners for swaps (0/1).", "", "", false},
+            {"--max-pe-swaps", "", "Swap refinement, first stage: the most swaps of the contents of two PEs (0: skip the stage; default: no limit).", "", "", false},
+            {"--max-group-swaps", "", "Swap refinement, second stage: the most swaps of a sender group of each of two PEs (0: skip the stage, the default).", "", "", false},
+            {"--max-vertex-swaps", "", "Swap refinement, third stage: the most swaps of a vertex of each of two PEs (0: skip the stage, the default).", "", "", false},
             {"--annealing-iterations", "", "Number of simulated annealing swap iterations on every level (0 = off).", "0", "", false},
             {"--annealing-radius", "", "Max swap radius of the simulated annealing.", "", "", false},
             {"--smash-rounds", "", "Multilevel mode: rounds of smash and repair on the finished mapping: the windows around the busiest PEs are placed again from scratch and the mapping is repaired; kept if the busiest PE gets less load (0: off).", "", "", false},
@@ -696,6 +699,14 @@ namespace HeiProMap {
             if (is_set("--swap-radius")) {
                 waver_swap_refinement_config.radius = std::stoull(get("--swap-radius"));
                 waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
+            }
+            if (is_set("--max-pe-swaps")) waver_swap_refinement_config.max_pe_swaps = std::stoull(get("--max-pe-swaps"));
+            if (is_set("--max-group-swaps")) waver_swap_refinement_config.max_group_swaps = std::stoull(get("--max-group-swaps"));
+            if (is_set("--max-vertex-swaps")) waver_swap_refinement_config.max_vertex_swaps = std::stoull(get("--max-vertex-swaps"));
+            // a stage asked for on the command line switches the swap refinement on
+            if (waver_swap_refinement_config.radius > 0 && (is_set("--max-pe-swaps") || is_set("--max-group-swaps") ||
+                                                              is_set("--max-vertex-swaps"))) {
+                waver_swap_refinement_config.enabled = true;
             }
             if (is_set("--swap-extended-neighborhood")) waver_swap_refinement_config.extended = std::stoull(get("--swap-extended-neighborhood")) != 0;
             if (is_set("--scatter-refinement")) waver_scatter_refinement_config.enabled = std::stoull(get("--scatter-refinement")) != 0;

@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -55,6 +56,12 @@ namespace HeiProMap {
 
         std::string name;
         bool enabled = false;
+        // The swaps are tried in three stages, each up to its maximum number of swaps (0: the stage is skipped): all PEs
+        // (the contents of two PEs are exchanged), then all sender groups (a group of each of two PEs), then all
+        // vertices (a vertex of each of two PEs).
+        u64 max_pe_swaps = std::numeric_limits<u64>::max();
+        u64 max_group_swaps = 0;
+        u64 max_vertex_swaps = 0;
         u64 radius = 1;          // neighborhood radius around a block (1 = direct neighbors)
         bool extended = false;   // also consider the neighborhoods of the block's communication partners
         u64 max_rounds = 100;    // rounds over all blocks; stops earlier once a round finds no improvement
@@ -174,10 +181,11 @@ namespace HeiProMap {
             size_t round = 0;
             std::vector<partition_t> nbrs;
             std::vector<bool> seen(k, false);
-            while (progress && round < max_rounds) {
+            while (progress && round < max_rounds && total_swaps < config.max_pe_swaps) {
                 progress = false;
                 size_t swaps = 0;
                 for (partition_t p = 0; p < k; ++p) {
+                    if (total_swaps + swaps >= config.max_pe_swaps) break;
                     if (blk_verts[p].empty()) continue;
 
                     get_candidates(p, nbrs, seen);
