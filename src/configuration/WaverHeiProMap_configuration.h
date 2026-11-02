@@ -254,6 +254,7 @@ namespace HeiProMap {
             {"--relax-min-n", "", "Relaxation: only on graphs with at least this many vertices.", "", "", false},
             {"--diffusion-rebalance", "", "Multilevel mode: before the rebalancer, move the excess weight of overloaded PEs along the grid by a diffusion flow, one hop at a time, taking the boundary vertices that fit the receiving PE best (0/1).", "", "", false},
             {"--dump-hierarchy", "", "Multilevel mode: write the cluster of every input vertex on every graph level to <prefix>_<level>.txt (level 1 is the first coarse graph).", "", "", false},
+            {"--dump-state", "", "Multilevel mode: write the graph, the partition and the parameters of every level to <prefix>_<call>.graph/.meta and <prefix>_<call>_<tag>.part, just before (pre_group) and after (post_group) the scatter, chain and split refinements.", "", "", false},
             {"--spectral-rotations", "", "Multilevel mode: turns of the two smoothest vectors tried in the spectral placement of the coarsest level, evenly over a quarter turn (1: no turn).", "", "", false},
             {"--global-split", "", "Multilevel mode: at every topology split also place the whole current graph spectrally onto the finer grid, and keep it if its message cost is lower than that of the local splits (0/1).", "", "", false},
             {"--terminal-propagation", "", "Multilevel mode: when a coarse PE is split, pull the placement of its vertices towards their neighbors in the neighboring cells (0/1).", "", "", false},
@@ -324,6 +325,7 @@ namespace HeiProMap {
         u64 relax_rounds = 0, relax_sweeps = 8, relax_min_n = 0; // multilevel: warm-started relaxation
         f64 relax_anchor = 0.5;
         bool diffusion_rebalance = false;  // multilevel: a diffusion flow on the grid moves the excess weight before the rebalancer
+        std::string dump_state;            // multilevel: prefix of the files the state before and after the group refinements is written to
         std::string dump_hierarchy;        // multilevel: prefix of the files the clusters of every level are written to
         u64 spectral_rotations = 1;        // multilevel: turns of the two smoothest vectors tried in the coarsest spectral placement
         bool global_split = false;         // multilevel: a global spectral placement competes with the local splits
@@ -787,6 +789,7 @@ namespace HeiProMap {
             if (is_set("--relax-min-n")) relax_min_n = std::stoull(get("--relax-min-n"));
             if (is_set("--diffusion-rebalance")) diffusion_rebalance = std::stoull(get("--diffusion-rebalance")) != 0;
             if (is_set("--dump-hierarchy")) dump_hierarchy = get("--dump-hierarchy");
+            if (is_set("--dump-state")) dump_state = get("--dump-state");
             if (is_set("--spectral-rotations")) spectral_rotations = std::stoull(get("--spectral-rotations"));
             if (is_set("--global-split")) global_split = std::stoull(get("--global-split")) != 0;
             if (is_set("--split-refine-passes")) split_refine_passes = std::stoull(get("--split-refine-passes"));

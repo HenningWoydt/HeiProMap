@@ -112,6 +112,7 @@ namespace HeiProMap {
         // The boundary matches the partition. Cleared whenever the partition changes without updating it (topology
         // uncoarsening, the refinements that relabel PEs).
         bool structures_fresh = false;
+        u64 refinement_calls = 0; // numbers the files of --dump-state
 
         // cell_fine_counts[d][c]: the number of finest PEs merged into cell c of the topology at depth d. The balance a
         // coarse cell may have is that of its finest PEs together, so its limits are sums over these.
@@ -1425,6 +1426,34 @@ namespace HeiProMap {
             for (const vertex_t c: cluster) { out << p_manager[c] << "\n"; }
         }
 
+        // Writes the graph, the partition and the parameters of the current level for a prototype outside the solver:
+        // <prefix>_<call>.graph (METIS, vertex and edge weights), <prefix>_<call>.meta (the grid, the cost model, the weight
+        // limits of the cells; the message cost of every dump is appended) and <prefix>_<call>_<tag>.part (the cell of every
+        // vertex). The graph and the meta data are written with the first dump of a call.
+        void dump_state(const std::string &tag) const {
+            if (ac.dump_state.empty()) { return; }
+            const graph_t &g = graphs.back();
+            const std::string base = ac.dump_state + "_" + std::to_string(refinement_calls);
+            const bool first = tag == "pre_group";
+            if (first) {
+                g.write_graph(base + ".graph");
+                std::ofstream meta(base + ".meta");
+                meta << std::setprecision(17) << "n " << g.n << "\nk " << ac.k << "\nW " << d_oracle.current_W()
+                     << "\nalpha_end " << ac.alpha_end() << "\nbeta_end " << ac.beta_end() << "\nalpha_link " << ac.alpha_link
+                     << "\nbeta_link " << ac.beta_link << "\nlmin";
+                for (partition_t c = 0; c < ac.k; ++c) { meta << " " << p_manager.get_lmin(c); }
+                meta << "\nlmax";
+                for (partition_t c = 0; c < ac.k; ++c) { meta << " " << p_manager.get_lmax(c); }
+                meta << std::endl;
+            }
+            std::ofstream part(base + "_" + tag + ".part");
+            for (vertex_t u = 0; u < g.n; ++u) { part << p_manager[u] << "\n"; }
+            std::ofstream meta(base + ".meta", std::ios::app);
+            meta << std::setprecision(17) << "cost_" << tag << " "
+                 << SpectralTracker::message_cost(g, p_manager.partition, d_oracle, ac.alpha_end(), ac.beta_end(),
+                                                  ac.alpha_link, ac.beta_link) << std::endl;
+        }
+
         // Writes, for every graph level, the cluster (vertex of that level) of every input vertex, one file per level.
         void dump_hierarchy() const {
             std::vector<vertex_t> cluster(mappings.empty() ? 0 : mappings.front().get_old_n());
@@ -1843,6 +1872,7 @@ namespace HeiProMap {
         // All refinements, in order. Each is switched on by its configuration. Simulated annealing swaps whole PEs.
         void refinement() {
             auto p = get_time_point();
+            ++refinement_calls;
             print_step("start");
             if (ac.relax_rounds > 0 && d_oracle.depth() == 0 && graphs.back().n >= ac.relax_min_n) {
                 relax_refine();
@@ -1865,6 +1895,7 @@ namespace HeiProMap {
 
             if (ac.waver_scatter_refinement_config.enabled || ac.waver_chain_refinement_config.enabled
                 || ac.waver_split_refinement_config.enabled) {
+                dump_state("pre_group");
                 auto sp_local = get_time_point();
                 auto scatter_cfg = ac.waver_scatter_refinement_config;
                 auto chain_cfg = ac.waver_chain_refinement_config;
@@ -1898,6 +1929,7 @@ namespace HeiProMap {
                                                    ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 }
                 timings.group_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                dump_state("post_group");
                 print_step("group moves");
             }
 
