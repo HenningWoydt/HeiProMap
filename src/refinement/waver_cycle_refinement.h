@@ -11,7 +11,7 @@
 #include <iostream>
 #include <vector>
 
-#include "waver_merge_refinement.h"
+#include "waver_group_moves.h"
 
 namespace HeiProMap {
     // Hyperparameters of the cycle refinement.
@@ -41,7 +41,7 @@ namespace HeiProMap {
         using graph_t = CSRGraph;
         using p_manager_t = PartitionManager;
         using bv_manager_t = BoundaryVertexManager;
-        using Base = WaverMergeRefinement;
+        using Base = WaverGroupMoves;
 
         template<typename DistanceOracleT>
         class CycleEngine : public Base::Engine<DistanceOracleT> {
@@ -54,7 +54,7 @@ namespace HeiProMap {
             CycleEngine(graph_t &t_g, p_manager_t &t_pm, bv_manager_t &t_bv, const DistanceOracleT &t_oracle,
                         const WaverCycleRefinementConfiguration &t_cycle,
                         const f64 t_alpha_end, const f64 t_beta_end, const f64 t_alpha_link, const f64 t_beta_link)
-                : E(t_g, t_pm, t_bv, t_oracle, unused_config(), t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
+                : E(t_g, t_pm, t_bv, t_oracle, t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
                   cycle(t_cycle) {}
 
             void run() {
@@ -99,10 +99,6 @@ namespace HeiProMap {
         private:
             const WaverCycleRefinementConfiguration &cycle;
 
-            static const WaverMergeRefinementConfiguration &unused_config() {
-                static const WaverMergeRefinementConfiguration c("unused");
-                return c;
-            }
 
             // The best move of a group of `from` with edges to e: its target, delta and group. A move to `home`
             // (closing the cycle) needs room in home; a move to another block is only allowed if that block is not yet

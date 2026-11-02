@@ -15,7 +15,7 @@
 #include <iostream>
 #include <vector>
 
-#include "waver_merge_refinement.h"
+#include "waver_group_moves.h"
 #include "waver_region_load.h"
 
 namespace HeiProMap {
@@ -53,12 +53,12 @@ namespace HeiProMap {
         using graph_t = CSRGraph;
         using p_manager_t = PartitionManager;
         using bv_manager_t = BoundaryVertexManager;
-        using Base = WaverMergeRefinement;
+        using Base = WaverGroupMoves;
 
         template<typename DistanceOracleT>
         class BusyEngine : public Base::Engine<DistanceOracleT> {
             using E = Base::Engine<DistanceOracleT>;
-            using E::g; using E::pm; using E::bv; using E::cfg; using E::k; using E::quotient;
+            using E::g; using E::pm; using E::bv; using E::k; using E::quotient;
             using E::alpha_end; using E::beta_end;
             using E::collect_group; using E::measure; using E::apply; using E::undo; using E::targets_of;
             using E::locked; using E::eject;
@@ -67,7 +67,7 @@ namespace HeiProMap {
             BusyEngine(graph_t &t_g, p_manager_t &t_pm, bv_manager_t &t_bv, const DistanceOracleT &t_oracle,
                        const WaverBusyRefinementConfiguration &t_busy,
                        const f64 t_alpha_end, const f64 t_beta_end, const f64 t_alpha_link, const f64 t_beta_link)
-                : E(t_g, t_pm, t_bv, t_oracle, unused_config(), t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
+                : E(t_g, t_pm, t_bv, t_oracle, t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
                   busy(t_busy) {
                 if (busy.exact) { tracker.initialize(t_g, t_pm, this->k, busy.costs); }
             }
@@ -114,10 +114,6 @@ namespace HeiProMap {
             WaverRegionLoad tracker;
             std::vector<char> in_set_mark;
 
-            static const WaverMergeRefinementConfiguration &unused_config() {
-                static const WaverMergeRefinementConfiguration c("unused");
-                return c;
-            }
 
             f64 load(const partition_t x) {
                 if (busy.exact) { return tracker.load(x, quotient.neighbors(x).size()); }

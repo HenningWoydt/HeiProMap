@@ -67,7 +67,9 @@
 #include "../uncoarsening/topology_uncoarsener.h"
 #include "../refinement/waver_message_refinement.h"
 #include "../refinement/waver_long_message_refinement.h"
-#include "../refinement/waver_merge_refinement.h"
+#include "../refinement/waver_scatter_refinement.h"
+#include "../refinement/waver_chain_refinement.h"
+#include "../refinement/waver_split_refinement.h"
 #include "../refinement/waver_busy_refinement.h"
 #include "../refinement/waver_cycle_refinement.h"
 #include "../refinement/waver_crowd_refinement.h"
@@ -1861,30 +1863,42 @@ namespace HeiProMap {
                 print_step("msg");
             }
 
-            if (ac.waver_merge_refinement_config.enabled) {
+            if (ac.waver_scatter_refinement_config.enabled || ac.waver_chain_refinement_config.enabled
+                || ac.waver_split_refinement_config.enabled) {
                 auto sp_local = get_time_point();
-                // After the message refinement: scatter, then chains, then scatter again (chains free room again).
-                // With --merge-scatter 1 only the scatter pass runs.
-                auto chain_cfg = ac.waver_merge_refinement_config;
+                auto scatter_cfg = ac.waver_scatter_refinement_config;
+                auto chain_cfg = ac.waver_chain_refinement_config;
+                auto split_cfg = ac.waver_split_refinement_config;
                 if (ac.intense_max_n > 0 && d_oracle.depth() == 0 && graphs.back().n <= ac.intense_max_n) {
+                    scatter_cfg.max_rounds = ac.intense_rounds;
                     chain_cfg.max_depth = ac.intense_depth;
                     chain_cfg.max_rounds = ac.intense_rounds;
                     chain_cfg.partial = ac.intense_partial;
-                    chain_cfg.split_parts = ac.intense_split;
+                    split_cfg.parts = ac.intense_split;
+                    split_cfg.enabled = ac.intense_split >= 2;
+                    split_cfg.max_depth = ac.intense_depth;
+                    split_cfg.max_rounds = ac.intense_rounds;
+                    split_cfg.partial = ac.intense_partial;
                 }
-                auto scatter_cfg = chain_cfg;
-                scatter_cfg.scatter = true;
-                const bool chains = !chain_cfg.scatter;
-                WaverMergeRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, scatter_cfg,
-                                             ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                if (chains) {
-                    WaverMergeRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, chain_cfg,
-                                                 ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
-                    WaverMergeRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, scatter_cfg,
+                // After the message refinement: scatter, then chains and splits, then scatter again (they free room again).
+                if (scatter_cfg.enabled) {
+                    WaverScatterRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, scatter_cfg,
+                                                   ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                }
+                if (chain_cfg.enabled) {
+                    WaverChainRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, chain_cfg,
                                                  ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
                 }
-                timings.merge_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                print_step("merge");
+                if (split_cfg.enabled) {
+                    WaverSplitRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, split_cfg,
+                                                 ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                }
+                if (scatter_cfg.enabled && (chain_cfg.enabled || split_cfg.enabled)) {
+                    WaverScatterRefinement::refine(graphs.back(), p_manager, bv_manager, d_oracle, scatter_cfg,
+                                                   ac.alpha_end(), ac.beta_end(), ac.alpha_link, ac.beta_link);
+                }
+                timings.group_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                print_step("group moves");
             }
 
             if (ac.waver_smooth_refinement_config.enabled) {

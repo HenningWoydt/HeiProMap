@@ -55,7 +55,7 @@ namespace HeiProMap {
         f64 msg_refine_ms = 0.0;
         f64 swap_refine_ms = 0.0;
         f64 long_msg_refine_ms = 0.0;
-        f64 merge_refine_ms = 0.0;
+        f64 group_refine_ms = 0.0;
         f64 busy_refine_ms = 0.0;
         f64 crowd_refine_ms = 0.0;
         f64 shift_refine_ms = 0.0;
@@ -153,7 +153,7 @@ namespace HeiProMap {
         time_row("  Msg Refinement", t.msg_refine_ms);
         time_row("  Swap", t.swap_refine_ms);
         time_row("  Long Msg", t.long_msg_refine_ms);
-        time_row("  Merge", t.merge_refine_ms);
+        time_row("  Scatter/Chain/Split", t.group_refine_ms);
         time_row("  Cycle", t.cycle_refine_ms);
         time_row("  Busy", t.busy_refine_ms);
         time_row("  Crowd", t.crowd_refine_ms);

@@ -38,7 +38,9 @@
 #include "../coarsening/heavy_edge_matching.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../refinement/waver_long_message_refinement.h"
-#include "../refinement/waver_merge_refinement.h"
+#include "../refinement/waver_chain_refinement.h"
+#include "../refinement/waver_scatter_refinement.h"
+#include "../refinement/waver_split_refinement.h"
 #include "../refinement/waver_busy_refinement.h"
 #include "../refinement/waver_corner_refinement.h"
 #include "../refinement/waver_cycle_refinement.h"
@@ -183,13 +185,20 @@ namespace HeiProMap {
             {"--message-refinement", "", "Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
             {"--message-refinement-iterations", "", "Maximum iterations of the message-group refinement on one level.", "", "", false},
             {"--long-message-padding", "", "Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
-            {"--merge-refinement", "", "Multilevel mode: run the merge refinement, which moves a sender group into a block without room for it and passes the overload on along a chain of moves (0/1).", "", "", false},
-            {"--merge-depth", "", "Maximum number of moves in one chain of the merge refinement.", "", "", false},
-            {"--merge-round-gain", "", "Merge refinement: stop when a round gains less than this share of the gain of the first round (0: off).", "", "", false},
-            {"--merge-rounds", "", "Maximum rounds of the merge refinement on one level.", "", "", false},
-            {"--merge-partial", "", "Merge refinement: an overloaded block may also give up only part of a sender group, the vertices tied most closely to the receiving block (0/1).", "", "", false},
-            {"--merge-split", "", "Merge refinement: a sender group may also be split among up to this many blocks, each vertex going to the block it has the most edge weight to (below 2: never).", "", "", false},
-            {"--merge-scatter", "", "Merge refinement without chains: the sender group is spread over the receiver and all its neighbors, within their room, and no block is overloaded (0/1).", "", "", false},
+            {"--scatter-refinement", "", "Multilevel mode: run the scatter refinement, which spreads a sender group over the receiver and its neighbors, within their room, so that no block is overloaded (0/1).", "", "", false},
+            {"--scatter-rounds", "", "Maximum rounds of the scatter refinement on one level.", "", "", false},
+            {"--scatter-verbose", "", "Print the statistics of every round of the scatter refinement (0/1).", "", "", false},
+            {"--chain-refinement", "", "Multilevel mode: run the chain refinement, which moves a sender group into a block without room for it and passes the overload on along a chain of moves (0/1).", "", "", false},
+            {"--chain-depth", "", "Maximum number of moves in one chain of the chain refinement.", "", "", false},
+            {"--chain-rounds", "", "Maximum rounds of the chain refinement on one level.", "", "", false},
+            {"--chain-round-gain", "", "Chain refinement: stop when a round gains less than this share of the gain of the first round (0: off).", "", "", false},
+            {"--chain-partial", "", "Chain refinement: an overloaded block may also give up only part of a sender group, the vertices tied most closely to the receiving block (0/1).", "", "", false},
+            {"--chain-verbose", "", "Print the statistics of every round of the chain refinement (0/1).", "", "", false},
+            {"--group-split-parts", "", "Multilevel mode: run the split refinement, which splits a sender group among up to this many blocks, each vertex going to the block it has the most edge weight to (below 2: off).", "", "", false},
+            {"--group-split-depth", "", "Maximum number of moves that pass the load of overloaded blocks on in the split refinement.", "", "", false},
+            {"--group-split-rounds", "", "Maximum rounds of the split refinement on one level.", "", "", false},
+            {"--group-split-partial", "", "Split refinement: an overloaded block may also give up only part of a sender group (0/1).", "", "", false},
+            {"--group-split-verbose", "", "Print the statistics of every round of the split refinement (0/1).", "", "", false},
             {"--shift-refinement", "", "Multilevel mode: run the shift refinement, which places the blocks of a long message next to each other and shifts the blocks on the way by one cell (0/1).", "", "", false},
             {"--shift-rounds", "", "Maximum rounds of the shift refinement on one level.", "", "", false},
             {"--shift-messages", "", "Shift refinement: the number of longest messages worked on per round.", "", "", false},
@@ -219,7 +228,6 @@ namespace HeiProMap {
             {"--busy-chain", "", "Busy-PE refinement (exact load): a sender group may also move to a block without room if that block gives a group back (0/1).", "", "", false},
             {"--busy-wide", "", "Busy-PE refinement: a sender group may also move to any block it has edges to, which can end the message to its receiver (0/1).", "", "", false},
             {"--busy-verbose", "", "Print the statistics of every round of the busy-PE refinement (0/1).", "", "", false},
-            {"--merge-verbose", "", "Print the statistics of every round of the merge refinement (0/1).", "", "", false},
             {"--swap-radius", "", "Neighborhood radius of the swap refinement (1 = direct neighbors, 0 = off).", "", "", false},
             {"--swap-extended-neighborhood", "", "Also consider the neighborhoods of communication partners for swaps (0/1).", "", "", false},
             {"--annealing-iterations", "", "Number of simulated annealing swap iterations on every level (0 = off).", "0", "", false},
@@ -231,11 +239,11 @@ namespace HeiProMap {
             {"--rebalance-nearest", "", "Rebalancer: a vertex of an overloaded block whose neighbors have no room goes to the nearest block with room instead of the first one by id (0/1).", "0", "", false},
             {"--level-stats", "", "Multilevel mode: print metrics of the mapping on every level, after the level change and after the refinement (0/1).", "", "", false},
             {"--diffusion-equalize", "", "Multilevel mode: after a level change also pull vertices from above-average into below-average PEs, without regard to the boundary (0/1, default 1).", "", "", false},
-            {"--intense-max-n", "", "Multilevel mode: on the finest topology, graphs up to this many vertices use the --intense-* merge settings (0: off).", "", "", false},
-            {"--intense-depth", "", "Merge depth on the intense levels.", "", "", false},
-            {"--intense-rounds", "", "Merge rounds on the intense levels.", "", "", false},
+            {"--intense-max-n", "", "Multilevel mode: on the finest topology, graphs up to this many vertices use the --intense-* settings of the scatter, chain and split refinements (0: off).", "", "", false},
+            {"--intense-depth", "", "Chain and split depth on the intense levels.", "", "", false},
+            {"--intense-rounds", "", "Scatter, chain and split rounds on the intense levels.", "", "", false},
             {"--intense-partial", "", "Partial moves on the intense levels (0/1).", "", "", false},
-            {"--intense-split", "", "Merge split parts on the intense levels.", "", "", false},
+            {"--intense-split", "", "Split parts on the intense levels (below 2: no split).", "", "", false},
             {"--window-rounds", "", "Multilevel mode: rounds of the window re-embedding on every level of the finest topology (0: off).", "", "", false},
             {"--window-size", "", "Window re-embedding: cells per side of a window.", "", "", false},
             {"--window-min-n", "", "Window re-embedding: only on graphs with at least this many vertices.", "", "", false},
@@ -342,7 +350,9 @@ namespace HeiProMap {
         WaverCrowdRefinementConfiguration       waver_crowd_refinement_config       = WaverCrowdRefinementConfiguration("Waver Crowd Refinement");
         WaverCycleRefinementConfiguration       waver_cycle_refinement_config       = WaverCycleRefinementConfiguration("Waver Cycle Refinement");
         WaverBusyRefinementConfiguration        waver_busy_refinement_config        = WaverBusyRefinementConfiguration("Waver Busy Refinement");
-        WaverMergeRefinementConfiguration       waver_merge_refinement_config       = WaverMergeRefinementConfiguration("Waver Merge Refinement");
+        WaverScatterRefinementConfiguration     waver_scatter_refinement_config     = WaverScatterRefinementConfiguration("Waver Scatter Refinement");
+        WaverChainRefinementConfiguration       waver_chain_refinement_config       = WaverChainRefinementConfiguration("Waver Chain Refinement");
+        WaverSplitRefinementConfiguration       waver_split_refinement_config       = WaverSplitRefinementConfiguration("Waver Split Refinement");
         WaverSARefinementConfiguration          waver_sa_refinement_config          = WaverSARefinementConfiguration("Waver Simulated Annealing");
 
         WaverHeiProMapConfiguration() = default;
@@ -490,8 +500,9 @@ namespace HeiProMap {
             waver_message_refinement_config.enabled = true;
             waver_message_refinement_config.max_iters = 1;
 
-            waver_merge_refinement_config.enabled = true;
-            waver_merge_refinement_config.max_depth = 2;
+            waver_scatter_refinement_config.enabled = true;
+            waver_chain_refinement_config.enabled = true;
+            waver_chain_refinement_config.max_depth = 2;
 
             waver_long_message_refinement_config.enabled = false;
             waver_long_message_refinement_config.padding = 2;
@@ -547,9 +558,11 @@ namespace HeiProMap {
             waver_message_refinement_config.enabled = true;
             waver_message_refinement_config.max_iters = 20;
 
-            waver_merge_refinement_config.enabled = true;
-            waver_merge_refinement_config.max_depth = 2;
-            waver_merge_refinement_config.max_rounds = 2;  // the third round gains under 10% of the first: 13% less time, same makespan
+            waver_scatter_refinement_config.enabled = true;
+            waver_scatter_refinement_config.max_rounds = 2;
+            waver_chain_refinement_config.enabled = true;
+            waver_chain_refinement_config.max_depth = 2;
+            waver_chain_refinement_config.max_rounds = 2;  // the third round gains under 10% of the first: 13% less time, same makespan
             waver_busy_refinement_config.enabled = true;
             waver_busy_refinement_config.max_rounds = 20;
             waver_busy_refinement_config.top_fraction = 0.5;
@@ -675,12 +688,23 @@ namespace HeiProMap {
                 waver_swap_refinement_config.enabled = waver_swap_refinement_config.radius > 0;
             }
             if (is_set("--swap-extended-neighborhood")) waver_swap_refinement_config.extended = std::stoull(get("--swap-extended-neighborhood")) != 0;
-            if (is_set("--merge-refinement")) waver_merge_refinement_config.enabled = std::stoull(get("--merge-refinement")) != 0;
-            if (is_set("--merge-depth")) waver_merge_refinement_config.max_depth = std::stoull(get("--merge-depth"));
-            if (is_set("--merge-rounds")) waver_merge_refinement_config.max_rounds = std::stoull(get("--merge-rounds"));
-            if (is_set("--merge-partial")) waver_merge_refinement_config.partial = std::stoull(get("--merge-partial")) != 0;
-            if (is_set("--merge-split")) waver_merge_refinement_config.split_parts = std::stoull(get("--merge-split"));
-            if (is_set("--merge-scatter")) waver_merge_refinement_config.scatter = std::stoull(get("--merge-scatter")) != 0;
+            if (is_set("--scatter-refinement")) waver_scatter_refinement_config.enabled = std::stoull(get("--scatter-refinement")) != 0;
+            if (is_set("--scatter-rounds")) waver_scatter_refinement_config.max_rounds = std::stoull(get("--scatter-rounds"));
+            if (is_set("--scatter-verbose")) waver_scatter_refinement_config.verbose = std::stoull(get("--scatter-verbose")) != 0;
+            if (is_set("--chain-refinement")) waver_chain_refinement_config.enabled = std::stoull(get("--chain-refinement")) != 0;
+            if (is_set("--chain-depth")) waver_chain_refinement_config.max_depth = std::stoull(get("--chain-depth"));
+            if (is_set("--chain-rounds")) waver_chain_refinement_config.max_rounds = std::stoull(get("--chain-rounds"));
+            if (is_set("--chain-round-gain")) waver_chain_refinement_config.min_round_gain = std::stod(get("--chain-round-gain"));
+            if (is_set("--chain-partial")) waver_chain_refinement_config.partial = std::stoull(get("--chain-partial")) != 0;
+            if (is_set("--chain-verbose")) waver_chain_refinement_config.verbose = std::stoull(get("--chain-verbose")) != 0;
+            if (is_set("--group-split-parts")) {
+                waver_split_refinement_config.parts = std::stoull(get("--group-split-parts"));
+                waver_split_refinement_config.enabled = waver_split_refinement_config.parts >= 2;
+            }
+            if (is_set("--group-split-depth")) waver_split_refinement_config.max_depth = std::stoull(get("--group-split-depth"));
+            if (is_set("--group-split-rounds")) waver_split_refinement_config.max_rounds = std::stoull(get("--group-split-rounds"));
+            if (is_set("--group-split-partial")) waver_split_refinement_config.partial = std::stoull(get("--group-split-partial")) != 0;
+            if (is_set("--group-split-verbose")) waver_split_refinement_config.verbose = std::stoull(get("--group-split-verbose")) != 0;
             if (is_set("--smooth-refinement")) waver_smooth_refinement_config.enabled = std::stoull(get("--smooth-refinement")) != 0;
             if (is_set("--smooth-rounds")) waver_smooth_refinement_config.max_rounds = std::stoull(get("--smooth-rounds"));
             if (is_set("--smooth-hop-weight")) waver_smooth_refinement_config.hop_weight = std::stod(get("--smooth-hop-weight"));
@@ -706,7 +730,6 @@ namespace HeiProMap {
             if (is_set("--busy-beta")) waver_busy_refinement_config.beta = std::stod(get("--busy-beta"));
             if (is_set("--busy-exact")) waver_busy_refinement_config.exact = std::stoull(get("--busy-exact")) != 0;
             if (is_set("--busy-patience")) waver_busy_refinement_config.patience = std::stoull(get("--busy-patience"));
-            if (is_set("--merge-round-gain")) waver_merge_refinement_config.min_round_gain = std::stod(get("--merge-round-gain"));
             if (is_set("--busy-tries")) waver_busy_refinement_config.max_tries = std::stoull(get("--busy-tries"));
             if (is_set("--corner-rounds")) {
                 waver_corner_refinement_config.max_rounds = std::stoull(get("--corner-rounds"));
@@ -722,7 +745,6 @@ namespace HeiProMap {
             if (is_set("--busy-chain")) waver_busy_refinement_config.chain = std::stoull(get("--busy-chain")) != 0;
             if (is_set("--busy-wide")) waver_busy_refinement_config.wide = std::stoull(get("--busy-wide")) != 0;
             if (is_set("--busy-verbose")) waver_busy_refinement_config.verbose = std::stoull(get("--busy-verbose")) != 0;
-            if (is_set("--merge-verbose")) waver_merge_refinement_config.verbose = std::stoull(get("--merge-verbose")) != 0;
             if (is_set("--long-message-padding")) {
                 waver_long_message_refinement_config.padding = std::stoull(get("--long-message-padding"));
                 waver_long_message_refinement_config.enabled = waver_long_message_refinement_config.padding > 0;

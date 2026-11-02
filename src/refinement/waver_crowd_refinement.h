@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-#include "waver_merge_refinement.h"
+#include "waver_group_moves.h"
 
 namespace HeiProMap {
     // Hyperparameters of the crowd refinement.
@@ -46,7 +46,7 @@ namespace HeiProMap {
         using graph_t = CSRGraph;
         using p_manager_t = PartitionManager;
         using bv_manager_t = BoundaryVertexManager;
-        using Base = WaverMergeRefinement;
+        using Base = WaverGroupMoves;
 
         template<typename DistanceOracleT>
         class CrowdEngine : public Base::Engine<DistanceOracleT> {
@@ -63,7 +63,7 @@ namespace HeiProMap {
             CrowdEngine(graph_t &t_g, p_manager_t &t_pm, bv_manager_t &t_bv, const DistanceOracleT &t_oracle,
                         const WaverCrowdRefinementConfiguration &t_crowd,
                         const f64 t_alpha_end, const f64 t_beta_end, const f64 t_alpha_link, const f64 t_beta_link)
-                : E(t_g, t_pm, t_bv, t_oracle, unused_config(), t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
+                : E(t_g, t_pm, t_bv, t_oracle, t_alpha_end, t_beta_end, t_alpha_link, t_beta_link),
                   crowd(t_crowd) {
                 W = static_cast<int64_t>(t_oracle.current_W());
                 H = (static_cast<int64_t>(this->k) + W - 1) / W;
@@ -134,10 +134,6 @@ namespace HeiProMap {
             std::vector<int64_t> cover;
             size_t degree_cap = 0;
 
-            static const WaverMergeRefinementConfiguration &unused_config() {
-                static const WaverMergeRefinementConfiguration c("unused");
-                return c;
-            }
 
             struct Box {
                 int64_t x0, x1, y0, y1;
