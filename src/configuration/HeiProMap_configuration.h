@@ -158,10 +158,10 @@ namespace HeiProMap {
     inline EdgeRatingFunction string_to_edge_rating_function(const std::string &str) {
         if (str == "weight") return EdgeRatingFunction::WEIGHT;
         if (str == "expansion") return EdgeRatingFunction::EXPANSION;
-        if (str == "expansion*") return EdgeRatingFunction::EXPANSIONSTAR;
-        if (str == "expansion**") return EdgeRatingFunction::EXPANSIONSTARSTAR;
+        if (str == "expansionstar") return EdgeRatingFunction::EXPANSIONSTAR;
+        if (str == "expansionstarstar") return EdgeRatingFunction::EXPANSIONSTARSTAR;
         if (str == "innerouter") return EdgeRatingFunction::INNEROUTER;
-        std::cout << "Error: Invalid rating function '" << str << "'. Allowed values: weight, expansion, expansion*, expansion**, innerouter" << std::endl;
+        std::cout << "Error: Invalid rating function '" << str << "'. Allowed values: weight, expansion, expansionstar, expansionstarstar, innerouter" << std::endl;
         exit(EXIT_FAILURE);
     }
 }
@@ -209,7 +209,7 @@ namespace HeiProMap {
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
 
             // Global Path Algorithm (GPA) Coarsening
-            {"--gpa-coarsening-rating-function", "", "GPA rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--gpa-coarsening-rating-function", "", "GPA rating function (weight, expansion, expansionstar, expansionstarstar, innerouter).", "", "", false},
             {"--gpa-coarsening-random-level", "", "GPA random level.", "", "", false},
             {"--gpa-coarsening-edge-rating-tiebreaking", "", "GPA use edge rating tiebreaking (true/false).", "", "", false},
             {"--gpa-coarsening-two-hop-threshold", "", "GPA two-hop threshold.", "", "", false},
@@ -218,12 +218,12 @@ namespace HeiProMap {
             {"--sclp-coarsening-max-rounds", "", "SCLP max rounds.", "", "", false},
             {"--sclp-coarsening-min-threshold", "", "SCLP min threshold.", "", "", false},
             {"--sclp-coarsening-f", "", "SCLP tuning parameter f.", "8.0", "", false},
-            {"--sclp-coarsening-rating-function", "", "SCLP rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--sclp-coarsening-rating-function", "", "SCLP rating function (weight, expansion, expansionstar, expansionstarstar, innerouter).", "", "", false},
             {"--sclp-coarsening-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
             {"--sclp-coarsening-use-parallel-version", "", "SCLP use parallel version (true/false).", "", "", false},
 
             // Heavy Edge Matching (HEM) Coarsening
-            {"--hem-coarsening-rating-function", "", "HEM rating function (weight, expansion, expansion*, expansion**, innerouter).", "", "", false},
+            {"--hem-coarsening-rating-function", "", "HEM rating function (weight, expansion, expansionstar, expansionstarstar, innerouter).", "", "", false},
 
             // Label Propagation (LP) Refinement
             {"--lp-refinement-enabled", "", "Enable label propagation refinement (true/false).", "", "", false},
