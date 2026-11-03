@@ -170,6 +170,10 @@ namespace HeiProMap {
 #include "../init_partitioning/global_multisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
+#include "../refinement/flow_based_refinement.h"
+#include "../refinement/simple_label_propagation_refinement.h"
+#include "../refinement/simple_quotient_graph_refinement.h"
+#include "../refinement/simple_flow_based_refinement.h"
 #include "../coarsening/global_path_algorithm.h"
 #include "../coarsening/size_constrained_lp.h"
 #include "../coarsening/heavy_edge_matching.h"
@@ -204,6 +208,9 @@ namespace HeiProMap {
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
             {"--initial-c", "", "Initial contracting limit.", "64", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
+            {"--simple-accept-zero-gain", "", "With the simple refiners: the simple flow refinement applies zero-gain cuts like the regular one (true/false).", "true", "", false},
+            {"--force-parallel-suite", "", "Always use the parallel suite (simple refiners without quotient graph / block connectivity, parallel LP, parallel contraction), even with 1 thread (true/false). It is enabled automatically when threads > 1.", "false", "", false},
+            {"--simple-refinement", "", "Explicitly enable/disable only the simple refiners (true/false). Default: follows the parallel suite.", "", "", false},
 
             // Coarsening options
             {"--coarsening", "", "Coarsening algorithm (global-paths, size-constrained-lp, heavy-edge).", "", "", false},
@@ -288,6 +295,12 @@ namespace HeiProMap {
 
         u64 initial_c = 64;
         bool use_parallel_contraction = false;
+
+        // if true: no quotient graph / block connectivity datastructures, simple refiners are used
+        // parallel suite: automatically enabled when threads > 1 (or forced with --force-parallel-suite)
+        bool parallel_suite = false;
+        bool simple_refinement = false;
+        bool simple_accept_zero_gain = true;
 
         std::string config_name = "undefined";
 
@@ -424,6 +437,21 @@ namespace HeiProMap {
             set_threads();
             set_hm_level();
 
+            parallel_suite = (threads > 1);
+            if (is_set("--force-parallel-suite")) {
+                const std::string val = get("--force-parallel-suite");
+                parallel_suite = parallel_suite || (val == "true" || val == "1" || val == "yes");
+            }
+            simple_refinement = parallel_suite;
+            if (is_set("--simple-refinement")) {
+                const std::string val = get("--simple-refinement");
+                simple_refinement = (val == "true" || val == "1" || val == "yes");
+            }
+            if (is_set("--simple-accept-zero-gain")) {
+                const std::string val = get("--simple-accept-zero-gain");
+                simple_accept_zero_gain = (val == "true" || val == "1" || val == "yes");
+            }
+
             if (!is_set("--config")) {
                 std::cout << "Error: --config (or -c) must be specified." << std::endl;
                 exit(EXIT_FAILURE);
@@ -462,13 +490,13 @@ namespace HeiProMap {
                 initial_c = std::stoull(get("--initial-c"));
             }
 
-            use_parallel_contraction = (threads > 1);
+            use_parallel_contraction = parallel_suite;
             if (is_set("--use-parallel-contraction")) {
                 std::string val = get("--use-parallel-contraction");
                 use_parallel_contraction = (val == "true" || val == "1");
             }
 
-            label_propagation_config.force_parallel_alg = (threads > 1);
+            label_propagation_config.force_parallel_alg = parallel_suite;
             if (is_set("--lp-refinement-enabled")) {
                 std::string val = get("--lp-refinement-enabled");
                 label_propagation_config.enabled = (val == "true" || val == "1");
@@ -538,7 +566,7 @@ namespace HeiProMap {
                 global_path_algorithm_config.two_hop_threshold = std::stod(get("--gpa-coarsening-two-hop-threshold"));
             }
 
-            size_constrained_lp_config.force_parallel_alg = (threads > 1);
+            size_constrained_lp_config.force_parallel_alg = parallel_suite;
 
             // Override SCLP configs
             if (is_set("--sclp-coarsening-max-rounds")) {
@@ -859,6 +887,46 @@ namespace HeiProMap {
 
         void set_super_strong_parallel() {
             set_super_strong();
+        }
+
+        /**
+         * Simple refiner configurations, derived from the regular refinement
+         * configurations. Only meaningful if simple_refinement is set.
+         */
+        SimpleLabelPropagationConfiguration get_simple_label_propagation_config() const {
+            SimpleLabelPropagationConfiguration c("Simple Label Propagation");
+            c.enabled = label_propagation_config.enabled;
+            c.max_iteration = label_propagation_config.max_iteration;
+            c.force_parallel_alg = label_propagation_config.force_parallel_alg;
+            c.use_edge_cut = label_propagation_config.use_edge_cut;
+            return c;
+        }
+
+        SimpleQuotientGraphRefinementConfiguration get_simple_qg_refinement_config() const {
+            SimpleQuotientGraphRefinementConfiguration c("Simple Quotient Graph");
+            c.enabled = quotient_graph_refinement_config.enabled;
+            c.max_iteration = quotient_graph_refinement_config.max_iteration;
+            c.min_n_steps = quotient_graph_refinement_config.min_n_steps;
+            c.alpha = quotient_graph_refinement_config.alpha;
+            c.use_preemptive_exit = quotient_graph_refinement_config.use_preemptive_exit;
+            c.use_edge_cut = quotient_graph_refinement_config.use_edge_cut;
+            return c;
+        }
+
+        SimpleFlowBasedRefinementConfiguration get_simple_flow_based_refinement_config() const {
+            SimpleFlowBasedRefinementConfiguration c("Simple Flow Based");
+            c.enabled = flow_based_refinement_config.enabled;
+            c.max_global_iteration = flow_based_refinement_config.max_global_iteration;
+            c.max_local_iteration = flow_based_refinement_config.max_local_iteration;
+            c.alpha = flow_based_refinement_config.alpha;
+            c.alpha_upper_bound = flow_based_refinement_config.alpha_upper_bound;
+            c.alpha_modifier = flow_based_refinement_config.alpha_modifier;
+            c.use_closed_vertex_set = flow_based_refinement_config.use_closed_vertex_set;
+            c.closed_vertex_sets_repeats = flow_based_refinement_config.closed_vertex_sets_repeats;
+            c.use_edge_cut = flow_based_refinement_config.use_edge_cut;
+            c.always_include_boundary = flow_based_refinement_config.always_include_boundary;
+            c.accept_zero_gain = simple_accept_zero_gain;
+            return c;
         }
 
         /**

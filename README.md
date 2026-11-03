@@ -69,6 +69,9 @@ HeiProMap provides several executables tailored for different graph-related opti
 - `--config`, `-c`: Optimization profile (`fast`, `eco`, `strong`, `super-strong`).
 - `--threads`, `-t`: Number of threads to use.
 - `--imbalance`, `-e`: Allowed imbalance (default: `0.03`).
+- `--force-parallel-suite`: Always use the parallel suite, even with `--threads 1` (default: `false`, useful for testing). The suite is enabled automatically when `--threads > 1`. It uses the simple refiners (label propagation, quotient graph and flow refinement without the quotient graph / block connectivity datastructures), parallel label propagation and parallel contraction.
+- `--simple-refinement`: Explicitly enable or disable only the simple refiners (default: follows the parallel suite).
+- `--simple-accept-zero-gain`: Whether the simple flow refinement applies zero-gain cuts like the regular flow refinement (default: `true`).
 
 ## License
 

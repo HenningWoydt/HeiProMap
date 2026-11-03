@@ -64,6 +64,8 @@ namespace HeiProMap {
         bool use_closed_vertex_set = true;
         u64 closed_vertex_sets_repeats = 100;
         bool use_edge_cut = true;
+        bool always_include_boundary = false; // include the whole pair boundary in the region, even beyond the weight cap
+        bool accept_zero_gain = false;        // apply valid cuts that change the partition but have gain 0 (explores more, grows the region budget alpha)
     };
 
     template<bool LARGE_K>
@@ -414,7 +416,7 @@ namespace HeiProMap {
                 weight_t gain = calculate_gain<t_uniform_e_weights>(
                     g, p_manager, d_oracle, is_left, left_id, right_id, left_region, right_region, translation_table, region_marker, region_mark);
 
-                if (gain <= 0) {
+                if (gain < 0 || (gain == 0 && !config->accept_zero_gain)) {
                     if (alpha <= 1.0) break;
                     alpha = std::max(alpha / alpha_modifier, 1.0);
                     continue;
@@ -471,7 +473,9 @@ namespace HeiProMap {
                 vertex_t u = queue[queue_idx++];
                 weight_t w = t_uniform_v_weights ? 1 : g.v_weight(u);
 
-                if (curr_weight + w > max_weight) continue;
+                // the first boundary.size() queue entries are the pair boundary
+                const bool force_include = config->always_include_boundary && queue_idx <= boundary.size();
+                if (!force_include && curr_weight + w > max_weight) continue;
                 curr_weight += w;
                 region.push_back(u);
                 region_marker[u] = mark;
@@ -576,8 +580,10 @@ namespace HeiProMap {
                 for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
                     const vertex_t v = g.edges_v[i];
                     const weight_t w = g.edge_w(i);
-                    if (region_marker[v] == left_mark || region_marker[v] == right_mark) {
-                        if (region_marker[v] == right_mark && u < v) continue;
+                    // edges to the left region were already added by the left loop
+                    if (region_marker[v] == left_mark) continue;
+                    if (region_marker[v] == right_mark) {
+                        if (u < v) continue;
                         int new_v = static_cast<int>(translation_table.get_n(v));
                         weight_t cap = t_uniform_e_weights ? distance : w * distance;
                         pr.add_edge(new_u, new_v, cap, cap);

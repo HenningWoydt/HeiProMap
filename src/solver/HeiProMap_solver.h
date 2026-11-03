@@ -46,6 +46,9 @@
 #include "../rebalance/rebalancer.h"
 #include "../init_partitioning/global_multisection.h"
 #include "../refinement/flow_based_refinement.h"
+#include "../refinement/simple_label_propagation_refinement.h"
+#include "../refinement/simple_quotient_graph_refinement.h"
+#include "../refinement/simple_flow_based_refinement.h"
 #include "../configuration/HeiProMap_configuration.h"
 #include "../utility/assert_state.h"
 #include "../utility/qap.h"
@@ -91,6 +94,14 @@ namespace HeiProMap {
         LabelPropagationRefinement<LARGE_K> lp_refine;
         QuotientGraphRefinement<LARGE_K> qg_refine;
         FlowBasedRefinement<LARGE_K> flow_based_refinement;
+
+        // simple refinement (no quotient graph / block connectivity), see ac.simple_refinement
+        SimpleLabelPropagationRefinement<LARGE_K> simple_lp_refine;
+        SimpleQuotientGraphRefinement<LARGE_K> simple_qg_refine;
+        SimpleFlowBasedRefinement<LARGE_K> simple_flow_refine;
+        SimpleLabelPropagationConfiguration simple_lp_config = SimpleLabelPropagationConfiguration("Simple Label Propagation");
+        SimpleQuotientGraphRefinementConfiguration simple_qg_config = SimpleQuotientGraphRefinementConfiguration("Simple Quotient Graph");
+        SimpleFlowBasedRefinementConfiguration simple_flow_config = SimpleFlowBasedRefinementConfiguration("Simple Flow Based");
 
         f64 misc_ms = 0.0;
         f64 coarsening_ms = 0.0;
@@ -171,6 +182,36 @@ namespace HeiProMap {
             }
         }
 
+    private:
+        void initialize_refiners() {
+            if (ac.simple_refinement) {
+                simple_lp_config = ac.get_simple_label_propagation_config();
+                simple_qg_config = ac.get_simple_qg_refinement_config();
+                simple_flow_config = ac.get_simple_flow_based_refinement_config();
+
+                if (simple_lp_config.enabled) {
+                    simple_lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), simple_lp_config, &m_pool);
+                }
+                if (simple_qg_config.enabled) {
+                    simple_qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), simple_qg_config, &m_pool);
+                }
+                if (simple_flow_config.enabled) {
+                    simple_flow_refine.initialize(graphs[0].n, ac.k, ac.threads, random_engine.get_u64(), simple_flow_config, &m_pool);
+                }
+                return;
+            }
+
+            if (ac.label_propagation_config.enabled) {
+                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
+            }
+            if (ac.quotient_graph_refinement_config.enabled) {
+                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
+            }
+            if (ac.flow_based_refinement_config.enabled) {
+                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
+            }
+        }
+
     public:
         explicit HeiProMapSolver(const AlgorithmConfiguration &t_ac) {
             graphs.reserve(100);
@@ -184,8 +225,10 @@ namespace HeiProMap {
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight, &m_pool);
             bv_manager.initialize(graphs[0].n, ac.k, &m_pool);
-            q_graph.initialize(ac.k, &m_pool);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
+            if (!ac.simple_refinement) {
+                q_graph.initialize(ac.k, &m_pool);
+                block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
+            }
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
@@ -198,15 +241,7 @@ namespace HeiProMap {
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
             // refinement
-            if (ac.label_propagation_config.enabled) {
-                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
-            }
-            if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
-            }
-            if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
-            }
+            initialize_refiners();
 
             auto ep = get_time_point();
             init_time += get_seconds(sp, ep);
@@ -223,8 +258,10 @@ namespace HeiProMap {
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight, &m_pool);
             bv_manager.initialize(graphs[0].n, ac.k, &m_pool);
-            q_graph.initialize(ac.k, &m_pool);
-            block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
+            if (!ac.simple_refinement) {
+                q_graph.initialize(ac.k, &m_pool);
+                block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
+            }
             HEAVYASSERT(assert_state_pre_partitioning(graphs[0], p_manager, ac.k));
 
             // distance
@@ -237,17 +274,7 @@ namespace HeiProMap {
             rebalancer.initialize(graphs[0].n, graphs[0].m, ac.k, random_engine.get_u64());
 
             // refinement
-            if (ac.label_propagation_config.enabled) {
-                lp_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.label_propagation_config);
-            }
-
-            if (ac.quotient_graph_refinement_config.enabled) {
-                qg_refine.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.quotient_graph_refinement_config, &m_pool);
-            }
-
-            if (ac.flow_based_refinement_config.enabled) {
-                flow_based_refinement.initialize(graphs[0].n, graphs[0].m, ac.k, ac.threads, random_engine.get_u64(), ac.flow_based_refinement_config, &m_pool);
-            }
+            initialize_refiners();
         }
 
         const PartitionManager &solve_subproblem() {
@@ -279,8 +306,10 @@ namespace HeiProMap {
                     HEIPROMAP_PROFILE_SCOPE("final_refinement", "Solver", "refine");
 
                     bv_manager.reset();
-                    q_graph.initialize(ac.k, &m_pool);
-                    block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
+                    if (!ac.simple_refinement) {
+                        q_graph.initialize(ac.k, &m_pool);
+                        block_conn.initialize(graphs[0].n, graphs[0].m, ac.k, &m_pool);
+                    }
 
                     for (vertex_t u = 0; u < graphs[0].n; ++u) {
                         partition_t u_id = p_manager[u];
@@ -289,20 +318,24 @@ namespace HeiProMap {
                             partition_t v_id = p_manager[v];
                             if (u_id != v_id) {
                                 bv_manager.add(u, u_id);
-                                if (u < v) {
+                                if (!ac.simple_refinement && u < v) {
                                     q_graph.add_edge(u_id, v_id, graphs[0].edge_w(i));
                                 }
                             }
                         }
                     }
-                    block_conn.compute_from_scratch(graphs[0], p_manager);
+                    if (!ac.simple_refinement) { block_conn.compute_from_scratch(graphs[0], p_manager); }
 
                     weight_t lmax = std::ceil((1.0 + ac.imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
                     for (partition_t i = 0; i < ac.k; ++i) {
                         p_manager.set_lmax(i, lmax);
                     }
                     std::cout << "QAP before flow refinement: " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
-                    flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                    if (ac.simple_refinement) {
+                        simple_flow_refine.refine(graphs[0], d_oracle, bv_manager, p_manager);
+                    } else {
+                        flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                    }
                     std::cout << "QAP after flow refinement : " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
                 }
             } else {
@@ -519,13 +552,20 @@ namespace HeiProMap {
                 // initialize boundary vertices and quotient graph
                 HEIPROMAP_PROFILE_SCOPE("partition", "misc", "initialize_datastructures");
                 p_manager.reset_weights();
+                // flat k-way partition: every block is a PE (level 0), the matchers only visit active blocks
+                for (partition_t id = 0; id < ac.k; ++id) {
+                    p_manager.set_hierarchy_level(id, 0);
+                }
                 bv_manager.reset();
-                q_graph.initialize(ac.k, &m_pool);
-                block_conn.initialize(graphs.back().n, graphs.back().m, ac.k, &m_pool);
-                block_conn.reset_build();
+                const bool use_ds = !ac.simple_refinement; // q_graph and block_conn
+                if (use_ds) {
+                    q_graph.initialize(ac.k, &m_pool);
+                    block_conn.initialize(graphs.back().n, graphs.back().m, ac.k, &m_pool);
+                    block_conn.reset_build();
+                }
 
                 for (vertex_t u = 0; u < graphs.back().n; ++u) {
-                    block_conn.begin_vertex(graphs.back(), u);
+                    if (use_ds) { block_conn.begin_vertex(graphs.back(), u); }
 
                     const partition_t u_id = p_manager[u];
                     const weight_t u_w = graphs.back().uniform_v_weights ? 1 : graphs.back().v_weight(u);
@@ -537,11 +577,11 @@ namespace HeiProMap {
                         const partition_t v_id = p_manager[v];
 
                         // build block_conns directly here
-                        block_conn.add_connection(u, v_id, w);
+                        if (use_ds) { block_conn.add_connection(u, v_id, w); }
 
                         if (u_id != v_id) {
                             bv_manager.add(u, u_id); // boundary vertex
-                            if (u < v) {
+                            if (use_ds && u < v) {
                                 q_graph.add_edge(u_id, v_id, w); // quotient graph
                             }
                         }
@@ -554,7 +594,7 @@ namespace HeiProMap {
             auto ep = get_time_point();
             initial_partitioning_ms += get_milli_seconds(sp, ep);
 
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
         }
 
         void coarsening(const u64 level, f64 level_imbalance) {
@@ -613,7 +653,7 @@ namespace HeiProMap {
 
             if (ac.threads > 1) {
                 bv_manager.parallel_reset(ac.threads);
-                block_conn.parallel_initialize_offsets(g_uncontracted, ac.threads);
+                if (!ac.simple_refinement) { block_conn.parallel_initialize_offsets(g_uncontracted, ac.threads); }
 
                 std::vector<std::vector<std::vector<vertex_t> > > thread_boundaries(ac.threads, std::vector<std::vector<vertex_t> >(ac.k));
 
@@ -637,14 +677,14 @@ namespace HeiProMap {
                             // rebuild block connections
                             if (u_id == v_id) {
                                 own_weight += w;
-                            } else {
+                            } else if (!ac.simple_refinement) {
                                 block_conn.add_connection(u, v_id, w);
                             }
 
                             // rebuild boundary information
                             n_different += (u_id != v_id);
                         }
-                        if (own_weight > 0) {
+                        if (own_weight > 0 && !ac.simple_refinement) {
                             block_conn.add_connection(u, u_id, own_weight);
                         }
 
@@ -658,14 +698,16 @@ namespace HeiProMap {
                 bv_manager.parallel_import_boundary_vertices(thread_boundaries, ac.threads);
             } else {
                 bv_manager.reset();
-                block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k, &m_pool);
-                block_conn.reset_build();
+                if (!ac.simple_refinement) {
+                    block_conn.initialize(g_uncontracted.n, g_uncontracted.m, ac.k, &m_pool);
+                    block_conn.reset_build();
+                }
 
                 for (vertex_t u = 0; u < g_uncontracted.n; ++u) {
                     const partition_t u_id = p_manager[u];
                     size_t n_different = 0;
 
-                    block_conn.begin_vertex(g_uncontracted, u);
+                    if (!ac.simple_refinement) { block_conn.begin_vertex(g_uncontracted, u); }
                     weight_t own_weight = 0;
 
                     for (size_t i = g_uncontracted.neighborhoods[u]; i < g_uncontracted.neighborhoods[u + 1]; ++i) {
@@ -676,14 +718,14 @@ namespace HeiProMap {
                         // rebuild block connections
                         if (u_id == v_id) {
                             own_weight += w;
-                        } else {
+                        } else if (!ac.simple_refinement) {
                             block_conn.add_connection(u, v_id, w);
                         }
 
                         // rebuild boundary information
                         n_different += (u_id != v_id);
                     }
-                    if (own_weight > 0) {
+                    if (own_weight > 0 && !ac.simple_refinement) {
                         block_conn.add_connection(u, u_id, own_weight);
                     }
                     bv_manager.add_boundary_vertex_from_count(u, u_id, n_different);
@@ -702,13 +744,19 @@ namespace HeiProMap {
             level_infos[level].t_uncontraction += get_milli_seconds(sp, ep);
             #endif
 
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(),p_manager, bv_manager, q_graph, block_conn , ac.k));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(),p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
         }
 
         void rebalancing(const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
 
-            if (level == 0) {
+            if (ac.simple_refinement) {
+                if (level == 0) {
+                    rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                } else {
+                    rebalancer.rebalance<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
+                }
+            } else if (level == 0) {
                 rebalancer.rebalance_last_layer<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
             } else {
                 rebalancer.rebalance<true, true>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);
@@ -722,7 +770,7 @@ namespace HeiProMap {
             level_infos[level].t_rebalance += get_milli_seconds(sp, ep);
             #endif
 
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
         }
 
         void refinement(const u64 level, const f64 level_imbalance) {
@@ -733,32 +781,50 @@ namespace HeiProMap {
                 p_manager.set_lmax(i, lmax);
             }
 
-            if (ac.label_propagation_config.enabled) {
+            if (ac.simple_refinement) {
+                if (simple_lp_config.enabled) {
+                    auto sp_local = get_time_point();
+                    simple_lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
+                    lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                }
+                if (simple_qg_config.enabled) {
+                    auto sp_local = get_time_point();
+                    simple_qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager);
+                    qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                }
+                if (simple_flow_config.enabled) {
+                    auto sp_local = get_time_point();
+                    simple_flow_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager);
+                    flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
+                }
+            }
+
+            if (!ac.simple_refinement && ac.label_propagation_config.enabled) {
                 auto sp_local = get_time_point();
                 lp_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 lp_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
             }
 
-            if (ac.quotient_graph_refinement_config.enabled) {
+            if (!ac.simple_refinement && ac.quotient_graph_refinement_config.enabled) {
                 auto sp_local = get_time_point();
                 qg_refine.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 qg_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
             }
 
             // if (ac.negative_cycle_config.enabled) {
             //     auto sp_local = get_time_point();
             //     negative_cycle_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn, p_manager.lmax, graphs.back().uniform_v_weights, graphs.back().uniform_e_weights);
             //     negative_cycle_refine_ms += get_milli_seconds(sp_local, get_time_point());
-            //     HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            //     HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
             // }
 
-            if (ac.flow_based_refinement_config.enabled) {
+            if (!ac.simple_refinement && ac.flow_based_refinement_config.enabled) {
                 auto sp_local = get_time_point();
                 flow_based_refinement.refine(graphs.back(), d_oracle, bv_manager, p_manager, q_graph, block_conn);
                 flow_refine_ms += get_milli_seconds(sp_local, get_time_point());
-                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+                HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
             }
 
             auto ep = get_time_point();
@@ -769,7 +835,7 @@ namespace HeiProMap {
             level_infos[level].t_refinement += get_milli_seconds(sp, ep);
             #endif
 
-            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k));
+            HEAVYASSERT(assert_state_after_partitioning(graphs.back(), p_manager, bv_manager, q_graph, block_conn, ac.k, ac.threads, !ac.simple_refinement, !ac.simple_refinement));
         }
 
         inline f64 determine_adaptive_imbalance(f64 global_imbalance,
