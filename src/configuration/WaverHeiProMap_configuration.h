@@ -184,6 +184,7 @@ namespace HeiProMap {
             {"--topology-uncoarsening-factor", "", "While graph levels are left, the topology is only uncoarsened if the graph has at least this many vertices per finer PE on average.", "", "", false},
             {"--message-refinement", "", "Run the message-group refinement on every level, including the individual input vertices (0/1).", "", "", false},
             {"--message-refinement-iterations", "", "Maximum iterations of the message-group refinement on one level.", "", "", false},
+            {"--message-verbose", "", "Print the statistics and the time split of every iteration of the message-group refinement (0/1).", "", "", false},
             {"--long-message-padding", "", "Rectangle padding of the long-message swap refinement (0 = off).", "", "", false},
             {"--scatter-refinement", "", "Run the scatter refinement, which spreads a sender group over the receiver and its neighbors, within their room, so that no block is overloaded (0/1). On in the presets, but off in the spectral mode unless set.", "", "", false},
             {"--scatter-rounds", "", "Maximum rounds of the scatter refinement on one level.", "", "", false},
@@ -476,6 +477,10 @@ namespace HeiProMap {
                 waver_split_refinement_config.enabled = false;
                 if (config_name == "fast") { waver_busy_refinement_config.enabled = true; }
             }
+            // The multilevel mode refines from the coarsest level down, where a second and third pass of the message
+            // refinement pay off (on the 91M-vertex NASA mesh: 3 iterations -8.8% message cost for 2.2x the refinement
+            // time, 10 iterations -12.6% for 3.9x), so fast uses 3. The spectral mode keeps 1.
+            if (mode == "multilevel" && config_name == "fast") { waver_message_refinement_config.max_iters = 3; }
 
             apply_command_line_overrides();
 
@@ -781,6 +786,7 @@ namespace HeiProMap {
             if (is_set("--annealing-radius")) waver_sa_refinement_config.radius = std::stoull(get("--annealing-radius"));
             if (is_set("--message-refinement")) waver_message_refinement_config.enabled = std::stoull(get("--message-refinement")) != 0;
             if (is_set("--message-refinement-iterations")) waver_message_refinement_config.max_iters = std::stoull(get("--message-refinement-iterations"));
+            if (is_set("--message-verbose")) waver_message_refinement_config.verbose = std::stoull(get("--message-verbose")) != 0;
             if (is_set("--smash-rounds")) smash_rounds = std::stoull(get("--smash-rounds"));
             if (is_set("--smash-count")) smash_count = std::stoull(get("--smash-count"));
             if (is_set("--smash-radius")) smash_radius = std::stoull(get("--smash-radius"));

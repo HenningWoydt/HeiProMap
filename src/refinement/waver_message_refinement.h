@@ -88,6 +88,27 @@ namespace HeiProMap {
         using p_manager_t = PartitionManager;
         using bv_manager_t = BoundaryVertexManager;
 
+        // The scans over the edges of a list of vertices read the neighbor list of a vertex and the block of each neighbor,
+        // at random places of arrays that are far larger than the cache. While vertex i is worked on, the data of the next
+        // ones is requested: the start of the neighbor list of vertex i + 8, the neighbor list of vertex i + 4, the
+        // blocks of the neighbors of vertex i + 2. vertex(j) gives the j-th vertex of the list of n.
+        template<typename VertexAt>
+        static void prefetch_ahead(const graph_t &g, const p_manager_t &pm, const size_t i, const size_t n,
+                                   const VertexAt &vertex) {
+            if (i + 8 < n) { __builtin_prefetch(&g.neighborhoods[vertex(i + 8)]); }
+            if (i + 4 < n) {
+                const vertex_t u = vertex(i + 4);
+                __builtin_prefetch(&g.edges_v[g.neighborhoods[u]]);
+                __builtin_prefetch(&g.edges_w[g.neighborhoods[u]]);
+            }
+            if (i + 2 < n) {
+                const vertex_t u = vertex(i + 2);
+                for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                    __builtin_prefetch(&pm[g.edges_v[j]]);
+                }
+            }
+        }
+
         // The quotient graph, kept as one row per block: the blocks it exchanges messages with (sorted by id) and the
         // edge weight to each. A row is built on first use from the boundary vertices of its block and dropped when a
         // move changes it, so no quotient graph has to be maintained outside this refinement.
@@ -110,6 +131,15 @@ namespace HeiProMap {
             const std::vector<Entry> &neighbors(const partition_t x) {
                 if (!valid[x]) { build(x); }
                 return rows[x];
+            }
+
+            // Requests the row of x, if it is built: the vector header, then the entries (a row has a few lines of them).
+            void prefetch(const partition_t x) const {
+                if (!valid[x]) { return; }
+                const Entry *data = rows[x].data();
+                __builtin_prefetch(data);
+                __builtin_prefetch(data + 8);
+                __builtin_prefetch(data + 16);
             }
 
             // Edge weight between the blocks x and y (x != y), 0 if they exchange no message.
@@ -166,7 +196,9 @@ namespace HeiProMap {
             std::vector<partition_t> dirty; // blocks with a non-zero entry in acc
 
             void build(const partition_t x) {
-                for (size_t i = 0; i < bv->size(x); ++i) {
+                const size_t n = bv->size(x);
+                for (size_t i = 0; i < n; ++i) {
+                    prefetch_ahead(*g, *pm, i, n, [&](const size_t at) { return bv->get(x, at); });
                     const vertex_t u = bv->get(x, i);
                     for (size_t j = g->neighborhoods[u]; j < g->neighborhoods[u + 1]; ++j) {
                         const partition_t d = (*pm)[g->edges_v[j]];
@@ -312,6 +344,11 @@ namespace HeiProMap {
             std::vector<std::pair<partition_t, weight_t> > ext_neighbors;
             std::vector<weight_t> tmp_weight; // scratch: D → total group→D weight
             std::vector<char> tmp_seen; // scratch: D is in dirty
+            // Terms of the delta that do not depend on the candidate, per group: for each ext_neighbors[i] the distance
+            // to A and whether the group carries all of the A -> D weight; ext_slot maps a block to its entry.
+            std::vector<int32_t> ext_slot;
+            std::vector<f64> ext_h;
+            std::vector<char> ext_removed;
             std::vector<partition_t> dirty; // blocks touched in tmp_weight
 
             HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "setup");
@@ -319,6 +356,7 @@ namespace HeiProMap {
             in_group.assign(g.n, false);
             tmp_weight.assign(k, 0);
             tmp_seen.assign(k, 0);
+            ext_slot.assign(k, -1);
             slot_of.assign(k, -1);
             seen_stamp.assign(k, 0);
             last_touched.assign(k, 0);
@@ -331,10 +369,19 @@ namespace HeiProMap {
             near_touched.assign(k, 0);
 
 
+            using clock = std::chrono::steady_clock;
+            const auto since = [](const clock::time_point t) {
+                return std::chrono::duration<f64, std::milli>(clock::now() - t).count();
+            };
+
             bool any_move = true;
             for (u64 iter = 0; iter < config.max_iters && any_move; ++iter) {
                 HEIPROMAP_PROFILE_SCOPE("refinement", "WaverMessageRefinement", "iteration");
                 any_move = false;
+                // statistics of the iteration (printed if config.verbose)
+                u64 n_pairs = 0, n_no_move = 0, n_scans = 0, n_empty = 0, n_no_room = 0, n_evaluated = 0, n_cands = 0, n_moves = 0;
+                f64 t_groups = 0.0, t_ext = 0.0, t_cands = 0.0;
+                const auto iter_start = clock::now();
 
                 // A group can only move into a block with room left. Without any, nothing can be accepted.
                 bool has_slack = false;
@@ -384,13 +431,16 @@ namespace HeiProMap {
                         const partition_t B = targets[idx];
                         // Skip if pair no longer exists (prior move may have dissolved it)
                         if (quotient.weight(A, B) == 0) { continue; }
-                        if (!may_move(B)) { continue; }
+                        ++n_pairs;
+                        if (!may_move(B)) { ++n_no_move; continue; }
 
                         // -------------------------------------------------------
                         // Collect S_AB: boundary vertices in A connecting to B. One pass over the boundary of A
                         // builds the groups of this and all later neighbors that may move; a move invalidates them.
                         // -------------------------------------------------------
                         if (!group_valid[idx]) {
+                            const auto t0 = clock::now();
+                            ++n_scans;
                             for (size_t i = idx; i < targets.size(); ++i) {
                                 group_valid[i] = i == idx || may_move(targets[i]);
                                 if (group_valid[i]) {
@@ -398,7 +448,10 @@ namespace HeiProMap {
                                     slot_of[targets[i]] = static_cast<int32_t>(i);
                                 }
                             }
-                            for (size_t i = 0; i < bv_manager.size(A); ++i) {
+                            const size_t n_boundary = bv_manager.size(A);
+                            for (size_t i = 0; i < n_boundary; ++i) {
+                                prefetch_ahead(g, p_manager, i, n_boundary,
+                                               [&](const size_t at) { return bv_manager.get(A, at); });
                                 const vertex_t u = bv_manager.get(A, i);
                                 ++stamp;
                                 for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
@@ -410,9 +463,11 @@ namespace HeiProMap {
                                 }
                             }
                             for (size_t i = idx; i < targets.size(); ++i) { slot_of[targets[i]] = -1; }
+                            t_groups += since(t0);
                         }
                         const std::vector<vertex_t> &group = groups[idx];
                         if (group.empty()) {
+                            ++n_empty;
                             continue;
                         }
                         for (const vertex_t u: group) { in_group[u] = true; }
@@ -440,12 +495,17 @@ namespace HeiProMap {
                             }
                         }
                         if (!any_candidate) {
+                            ++n_no_room;
                             for (const vertex_t u: group) { in_group[u] = false; }
                             continue;
                         }
+                        ++n_evaluated;
+                        const auto t_ext0 = clock::now();
 
                         // The weight from the group to every other block, and to the vertices of A outside the group.
-                        for (const vertex_t u: group) {
+                        for (size_t i = 0; i < group.size(); ++i) {
+                            prefetch_ahead(g, p_manager, i, group.size(), [&](const size_t at) { return group[at]; });
+                            const vertex_t u = group[i];
                             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
                                 const vertex_t v = g.edges_v[j];
                                 const partition_t D = p_manager[v];
@@ -468,6 +528,21 @@ namespace HeiProMap {
                             tmp_seen[D] = 0;
                         }
                         dirty.clear();
+                        f64 removal_gain = 0.0; // pairs A -> D that vanish with the group, whatever the candidate
+                        f64 hop_base = 0.0; // beta_link * w * h(A, D) over all D
+                        ext_h.resize(ext_neighbors.size());
+                        ext_removed.resize(ext_neighbors.size());
+                        for (size_t i = 0; i < ext_neighbors.size(); ++i) {
+                            const auto &[D, w] = ext_neighbors[i];
+                            ext_slot[D] = static_cast<int32_t>(i);
+                            ext_h[i] = static_cast<f64>(d_oracle.get(A, D));
+                            const weight_t w_A_D = quotient.weight(A, D);
+                            ext_removed[i] = w_A_D > 0 && w_A_D == w;
+                            if (ext_removed[i]) { removal_gain += alpha_end + alpha_link * ext_h[i]; }
+                            hop_base += beta_link * static_cast<f64>(w) * ext_h[i];
+                        }
+                        t_ext += since(t_ext0);
+                        const auto t_cand0 = clock::now();
 
                         // -----------------------------------------------------------
                         // Try candidates: B itself + all current neighbors of B +
@@ -480,23 +555,49 @@ namespace HeiProMap {
                             if (C == A) { return; }
                             if (p_manager.bweights[C] + group_weight > p_manager.get_lmax(C)) { return; }
                             if (p_manager.bweights[A] - group_weight < p_manager.get_lmin(A)) { return; }
-                            f64 d = compute_group_delta(A, C, ext_neighbors, weight_to_A, quotient, d_oracle,
-                                                        alpha_end, beta_end, alpha_link, beta_link);
+                            ++n_cands;
+                            // the same delta as compute_group_delta, with the terms of the group taken from above
+                            f64 d = removal_gain + hop_base;
+                            bool pair_A_C_removed = false;
+                            const int32_t c_slot = ext_slot[C];
+                            if (c_slot >= 0) {
+                                d += beta_end * static_cast<f64>(ext_neighbors[c_slot].second);
+                                pair_A_C_removed = ext_removed[c_slot];
+                            }
+                            for (const auto &[D, w]: ext_neighbors) {
+                                if (D == C) { continue; }
+                                const f64 h = static_cast<f64>(d_oracle.get(C, D));
+                                if (quotient.weight(C, D) == 0) { d -= alpha_end + alpha_link * h; }
+                                d -= beta_link * static_cast<f64>(w) * h;
+                            }
+                            if (weight_to_A > 0) {
+                                const f64 h = static_cast<f64>(d_oracle.get(C, A));
+                                const f64 w = static_cast<f64>(weight_to_A);
+                                if (quotient.weight(C, A) == 0 || pair_A_C_removed) { d -= alpha_end + alpha_link * h; }
+                                d -= beta_end * w + beta_link * w * h;
+                            }
                             if (d > best_delta + kMinGain) {
                                 best_delta = d;
                                 best_C = C;
                             }
                         };
 
+                        // the rows of the candidates are read for every external block: request them all first
+                        quotient.prefetch(B);
+                        for (const auto &he: quotient.neighbors(B)) { quotient.prefetch(he.target); }
                         try_candidate(B); // move senders INTO the receiver block
                         for (const auto &he: quotient.neighbors(B)) {
                             try_candidate(he.target);
                         }
 
+                        t_cands += since(t_cand0);
+                        for (const auto &[D, w]: ext_neighbors) { ext_slot[D] = -1; }
+
                         // -----------------------------------------------------------
                         // Apply best move
                         // -----------------------------------------------------------
                         if (best_C != NO_ID) {
+                            ++n_moves;
                             for (const vertex_t u: group) {
                                 apply_move(g, bv_manager, p_manager, u, g.v_weight(u), A, best_C);
                             }
@@ -504,11 +605,28 @@ namespace HeiProMap {
                             last_touched[A] = last_touched[best_C] = iter + 1;
                             for (const auto &[D, w_group_to_D]: ext_neighbors) { last_touched[D] = iter + 1; }
                             any_move = true;
-                            std::fill(group_valid.begin(), group_valid.end(), 0);
+                            // The groups of the other neighbors keep their vertices, except the ones that moved. Only
+                            // the group towards best_C gains vertices (their edges to the moved ones are cut now).
+                            for (size_t i = idx + 1; i < targets.size(); ++i) {
+                                if (!group_valid[i]) { continue; }
+                                if (targets[i] == best_C) { group_valid[i] = 0; continue; }
+                                std::vector<vertex_t> &other = groups[i];
+                                other.erase(std::remove_if(other.begin(), other.end(),
+                                                           [&](const vertex_t u) { return p_manager[u] != A; }),
+                                            other.end());
+                            }
                         }
 
                         for (vertex_t u: group) { in_group[u] = false; }
                     }
+                }
+
+                if (config.verbose) {
+                    std::cout << "[message] iter " << iter << ": " << since(iter_start) << " ms, pairs " << n_pairs
+                              << " (no room for any group " << n_no_move << ", group scans " << n_scans
+                              << " " << t_groups << " ms, empty " << n_empty << ", no candidate " << n_no_room
+                              << ", evaluated " << n_evaluated << ": edge scan " << t_ext << " ms, " << n_cands
+                              << " candidates " << t_cands << " ms), moves " << n_moves << std::endl;
                 }
             }
         }
