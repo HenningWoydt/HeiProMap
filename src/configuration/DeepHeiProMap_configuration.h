@@ -236,6 +236,7 @@ namespace HeiProMap {
             {"--sclp-max-rounds",         "",   "SCLP: maximum number of label propagation rounds.",                                 "5",                   "", false},
             {"--sclp-min-threshold",      "",   "SCLP: minimum fraction of moved vertices to continue.",                             "0.05",                "", false},
             {"--sclp-f",                  "",   "SCLP: cluster weight factor (max_w = ceil(lmax / f)).",                             "64",                  "", false},
+            {"--sclp-stall-f-min",        "",   "SCLP: on a stalled level halve f down to this value and recluster (0 = off).",       "0",                   "", false},
             {"--sclp-rating",             "",   "SCLP: edge rating function. {weight, expansion, expansionstar, expansionstarstar, innerouter}", "weight",   "", false},
             {"--sclp-degree-ordering",    "",   "SCLP: use degree-based vertex ordering (true/false).",                              "true",                "", false},
             {"--sclp-force-parallel",     "",   "SCLP: force parallel algorithm even with 1 thread (true/false).",                   "false",                    "", false},
@@ -445,6 +446,9 @@ namespace HeiProMap {
             if (is_set("--sclp-f")) {
                 size_constrained_lp_clustering_configuration.f = std::stod(get("--sclp-f"));
             }
+            if (is_set("--sclp-stall-f-min")) {
+                size_constrained_lp_clustering_configuration.stall_f_min = std::stod(get("--sclp-stall-f-min"));
+            }
             if (is_set("--sclp-rating")) {
                 std::string val = get("--sclp-rating");
                 if (val == "weight") size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::WEIGHT;
@@ -512,6 +516,7 @@ namespace HeiProMap {
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
             size_constrained_lp_clustering_configuration.rating_function = EdgeRatingFunction::EXPANSIONSTAR;
             size_constrained_lp_clustering_configuration.f = 32;
+            size_constrained_lp_clustering_configuration.stall_f_min = 4;
             size_constrained_lp_clustering_configuration.max_rounds = 5;
             size_constrained_lp_clustering_configuration.force_parallel_alg = true;
             force_parallel_contraction = true;

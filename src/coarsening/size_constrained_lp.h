@@ -58,6 +58,11 @@ namespace HeiProMap {
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
         f64 f = 64;
+        // Stall handling: if a level shrinks the graph by less than (1 - stall_ratio), the cluster weight
+        // bound lmax / f is halved (f is halved, down to stall_f_min) and the level is clustered again.
+        // The relaxed f stays in effect for the remaining levels. 0 disables it.
+        f64 stall_f_min = 0;
+        f64 stall_ratio = 0.95;
         EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
         bool use_degree_ordering = true;
         bool force_parallel_alg = false;
@@ -95,6 +100,7 @@ namespace HeiProMap {
         // config
         SizeConstrainedLPConfiguration config;
         RandomEngine random_engine;
+        f64 f_eff = 64;
 
     public:
         size_t heap_bytes() const {
@@ -143,6 +149,7 @@ namespace HeiProMap {
             m_k = t_k;
 
             config = t_config;
+            f_eff = t_config.f;
             random_engine = RandomEngine(t_seed);
         }
 
@@ -158,6 +165,11 @@ namespace HeiProMap {
                      const u64 threads,
                      const weight_t lmax) {
             dispatch_with_templates(level, g, p_manager, mapping, imbalance, threads, lmax);
+            while (config.stall_f_min > 0 && f_eff > config.stall_f_min
+                   && static_cast<f64>(mapping.get_coarse_n()) > config.stall_ratio * static_cast<f64>(g.n)) {
+                f_eff = std::max(config.stall_f_min, f_eff / 2.0);
+                dispatch_with_templates(level, g, p_manager, mapping, imbalance, threads, lmax);
+            }
             release_memory();
         }
 
@@ -813,7 +825,7 @@ namespace HeiProMap {
                 max_deg = std::max(max_deg, g.deg(u));
             }
 
-            const weight_t W = std::ceil(static_cast<f64>(lmax) / config.f);
+            const weight_t W = std::ceil(static_cast<f64>(lmax) / f_eff);
             const weight_t max_w = std::max(max_v_w, W);
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
 
