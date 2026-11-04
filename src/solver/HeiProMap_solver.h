@@ -751,6 +751,12 @@ namespace HeiProMap {
         void rebalancing(const u64 level, f64 level_imbalance) {
             auto sp = get_time_point();
 
+            // the rebalancer reads the per-block limits from the partition manager
+            const weight_t lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs.back().g_weight / (f64) ac.k));
+            for (partition_t i = 0; i < ac.k; ++i) {
+                p_manager.set_lmax(i, lmax);
+            }
+
             if (ac.simple_refinement) {
                 if (level == 0) {
                     rebalancer.rebalance_last_layer<false, false>(graphs.back(), p_manager, bv_manager, q_graph, d_oracle, block_conn);

@@ -113,6 +113,11 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "refine_pm");
             if (pm.k <= 1) return;
 
+            // the refiners read the per-block limits from the partition manager
+            for (partition_t i = 0; i < pm.k; ++i) {
+                pm.set_lmax(i, lmax_constraints[i]);
+            }
+
             if (k_vec.empty()) {
                 k_vec = std::vector<partition_t>(1, original_k);
                 dist_vec = std::vector<weight_t>(1, 1);

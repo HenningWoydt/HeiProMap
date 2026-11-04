@@ -406,11 +406,10 @@ namespace HeiProMap {
                 }
             }
 
-            AlignedArray<weight_t> lmax_constraints;
-            lmax_constraints.initialize(k);
-            weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) k));
+            // the rebalancer reads the per-block limits from the partition manager
+            const weight_t lmax = std::ceil((1.0 + imbalance) * ((f64) g.g_weight / (f64) k));
             for (partition_t i = 0; i < k; ++i) {
-                lmax_constraints[i] = lmax;
+                pm.set_lmax(i, lmax);
             }
 
             Rebalancer rebalancer;
