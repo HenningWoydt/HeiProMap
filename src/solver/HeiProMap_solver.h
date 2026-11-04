@@ -437,7 +437,8 @@ namespace HeiProMap {
             }
 
             #if ENABLE_PROFILER
-            level_infos.emplace_back();
+            // if the loop stopped because coarsening stalled, the entry of this level already exists
+            if (level_infos.size() <= level) { level_infos.emplace_back(); }
             level_infos[level].level = level;
             level_infos[level].n = graphs.back().n;
             level_infos[level].m = graphs.back().m;

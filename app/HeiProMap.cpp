@@ -107,7 +107,7 @@ int main(const int argc, char *argv[]) {
     auto t_write_end = HeiProMap::get_time_point();
     HeiProMap::f64 write_io_ms = HeiProMap::get_milli_seconds(t_write_start, t_write_end);
 
-    if (argc == 1) {
+    if (argc == 1 || std::getenv("HEIPROMAP_PROFILE") != nullptr) {
         HeiProMap::Profiler::instance().print_table_ascii_colored(std::cout);
     }
 

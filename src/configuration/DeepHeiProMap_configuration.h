@@ -654,6 +654,7 @@ namespace HeiProMap {
             // coarsening
             coarsening_algorithm_string = "size-constrained-lp";
             coarsening_algorithm_id = string_to_coarsening_algorithm(coarsening_algorithm_string);
+            size_constrained_lp_clustering_configuration.f = 64; // keep the previous default, the class default is now 18
             size_constrained_lp_clustering_configuration.force_parallel_alg = true;
             force_parallel_contraction = true;
 

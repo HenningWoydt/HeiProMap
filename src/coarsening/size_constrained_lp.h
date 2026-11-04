@@ -30,6 +30,8 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <numeric>
+#include <random>
 #include <unordered_map>
 #include <vector>
 
@@ -57,12 +59,16 @@ namespace HeiProMap {
     public:
         u64 max_rounds = 5;
         f64 min_threshold = 0.05;
-        f64 f = 64;
+        f64 f = 18;
         // Stall handling: if a level shrinks the graph by less than (1 - stall_ratio), the cluster weight
         // bound lmax / f is halved (f is halved, down to stall_f_min) and the level is clustered again.
-        // The relaxed f stays in effect for the remaining levels. 0 disables it.
+        // The relaxed f stays in effect for the remaining levels. 0 disables it. Only used with the lmax / f bound.
         f64 stall_f_min = 0;
         f64 stall_ratio = 0.95;
+        // false: U = max(max_v_w, ceil(lmax / f))                                (Meyerhenke et al.)
+        // true:  U = max(max_v_w, floor(eps * c(V) / clamp(n / C, 2, k)))        (KaMinPar, Gottesburen et al.)
+        bool use_epsilon_block_weight = false;
+        u64 contraction_limit = 64; // C of the epsilon-block-weight rule, set to the initial-c
         EdgeRatingFunction rating_function = EdgeRatingFunction::WEIGHT;
         bool use_degree_ordering = true;
         bool force_parallel_alg = false;
@@ -79,7 +85,9 @@ namespace HeiProMap {
         partition_t m_k = 0;
 
         // vertex ordering
-        AlignedArray<vertex_t> flat_vertices;
+        AlignedArray<vertex_t> flat_vertices;   // iteration order of the current round
+        AlignedArray<vertex_t> sorted_vertices; // vertices sorted by degree bucket (or by id if degree ordering is off)
+        size_t m_num_buckets = 1;
         AlignedArray<vertex_t> bucket_sizes;
         AlignedArray<vertex_t> bucket_offsets;
         std::vector<std::vector<vertex_t>> thread_bucket_counts;
@@ -104,7 +112,7 @@ namespace HeiProMap {
 
     public:
         size_t heap_bytes() const {
-            return flat_vertices.heap_bytes() + bucket_sizes.heap_bytes()
+            return flat_vertices.heap_bytes() + sorted_vertices.heap_bytes() + bucket_sizes.heap_bytes()
                  + bucket_offsets.heap_bytes() + cluster_weights.heap_bytes()
                  + cluster_count.heap_bytes() + active.heap_bytes()
                  + active_next.heap_bytes() + remap.heap_bytes()
@@ -113,6 +121,7 @@ namespace HeiProMap {
 
         void release_memory() {
             flat_vertices.free_memory();
+            sorted_vertices.free_memory();
             bucket_sizes.free_memory();
             bucket_offsets.free_memory();
             cluster_weights.free_memory();
@@ -125,6 +134,7 @@ namespace HeiProMap {
 
         void set_pool(MemoryPool *pool) {
             flat_vertices.set_pool(pool);
+            sorted_vertices.set_pool(pool);
             bucket_sizes.set_pool(pool);
             bucket_offsets.set_pool(pool);
             cluster_weights.set_pool(pool);
@@ -165,7 +175,7 @@ namespace HeiProMap {
                      const u64 threads,
                      const weight_t lmax) {
             dispatch_with_templates(level, g, p_manager, mapping, imbalance, threads, lmax);
-            while (config.stall_f_min > 0 && f_eff > config.stall_f_min
+            while (!config.use_epsilon_block_weight && config.stall_f_min > 0 && f_eff > config.stall_f_min
                    && static_cast<f64>(mapping.get_coarse_n()) > config.stall_ratio * static_cast<f64>(g.n)) {
                 f_eff = std::max(config.stall_f_min, f_eff / 2.0);
                 dispatch_with_templates(level, g, p_manager, mapping, imbalance, threads, lmax);
@@ -223,14 +233,20 @@ namespace HeiProMap {
         void init_vertex_order(const graph_t &g, const size_t B, const u64 threads) {
             HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "flat_vertices");
             flat_vertices.initialize(g.n);
+            sorted_vertices.initialize(g.n);
 
             if (!config.use_degree_ordering) {
+                // single bucket, the traversal is still chunk-shuffled (see shuffle_chunks)
                 #pragma omp parallel for num_threads(threads)
                 for (vertex_t u = 0; u < g.n; ++u) {
-                    flat_vertices[u] = u;
+                    sorted_vertices[u] = u;
                 }
+                bucket_offsets.initialize(1);
+                bucket_offsets[0] = 0;
+                m_num_buckets = 1;
                 return;
             }
+            m_num_buckets = B;
 
             bucket_sizes.initialize(B, 0);
             bucket_offsets.initialize(B);
@@ -282,7 +298,7 @@ namespace HeiProMap {
                 for (vertex_t u = 0; u < g.n; ++u) {
                     const size_t d = g.deg(u);
                     const size_t b = (d == 0) ? 0 : floor_log2(d);
-                    flat_vertices[local_offsets[b]++] = u;
+                    sorted_vertices[local_offsets[b]++] = u;
                 }
             }
 
@@ -320,34 +336,58 @@ namespace HeiProMap {
         // Shuffle
         // =====================================================================
 
-        void shuffle_buckets(const graph_t &g, const size_t B, const u64 threads) {
-            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_buckets");
-            u64 shuffle_seed = random_engine.get_u64();
+        // Chunk-shuffled traversal as in KaMinPar (Gottesburen et al., ESA'21): every degree bucket is split
+        // into chunks of max(1024, sqrt(n)) nodes. Per round, the chunk order of a bucket is shuffled, the
+        // 64-node sub-blocks of a chunk are visited in random order and each sub-block is permuted. Buckets are
+        // visited by increasing degree. The result is written to flat_vertices.
+        void shuffle_chunks(const graph_t &g, const u64 threads) {
+            HEIPROMAP_PROFILE_SCOPE("coarsening", "SizeConstrainedLP", "shuffle_chunks");
+            constexpr size_t SUB = 64;
+            const u64 seed = random_engine.get_u64();
+            const size_t chunk_nodes = std::max<size_t>(1024, static_cast<size_t>(std::sqrt(static_cast<f64>(g.n))));
 
-            constexpr size_t MIN_CHUNK = 1024;
-            std::vector<std::pair<size_t, size_t>> chunks;
-            for (size_t i = 0; i < B - 1; ++i) {
-                const size_t beg = bucket_offsets[i];
-                const size_t end = bucket_offsets[i + 1];
-                const size_t bucket_size = end - beg;
-                if (bucket_size <= MIN_CHUNK) {
-                    chunks.emplace_back(beg, end);
-                } else {
-                    const size_t n_chunks = std::min(threads, (bucket_size + MIN_CHUNK - 1) / MIN_CHUNK);
-                    const size_t chunk_size = bucket_size / n_chunks;
-                    for (size_t c = 0; c < n_chunks; ++c) {
-                        const size_t c_beg = beg + c * chunk_size;
-                        const size_t c_end = (c + 1 == n_chunks) ? end : c_beg + chunk_size;
-                        chunks.emplace_back(c_beg, c_end);
-                    }
+            struct Chunk { size_t beg; size_t end; size_t out; };
+            std::vector<Chunk> chunks;
+            for (size_t b = 0; b < m_num_buckets; ++b) {
+                const size_t beg = bucket_offsets[b];
+                const size_t end = (b + 1 < m_num_buckets) ? static_cast<size_t>(bucket_offsets[b + 1]) : static_cast<size_t>(g.n);
+                if (beg >= end) { continue; }
+
+                const size_t first = chunks.size();
+                for (size_t c = beg; c < end; c += chunk_nodes) {
+                    chunks.push_back({c, std::min(c + chunk_nodes, end), 0});
+                }
+                std::mt19937_64 gen(seed + b);
+                std::shuffle(chunks.begin() + first, chunks.end(), gen);
+
+                size_t out = beg;
+                for (size_t i = first; i < chunks.size(); ++i) {
+                    chunks[i].out = out;
+                    out += chunks[i].end - chunks[i].beg;
                 }
             }
 
             #pragma omp parallel for num_threads(threads) schedule(dynamic, 1)
             for (size_t i = 0; i < chunks.size(); ++i) {
-                std::mt19937 local_gen(shuffle_seed + i);
-                fast_shuffle_unchecked(flat_vertices.get_ptr() + chunks[i].first,
-                                      flat_vertices.get_ptr() + chunks[i].second, local_gen);
+                const Chunk &ch = chunks[i];
+                std::mt19937_64 gen(seed ^ (0x9E3779B97F4A7C15ull * (i + 1)));
+                const size_t size = ch.end - ch.beg;
+                const size_t num_sub = (size + SUB - 1) / SUB;
+
+                std::vector<size_t> sub(num_sub);
+                std::iota(sub.begin(), sub.end(), 0);
+                std::shuffle(sub.begin(), sub.end(), gen);
+
+                size_t out = ch.out;
+                vertex_t tmp[SUB];
+                for (size_t k = 0; k < num_sub; ++k) {
+                    const size_t base = ch.beg + SUB * sub[k];
+                    const size_t len = std::min(SUB, ch.end - base);
+                    std::copy(sorted_vertices.get_ptr() + base, sorted_vertices.get_ptr() + base + len, tmp);
+                    std::shuffle(tmp, tmp + len, gen);
+                    std::copy(tmp, tmp + len, flat_vertices.get_ptr() + out);
+                    out += len;
+                }
             }
         }
 
@@ -809,7 +849,7 @@ namespace HeiProMap {
                                const graph_t &g,
                                const p_manager_t &p_manager,
                                Mapping &mapping,
-                               [[maybe_unused]] const f64 imbalance,
+                               const f64 imbalance,
                                const u64 threads,
                                const weight_t lmax) {
             mapping.initialize(g.n);
@@ -825,7 +865,14 @@ namespace HeiProMap {
                 max_deg = std::max(max_deg, g.deg(u));
             }
 
-            const weight_t W = std::ceil(static_cast<f64>(lmax) / f_eff);
+            weight_t W;
+            if (config.use_epsilon_block_weight) {
+                // c(V) is constant over the levels, so the inferred epsilon equals the imbalance
+                const u64 blocks = std::min<u64>(std::max<u64>(g.n / std::max<u64>(config.contraction_limit, 1), 2), std::max<u64>(m_k, 1));
+                W = static_cast<weight_t>(imbalance * static_cast<f64>(g.g_weight) / static_cast<f64>(blocks));
+            } else {
+                W = std::ceil(static_cast<f64>(lmax) / f_eff);
+            }
             const weight_t max_w = std::max(max_v_w, W);
             const size_t B = (max_deg == 0) ? 1 : (floor_log2(max_deg) + 1);
 
@@ -836,9 +883,7 @@ namespace HeiProMap {
 
             // LP rounds
             for (u64 round = 0; round < config.max_rounds; ++round) {
-                if (config.use_degree_ordering) {
-                    shuffle_buckets(g, B, threads);
-                }
+                shuffle_chunks(g, threads);
 
                 u64 n_moved;
                 if (config.force_parallel_alg || threads > 1) {

@@ -224,7 +224,8 @@ namespace HeiProMap {
             // Size-Constrained Label Propagation (SCLP) Coarsening
             {"--sclp-coarsening-max-rounds", "", "SCLP max rounds.", "", "", false},
             {"--sclp-coarsening-min-threshold", "", "SCLP min threshold.", "", "", false},
-            {"--sclp-coarsening-f", "", "SCLP tuning parameter f.", "8.0", "", false},
+            {"--sclp-coarsening-f", "", "SCLP tuning parameter f (max cluster weight lmax / f).", "18.0", "", false},
+            {"--sclp-coarsening-weight-limit", "", "SCLP cluster weight limit: f (lmax / f) or epsilon-block-weight (KaMinPar: eps * c(V) / clamp(n / C, 2, k)).", "f", "", false},
             {"--sclp-coarsening-rating-function", "", "SCLP rating function (weight, expansion, expansionstar, expansionstarstar, innerouter).", "", "", false},
             {"--sclp-coarsening-use-degree-ordering", "", "SCLP use degree ordering (true/false).", "true", "", false},
             {"--sclp-coarsening-use-parallel-version", "", "SCLP use parallel version (true/false).", "", "", false},
@@ -567,6 +568,7 @@ namespace HeiProMap {
             }
 
             size_constrained_lp_config.force_parallel_alg = parallel_suite;
+            size_constrained_lp_config.contraction_limit = initial_c;
 
             // Override SCLP configs
             if (is_set("--sclp-coarsening-max-rounds")) {
@@ -577,6 +579,12 @@ namespace HeiProMap {
             }
             if (is_set("--sclp-coarsening-f")) {
                 size_constrained_lp_config.f = std::stod(get("--sclp-coarsening-f"));
+            }
+            if (is_set("--sclp-coarsening-weight-limit")) {
+                const std::string val = get("--sclp-coarsening-weight-limit");
+                if (val == "epsilon-block-weight") { size_constrained_lp_config.use_epsilon_block_weight = true; }
+                else if (val == "f") { size_constrained_lp_config.use_epsilon_block_weight = false; }
+                else { std::cerr << "Unknown --sclp-coarsening-weight-limit " << val << " (f, epsilon-block-weight)" << std::endl; exit(EXIT_FAILURE); }
             }
             if (is_set("--sclp-coarsening-rating-function")) {
                 size_constrained_lp_config.rating_function = string_to_edge_rating_function(get("--sclp-coarsening-rating-function"));
@@ -664,7 +672,7 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 32.0;
+            size_constrained_lp_config.f = 18.0;
             size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
             size_constrained_lp_config.use_degree_ordering = true;
 
@@ -724,7 +732,9 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 16.0;
+            size_constrained_lp_config.f = 18.0;
+            size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
+            size_constrained_lp_config.use_degree_ordering = true;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -784,7 +794,9 @@ namespace HeiProMap {
 
             size_constrained_lp_config.max_rounds = 5;
             size_constrained_lp_config.min_threshold = 0.05;
-            size_constrained_lp_config.f = 16.0;
+            size_constrained_lp_config.f = 18.0;
+            size_constrained_lp_config.rating_function = EdgeRatingFunction::WEIGHT;
+            size_constrained_lp_config.use_degree_ordering = true;
 
             // set multisection
             partitioning_algorithm_string = "multisection";
@@ -899,6 +911,9 @@ namespace HeiProMap {
             c.max_iteration = label_propagation_config.max_iteration;
             c.force_parallel_alg = label_propagation_config.force_parallel_alg;
             c.use_edge_cut = label_propagation_config.use_edge_cut;
+            // parallel suite does not use q_graph / block_conn, skip rebuilding them
+            c.enable_q_graph = false;
+            c.enable_block_conn = false;
             return c;
         }
 
