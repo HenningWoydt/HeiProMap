@@ -137,6 +137,7 @@ namespace HeiProMap {
             // Setup 2-way environment for the current subgraph
             p_manager_t sub_pm;
             sub_pm.initialize(g.n, 2, g.g_weight);
+            sub_pm.activate_all_blocks();
             sub_pm.reset_weights();
             for (vertex_t u = 0; u < g.n; ++u) {
                 sub_pm.set(u, g.v_weight(u), side[u]);
@@ -525,10 +526,12 @@ namespace HeiProMap {
 
             PartitionManager left_pm;
             left_pm.initialize(left_g.n, k_left, left_g.g_weight);
+            left_pm.activate_all_blocks();
             recurse(left_g, left_pm, k_left, total_k, global_weight, imbalance, config);
 
             PartitionManager right_pm;
             right_pm.initialize(right_g.n, k_right, right_g.g_weight);
+            right_pm.activate_all_blocks();
             recurse(right_g, right_pm, k_right, total_k, global_weight, imbalance, config);
 
             HEIPROMAP_PROFILE_SCOPE("partition", "RecursiveBisectionPartitioner", "merge_results");
@@ -572,6 +575,7 @@ namespace HeiProMap {
             } else {
                 p_manager.reset_weights();
             }
+            p_manager.activate_all_blocks();
 
             recurse(g, p_manager, k, k, g.g_weight, imbalance, config);
         }

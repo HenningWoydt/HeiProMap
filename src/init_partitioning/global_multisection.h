@@ -447,6 +447,7 @@ namespace HeiProMap {
 
             PartitionManager pm;
             pm.initialize(g.n, k, g.g_weight);
+            pm.activate_all_blocks();
             pm.reset_weights();
             for (vertex_t u = 0; u < g.n; ++u) {
                 pm.set(u, g.v_weight(u), partition[u]);

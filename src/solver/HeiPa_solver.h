@@ -189,6 +189,7 @@ namespace HeiProMap {
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+            p_manager.activate_all_blocks();
             bv_manager.initialize(graphs[0].n, ac.k);
             q_graph.initialize(ac.k);
             block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
@@ -227,6 +228,7 @@ namespace HeiProMap {
 
             // manager
             p_manager.initialize(graphs[0].n, ac.k, graphs[0].g_weight);
+            p_manager.activate_all_blocks();
             bv_manager.initialize(graphs[0].n, ac.k);
             q_graph.initialize(ac.k);
             block_conn.initialize(graphs[0].n, graphs[0].m, ac.k);
@@ -392,6 +394,7 @@ namespace HeiProMap {
                     // -------------------------------------------------------
                     PartitionManager local_pm;
                     local_pm.initialize(graphs.back().n, ac.k, 0);
+                    local_pm.activate_all_blocks();
 
                     RecursiveBisectionPartitioner rb_partitioner;
                     rb_partitioner.partition(graphs.back(), local_pm, ac.k, ac.seed, level_imbalance, ac.recursive_bisection_config);

@@ -157,6 +157,15 @@ namespace HeiProMap {
             hierarchy_level[id] = level;
         }
 
+        // Marks all k blocks as active (level 0). Solvers that work on all blocks at once (everything except
+        // Deep-HeiProMap, which creates blocks level by level) must call this after initialize(), otherwise
+        // the matchers of the refiners see no active block and the refinement does nothing.
+        void activate_all_blocks() {
+            for (partition_t id = 0; id < k; ++id) {
+                set_hierarchy_level(id, 0);
+            }
+        }
+
         // ==========================================
         // Vertex Assignment & Movement
         // ==========================================

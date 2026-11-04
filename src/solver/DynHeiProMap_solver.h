@@ -186,6 +186,7 @@ namespace HeiProMap {
 
                 // Reset managers if hierarchy changes
                 p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.activate_all_blocks();
                 bv_manager.initialize(g.n, (partition_t) num_blocks);
                 b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
                 q.initialize((partition_t) num_blocks);
@@ -308,6 +309,7 @@ namespace HeiProMap {
             for (auto h: config.hierarchy) num_blocks *= h;
 
             p_manager.initialize(0, (partition_t) num_blocks, 0);
+            p_manager.activate_all_blocks();
             bv_manager.initialize(0, (partition_t) num_blocks);
             b_conn.initialize(0, 0, (partition_t) num_blocks);
             q.initialize((partition_t) num_blocks);
@@ -378,6 +380,7 @@ namespace HeiProMap {
         void rebuild_managers() {
             u64 num_blocks = p_manager.k;
             p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+            p_manager.activate_all_blocks();
             bv_manager.initialize(g.n, (partition_t) num_blocks);
             b_conn.initialize(g.n, g.m, (partition_t) num_blocks);
             q.initialize((partition_t) num_blocks);
@@ -467,6 +470,7 @@ namespace HeiProMap {
             if (initial_partition.empty()) {
                 // First partition
                 p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.activate_all_blocks();
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }
@@ -491,6 +495,7 @@ namespace HeiProMap {
                 previous_partition = reference;
 
                 p_manager.initialize(g.n, (partition_t) num_blocks, g.g_weight);
+                p_manager.activate_all_blocks();
                 for (vertex_t u = 0; u < g.n; ++u) {
                     p_manager.set(u, g.v_weights[u], new_partition[u]);
                 }
@@ -517,6 +522,7 @@ namespace HeiProMap {
                 // Should not happen if incremental updates are implemented,
                 // but for now we re-initialize if needed.
                 p_manager.initialize(g.n, p_manager.k, g.g_weight);
+                p_manager.activate_all_blocks();
                 // Need to recover partition data... this highlights why we need incremental updates.
             }
 
