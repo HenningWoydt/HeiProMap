@@ -37,6 +37,8 @@ namespace HeiProMap {
                                      // needs both engines, so two busy PEs next to each other are worse than a busy one
                                      // next to a light one
         u64 swap_tries = 4;     // neighbors in the target block a vertex may be swapped with if the block is full
+        f64 swap_top = 1.0;     // a swap into a full block is only tried for the share of (vertex, block) pairs whose single
+                                // move raises the objective least (1: all); the cutoff is sampled at the start of a round
         bool verbose = false;
     };
 
@@ -57,6 +59,7 @@ namespace HeiProMap {
             for (u64 round = 0; round < cfg.max_rounds; ++round) {
                 const f64 before = s.objective();
                 s.rebuild_members();
+                s.set_swap_cutoff();
                 u64 moves = 0;
                 // the busiest PEs first
                 std::vector<u32> order(K);
@@ -151,6 +154,33 @@ namespace HeiProMap {
                 }
                 pair_weight.clear();
             }
+
+            f64 swap_cutoff = 1e300; // swaps are tried only if the single move raises the objective by at most this share
+
+            // Samples the (vertex, full block) pairs and sets the cutoff so that the cfg.swap_top share with the smallest
+            // objective increase of the single move passes. A swap pays off almost only where the move alone is cheap.
+            void set_swap_cutoff() {
+                swap_cutoff = 1e300;
+                if (cfg.swap_top >= 1.0 || cfg.pair_objective) { return; }
+                std::vector<f64> sample;
+                for (vertex_t u = 0; u < g.n; u += 8) {
+                    const partition_t a = part[u];
+                    const weight_t uw = g.v_weight(u);
+                    blocks_seen.clear();
+                    for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1]; ++j) {
+                        const partition_t c = part[g.edges_v[j]];
+                        if (c == a || std::find(blocks_seen.begin(), blocks_seen.end(), c) != blocks_seen.end()) { continue; }
+                        blocks_seen.push_back(c);
+                        if (bw[c] + uw <= lmax && bw[a] - uw > 0) { continue; }
+                        sample.push_back((eval_move(u, c) - sum_power) / sum_power);
+                    }
+                }
+                if (sample.size() < 100) { return; }
+                const size_t k = std::min(sample.size() - 1, static_cast<size_t>(cfg.swap_top * static_cast<f64>(sample.size())));
+                std::nth_element(sample.begin(), sample.begin() + static_cast<std::ptrdiff_t>(k), sample.end());
+                swap_cutoff = sample[k];
+            }
+            std::vector<partition_t> blocks_seen;        // scratch
 
             void rebuild_members() {
                 for (auto &m: members) { m.clear(); }
@@ -359,6 +389,7 @@ namespace HeiProMap {
                         bool done = false;
                         if (!cfg.pair_objective) {
                             // u goes to c once, every candidate v is only evaluated and the first improving one moves
+                            if (swap_cutoff < 1e299 && (eval_move(u, c) - before) / before > swap_cutoff) { continue; }
                             move(u, c, touched);
                             for (size_t j = g.neighborhoods[u]; j < g.neighborhoods[u + 1] && tried < cfg.swap_tries; ++j) {
                                 const vertex_t v = g.edges_v[j];

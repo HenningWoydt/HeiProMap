@@ -235,6 +235,7 @@ namespace HeiProMap {
 
             if (ac.waver_corner_refinement_config.enabled) {
                 // single vertices move or swap between neighboring PEs so that the busiest engines get less work
+                HEIPROMAP_PROFILE_SCOPE("refinement", "WaverSolver", "corner_refinement");
                 const auto t_corner = get_time_point();
                 std::vector<partition_t> part = snapshot();
                 const graph_t &g = graphs.back();

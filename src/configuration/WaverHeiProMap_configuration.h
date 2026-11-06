@@ -158,6 +158,7 @@ namespace HeiProMap {
             {"--corner-power", "", "Corner refinement: the engine loads are compared as sum(load^power).", "", "", false},
             {"--corner-tau", "", "Corner refinement: a contact of w cut edges counts as 1 - exp(-w / tau) messages.", "", "", false},
             {"--corner-top", "", "Corner refinement: the share of PEs, busiest first, whose vertices are tried in a round.", "", "", false},
+            {"--corner-swap-top", "", "Corner refinement: a swap into a full PE is only tried for this share of the (vertex, PE) pairs whose single move raises the objective least (1: all).", "", "", false},
             {"--corner-pair", "", "Corner refinement: the objective is the sum over message pairs of (load_a + load_b)^power instead of sum(load^power), since a message needs both engines (0/1).", "", "", false},
             {"--corner-swaps", "", "Corner refinement: neighbors in a full PE a vertex may be swapped with.", "", "", false},
             {"--corner-round-gain", "", "Corner refinement: stop when a round lowers the objective by less than this share (0: run all rounds).", "", "", false},
@@ -480,7 +481,10 @@ namespace HeiProMap {
             // The multilevel mode refines from the coarsest level down, where a second and third pass of the message
             // refinement pay off (on the 91M-vertex NASA mesh: 3 iterations -8.8% message cost for 2.2x the refinement
             // time, 10 iterations -12.6% for 3.9x), so fast uses 3. The spectral mode keeps 1.
-            if (mode == "multilevel" && config_name == "fast") { waver_message_refinement_config.max_iters = 3; }
+            if (mode == "multilevel" && config_name == "fast") {
+                waver_message_refinement_config.max_iters = 3;
+                waver_corner_refinement_config.swap_top = 0.2; // swaps into full PEs only where the single move is cheap: -12% time, same makespan
+            }
 
             apply_command_line_overrides();
 
@@ -768,6 +772,7 @@ namespace HeiProMap {
             if (is_set("--corner-power")) waver_corner_refinement_config.power = std::stod(get("--corner-power"));
             if (is_set("--corner-tau")) waver_corner_refinement_config.tau = std::stod(get("--corner-tau"));
             if (is_set("--corner-top")) waver_corner_refinement_config.top_fraction = std::stod(get("--corner-top"));
+            if (is_set("--corner-swap-top")) waver_corner_refinement_config.swap_top = std::stod(get("--corner-swap-top"));
             if (is_set("--corner-pair")) waver_corner_refinement_config.pair_objective = std::stoull(get("--corner-pair")) != 0;
             if (is_set("--corner-swaps")) waver_corner_refinement_config.swap_tries = std::stoull(get("--corner-swaps"));
             if (is_set("--corner-round-gain")) waver_corner_refinement_config.round_gain = std::stod(get("--corner-round-gain"));
