@@ -311,7 +311,8 @@ namespace HeiProMap {
 
         // augments the current flow to a maximum flow, returns the added flow.
         // afterwards level[v] != -1 iff v is reachable from s in the residual graph.
-        s64 maxflow() {
+        // If the added flow reaches `limit` it returns early (the caller prunes the pair anyway).
+        s64 maxflow(const s64 limit = INF) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "maxflow");
             s64 flow = 0;
             while (bfs()) {
@@ -331,6 +332,7 @@ namespace HeiProMap {
                                 if (a.cap == 0 && cut == pn) { cut = i; }
                             }
                             flow += bn;
+                            if (flow >= limit) { return flow; }
                             u = tail(path[cut]);
                             pn = cut;
                             continue;
@@ -529,7 +531,7 @@ namespace HeiProMap {
             cur.reset();
 
             for (int iter = 0; iter < nl + 2; ++iter) {
-                flow += maxflow();
+                flow += maxflow(cut_bound - flow);
                 // the cut never shrinks when terminals grow: this pair cannot beat a known feasible cut
                 if (flow >= cut_bound) { return; }
                 for (int v = 0; v < nl; ++v) { reach_s[v] = level[v] != -1; }
