@@ -153,11 +153,14 @@ namespace HeiProMap {
             }
         };
 
-        // flow network of the current sub problem. nodes: 0..nl-1 vertices, nl = s, nl+1 = t
+        // Flow network of the current sub problem on the nodes 0..nl-1. s and t are implicit: a vertex with
+        // in_s[v] has an infinite arc s -> v, a vertex with in_t[v] one v -> t. A simple augmenting path never
+        // returns to s or leaves t, so no capacity has to be stored for these arcs.
         int nl = 0;
-        int S = 0;
-        int T = 0;
-        int N = 0; // nl + 2
+        int N = 0; // = nl, size of the per vertex arrays
+        AlignedArray<int> src_list; // vertices with in_s
+        int src_n = 0;
+        int dlevel = -1; // level of the sink terminals of the current Dinic phase
         size_t na = 0; // number of arcs
         AlignedArray<Arc> arcs;
         AlignedArray<Arc> base_arcs;
@@ -169,8 +172,6 @@ namespace HeiProMap {
         int last_qt = 0;
         AlignedArray<int> path;
         size_t pn = 0;
-        AlignedArray<int> src_arc; // arc s -> v
-        AlignedArray<int> snk_arc; // arc v -> t
         AlignedArray<weight_t> vw;
         weight_t total_w = 0;
 
@@ -212,9 +213,7 @@ namespace HeiProMap {
         void build_network(const CSRGraph &g, const vertex_t *verts, const int cnt) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "build_network");
             nl = cnt;
-            S = nl;
-            T = nl + 1;
-            N = nl + 2;
+            N = nl;
 
             vw.initialize(nl);
             deg_buf.initialize(N);
@@ -229,9 +228,6 @@ namespace HeiProMap {
                 for (size_t i = g.neighborhoods[gu]; i < g.neighborhoods[gu + 1]; ++i) {
                     if (loc[g.edges_v[i]] >= 0) { deg_buf[u]++; }
                 }
-                deg_buf[u] += 2;
-                deg_buf[S]++;
-                deg_buf[T]++;
             }
 
             first[0] = 0;
@@ -241,8 +237,6 @@ namespace HeiProMap {
             base_arcs.initialize(na);
             for (int i = 0; i < N; ++i) { pos_buf[i] = first[i]; }
 
-            src_arc.initialize(nl);
-            snk_arc.initialize(nl);
             for (int u = 0; u < nl; ++u) {
                 const vertex_t gu = verts[u];
                 for (size_t i = g.neighborhoods[gu]; i < g.neighborhoods[gu + 1]; ++i) {
@@ -255,20 +249,6 @@ namespace HeiProMap {
                     arcs[b] = {u, a, w};
                 }
             }
-            for (int u = 0; u < nl; ++u) {
-                // s -> u (enabled for source vertices)
-                int a = pos_buf[S]++;
-                int b = pos_buf[u]++;
-                arcs[a] = {u, b, 0};
-                arcs[b] = {S, a, 0};
-                src_arc[u] = a;
-                // u -> t (enabled for sink vertices)
-                a = pos_buf[u]++;
-                b = pos_buf[T]++;
-                arcs[a] = {T, b, 0};
-                arcs[b] = {u, a, 0};
-                snk_arc[u] = a;
-            }
             std::memcpy(base_arcs.get_ptr(), arcs.get_ptr(), na * sizeof(Arc));
 
             ptr.initialize(N);
@@ -277,6 +257,7 @@ namespace HeiProMap {
             queue.initialize(N);
             bq.initialize(N);
             path.initialize(N);
+            src_list.initialize(N);
             in_s.initialize(N);
             in_t.initialize(N);
             reach_s.initialize(N);
@@ -293,27 +274,39 @@ namespace HeiProMap {
             first_part.initialize(N);
         }
 
+        void add_source(const int v) {
+            in_s[v] = 1;
+            src_list[src_n++] = v;
+        }
+
+        // Dinic level graph from all source terminals (level 0). Stops at the first level that contains a
+        // sink terminal (dlevel); only sink terminals of that level end an augmenting path.
         bool bfs() {
             // reset only what the previous search touched
             for (int i = 0; i < last_qt; ++i) { level[bq[i]] = -1; }
             int qh = 0, qt = 0;
-            level[S] = 0;
-            ptr[S] = first[S];
-            bq[qt++] = S;
+            dlevel = -1;
+            for (int i = 0; i < src_n; ++i) {
+                const int v = src_list[i];
+                level[v] = 0;
+                ptr[v] = first[v];
+                bq[qt++] = v;
+            }
             while (qh < qt) {
                 const int u = bq[qh++];
-                if (level[T] != -1 && level[u] >= level[T]) { break; } // deeper levels are not used by Dinic
+                if (dlevel != -1 && level[u] >= dlevel) { break; } // deeper levels are not used by Dinic
                 for (int i = first[u]; i < first[u + 1]; ++i) {
                     const Arc &a = arcs[i];
                     if (a.cap > 0 && level[a.to] == -1) {
                         level[a.to] = level[u] + 1;
                         ptr[a.to] = first[a.to];
                         bq[qt++] = a.to;
+                        if (dlevel == -1 && in_t[a.to]) { dlevel = level[a.to]; }
                     }
                 }
             }
             last_qt = qt;
-            return level[T] != -1;
+            return dlevel != -1;
         }
 
         // augments the current flow to a maximum flow, returns the added flow.
@@ -322,41 +315,44 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "maxflow");
             s64 flow = 0;
             while (bfs()) {
-                pn = 0;
-                int u = S;
-                while (true) {
-                    if (u == T) {
-                        s64 bn = INF;
-                        for (size_t i = 0; i < pn; ++i) { bn = std::min(bn, arcs[path[i]].cap); }
-                        size_t cut = pn;
-                        for (size_t i = 0; i < pn; ++i) {
-                            Arc &a = arcs[path[i]];
-                            a.cap -= bn;
-                            arcs[a.rev].cap += bn;
-                            if (a.cap == 0 && cut == pn) { cut = i; }
+                for (int si = 0; si < src_n; ++si) {
+                    int u = src_list[si];
+                    if (level[u] == -1) { continue; } // dead end
+                    pn = 0;
+                    while (true) {
+                        if (in_t[u] && level[u] == dlevel) {
+                            s64 bn = INF;
+                            for (size_t i = 0; i < pn; ++i) { bn = std::min(bn, arcs[path[i]].cap); }
+                            size_t cut = pn;
+                            for (size_t i = 0; i < pn; ++i) {
+                                Arc &a = arcs[path[i]];
+                                a.cap -= bn;
+                                arcs[a.rev].cap += bn;
+                                if (a.cap == 0 && cut == pn) { cut = i; }
+                            }
+                            flow += bn;
+                            u = tail(path[cut]);
+                            pn = cut;
+                            continue;
                         }
-                        flow += bn;
-                        u = tail(path[cut]);
-                        pn = cut;
-                        continue;
-                    }
-                    bool advanced = false;
-                    for (int &i = ptr[u]; i < first[u + 1]; ++i) {
-                        const Arc &a = arcs[i];
-                        if (a.cap > 0 && level[a.to] == level[u] + 1) {
-                            advanced = true;
-                            break;
+                        bool advanced = false;
+                        for (int &i = ptr[u]; i < first[u + 1]; ++i) {
+                            const Arc &a = arcs[i];
+                            if (a.cap > 0 && level[a.to] == level[u] + 1) {
+                                advanced = true;
+                                break;
+                            }
                         }
-                    }
-                    if (advanced) {
-                        path[pn++] = ptr[u];
-                        u = arcs[ptr[u]].to;
-                    } else {
-                        if (u == S) { break; }
-                        level[u] = -1; // dead end
-                        const int a = path[--pn];
-                        u = tail(a);
-                        ++ptr[u];
+                        if (advanced) {
+                            path[pn++] = ptr[u];
+                            u = arcs[ptr[u]].to;
+                        } else {
+                            level[u] = -1; // dead end
+                            if (pn == 0) { break; }
+                            const int a = path[--pn];
+                            u = tail(a);
+                            ++ptr[u];
+                        }
                     }
                 }
             }
@@ -368,8 +364,12 @@ namespace HeiProMap {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "reach_t");
             std::fill_n(reach_t.get_ptr(), N, 0);
             int qh = 0, qt = 0;
-            reach_t[T] = 1;
-            queue[qt++] = T;
+            for (int v = 0; v < nl; ++v) {
+                if (in_t[v]) {
+                    reach_t[v] = 1;
+                    queue[qt++] = v;
+                }
+            }
             while (qh < qt) {
                 const int x = queue[qh++];
                 for (int i = first[x]; i < first[x + 1]; ++i) {
@@ -440,11 +440,9 @@ namespace HeiProMap {
                 const int w = cand[ci].v;
                 if (side_w + added + vw[w] > max_side) { continue; }
                 if (source_side) {
-                    in_s[w] = 1;
-                    arcs[src_arc[w]].cap = INF;
+                    add_source(w);
                 } else {
                     in_t[w] = 1;
-                    arcs[snk_arc[w]].cap = INF;
                 }
                 added += vw[w];
                 any = true;
@@ -484,11 +482,9 @@ namespace HeiProMap {
             }
             for (int v = 0; v < nl; ++v) {
                 if (owner[v] == 1 && !in_s[v]) {
-                    in_s[v] = 1;
-                    arcs[src_arc[v]].cap = INF;
+                    add_source(v);
                 } else if (owner[v] == 2 && !in_t[v]) {
                     in_t[v] = 1;
-                    arcs[snk_arc[v]].cap = INF;
                 }
             }
         }
@@ -500,10 +496,9 @@ namespace HeiProMap {
             std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
             std::fill_n(in_s.get_ptr(), N, 0);
             std::fill_n(in_t.get_ptr(), N, 0);
-            in_s[j.a] = 1;
-            arcs[src_arc[j.a]].cap = INF;
+            src_n = 0;
+            add_source(j.a);
             in_t[j.b] = 1;
-            arcs[snk_arc[j.b]].cap = INF;
             if (init_fraction > 0.0) {
                 const weight_t target = (weight_t) (init_fraction * (f64) total_w);
                 grow_initial_terminals(j.a, j.b, std::min(target, j.hi), std::min(target, total_w - j.lo));
@@ -525,6 +520,8 @@ namespace HeiProMap {
             std::memcpy(arcs.get_ptr(), slot_arcs.get_ptr() + (size_t) slot * na, na * sizeof(Arc));
             std::memcpy(in_s.get_ptr(), slot_in_s.get_ptr() + (size_t) slot * N, N);
             std::memcpy(in_t.get_ptr(), slot_in_t.get_ptr() + (size_t) slot * N, N);
+            src_n = 0;
+            for (int v = 0; v < nl; ++v) { if (in_s[v]) { src_list[src_n++] = v; } }
 
             const weight_t avg_w = std::max<weight_t>(1, total_w / std::max(1, nl));
             s64 flow = j.lower;
