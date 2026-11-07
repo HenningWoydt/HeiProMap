@@ -214,6 +214,8 @@ namespace HeiProMap {
             {"--partitioning", "", "Initial partitioning algorithm (multisection, greedy, flow-bisection).", "", "", false},
             {"--flow-bisection-prune", "", "Flow bisection: stop a seed pair once its cut cannot beat the best feasible cut (true/false).", "true", "", false},
             {"--flow-bisection-init-fraction", "", "Flow bisection: both terminals are first grown to this fraction of the sub graph weight (0 = single vertex).", "0.1", "", false},
+            {"--flow-bisection-prune-factor", "", "Flow bisection: drop a pair when its flow reaches this factor times the best feasible cut (1 = exact).", "0.95", "", false},
+            {"--flow-bisection-keep-fraction", "", "Flow bisection: fraction of the (pair, orientation) jobs, best lower bound first, that is continued after the first solve.", "0.5", "", false},
             {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
             {"--simple-accept-zero-gain", "", "With the simple refiners: the simple flow refinement applies zero-gain cuts like the regular one (true/false).", "true", "", false},
@@ -509,6 +511,12 @@ namespace HeiProMap {
             }
             if (is_set("--flow-bisection-init-fraction")) {
                 flow_bisection_config.init_fraction = std::stod(get("--flow-bisection-init-fraction"));
+            }
+            if (is_set("--flow-bisection-prune-factor")) {
+                flow_bisection_config.prune_factor = std::stod(get("--flow-bisection-prune-factor"));
+            }
+            if (is_set("--flow-bisection-keep-fraction")) {
+                flow_bisection_config.keep_fraction = std::stod(get("--flow-bisection-keep-fraction"));
             }
             if (is_set("--flow-bisection-seeds")) {
                 flow_bisection_config.num_seeds = std::stoull(get("--flow-bisection-seeds"));

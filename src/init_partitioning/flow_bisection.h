@@ -50,6 +50,12 @@ namespace HeiProMap {
         bool prune = true;
         // both terminals are first grown (alternating BFS) to this fraction of the sub graph weight
         f64 init_fraction = 0.1;
+        // A pair is dropped as soon as its flow reaches prune_factor * (best feasible cut). 1.0 is exact (a
+        // pair can never end below its flow), smaller values also drop pairs that might win by a few percent.
+        f64 prune_factor = 0.95;
+        // Only the best keep_fraction of all (pair, orientation) jobs, ranked by the flow after their first
+        // solve (a lower bound of their cut), are continued. 1.0 continues all of them.
+        f64 keep_fraction = 0.5;
     };
 
     /**
@@ -110,6 +116,15 @@ namespace HeiProMap {
             void push(const T &x) { a[n++] = x; }
             T pop() { return a[--n]; }
             bool empty() const { return n == 0; }
+        };
+
+        // one (seed pair, orientation) of a bisection
+        struct Job {
+            int a, b; // terminals: a -> source, b -> sink
+            weight_t lo, hi; // window of the source side weight
+            int ia, ib; // seed indices (rows of dist_rows)
+            bool mirrored;
+            s64 lower; // flow after the first solve: a lower bound on the cut of this job
         };
 
         struct Task {
@@ -178,12 +193,19 @@ namespace HeiProMap {
         AlignedArray<size_t> blk_b, blk_e; // result of kway_partition: range of every block
         AlignedArray<int> loc;
         Stack<Task> task_stack;
+        // snapshots of the networks after the first solve of every job of a bisection
+        AlignedArray<Arc> slot_arcs;
+        AlignedArray<char> slot_in_s, slot_in_t;
+        AlignedArray<Job> jobs;
+        AlignedArray<int> job_order;
 
         std::mt19937_64 rng;
         bool debug = false;
         u64 pair_salt = 0;
         bool prune = true;
         f64 init_fraction = 0.1;
+        f64 prune_factor = 1.0;
+        f64 keep_fraction = 1.0;
 
         int tail(const int a) const { return arcs[arcs[a].rev].to; }
 
@@ -471,27 +493,41 @@ namespace HeiProMap {
             }
         }
 
-        // source set grows from a, sink set from b. window [lo, hi] is for the source side weight.
-        // The result is merged into `best` (scr_res is used as scratch).
-        void run_pair(const int a, const int b, const weight_t lo, const weight_t hi,
-                      const int *dist_a, const int *dist_b, PairResult &best,
-                      const s64 cut_bound = INF) {
-            rng.seed(pair_salt ^ ((u64) a * 1000003ULL + (u64) b * 7919ULL + 17));
-            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "run_pair");
+        // Sets up the network of a job (terminals a, b pre-grown), solves the first max flow and saves the
+        // network in `slot`. The flow value is a lower bound for the cut the job can end with.
+        void prepare_job(Job &j, const int slot) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "prepare_job");
             std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
             std::fill_n(in_s.get_ptr(), N, 0);
             std::fill_n(in_t.get_ptr(), N, 0);
-            in_s[a] = 1;
-            arcs[src_arc[a]].cap = INF;
-            in_t[b] = 1;
-            arcs[snk_arc[b]].cap = INF;
+            in_s[j.a] = 1;
+            arcs[src_arc[j.a]].cap = INF;
+            in_t[j.b] = 1;
+            arcs[snk_arc[j.b]].cap = INF;
             if (init_fraction > 0.0) {
                 const weight_t target = (weight_t) (init_fraction * (f64) total_w);
-                grow_initial_terminals(a, b, std::min(target, hi), std::min(target, total_w - lo));
+                grow_initial_terminals(j.a, j.b, std::min(target, j.hi), std::min(target, total_w - j.lo));
             }
+            j.lower = maxflow();
+            std::memcpy(slot_arcs.get_ptr() + (size_t) slot * na, arcs.get_ptr(), na * sizeof(Arc));
+            std::memcpy(slot_in_s.get_ptr() + (size_t) slot * N, in_s.get_ptr(), N);
+            std::memcpy(slot_in_t.get_ptr() + (size_t) slot * N, in_t.get_ptr(), N);
+        }
+
+        // Continues a job from its snapshot: pierce the lighter side until the cut is balanced.
+        // The result is merged into `best` (scr_res is used as scratch).
+        void run_job(const Job &j, const int slot, const int *dist_a, const int *dist_b, PairResult &best,
+                     const s64 cut_bound = INF) {
+            const int a = j.a, b = j.b;
+            const weight_t lo = j.lo, hi = j.hi;
+            rng.seed(pair_salt ^ ((u64) a * 1000003ULL + (u64) b * 7919ULL + 17));
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "run_pair");
+            std::memcpy(arcs.get_ptr(), slot_arcs.get_ptr() + (size_t) slot * na, na * sizeof(Arc));
+            std::memcpy(in_s.get_ptr(), slot_in_s.get_ptr() + (size_t) slot * N, N);
+            std::memcpy(in_t.get_ptr(), slot_in_t.get_ptr() + (size_t) slot * N, N);
 
             const weight_t avg_w = std::max<weight_t>(1, total_w / std::max(1, nl));
-            s64 flow = 0;
+            s64 flow = j.lower;
             PairResult &cur = scr_res;
             cur.reset();
 
@@ -560,7 +596,7 @@ namespace HeiProMap {
         }
 
         s64 bound(const PairResult &best) const {
-            return (prune && best.valid && best.violation == 0) ? best.cut : INF;
+            return (prune && best.valid && best.violation == 0) ? (s64) ((f64) best.cut * prune_factor) : INF;
         }
 
         // splits the sub problem; first_part[v] = 1 if local vertex v belongs to the first part
@@ -597,23 +633,50 @@ namespace HeiProMap {
             best_res.reset();
             pair_salt = rng();
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "all_pairs");
+
+            // all jobs: every seed pair, and the other orientation if the sides differ (seeds[j] must end up
+            // in the first part: source side weight window mirrored)
+            const size_t max_jobs = (size_t) ns * (size_t) (ns - 1);
+            jobs.initialize(max_jobs);
+            job_order.initialize(max_jobs);
+            size_t nj = 0;
             for (int i = 0; i < ns; ++i) {
-                const int *Di = dist_rows.get_ptr() + (size_t) i * (size_t) nl;
                 for (int j = i + 1; j < ns; ++j) {
-                    const int *Dj = dist_rows.get_ptr() + (size_t) j * (size_t) nl;
-                    run_pair(seeds[i], seeds[j], lo, hi, Di, Dj, best_res, bound(best_res));
-                    if (!symmetric) {
-                        // the other orientation: seeds[j] must end up in the first part
-                        // (source side weight window mirrored)
-                        mir_res.reset();
-                        run_pair(seeds[j], seeds[i], total_w - hi, total_w - lo, Dj, Di, mir_res, bound(best_res));
-                        if (mir_res.valid) {
-                            for (int x = 0; x < nl; ++x) { mir_res.in_source[x] = !mir_res.in_source[x]; }
-                            const bool better = !best_res.valid
-                                                || mir_res.violation < best_res.violation
-                                                || (mir_res.violation == best_res.violation && mir_res.cut < best_res.cut);
-                            if (better) { best_res.swap(mir_res); }
-                        }
+                    jobs[nj++] = Job{seeds[i], seeds[j], lo, hi, i, j, false, 0};
+                    if (!symmetric) { jobs[nj++] = Job{seeds[j], seeds[i], total_w - hi, total_w - lo, j, i, true, 0}; }
+                }
+            }
+            slot_arcs.initialize(nj * na);
+            slot_in_s.initialize(nj * (size_t) N);
+            slot_in_t.initialize(nj * (size_t) N);
+            for (size_t q = 0; q < nj; ++q) {
+                prepare_job(jobs[q], (int) q);
+                job_order[q] = (int) q;
+            }
+            // most promising (smallest lower bound) first: finds a good feasible cut early, which then
+            // prunes the remaining jobs
+            std::stable_sort(job_order.get_ptr(), job_order.get_ptr() + nj,
+                             [&](const int x, const int y) { return jobs[x].lower < jobs[y].lower; });
+
+            const size_t run_jobs = std::max<size_t>(1, (size_t) std::ceil((double) nj * keep_fraction));
+            for (size_t q = 0; q < run_jobs; ++q) {
+                const int slot = job_order[q];
+                const Job &job = jobs[slot];
+                const s64 cb = bound(best_res);
+                if (job.lower >= cb) { continue; } // cannot beat the best feasible cut
+                const int *da = dist_rows.get_ptr() + (size_t) job.ia * (size_t) nl;
+                const int *db = dist_rows.get_ptr() + (size_t) job.ib * (size_t) nl;
+                if (!job.mirrored) {
+                    run_job(job, slot, da, db, best_res, cb);
+                } else {
+                    mir_res.reset();
+                    run_job(job, slot, da, db, mir_res, cb);
+                    if (mir_res.valid) {
+                        for (int x = 0; x < nl; ++x) { mir_res.in_source[x] = !mir_res.in_source[x]; }
+                        const bool better = !best_res.valid
+                                            || mir_res.violation < best_res.violation
+                                            || (mir_res.violation == best_res.violation && mir_res.cut < best_res.cut);
+                        if (better) { best_res.swap(mir_res); }
                     }
                 }
             }
@@ -708,6 +771,8 @@ namespace HeiProMap {
             p.debug = std::getenv("FLOW_BISECTION_DEBUG") != nullptr;
             p.prune = config.prune;
             p.init_fraction = config.init_fraction;
+            p.prune_factor = config.prune_factor;
+            p.keep_fraction = config.keep_fraction;
             p.rng.seed(seed * 0x9E3779B97F4A7C15ULL + 12345);
 
             const size_t l = hierarchy.size();
