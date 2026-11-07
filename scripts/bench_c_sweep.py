@@ -24,6 +24,7 @@ def main():
     ap.add_argument("--configs", default="fast,eco,strong")
     ap.add_argument("--seeds", default="0,1,2,3,4")
     ap.add_argument("--flow-c", type=int, default=8)
+    ap.add_argument("--flow-extra", default="", help="extra HeiProMap flags for the flow runs only")
     ap.add_argument("--current-c", default="4,8,16,32,64")
     ap.add_argument("--hierarchy", default="4:8:6")
     ap.add_argument("--distance", default="1:10:100")
@@ -47,11 +48,12 @@ def main():
 
     rows = []
     for i, (g, c, alg, s, ic) in enumerate(jobs, 1):
-        key = "|".join(map(str, [g, c, alg, s, ic, a.hierarchy, a.distance, a.imbalance, a.threads]))
+        key = "|".join(map(str, [g, c, alg, s, ic, a.hierarchy, a.distance, a.imbalance, a.threads] + ([a.flow_extra] if alg == "flow" and a.flow_extra else [])))
         if key not in cache:
             print(f"[{i}/{len(jobs)}] {alg} c={ic} {c} {g} seed {s}", flush=True)
             aa = copy.copy(a)
             aa.initial_c = ic
+            aa.extra = a.flow_extra.split() if alg == "flow" else []
             row = b.run_one((g, c, alg, s, aa))
             if not row["ok"]:
                 continue
