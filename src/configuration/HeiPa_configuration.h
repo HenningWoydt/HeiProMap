@@ -88,6 +88,7 @@ namespace HeiProMap {
         PARTITIONING_ALG_GREEDY,
         PARTITIONING_ALG_GREEDY_GRAPH_GROWING,
         PARTITIONING_ALG_HYBRID,
+        PARTITIONING_ALG_FLOW_BISECTION,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
@@ -98,6 +99,7 @@ namespace HeiProMap {
         if (str == "greedy") return PARTITIONING_ALG_GREEDY;
         if (str == "greedy-graph-growing") return PARTITIONING_ALG_GREEDY_GRAPH_GROWING;
         if (str == "hybrid") return PARTITIONING_ALG_HYBRID;
+        if (str == "flow-bisection") return PARTITIONING_ALG_FLOW_BISECTION;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
@@ -110,6 +112,7 @@ namespace HeiProMap {
             case PARTITIONING_ALG_GREEDY: return "greedy";
             case PARTITIONING_ALG_GREEDY_GRAPH_GROWING: return "greedy-graph-growing";
             case PARTITIONING_ALG_HYBRID: return "hybrid";
+            case PARTITIONING_ALG_FLOW_BISECTION: return "flow-bisection";
             default: return "UNDEFINED";
         }
     }

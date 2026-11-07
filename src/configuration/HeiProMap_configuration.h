@@ -79,6 +79,7 @@ namespace HeiProMap {
         PARTITIONING_ALG_GREEDY,
         PARTITIONING_ALG_GREEDY_GRAPH_GROWING,
         PARTITIONING_ALG_HYBRID,
+        PARTITIONING_ALG_FLOW_BISECTION,
     };
 
     inline PARTITIONING_ALGS string_to_partitioning_algorithm(const std::string &str) {
@@ -89,6 +90,7 @@ namespace HeiProMap {
         if (str == "greedy") return PARTITIONING_ALG_GREEDY;
         if (str == "greedy-graph-growing") return PARTITIONING_ALG_GREEDY_GRAPH_GROWING;
         if (str == "hybrid") return PARTITIONING_ALG_HYBRID;
+        if (str == "flow-bisection") return PARTITIONING_ALG_FLOW_BISECTION;
         return PARTITIONING_ALG_UNDEFINED;
     }
 
@@ -101,6 +103,7 @@ namespace HeiProMap {
             case PARTITIONING_ALG_GREEDY: return "greedy";
             case PARTITIONING_ALG_GREEDY_GRAPH_GROWING: return "greedy-graph-growing";
             case PARTITIONING_ALG_HYBRID: return "hybrid";
+            case PARTITIONING_ALG_FLOW_BISECTION: return "flow-bisection";
             default: return "UNDEFINED";
         }
     }
@@ -168,6 +171,7 @@ namespace HeiProMap {
 
 #include "../utility/utils.h"
 #include "../init_partitioning/global_multisection.h"
+#include "../init_partitioning/flow_bisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
@@ -207,6 +211,10 @@ namespace HeiProMap {
             // optional
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
             {"--initial-c", "", "Initial contracting limit.", "64", "", false},
+            {"--partitioning", "", "Initial partitioning algorithm (multisection, greedy, flow-bisection).", "", "", false},
+            {"--flow-bisection-prune", "", "Flow bisection: stop a seed pair once its cut cannot beat the best feasible cut (true/false).", "true", "", false},
+            {"--flow-bisection-init-fraction", "", "Flow bisection: both terminals are first grown to this fraction of the sub graph weight (0 = single vertex).", "0.1", "", false},
+            {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
             {"--simple-accept-zero-gain", "", "With the simple refiners: the simple flow refinement applies zero-gain cuts like the regular one (true/false).", "true", "", false},
             {"--force-parallel-suite", "", "Always use the parallel suite (simple refiners without quotient graph / block connectivity, parallel LP, parallel contraction), even with 1 thread (true/false). It is enabled automatically when threads > 1.", "false", "", false},
@@ -321,6 +329,7 @@ namespace HeiProMap {
         bool rb_use_full_refine = false;
 
         GlobalMultisectionConfiguration global_multisection_config;
+        FlowBisectionConfiguration flow_bisection_config;
         std::string heipa_config_string = "strong";
 
         // rebalance algorithm
@@ -489,6 +498,20 @@ namespace HeiProMap {
 
             if (is_set("--initial-c")) {
                 initial_c = std::stoull(get("--initial-c"));
+            }
+            if (is_set("--partitioning")) {
+                partitioning_algorithm_string = get("--partitioning");
+                partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            }
+            if (is_set("--flow-bisection-prune")) {
+                const std::string val = get("--flow-bisection-prune");
+                flow_bisection_config.prune = (val == "true" || val == "1");
+            }
+            if (is_set("--flow-bisection-init-fraction")) {
+                flow_bisection_config.init_fraction = std::stod(get("--flow-bisection-init-fraction"));
+            }
+            if (is_set("--flow-bisection-seeds")) {
+                flow_bisection_config.num_seeds = std::stoull(get("--flow-bisection-seeds"));
             }
 
             use_parallel_contraction = parallel_suite;
