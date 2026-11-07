@@ -56,6 +56,8 @@ namespace HeiProMap {
         // Only the best keep_fraction of all (pair, orientation) jobs, ranked by the flow after their first
         // solve (a lower bound of their cut), are continued. 1.0 continues all of them.
         f64 keep_fraction = 0.5;
+        // Boykov-Kolmogorov max flow (search trees are kept when terminals are added); false: Dinic
+        bool use_bk = true;
     };
 
     /**
@@ -159,6 +161,13 @@ namespace HeiProMap {
         int nl = 0;
         int N = 0; // = nl, size of the per vertex arrays
         AlignedArray<int> src_list; // vertices with in_s
+        // Boykov-Kolmogorov search trees. label: 0 free, 1 in the source tree, 2 in the sink tree. pa[v]: arc
+        // (in v's list) to the parent, -1 root (terminal), -3 orphan. At termination the source tree is the set
+        // reachable from s and the sink tree the set that reaches t in the residual graph.
+        bool use_bk = true;
+        AlignedArray<char> label, isact;
+        AlignedArray<int> pa, act, orph;
+        int act_h = 0, act_t = 0, orph_n = 0;
         int src_n = 0;
         int dlevel = -1; // level of the sink terminals of the current Dinic phase
         size_t na = 0; // number of arcs
@@ -196,7 +205,8 @@ namespace HeiProMap {
         Stack<Task> task_stack;
         // snapshots of the networks after the first solve of every job of a bisection
         AlignedArray<Arc> slot_arcs;
-        AlignedArray<char> slot_in_s, slot_in_t;
+        AlignedArray<char> slot_in_s, slot_in_t, slot_label;
+        AlignedArray<int> slot_pa;
         AlignedArray<Job> jobs;
         AlignedArray<int> job_order;
 
@@ -258,6 +268,11 @@ namespace HeiProMap {
             bq.initialize(N);
             path.initialize(N);
             src_list.initialize(N);
+            label.initialize(N, 0);
+            isact.initialize(N, 0);
+            pa.initialize(N, -1);
+            act.initialize(N + 1);
+            orph.initialize(N);
             in_s.initialize(N);
             in_t.initialize(N);
             reach_s.initialize(N);
@@ -361,6 +376,178 @@ namespace HeiProMap {
             return flow;
         }
 
+        // ---------------------------------------------------------------- Boykov-Kolmogorov
+        void bk_activate(const int v) {
+            if (isact[v]) { return; }
+            isact[v] = 1;
+            act[act_t] = v;
+            act_t = (act_t + 1 == N + 1) ? 0 : act_t + 1;
+        }
+
+        void bk_orphan(const int v) {
+            if (pa[v] == -3) { return; }
+            pa[v] = -3;
+            orph[orph_n++] = v;
+        }
+
+        // trees from scratch: terminals are the roots
+        void bk_init() {
+            for (int v = 0; v < nl; ++v) {
+                label[v] = in_s[v] ? 1 : (in_t[v] ? 2 : 0);
+                pa[v] = -1;
+                isact[v] = 0;
+            }
+            act_h = act_t = 0;
+            orph_n = 0;
+            for (int v = 0; v < nl; ++v) { if (label[v]) { bk_activate(v); } }
+        }
+
+        // v becomes a source terminal while the trees are kept
+        void bk_add_source(const int v) {
+            if (label[v] == 2) {
+                for (int i = first[v]; i < first[v + 1]; ++i) {
+                    const int q = arcs[i].to;
+                    if (label[q] == 2 && pa[q] == arcs[i].rev) { bk_orphan(q); }
+                }
+            }
+            label[v] = 1;
+            pa[v] = -1;
+            bk_activate(v);
+        }
+
+        void bk_add_sink(const int v) {
+            if (label[v] == 1) {
+                for (int i = first[v]; i < first[v + 1]; ++i) {
+                    const int q = arcs[i].to;
+                    if (label[q] == 1 && pa[q] == arcs[i].rev) { bk_orphan(q); }
+                }
+            }
+            label[v] = 2;
+            pa[v] = -1;
+            bk_activate(v);
+        }
+
+        // tries to find a new parent for the orphan p, otherwise frees it
+        void bk_adopt(const int p) {
+            if (in_s[p] || in_t[p]) { return; } // became a terminal (root) while waiting
+            const char lab = label[p];
+            for (int i = first[p]; i < first[p + 1]; ++i) {
+                const int q = arcs[i].to;
+                if (label[q] != lab) { continue; }
+                const bool res = lab == 1 ? arcs[arcs[i].rev].cap > 0 : arcs[i].cap > 0;
+                if (!res) { continue; }
+                int x = q;
+                bool ok = true;
+                while (true) {
+                    const int a = pa[x];
+                    if (a == -1) { break; }
+                    if (a == -3) {
+                        ok = false;
+                        break;
+                    }
+                    x = arcs[a].to;
+                }
+                if (ok) {
+                    pa[p] = i;
+                    return;
+                }
+            }
+            label[p] = 0;
+            for (int i = first[p]; i < first[p + 1]; ++i) {
+                const int q = arcs[i].to;
+                if (label[q] != lab) { continue; }
+                const bool can_grow = lab == 1 ? arcs[arcs[i].rev].cap > 0 : arcs[i].cap > 0;
+                if (can_grow) { bk_activate(q); }
+                if (pa[q] == arcs[i].rev) { bk_orphan(q); }
+            }
+        }
+
+        void bk_process_orphans() {
+            while (orph_n > 0) { bk_adopt(orph[--orph_n]); }
+        }
+
+        // pushes flow along s-tree path to a, arc ba (a -> b), t-tree path from b
+        s64 bk_augment(const int ba, const int a_node) {
+            const int b = arcs[ba].to;
+            s64 bn = arcs[ba].cap;
+            for (int v = a_node; pa[v] != -1; v = arcs[pa[v]].to) { bn = std::min(bn, arcs[arcs[pa[v]].rev].cap); }
+            for (int v = b; pa[v] != -1; v = arcs[pa[v]].to) { bn = std::min(bn, arcs[pa[v]].cap); }
+            arcs[ba].cap -= bn;
+            arcs[arcs[ba].rev].cap += bn;
+            for (int v = a_node; pa[v] != -1;) {
+                const int up = pa[v];
+                const int par = arcs[up].to;
+                Arc &pr = arcs[arcs[up].rev];
+                pr.cap -= bn;
+                arcs[up].cap += bn;
+                if (pr.cap == 0) { bk_orphan(v); }
+                v = par;
+            }
+            for (int v = b; pa[v] != -1;) {
+                const int up = pa[v];
+                const int par = arcs[up].to;
+                arcs[up].cap -= bn;
+                arcs[arcs[up].rev].cap += bn;
+                if (arcs[up].cap == 0) { bk_orphan(v); }
+                v = par;
+            }
+            return bn;
+        }
+
+        // grows the trees until no active vertex is left; returns the added flow (early return at `limit`)
+        s64 bk_maxflow(const s64 limit = INF) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "maxflow");
+            s64 flow = 0;
+            bk_process_orphans();
+            while (act_h != act_t) {
+                const int p = act[act_h];
+                if (label[p] == 0) {
+                    isact[p] = 0;
+                    act_h = (act_h + 1 == N + 1) ? 0 : act_h + 1;
+                    continue;
+                }
+                int ba = -1, an = -1;
+                if (label[p] == 1) {
+                    for (int i = first[p]; i < first[p + 1]; ++i) {
+                        if (arcs[i].cap <= 0) { continue; }
+                        const int q = arcs[i].to;
+                        if (label[q] == 0) {
+                            label[q] = 1;
+                            pa[q] = arcs[i].rev;
+                            bk_activate(q);
+                        } else if (label[q] == 2) {
+                            ba = i;
+                            an = p;
+                            break;
+                        }
+                    }
+                } else {
+                    for (int i = first[p]; i < first[p + 1]; ++i) {
+                        if (arcs[arcs[i].rev].cap <= 0) { continue; }
+                        const int q = arcs[i].to;
+                        if (label[q] == 0) {
+                            label[q] = 2;
+                            pa[q] = arcs[i].rev;
+                            bk_activate(q);
+                        } else if (label[q] == 1) {
+                            ba = arcs[i].rev;
+                            an = q;
+                            break;
+                        }
+                    }
+                }
+                if (ba >= 0) {
+                    flow += bk_augment(ba, an);
+                    if (flow >= limit) { return flow; }
+                    bk_process_orphans();
+                } else {
+                    isact[p] = 0;
+                    act_h = (act_h + 1 == N + 1) ? 0 : act_h + 1;
+                }
+            }
+            return flow;
+        }
+
         // vertices that can still reach t in the residual graph
         void compute_reach_t() {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "reach_t");
@@ -443,8 +630,10 @@ namespace HeiProMap {
                 if (side_w + added + vw[w] > max_side) { continue; }
                 if (source_side) {
                     add_source(w);
+                    if (use_bk) { bk_add_source(w); }
                 } else {
                     in_t[w] = 1;
+                    if (use_bk) { bk_add_sink(w); }
                 }
                 added += vw[w];
                 any = true;
@@ -505,7 +694,14 @@ namespace HeiProMap {
                 const weight_t target = (weight_t) (init_fraction * (f64) total_w);
                 grow_initial_terminals(j.a, j.b, std::min(target, j.hi), std::min(target, total_w - j.lo));
             }
-            j.lower = maxflow();
+            if (use_bk) {
+                bk_init();
+                j.lower = bk_maxflow();
+                std::memcpy(slot_label.get_ptr() + (size_t) slot * N, label.get_ptr(), N);
+                std::memcpy(slot_pa.get_ptr() + (size_t) slot * N, pa.get_ptr(), N * sizeof(int));
+            } else {
+                j.lower = maxflow();
+            }
             std::memcpy(slot_arcs.get_ptr() + (size_t) slot * na, arcs.get_ptr(), na * sizeof(Arc));
             std::memcpy(slot_in_s.get_ptr() + (size_t) slot * N, in_s.get_ptr(), N);
             std::memcpy(slot_in_t.get_ptr() + (size_t) slot * N, in_t.get_ptr(), N);
@@ -524,6 +720,13 @@ namespace HeiProMap {
             std::memcpy(in_t.get_ptr(), slot_in_t.get_ptr() + (size_t) slot * N, N);
             src_n = 0;
             for (int v = 0; v < nl; ++v) { if (in_s[v]) { src_list[src_n++] = v; } }
+            if (use_bk) {
+                std::memcpy(label.get_ptr(), slot_label.get_ptr() + (size_t) slot * N, N);
+                std::memcpy(pa.get_ptr(), slot_pa.get_ptr() + (size_t) slot * N, N * sizeof(int));
+                std::fill_n(isact.get_ptr(), N, 0);
+                act_h = act_t = 0;
+                orph_n = 0;
+            }
 
             const weight_t avg_w = std::max<weight_t>(1, total_w / std::max(1, nl));
             s64 flow = j.lower;
@@ -531,11 +734,20 @@ namespace HeiProMap {
             cur.reset();
 
             for (int iter = 0; iter < nl + 2; ++iter) {
-                flow += maxflow(cut_bound - flow);
-                // the cut never shrinks when terminals grow: this pair cannot beat a known feasible cut
-                if (flow >= cut_bound) { return; }
-                for (int v = 0; v < nl; ++v) { reach_s[v] = level[v] != -1; }
-                compute_reach_t();
+                if (use_bk) {
+                    flow += bk_maxflow(cut_bound - flow);
+                    if (flow >= cut_bound) { return; }
+                    for (int v = 0; v < nl; ++v) {
+                        reach_s[v] = label[v] == 1;
+                        reach_t[v] = label[v] == 2;
+                    }
+                } else {
+                    flow += maxflow(cut_bound - flow);
+                    // the cut never shrinks when terminals grow: this pair cannot beat a known feasible cut
+                    if (flow >= cut_bound) { return; }
+                    for (int v = 0; v < nl; ++v) { reach_s[v] = level[v] != -1; }
+                    compute_reach_t();
+                }
 
                 weight_t w_rs = 0, w_ct = 0;
                 for (int v = 0; v < nl; ++v) {
@@ -648,6 +860,10 @@ namespace HeiProMap {
             slot_arcs.initialize(nj * na);
             slot_in_s.initialize(nj * (size_t) N);
             slot_in_t.initialize(nj * (size_t) N);
+            if (use_bk) {
+                slot_label.initialize(nj * (size_t) N);
+                slot_pa.initialize(nj * (size_t) N);
+            }
             for (size_t q = 0; q < nj; ++q) {
                 prepare_job(jobs[q], (int) q);
                 job_order[q] = (int) q;
@@ -772,6 +988,7 @@ namespace HeiProMap {
             p.init_fraction = config.init_fraction;
             p.prune_factor = config.prune_factor;
             p.keep_fraction = config.keep_fraction;
+            p.use_bk = config.use_bk;
             p.rng.seed(seed * 0x9E3779B97F4A7C15ULL + 12345);
 
             const size_t l = hierarchy.size();
