@@ -39,8 +39,8 @@ namespace HeiProMap {
      * Flow network of a sub graph with undirected edges (two paired arcs with the edge weight as capacity) on the
      * nodes 0..nl-1, and an incremental Boykov-Kolmogorov max flow between two growing terminal sets.
      *
-     * s and t are implicit: a vertex with in_s[v] has an infinite arc s -> v, a vertex with in_t[v] one v -> t. A
-     * simple augmenting path never returns to s or leaves t, so no capacity is stored for these arcs.
+     * s and t are implicit: a source terminal (root of the source tree) has an infinite arc s -> v, a sink
+     * terminal one v -> t. A simple augmenting path never returns to s or leaves t, so no capacity is stored.
      *
      * Search trees: label 0 free, 1 in the source tree, 2 in the sink tree. pa[v] is the arc (in v's list) to the
      * parent, -1 for a root (terminal), -3 for an orphan. At termination of bk_maxflow the source tree is exactly the
@@ -67,10 +67,6 @@ namespace HeiProMap {
         AlignedArray<int> first; // arcs of v: [first[v], first[v + 1])
         AlignedArray<weight_t> vw;
         weight_t total_w = 0;
-
-        AlignedArray<char> in_s, in_t;
-        AlignedArray<int> src_list; // vertices with in_s
-        int src_n = 0;
 
         // Boykov-Kolmogorov state
         AlignedArray<char> label, isact;
@@ -123,7 +119,6 @@ namespace HeiProMap {
             }
             std::memcpy(base_arcs.get_ptr(), arcs.get_ptr(), na * sizeof(Arc));
 
-            src_list.initialize(N);
             label.initialize(N, 0);
             isact.initialize(N, 0);
             pa.initialize(N, -1);
@@ -131,13 +126,6 @@ namespace HeiProMap {
             orph.initialize(N);
             ts.initialize(N, 0);
             dst.initialize(N, 0);
-            in_s.initialize(N);
-            in_t.initialize(N);
-        }
-
-        void add_source(const int v) {
-            in_s[v] = 1;
-            src_list[src_n++] = v;
         }
 
         // ---------------------------------------------------------------- Boykov-Kolmogorov
@@ -155,15 +143,26 @@ namespace HeiProMap {
             orph[orph_n++] = v;
         }
 
-        // trees from scratch: terminals are the roots
-        void bk_init() {
-            for (int v = 0; v < nl; ++v) {
-                label[v] = in_s[v] ? 1 : (in_t[v] ? 2 : 0);
-                pa[v] = -1;
-                isact[v] = 0;
-            }
+        // A terminal is a root of a tree. Free vertices have label 0 (and pa -1).
+        bool is_terminal(const int v) const { return label[v] != 0 && pa[v] == -1; }
+
+        // empty trees (no terminals), nothing active
+        void reset_trees() {
+            std::fill_n(label.get_ptr(), nl, 0);
+            std::fill_n(pa.get_ptr(), nl, -1);
+            std::fill_n(isact.get_ptr(), nl, 0);
             act_h = act_t = 0;
             orph_n = 0;
+        }
+
+        // v becomes a terminal of tree `lab` (1 source, 2 sink) while the trees are still empty
+        void set_terminal(const int v, const char lab) {
+            label[v] = lab;
+            pa[v] = -1;
+        }
+
+        // trees from scratch: the terminals set since reset_trees are the roots
+        void bk_start() {
             for (int v = 0; v < nl; ++v) { if (label[v]) { bk_activate(v); } }
         }
 
@@ -194,7 +193,7 @@ namespace HeiProMap {
 
         // tries to find a new parent for the orphan p, otherwise frees it
         void bk_adopt(const int p) {
-            if (in_s[p] || in_t[p]) { return; } // became a terminal (root) while waiting
+            if (pa[p] != -3) { return; } // became a terminal (root) while waiting
             const char lab = label[p];
             int best = -1, best_d = INT_MAX;
             for (int i = first[p]; i < first[p + 1]; ++i) {

@@ -162,7 +162,7 @@ namespace HeiProMap {
         Stack<Task> task_stack;
         // snapshots of the networks after the first solve of every job of a bisection
         AlignedArray<Arc> slot_arcs;
-        AlignedArray<char> slot_in_s, slot_in_t, slot_label;
+        AlignedArray<char> slot_label;
         AlignedArray<int> slot_pa;
         AlignedArray<Job> jobs;
         AlignedArray<int> job_order;
@@ -227,7 +227,7 @@ namespace HeiProMap {
                 if (label[v] != side) { continue; }
                 for (int i = first[v]; i < first[v + 1]; ++i) {
                     const int w = arcs[i].to;
-                    if (w >= nl || label[w] == side || in_s[w] || in_t[w] || stamp[w] == stamp_id) { continue; }
+                    if (w >= nl || label[w] == side || is_terminal(w) || stamp[w] == stamp_id) { continue; }
                     stamp[w] = stamp_id;
                     cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], rng(), w};
                 }
@@ -235,7 +235,7 @@ namespace HeiProMap {
             if (cand_n == 0) {
                 // disconnected: any free vertex
                 for (int w = 0; w < nl; ++w) {
-                    if (label[w] == side || in_s[w] || in_t[w]) { continue; }
+                    if (label[w] == side || is_terminal(w)) { continue; }
                     cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], rng(), w};
                 }
             }
@@ -250,10 +250,8 @@ namespace HeiProMap {
                 const int w = cand[ci].v;
                 if (side_w + added + vw[w] > max_side) { continue; }
                 if (source_side) {
-                    add_source(w);
                     bk_add_source(w);
                 } else {
-                    in_t[w] = 1;
                     bk_add_sink(w);
                 }
                 added += vw[w];
@@ -293,11 +291,7 @@ namespace HeiProMap {
                 }
             }
             for (int v = 0; v < nl; ++v) {
-                if (owner[v] == 1 && !in_s[v]) {
-                    add_source(v);
-                } else if (owner[v] == 2 && !in_t[v]) {
-                    in_t[v] = 1;
-                }
+                if (label[v] == 0 && owner[v] != 0) { set_terminal(v, (char) owner[v]); }
             }
         }
 
@@ -307,23 +301,19 @@ namespace HeiProMap {
         void prepare_job(Job &j, const int slot, const s64 limit = INF) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "prepare_job");
             std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
-            std::fill_n(in_s.get_ptr(), N, 0);
-            std::fill_n(in_t.get_ptr(), N, 0);
-            src_n = 0;
-            add_source(j.a);
-            in_t[j.b] = 1;
+            reset_trees();
+            set_terminal(j.a, 1);
+            set_terminal(j.b, 2);
             if (init_fraction > 0.0) {
                 const weight_t target = (weight_t) (init_fraction * (f64) total_w);
                 grow_initial_terminals(j.a, j.b, std::min(target, j.hi), std::min(target, total_w - j.lo));
             }
-            bk_init();
+            bk_start();
             j.lower = bk_maxflow(limit);
             if (j.lower >= limit) { return; }
             std::memcpy(slot_label.get_ptr() + (size_t) slot * N, label.get_ptr(), N);
             std::memcpy(slot_pa.get_ptr() + (size_t) slot * N, pa.get_ptr(), N * sizeof(int));
             std::memcpy(slot_arcs.get_ptr() + (size_t) slot * na, arcs.get_ptr(), na * sizeof(Arc));
-            std::memcpy(slot_in_s.get_ptr() + (size_t) slot * N, in_s.get_ptr(), N);
-            std::memcpy(slot_in_t.get_ptr() + (size_t) slot * N, in_t.get_ptr(), N);
         }
 
         // snapshot of the mirrored job (b, a) from the state of the solved job (a, b) that is still in the
@@ -336,8 +326,6 @@ namespace HeiProMap {
                 da[e].rev = arcs[e].rev;
                 da[e].cap = arcs[arcs[e].rev].cap;
             }
-            std::memcpy(slot_in_s.get_ptr() + (size_t) slot * N, in_t.get_ptr(), N);
-            std::memcpy(slot_in_t.get_ptr() + (size_t) slot * N, in_s.get_ptr(), N);
             char *dl = slot_label.get_ptr() + (size_t) slot * N;
             for (int v = 0; v < N; ++v) { dl[v] = label[v] ? (char) (3 - label[v]) : 0; }
             std::memcpy(slot_pa.get_ptr() + (size_t) slot * N, pa.get_ptr(), N * sizeof(int));
@@ -352,10 +340,6 @@ namespace HeiProMap {
             rng.seed(pair_salt ^ ((u64) a * 1000003ULL + (u64) b * 7919ULL + 17));
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "run_pair");
             std::memcpy(arcs.get_ptr(), slot_arcs.get_ptr() + (size_t) slot * na, na * sizeof(Arc));
-            std::memcpy(in_s.get_ptr(), slot_in_s.get_ptr() + (size_t) slot * N, N);
-            std::memcpy(in_t.get_ptr(), slot_in_t.get_ptr() + (size_t) slot * N, N);
-            src_n = 0;
-            for (int v = 0; v < nl; ++v) { if (in_s[v]) { src_list[src_n++] = v; } }
             std::memcpy(label.get_ptr(), slot_label.get_ptr() + (size_t) slot * N, N);
             std::memcpy(pa.get_ptr(), slot_pa.get_ptr() + (size_t) slot * N, N * sizeof(int));
             std::fill_n(isact.get_ptr(), N, 0);
@@ -500,8 +484,6 @@ namespace HeiProMap {
                 }
             }
             slot_arcs.initialize(nj * na);
-            slot_in_s.initialize(nj * (size_t) N);
-            slot_in_t.initialize(nj * (size_t) N);
             slot_label.initialize(nj * (size_t) N);
             slot_pa.initialize(nj * (size_t) N);
             return nj;
