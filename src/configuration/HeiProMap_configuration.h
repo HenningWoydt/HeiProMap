@@ -216,6 +216,7 @@ namespace HeiProMap {
             {"--flow-bisection-init-fraction", "", "Flow bisection: both terminals are first grown to this fraction of the sub graph weight (0 = single vertex).", "0.1", "", false},
             {"--flow-bisection-prune-factor", "", "Flow bisection: drop a pair when its flow reaches this factor times the best feasible cut (1 = exact).", "0.95", "", false},
             {"--flow-bisection-keep-fraction", "", "Flow bisection: fraction of the (pair, orientation) jobs, best lower bound first, that is continued after the first solve.", "0.5", "", false},
+            {"--flow-bisection-bound-jobs", "", "Flow bisection: number of jobs whose first solve is complete; the best one is run first and bounds the first solves of the others (0 = off).", "4", "", false},
             {"--flow-bisection-bk", "", "Flow bisection: use the Boykov-Kolmogorov max flow algorithm instead of Dinic (true/false).", "true", "", false},
             {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
             {"--flow-bisection-seeds-mid", "", "Flow bisection: seeds on the hierarchy levels between the top and the bottom one (the cuts there weigh less in the QAP).", "3", "", false},
@@ -527,6 +528,9 @@ namespace HeiProMap {
             }
             if (is_set("--flow-bisection-seeds")) {
                 flow_bisection_config.num_seeds = std::stoull(get("--flow-bisection-seeds"));
+            }
+            if (is_set("--flow-bisection-bound-jobs")) {
+                flow_bisection_config.bound_jobs = std::stoull(get("--flow-bisection-bound-jobs"));
             }
             if (is_set("--flow-bisection-seeds-mid")) {
                 flow_bisection_config.num_seeds_mid = std::stoull(get("--flow-bisection-seeds-mid"));

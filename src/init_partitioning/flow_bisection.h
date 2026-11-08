@@ -60,6 +60,9 @@ namespace HeiProMap {
         // Only the best keep_fraction of all (pair, orientation) jobs, ranked by the flow after their first
         // solve (a lower bound of their cut), are continued. 1.0 continues all of them.
         f64 keep_fraction = 0.5;
+        // The first `bound_jobs` jobs are solved completely and the best of them is run; its cut bounds the
+        // first solves of all other jobs (stopped early). 0 = solve all first solves completely.
+        u64 bound_jobs = 4;
         // Boykov-Kolmogorov max flow (search trees are kept when terminals are added); false: Dinic
         bool use_bk = true;
     };
@@ -173,6 +176,7 @@ namespace HeiProMap {
         AlignedArray<int> pa, act, orph, ts, dst;
         int bk_time = 0;
         bool use_mirror = true;
+        size_t lazy_p = 0;
         int act_h = 0, act_t = 0, orph_n = 0;
         int src_n = 0;
         int dlevel = -1; // level of the sink terminals of the current Dinic phase
@@ -704,7 +708,8 @@ namespace HeiProMap {
 
         // Sets up the network of a job (terminals a, b pre-grown), solves the first max flow and saves the
         // network in `slot`. The flow value is a lower bound for the cut the job can end with.
-        void prepare_job(Job &j, const int slot) {
+        // `limit`: the first solve stops once its flow reaches it (the job is pruned then: lower >= limit)
+        void prepare_job(Job &j, const int slot, const s64 limit = INF) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "prepare_job");
             std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
             std::fill_n(in_s.get_ptr(), N, 0);
@@ -718,7 +723,8 @@ namespace HeiProMap {
             }
             if (use_bk) {
                 bk_init();
-                j.lower = bk_maxflow();
+                j.lower = bk_maxflow(limit);
+                if (j.lower >= limit) { return; }
                 std::memcpy(slot_label.get_ptr() + (size_t) slot * N, label.get_ptr(), N);
                 std::memcpy(slot_pa.get_ptr() + (size_t) slot * N, pa.get_ptr(), N * sizeof(int));
             } else {
@@ -911,26 +917,10 @@ namespace HeiProMap {
             // parent arcs stay valid)
             const weight_t ball = (weight_t) (init_fraction * (f64) total_w);
             const bool can_mirror = !symmetric && use_mirror && ball <= std::min(hi, total_w - lo);
-            for (size_t q = 0; q < nj; ++q) {
-                prepare_job(jobs[q], (int) q);
-                job_order[q] = (int) q;
-                if (can_mirror && !jobs[q].mirrored && q + 1 < nj) {
-                    make_mirror_snapshot(jobs[q], jobs[q + 1], (int) q + 1);
-                    job_order[q + 1] = (int) (q + 1);
-                    ++q;
-                }
-            }
-            // most promising (smallest lower bound) first: finds a good feasible cut early, which then
-            // prunes the remaining jobs
-            std::stable_sort(job_order.get_ptr(), job_order.get_ptr() + nj,
-                             [&](const int x, const int y) { return jobs[x].lower < jobs[y].lower; });
-
-            const size_t run_jobs = std::max<size_t>(1, (size_t) std::ceil((double) nj * keep_fraction));
-            for (size_t q = 0; q < run_jobs; ++q) {
-                const int slot = job_order[q];
+            auto run_slot = [&](const int slot) {
                 const Job &job = jobs[slot];
                 const s64 cb = bound(best_res);
-                if (job.lower >= cb) { continue; } // cannot beat the best feasible cut
+                if (job.lower >= cb) { return; } // cannot beat the best feasible cut
                 const int *da = dist_rows.get_ptr() + (size_t) job.ia * (size_t) nl;
                 const int *db = dist_rows.get_ptr() + (size_t) job.ib * (size_t) nl;
                 if (!job.mirrored) {
@@ -946,7 +936,49 @@ namespace HeiProMap {
                         if (better) { best_res.swap(mir_res); }
                     }
                 }
+            };
+            // The first `lazy_p` jobs are solved completely and the best of them is run: its cut bounds the first
+            // solves of all other jobs, which stop as soon as their flow reaches the prune bound.
+            size_t m = 0;
+            int ran_slot = -1;
+            for (size_t q = 0; q < nj; ++q) {
+                const bool bounded = lazy_p > 0 && q >= lazy_p;
+                if (lazy_p > 0 && q == lazy_p) {
+                    int bestj = 0;
+                    for (size_t x = 1; x < m; ++x) { if (jobs[job_order[x]].lower < jobs[job_order[bestj]].lower) { bestj = (int) x; } }
+                    ran_slot = job_order[bestj];
+                    run_slot(ran_slot);
+                }
+                const s64 lim = bounded ? bound(best_res) : INF;
+                prepare_job(jobs[q], (int) q, lim);
+                job_order[m++] = (int) q;
+                if (can_mirror && !jobs[q].mirrored && q + 1 < nj) {
+                    if (jobs[q].lower < lim) {
+                        make_mirror_snapshot(jobs[q], jobs[q + 1], (int) q + 1);
+                    } else {
+                        jobs[q + 1].lower = jobs[q].lower;
+                    }
+                    job_order[m++] = (int) (q + 1);
+                    ++q;
+                }
             }
+            if (lazy_p > 0 && ran_slot < 0) { // fewer jobs than lazy_p
+                int bestj = 0;
+                for (size_t x = 1; x < m; ++x) { if (jobs[job_order[x]].lower < jobs[job_order[bestj]].lower) { bestj = (int) x; } }
+                ran_slot = job_order[bestj];
+                run_slot(ran_slot);
+            }
+            if (ran_slot >= 0) { // already run
+                for (size_t x = 0; x < m; ++x) { if (job_order[x] == ran_slot) { job_order[x] = job_order[--m]; break; } }
+            }
+            // most promising (smallest lower bound) first: finds a good feasible cut early, which then
+            // prunes the remaining jobs
+            std::stable_sort(job_order.get_ptr(), job_order.get_ptr() + m,
+                             [&](const int x, const int y) { return jobs[x].lower < jobs[y].lower; });
+
+            const size_t run_jobs = std::max<size_t>(1, (size_t) std::ceil((double) nj * keep_fraction));
+            const size_t to_run = ran_slot >= 0 ? (run_jobs > 1 ? run_jobs - 1 : 0) : run_jobs;
+            for (size_t r = 0; r < std::min(to_run, m); ++r) { run_slot(job_order[r]); }
 
             // the number of random draws inside the pairs depends on pruning: restore a fixed stream
             rng.seed(pair_salt + 1);
@@ -1040,6 +1072,7 @@ namespace HeiProMap {
             p.init_fraction = config.init_fraction;
             p.prune_factor = config.prune_factor;
             p.keep_fraction = config.keep_fraction;
+            p.lazy_p = (size_t) config.bound_jobs;
             p.use_bk = config.use_bk;
             p.rng.seed(seed * 0x9E3779B97F4A7C15ULL + 12345);
 
