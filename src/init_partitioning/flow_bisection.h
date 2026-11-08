@@ -172,6 +172,7 @@ namespace HeiProMap {
         AlignedArray<char> label, isact;
         AlignedArray<int> pa, act, orph, ts, dst;
         int bk_time = 0;
+        bool use_mirror = true;
         int act_h = 0, act_t = 0, orph_n = 0;
         int src_n = 0;
         int dlevel = -1; // level of the sink terminals of the current Dinic phase
@@ -728,6 +729,25 @@ namespace HeiProMap {
             std::memcpy(slot_in_t.get_ptr() + (size_t) slot * N, in_t.get_ptr(), N);
         }
 
+        // snapshot of the mirrored job (b, a) from the state of the solved job (a, b) that is still in the
+        // working arrays
+        void make_mirror_snapshot(const Job &j, Job &jm, const int slot) {
+            jm.lower = j.lower;
+            Arc *da = slot_arcs.get_ptr() + (size_t) slot * na;
+            for (size_t e = 0; e < na; ++e) {
+                da[e].to = arcs[e].to;
+                da[e].rev = arcs[e].rev;
+                da[e].cap = arcs[arcs[e].rev].cap;
+            }
+            std::memcpy(slot_in_s.get_ptr() + (size_t) slot * N, in_t.get_ptr(), N);
+            std::memcpy(slot_in_t.get_ptr() + (size_t) slot * N, in_s.get_ptr(), N);
+            if (use_bk) {
+                char *dl = slot_label.get_ptr() + (size_t) slot * N;
+                for (int v = 0; v < N; ++v) { dl[v] = label[v] ? (char) (3 - label[v]) : 0; }
+                std::memcpy(slot_pa.get_ptr() + (size_t) slot * N, pa.get_ptr(), N * sizeof(int));
+            }
+        }
+
         // Continues a job from its snapshot: pierce the lighter side until the cut is balanced.
         // The result is merged into `best` (scr_res is used as scratch).
         void run_job(const Job &j, const int slot, const int *dist_a, const int *dist_b, PairResult &best,
@@ -885,9 +905,20 @@ namespace HeiProMap {
                 slot_label.initialize(nj * (size_t) N);
                 slot_pa.initialize(nj * (size_t) N);
             }
+            // the mirrored job of a pair has the same pre-grown balls (if the target fits both windows), and the
+            // reversed flow of a max flow is a max flow with source and sink swapped: its snapshot is derived
+            // from the first one (residual capacities exchanged with the reverse arcs, tree labels swapped, the
+            // parent arcs stay valid)
+            const weight_t ball = (weight_t) (init_fraction * (f64) total_w);
+            const bool can_mirror = !symmetric && use_mirror && ball <= std::min(hi, total_w - lo);
             for (size_t q = 0; q < nj; ++q) {
                 prepare_job(jobs[q], (int) q);
                 job_order[q] = (int) q;
+                if (can_mirror && !jobs[q].mirrored && q + 1 < nj) {
+                    make_mirror_snapshot(jobs[q], jobs[q + 1], (int) q + 1);
+                    job_order[q + 1] = (int) (q + 1);
+                    ++q;
+                }
             }
             // most promising (smallest lower bound) first: finds a good feasible cut early, which then
             // prunes the remaining jobs
