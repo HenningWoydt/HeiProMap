@@ -31,6 +31,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <limits>
 #include <random>
@@ -46,7 +47,9 @@
 namespace HeiProMap {
     struct FlowBisectionConfiguration {
         // number of far-apart seed vertices; all pairs of seeds are tried
-        u64 num_seeds = 6;
+        u64 num_seeds = 6;        // top hierarchy level
+        u64 num_seeds_mid = 3;    // levels between top and bottom
+        u64 num_seeds_bottom = 2; // bottom level
         // stop a pair as soon as its flow value reaches the best feasible cut found so far (exact)
         bool prune = true;
         // both terminals are first grown (alternating BFS) to this fraction of the sub graph weight
@@ -928,7 +931,7 @@ namespace HeiProMap {
          */
         void kway_partition(const CSRGraph &g, vertex_t *order, const size_t begin, const size_t end,
                             const partition_t k_prime, const weight_t *max_weights,
-                            const FlowBisectionConfiguration &config) {
+                            const FlowBisectionConfiguration &config, const u64 num_seeds) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "kway_partition");
             blk_b.initialize(k_prime);
             blk_e.initialize(k_prime);
@@ -963,7 +966,7 @@ namespace HeiProMap {
                 for (size_t i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
 
                 const weight_t lo_w = std::max<weight_t>(0, total_w - max2);
-                bisect(lo_w, max1, max1 == max2, config.num_seeds);
+                bisect(lo_w, max1, max1 == max2, num_seeds);
                 if (debug) {
                     weight_t w1 = 0;
                     size_t n1 = 0;
@@ -1040,7 +1043,10 @@ namespace HeiProMap {
 
                 const partition_t kk = hierarchy[item.level];
                 p.mw.initialize(kk, (weight_t) stride[item.level] * lmax);
-                p.kway_partition(g, order.get_ptr(), item.b, item.e, kk, p.mw.get_ptr(), config);
+                const size_t top = hierarchy.size() - 1;
+                const u64 ns = item.level == top ? config.num_seeds
+                               : (item.level == 0 ? config.num_seeds_bottom : config.num_seeds_mid);
+                p.kway_partition(g, order.get_ptr(), item.b, item.e, kk, p.mw.get_ptr(), config, ns);
 
                 if (p.debug) {
                     weight_t parent = 0, mx = 0, mn = std::numeric_limits<weight_t>::max();

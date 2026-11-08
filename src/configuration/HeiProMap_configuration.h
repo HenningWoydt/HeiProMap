@@ -218,6 +218,8 @@ namespace HeiProMap {
             {"--flow-bisection-keep-fraction", "", "Flow bisection: fraction of the (pair, orientation) jobs, best lower bound first, that is continued after the first solve.", "0.5", "", false},
             {"--flow-bisection-bk", "", "Flow bisection: use the Boykov-Kolmogorov max flow algorithm instead of Dinic (true/false).", "true", "", false},
             {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
+            {"--flow-bisection-seeds-mid", "", "Flow bisection: seeds on the hierarchy levels between the top and the bottom one (the cuts there weigh less in the QAP).", "3", "", false},
+            {"--flow-bisection-seeds-bottom", "", "Flow bisection: seeds on the bottom hierarchy level (cheapest distance).", "2", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
             {"--simple-accept-zero-gain", "", "With the simple refiners: the simple flow refinement applies zero-gain cuts like the regular one (true/false).", "true", "", false},
             {"--force-parallel-suite", "", "Always use the parallel suite (simple refiners without quotient graph / block connectivity, parallel LP, parallel contraction), even with 1 thread (true/false). It is enabled automatically when threads > 1.", "false", "", false},
@@ -525,6 +527,12 @@ namespace HeiProMap {
             }
             if (is_set("--flow-bisection-seeds")) {
                 flow_bisection_config.num_seeds = std::stoull(get("--flow-bisection-seeds"));
+            }
+            if (is_set("--flow-bisection-seeds-mid")) {
+                flow_bisection_config.num_seeds_mid = std::stoull(get("--flow-bisection-seeds-mid"));
+            }
+            if (is_set("--flow-bisection-seeds-bottom")) {
+                flow_bisection_config.num_seeds_bottom = std::stoull(get("--flow-bisection-seeds-bottom"));
             }
 
             use_parallel_contraction = parallel_suite;
