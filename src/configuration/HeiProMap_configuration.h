@@ -761,7 +761,7 @@ namespace HeiProMap {
 
         void set_eco() {
             config_name = "eco";
-            initial_c = 64;
+            initial_c = 32; // flow-bisection: small coarse graphs are enough
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -784,7 +784,7 @@ namespace HeiProMap {
             size_constrained_lp_config.use_degree_ordering = true;
 
             // set multisection
-            partitioning_algorithm_string = "multisection";
+            partitioning_algorithm_string = "flow-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
