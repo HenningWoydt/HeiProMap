@@ -143,30 +143,30 @@ namespace HeiProMap {
             }
         };
 
-        AlignedArray<int> queue, stamp;
+        AlignedArray<int> stamp;
         int stamp_id = 0;
 
         // scratch
         AlignedArray<char> owner; // grow_initial_terminals
-        AlignedArray<int> gq_s, gq_t;
+        AlignedArray<int> gq_s, gq_t; // BFS queues (also used by hop_distance)
         AlignedArray<Cand> cand;
         size_t cand_n = 0;
-        AlignedArray<int> seeds, tmp_dist, min_d, dist_rows; // bisect: dist_rows = n_seeds x nl
-        AlignedArray<char> chosen;
+        std::vector<int> seeds;
+        AlignedArray<int> tmp_dist, dist_rows; // bisect: dist_rows = n_seeds x nl
         AlignedArray<char> first_part;
         PairResult best_res, mir_res, scr_res;
         AlignedArray<vertex_t> scratch_order; // stable partition of a range
-        AlignedArray<weight_t> prefix, mw;
-        AlignedArray<size_t> blk_b, blk_e; // result of kway_partition: range of every block
+        std::vector<weight_t> prefix, mw;
+        std::vector<size_t> blk_b, blk_e; // result of kway_partition: range of every block
         AlignedArray<int> loc;
         Stack<Task> task_stack;
         // snapshots of the networks after the first solve of every job of a bisection
         AlignedArray<Arc> slot_arcs;
         AlignedArray<char> slot_label;
         AlignedArray<int> slot_pa;
-        AlignedArray<Job> jobs;
-        AlignedArray<int> job_order;
-        AlignedArray<s64> lam; // lam[i * ns + k]: known lower bound of the min cut of seeds i and k
+        std::vector<Job> jobs;
+        std::vector<int> job_order;
+        std::vector<s64> lam; // lam[i * ns + k]: known lower bound of the min cut of seeds i and k
 
         std::mt19937_64 rng;
         u64 pair_salt = 0;
@@ -179,7 +179,6 @@ namespace HeiProMap {
         /// network of the vertices verts[0, cnt) (loc must be set for them) and the buffers of the partitioner
         void setup_network(const CSRGraph &g, const vertex_t *verts, const int cnt) {
             build_network(g, verts, cnt, loc.get_ptr());
-            queue.initialize(N);
             stamp.initialize(N, 0);
             stamp_id = 0;
             owner.initialize(N);
@@ -187,8 +186,6 @@ namespace HeiProMap {
             gq_t.initialize(N);
             cand.initialize(N);
             tmp_dist.initialize(N);
-            min_d.initialize(N);
-            chosen.initialize(N);
             first_part.initialize(N);
         }
 
@@ -198,14 +195,14 @@ namespace HeiProMap {
             std::fill_n(dist, nl, FAR);
             int qh = 0, qt = 0;
             dist[src] = 0;
-            queue[qt++] = src;
+            gq_s[qt++] = src;
             while (qh < qt) {
-                const int u = queue[qh++];
+                const int u = gq_s[qh++];
                 for (int i = first[u]; i < first[u + 1]; ++i) {
                     const int v = arcs[i].to;
                     if (v < nl && dist[v] == FAR) {
                         dist[v] = dist[u] + 1;
-                        queue[qt++] = v;
+                        gq_s[qt++] = v;
                     }
                 }
             }
@@ -445,24 +442,25 @@ namespace HeiProMap {
         int pick_seeds(const u64 num_seeds) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "seed_selection");
             const int n_seeds = (int) std::min<u64>(std::max<u64>(2, num_seeds), (u64) nl);
-            seeds.initialize(n_seeds);
+            seeds.resize(n_seeds);
             dist_rows.initialize((size_t) n_seeds * (size_t) nl);
             int ns = 0;
             hop_distance((int) (rng() % (u64) nl), tmp_dist.get_ptr());
             int s0 = 0;
             for (int v = 0; v < nl; ++v) { if (tmp_dist[v] > tmp_dist[s0]) { s0 = v; } }
-            std::fill_n(min_d.get_ptr(), nl, std::numeric_limits<int>::max());
-            std::fill_n(chosen.get_ptr(), nl, 0);
+            // tmp_dist now holds the distance to the nearest seed, owner marks the seeds
+            std::fill_n(tmp_dist.get_ptr(), nl, std::numeric_limits<int>::max());
+            std::fill_n(owner.get_ptr(), nl, 0);
             int next = s0;
             while (ns < n_seeds) {
                 int *row = dist_rows.get_ptr() + (size_t) ns * (size_t) nl;
                 seeds[ns++] = next;
-                chosen[next] = 1;
+                owner[next] = 1;
                 hop_distance(next, row);
                 int arg = -1;
                 for (int v = 0; v < nl; ++v) {
-                    min_d[v] = std::min(min_d[v], row[v]);
-                    if (!chosen[v] && (arg < 0 || min_d[v] > min_d[arg])) { arg = v; }
+                    tmp_dist[v] = std::min(tmp_dist[v], row[v]);
+                    if (!owner[v] && (arg < 0 || tmp_dist[v] > tmp_dist[arg])) { arg = v; }
                 }
                 if (arg < 0) { break; }
                 next = arg;
@@ -474,8 +472,8 @@ namespace HeiProMap {
         /// first part: source side weight window mirrored). Allocates the snapshot slots.
         size_t make_jobs(const weight_t lo, const weight_t hi, const bool symmetric, const int ns) {
             const size_t max_jobs = (size_t) ns * (size_t) (ns - 1);
-            jobs.initialize(max_jobs);
-            job_order.initialize(max_jobs);
+            jobs.resize(max_jobs);
+            job_order.resize(max_jobs);
             size_t nj = 0;
             for (int i = 0; i < ns; ++i) {
                 for (int j = i + 1; j < ns; ++j) {
@@ -512,8 +510,7 @@ namespace HeiProMap {
                             int &ran_slot) {
             const size_t star = bound_jobs > 0 ? (size_t) (ns - 1) * (symmetric ? 1 : 2) : 0;
             const bool pair_sym = symmetric || can_mirror;
-            lam.initialize((size_t) ns * (size_t) ns);
-            std::fill_n(lam.get_ptr(), (size_t) ns * (size_t) ns, (s64) -1);
+            lam.assign((size_t) ns * (size_t) ns, (s64) -1);
             auto lam_at = [&](const int i, const int k) -> s64 & { return lam[(size_t) i * ns + k]; };
 
             size_t m = 0;
@@ -585,7 +582,7 @@ namespace HeiProMap {
 
             // most promising (smallest lower bound) first: finds a good feasible cut early, which then prunes the
             // remaining jobs. Only the best keep_fraction of all jobs is continued.
-            std::stable_sort(job_order.get_ptr(), job_order.get_ptr() + m,
+            std::stable_sort(job_order.begin(), job_order.begin() + m,
                              [&](const int x, const int y) { return jobs[x].lower < jobs[y].lower; });
             const size_t run_jobs = std::max<size_t>(1, (size_t) std::ceil((double) nj * keep_fraction));
             const size_t to_run = ran_slot >= 0 ? (run_jobs > 1 ? run_jobs - 1 : 0) : run_jobs;
@@ -607,10 +604,9 @@ namespace HeiProMap {
                             const partition_t k_prime, const weight_t *max_weights,
                             const u64 num_seeds) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "kway_partition");
-            blk_b.initialize(k_prime);
-            blk_e.initialize(k_prime);
-            for (partition_t i = 0; i < k_prime; ++i) { blk_b[i] = begin; blk_e[i] = begin; }
-            prefix.initialize(k_prime + 1);
+            blk_b.assign(k_prime, begin);
+            blk_e.assign(k_prime, begin);
+            prefix.resize(k_prime + 1);
             prefix[0] = 0;
             for (partition_t i = 0; i < k_prime; ++i) { prefix[i + 1] = prefix[i] + max_weights[i]; }
             scratch_order.initialize(end - begin);
@@ -704,11 +700,11 @@ namespace HeiProMap {
                 const Item item = stack.pop();
 
                 const partition_t kk = hierarchy[item.level];
-                p.mw.initialize(kk, (weight_t) stride[item.level] * lmax);
+                p.mw.assign(kk, (weight_t) stride[item.level] * lmax);
                 const size_t top = hierarchy.size() - 1;
                 const u64 ns = item.level == top ? config.num_seeds
                                : (item.level == 0 ? config.num_seeds_bottom : config.num_seeds_mid);
-                p.kway_partition(g, order.get_ptr(), item.b, item.e, kk, p.mw.get_ptr(), ns);
+                p.kway_partition(g, order.get_ptr(), item.b, item.e, kk, p.mw.data(), ns);
 
                 for (partition_t i = 0; i < kk; ++i) {
                     if (item.level == 0) {
