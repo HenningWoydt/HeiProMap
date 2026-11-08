@@ -56,6 +56,10 @@ namespace HeiProMap {
         // The first `bound_jobs` jobs are solved completely and the best of them is run; its cut bounds the
         // first solves of all other jobs (stopped early). 0 = solve all first solves completely.
         u64 bound_jobs = 4;
+        // Large sub problems get fewer seeds: a bisection with `arcs` arcs uses at most 1 + seed_budget / arcs seeds
+        // (the star around the first seed costs about one first solve per seed, and a solve scales with the arcs).
+        // 0 = no limit.
+        u64 seed_budget = 300000;
     };
 
     /**
@@ -168,6 +172,7 @@ namespace HeiProMap {
         f64 prune_factor = 1.0;
         f64 keep_fraction = 1.0;
         size_t bound_jobs = 0;
+        size_t seed_budget = 0;
 
         /// network of the vertices verts[0, cnt) (loc must be set for them) and the buffers of the partitioner
         void setup_network(const CSRGraph &g, const vertex_t *verts, const int cnt) {
@@ -601,7 +606,11 @@ namespace HeiProMap {
             std::fill_n(best_res.in_source.get_ptr(), nl, 1);
             if (nl < 2) { return; }
 
-            const int ns = pick_seeds(num_seeds);
+            u64 seeds_cap = num_seeds;
+            if (seed_budget > 0) {
+                seeds_cap = std::min<u64>(num_seeds, std::max<u64>(2, 1 + seed_budget / std::max<size_t>(1, na)));
+            }
+            const int ns = pick_seeds(seeds_cap);
             pair_salt = rng();
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "all_pairs");
 
@@ -699,6 +708,7 @@ namespace HeiProMap {
             p.prune_factor = config.prune_factor;
             p.keep_fraction = config.keep_fraction;
             p.bound_jobs = (size_t) config.bound_jobs;
+            p.seed_budget = (size_t) config.seed_budget;
             p.rng.seed(seed * 0x9E3779B97F4A7C15ULL + 12345);
 
             const size_t l = hierarchy.size();

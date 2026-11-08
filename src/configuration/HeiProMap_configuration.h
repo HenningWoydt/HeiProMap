@@ -218,6 +218,7 @@ namespace HeiProMap {
             {"--flow-bisection-keep-fraction", "", "Flow bisection: fraction of the (pair, orientation) jobs, best lower bound first, that is continued after the first solve.", "0.5", "", false},
             {"--flow-bisection-bound-jobs", "", "Flow bisection: number of jobs whose first solve is complete; the best one is run first and bounds the first solves of the others (0 = off).", "4", "", false},
             {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
+            {"--flow-bisection-seed-budget", "", "Flow bisection: a bisection with A arcs uses at most 1 + budget / A seeds (large sub problems get fewer seeds). 0 = no limit.", "300000", "", false},
             {"--flow-bisection-seeds-mid", "", "Flow bisection: seeds on the hierarchy levels between the top and the bottom one (the cuts there weigh less in the QAP).", "2", "", false},
             {"--flow-bisection-seeds-bottom", "", "Flow bisection: seeds on the bottom hierarchy level (cheapest distance).", "2", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
@@ -526,6 +527,9 @@ namespace HeiProMap {
             }
             if (is_set("--flow-bisection-bound-jobs")) {
                 flow_bisection_config.bound_jobs = std::stoull(get("--flow-bisection-bound-jobs"));
+            }
+            if (is_set("--flow-bisection-seed-budget")) {
+                flow_bisection_config.seed_budget = std::stoull(get("--flow-bisection-seed-budget"));
             }
             if (is_set("--flow-bisection-seeds-mid")) {
                 flow_bisection_config.num_seeds_mid = std::stoull(get("--flow-bisection-seeds-mid"));
