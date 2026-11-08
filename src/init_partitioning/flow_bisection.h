@@ -152,6 +152,11 @@ namespace HeiProMap {
         std::vector<int> job_order;
         std::vector<s64> lam; // lam[i * ns + k]: known lower bound of the min cut of seeds i and k
 
+        std::vector<Cand> heap;
+        AlignedArray<s64> cdelta;
+        AlignedArray<u64> crnd;
+        char pq_side = 0, pq_other = 0;
+        const int *pq_dist = nullptr;
         std::mt19937_64 rng;
         u64 pair_salt = 0;
         bool prune = true;
@@ -167,6 +172,8 @@ namespace HeiProMap {
             gq_s.initialize(N);
             gq_t.initialize(N);
             cand.initialize(N);
+            cdelta.initialize(N);
+            crnd.initialize(N);
             tmp_dist.initialize(N);
         }
 
@@ -195,8 +202,8 @@ namespace HeiProMap {
             return 0;
         }
 
-        // Candidates to pierce into one side: vertices next to `reach` (the side's current region)
-        // that are not terminals yet. Sorted so that the best are first.
+        // Initial candidates to pierce into one side: vertices next to the side's current region that are not
+        // terminals yet, with their score (see Cand).
         // how much the cut grows when w (outside of the side) becomes a terminal of `side`: its edges to the rest
         // become cut edges, its edges into the side stop being cut
         s64 cut_increase(const int w, const char side) const {
@@ -227,15 +234,31 @@ namespace HeiProMap {
                     cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], cut_increase(w, side), rng(), w};
                 }
             }
-            std::sort(cand.get_ptr(), cand.get_ptr() + cand_n);
+            pq_side = side;
+            pq_other = other_side;
+            pq_dist = dist_other;
+            for (size_t ci = 0; ci < cand_n; ++ci) {
+                cdelta[cand[ci].v] = cand[ci].delta;
+                crnd[cand[ci].v] = cand[ci].rnd;
+            }
         }
 
-        // pierces candidates into the side until `batch` weight is added without exceeding max_side
+        // Pierces vertices into the side until `batch` weight is added without exceeding max_side. The frontier is
+        // dynamic: when a vertex joins the side, the cut increase of its neighbours changes and new vertices become
+        // adjacent. Min-heap with lazy deletion (an entry is stale if its score differs from the current score).
         bool pierce(const bool source_side, const weight_t side_w, const weight_t max_side, const weight_t batch) {
+            const char side = pq_side;
             weight_t added = 0;
             bool any = false;
-            for (size_t ci = 0; ci < cand_n; ++ci) {
-                const int w = cand[ci].v;
+            auto greater = [](const Cand &a, const Cand &b) { return b < a; };
+            heap.assign(cand.get_ptr(), cand.get_ptr() + cand_n);
+            std::make_heap(heap.begin(), heap.end(), greater);
+            while (!heap.empty()) {
+                std::pop_heap(heap.begin(), heap.end(), greater);
+                const Cand c = heap.back();
+                heap.pop_back();
+                const int w = c.v;
+                if (label[w] == side || is_terminal(w) || c.delta != cdelta[w]) { continue; }
                 if (side_w + added + vw[w] > max_side) { continue; }
                 if (source_side) {
                     bk_add_source(w);
@@ -245,6 +268,18 @@ namespace HeiProMap {
                 added += vw[w];
                 any = true;
                 if (added >= batch) { break; }
+                for (int i = first[w]; i < first[w + 1]; ++i) {
+                    const int x = arcs[i].to;
+                    if (label[x] == side || is_terminal(x)) { continue; }
+                    if (!owner[x]) {
+                        owner[x] = 1;
+                        crnd[x] = rng();
+                    }
+                    const s64 d = cut_increase(x, side);
+                    cdelta[x] = d;
+                    heap.push_back(Cand{label[x] == pq_other ? 1 : 0, -pq_dist[x], d, crnd[x], x});
+                    std::push_heap(heap.begin(), heap.end(), greater);
+                }
             }
             return any;
         }
