@@ -67,8 +67,8 @@ namespace HeiProMap {
      *  2. for every pair (a, b) puts a into the source set and b into the sink set and
      *     solves max-flow. While the min cut is not balanced (the side weight has to be in
      *     [W - K2*lmax, K1*lmax]), the lighter side is grown by piercing vertices next to
-     *     its cut (preferring vertices that do not create an augmenting path and that are
-     *     far from the other terminal) and the flow is augmented incrementally,
+     *     its cut (preferring vertices that do not create an augmenting path and that increase
+     *     the cut the least) and the flow is augmented incrementally,
      *  3. keeps the balanced cut with minimum weight over all pairs (or the least violated one)
      *  and recurses on both sides.
      * The min cut can only grow when terminals grow, so the first balanced cut of a pair is
@@ -81,11 +81,15 @@ namespace HeiProMap {
         struct Cand {
             int far_flag; // 1 if the vertex is on the other side's region
             int neg_dist; // - hop distance to the other terminal
+            s64 delta; // increase of the cut when the vertex becomes a terminal of the side
             u64 rnd;
             int v;
 
+            // best first: vertices outside the other side's tree, then the smallest cut increase, then the
+            // largest distance to the other terminal
             bool operator<(const Cand &o) const {
                 if (far_flag != o.far_flag) { return far_flag < o.far_flag; }
+                if (delta != o.delta) { return delta < o.delta; }
                 if (neg_dist != o.neg_dist) { return neg_dist < o.neg_dist; }
                 if (rnd != o.rnd) { return rnd < o.rnd; }
                 return v < o.v;
@@ -193,6 +197,16 @@ namespace HeiProMap {
 
         // Candidates to pierce into one side: vertices next to `reach` (the side's current region)
         // that are not terminals yet. Sorted so that the best are first.
+        // how much the cut grows when w (outside of the side) becomes a terminal of `side`: its edges to the rest
+        // become cut edges, its edges into the side stop being cut
+        s64 cut_increase(const int w, const char side) const {
+            s64 d = 0;
+            for (int i = first[w]; i < first[w + 1]; ++i) {
+                d += label[arcs[i].to] == side ? -base_arcs[i].cap : base_arcs[i].cap;
+            }
+            return d;
+        }
+
         void collect_candidates(const char side, const char other_side, const int *dist_other) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "collect_candidates");
             cand_n = 0;
@@ -203,14 +217,14 @@ namespace HeiProMap {
                     const int w = arcs[i].to;
                     if (w >= nl || label[w] == side || is_terminal(w) || owner[w]) { continue; }
                     owner[w] = 1;
-                    cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], rng(), w};
+                    cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], cut_increase(w, side), rng(), w};
                 }
             }
             if (cand_n == 0) {
                 // disconnected: any free vertex
                 for (int w = 0; w < nl; ++w) {
                     if (label[w] == side || is_terminal(w)) { continue; }
-                    cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], rng(), w};
+                    cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], cut_increase(w, side), rng(), w};
                 }
             }
             std::sort(cand.get_ptr(), cand.get_ptr() + cand_n);
