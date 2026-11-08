@@ -41,7 +41,7 @@ namespace HeiProMap {
     struct FlowBisectionConfiguration {
         // number of far-apart seed vertices; all pairs of seeds are tried
         u64 num_seeds = 6;        // top hierarchy level
-        u64 num_seeds_mid = 3;    // levels between top and bottom
+        u64 num_seeds_mid = 2;    // levels between top and bottom
         u64 num_seeds_bottom = 2; // bottom level
         // stop a pair as soon as its flow value reaches the best feasible cut found so far (exact)
         bool prune = true;

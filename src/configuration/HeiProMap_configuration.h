@@ -218,7 +218,7 @@ namespace HeiProMap {
             {"--flow-bisection-keep-fraction", "", "Flow bisection: fraction of the (pair, orientation) jobs, best lower bound first, that is continued after the first solve.", "0.5", "", false},
             {"--flow-bisection-bound-jobs", "", "Flow bisection: number of jobs whose first solve is complete; the best one is run first and bounds the first solves of the others (0 = off).", "4", "", false},
             {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
-            {"--flow-bisection-seeds-mid", "", "Flow bisection: seeds on the hierarchy levels between the top and the bottom one (the cuts there weigh less in the QAP).", "3", "", false},
+            {"--flow-bisection-seeds-mid", "", "Flow bisection: seeds on the hierarchy levels between the top and the bottom one (the cuts there weigh less in the QAP).", "2", "", false},
             {"--flow-bisection-seeds-bottom", "", "Flow bisection: seeds on the bottom hierarchy level (cheapest distance).", "2", "", false},
             {"--use-parallel-contraction", "", "Use parallel contraction (true/false).", "", "", false},
             {"--simple-accept-zero-gain", "", "With the simple refiners: the simple flow refinement applies zero-gain cuts like the regular one (true/false).", "true", "", false},
