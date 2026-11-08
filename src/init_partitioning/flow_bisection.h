@@ -78,6 +78,10 @@ namespace HeiProMap {
      * ever grow, so after the first (largest) sub problem nothing is allocated or freed anymore.
      */
     class FlowBisectionPartitioner : FlowNetwork {
+        // A piercing step adds about 1/PIERCE_DIVISOR of the weight that the side still lacks to reach the window
+        // (at least one average vertex). Larger steps need fewer flow computations, smaller ones overshoot less.
+        static constexpr weight_t PIERCE_DIVISOR = 2;
+
         struct Cand {
             int far_flag; // 1 if the vertex is on the other side's region
             int neg_dist; // - hop distance to the other terminal
@@ -418,11 +422,11 @@ namespace HeiProMap {
                     if (grow_source) {
                         const weight_t deficit = std::max<weight_t>(1, lo - w_rs);
                         collect_candidates(1, 2, dist_b);
-                        done = pierce(true, w_rs, hi, std::max(avg_w, deficit / 8));
+                        done = pierce(true, w_rs, hi, std::max(avg_w, deficit / PIERCE_DIVISOR));
                     } else {
                         const weight_t deficit = std::max<weight_t>(1, (total_w - hi) - w_ct);
                         collect_candidates(2, 1, dist_a);
-                        done = pierce(false, w_ct, total_w - lo, std::max(avg_w, deficit / 8));
+                        done = pierce(false, w_ct, total_w - lo, std::max(avg_w, deficit / PIERCE_DIVISOR));
                     }
                     grow_source = !grow_source;
                 }
