@@ -177,6 +177,8 @@ namespace HeiProMap {
         int bk_time = 0;
         bool use_mirror = true;
         size_t lazy_p = 0;
+        bool use_transitivity = true;
+        AlignedArray<s64> lam;
         int act_h = 0, act_t = 0, orph_n = 0;
         int src_n = 0;
         int dlevel = -1; // level of the sink terminals of the current Dinic phase
@@ -939,18 +941,45 @@ namespace HeiProMap {
             };
             // The first `lazy_p` jobs are solved completely and the best of them is run: its cut bounds the first
             // solves of all other jobs, which stop as soon as their flow reaches the prune bound.
+            const size_t lp = lazy_p > 0 ? (size_t) (ns - 1) * (symmetric ? 1 : 2) : 0; // jobs of the star around seed 0
+            lam.initialize((size_t) ns * (size_t) ns);
+            std::fill_n(lam.get_ptr(), (size_t) ns * (size_t) ns, (s64) -1);
             size_t m = 0;
             int ran_slot = -1;
             for (size_t q = 0; q < nj; ++q) {
-                const bool bounded = lazy_p > 0 && q >= lazy_p;
-                if (lazy_p > 0 && q == lazy_p) {
+                const bool bounded = lp > 0 && q >= lp;
+                if (lp > 0 && q == lp) {
                     int bestj = 0;
                     for (size_t x = 1; x < m; ++x) { if (jobs[job_order[x]].lower < jobs[job_order[bestj]].lower) { bestj = (int) x; } }
                     ran_slot = job_order[bestj];
                     run_slot(ran_slot);
                 }
                 const s64 lim = bounded ? bound(best_res) : INF;
+                // transitivity of min cuts: lambda(i,k) >= min(lambda(i,j), lambda(j,k)) for disjoint terminal
+                // sets; a pair whose bound already reaches the prune bound would be dropped anyway
+                const bool pair_sym = symmetric || can_mirror;
+                if (bounded && pair_sym && use_transitivity && lim != INF) {
+                    s64 lb = -1;
+                    for (int x = 0; x < ns; ++x) {
+                        const s64 u = lam[(size_t) jobs[q].ia * ns + x], w = lam[(size_t) x * ns + jobs[q].ib];
+                        if (u >= 0 && w >= 0) { lb = std::max(lb, std::min(u, w)); }
+                    }
+                    if (lb >= lim) {
+                        jobs[q].lower = lb;
+                        lam[(size_t) jobs[q].ia * ns + jobs[q].ib] = lam[(size_t) jobs[q].ib * ns + jobs[q].ia] = lb;
+                        job_order[m++] = (int) q;
+                        if (can_mirror && !jobs[q].mirrored && q + 1 < nj) {
+                            jobs[q + 1].lower = lb;
+                            job_order[m++] = (int) (q + 1);
+                            ++q;
+                        }
+                        continue;
+                    }
+                }
                 prepare_job(jobs[q], (int) q, lim);
+                if (pair_sym) {
+                    lam[(size_t) jobs[q].ia * ns + jobs[q].ib] = lam[(size_t) jobs[q].ib * ns + jobs[q].ia] = jobs[q].lower;
+                }
                 job_order[m++] = (int) q;
                 if (can_mirror && !jobs[q].mirrored && q + 1 < nj) {
                     if (jobs[q].lower < lim) {
@@ -962,7 +991,7 @@ namespace HeiProMap {
                     ++q;
                 }
             }
-            if (lazy_p > 0 && ran_slot < 0) { // fewer jobs than lazy_p
+            if (lp > 0 && ran_slot < 0) { // fewer jobs than lp
                 int bestj = 0;
                 for (size_t x = 1; x < m; ++x) { if (jobs[job_order[x]].lower < jobs[job_order[bestj]].lower) { bestj = (int) x; } }
                 ran_slot = job_order[bestj];
