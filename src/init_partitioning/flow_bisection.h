@@ -28,6 +28,7 @@
 #define HEIPROMAP_FLOW_BISECTION_H
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -166,7 +167,8 @@ namespace HeiProMap {
         // reachable from s and the sink tree the set that reaches t in the residual graph.
         bool use_bk = true;
         AlignedArray<char> label, isact;
-        AlignedArray<int> pa, act, orph;
+        AlignedArray<int> pa, act, orph, ts, dst;
+        int bk_time = 0;
         int act_h = 0, act_t = 0, orph_n = 0;
         int src_n = 0;
         int dlevel = -1; // level of the sink terminals of the current Dinic phase
@@ -273,6 +275,8 @@ namespace HeiProMap {
             pa.initialize(N, -1);
             act.initialize(N + 1);
             orph.initialize(N);
+            ts.initialize(N, 0);
+            dst.initialize(N, 0);
             in_s.initialize(N);
             in_t.initialize(N);
             reach_s.initialize(N);
@@ -431,26 +435,39 @@ namespace HeiProMap {
         void bk_adopt(const int p) {
             if (in_s[p] || in_t[p]) { return; } // became a terminal (root) while waiting
             const char lab = label[p];
+            int best = -1, best_d = INT_MAX;
             for (int i = first[p]; i < first[p + 1]; ++i) {
                 const int q = arcs[i].to;
                 if (label[q] != lab) { continue; }
                 const bool res = lab == 1 ? arcs[arcs[i].rev].cap > 0 : arcs[i].cap > 0;
                 if (!res) { continue; }
-                int x = q;
-                bool ok = true;
+                // distance of q to its root, valid only if the chain reaches a root without orphans
+                int d = 0, x = q;
                 while (true) {
+                    if (ts[x] == bk_time) { d += dst[x]; break; }
                     const int a = pa[x];
-                    if (a == -1) { break; }
-                    if (a == -3) {
-                        ok = false;
-                        break;
-                    }
+                    if (a == -1) { d += 1; break; }
+                    if (a == -3) { d = INT_MAX; break; }
                     x = arcs[a].to;
+                    ++d;
                 }
-                if (ok) {
-                    pa[p] = i;
-                    return;
+                if (d == INT_MAX) { continue; }
+                // mark the chain as verified for this time stamp
+                int y = q, dd = d;
+                while (ts[y] != bk_time) {
+                    ts[y] = bk_time;
+                    dst[y] = dd--;
+                    const int a = pa[y];
+                    if (a == -1) { break; }
+                    y = arcs[a].to;
                 }
+                if (d < best_d) { best_d = d; best = i; }
+            }
+            if (best >= 0) {
+                pa[p] = best;
+                ts[p] = bk_time;
+                dst[p] = best_d + 1;
+                return;
             }
             label[p] = 0;
             for (int i = first[p]; i < first[p + 1]; ++i) {
@@ -463,6 +480,7 @@ namespace HeiProMap {
         }
 
         void bk_process_orphans() {
+            ++bk_time;
             while (orph_n > 0) { bk_adopt(orph[--orph_n]); }
         }
 
