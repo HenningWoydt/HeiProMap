@@ -47,6 +47,7 @@ def run_one(job):
     if a.initial_c:
         cmd += ["--initial-c", str(a.initial_c)]
     cmd += getattr(a, "extra", [])
+    cmd = ["timeout", "-k", "5", str(getattr(a, "run_timeout", 300))] + cmd  # safety timeout
     if not a.no_memlimit:
         cmd = ["systemd-run", "--user", "--scope", "-q", "-p", f"MemoryMax={a.memlimit}"] + cmd
     p = subprocess.run(cmd, capture_output=True, text=True)
@@ -101,6 +102,7 @@ def main():
     ap.add_argument("--quality-only", action="store_true")
     ap.add_argument("--force-timing", action="store_true", help="time all configs even if quality is bad")
     ap.add_argument("--refresh-cache", action="store_true")
+    ap.add_argument("--run-timeout", type=int, default=300, help="safety timeout per HeiProMap run (s)")
     ap.add_argument("--memlimit", default="100G")
     ap.add_argument("--no-memlimit", action="store_true")
     ap.add_argument("--out", type=Path, default=ROOT / "data" / "bench_flow_bisection")
