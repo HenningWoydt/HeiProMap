@@ -92,22 +92,6 @@ namespace HeiProMap {
             }
         };
 
-        // fixed capacity stack of trivially destructible items
-        template<typename T>
-        struct Stack {
-            AlignedArray<T> a;
-            size_t n = 0;
-
-            void reset(const size_t capacity) {
-                a.initialize(capacity);
-                n = 0;
-            }
-
-            void push(const T &x) { a[n++] = x; }
-            T pop() { return a[--n]; }
-            bool empty() const { return n == 0; }
-        };
-
         // one (seed pair, orientation) of a bisection
         struct Job {
             int a, b; // terminals: a -> source, b -> sink
@@ -143,23 +127,19 @@ namespace HeiProMap {
             }
         };
 
-        AlignedArray<int> stamp;
-        int stamp_id = 0;
-
         // scratch
-        AlignedArray<char> owner; // grow_initial_terminals
+        AlignedArray<char> owner; // marks of grow_initial_terminals, pick_seeds and collect_candidates
         AlignedArray<int> gq_s, gq_t; // BFS queues (also used by hop_distance)
         AlignedArray<Cand> cand;
         size_t cand_n = 0;
         std::vector<int> seeds;
         AlignedArray<int> tmp_dist, dist_rows; // bisect: dist_rows = n_seeds x nl
-        AlignedArray<char> first_part;
         PairResult best_res, mir_res, scr_res;
         AlignedArray<vertex_t> scratch_order; // stable partition of a range
         std::vector<weight_t> prefix, mw;
         std::vector<size_t> blk_b, blk_e; // result of kway_partition: range of every block
         AlignedArray<int> loc;
-        Stack<Task> task_stack;
+        std::vector<Task> task_stack;
         // snapshots of the networks after the first solve of every job of a bisection
         AlignedArray<Arc> slot_arcs;
         AlignedArray<char> slot_label;
@@ -179,14 +159,11 @@ namespace HeiProMap {
         /// network of the vertices verts[0, cnt) (loc must be set for them) and the buffers of the partitioner
         void setup_network(const CSRGraph &g, const vertex_t *verts, const int cnt) {
             build_network(g, verts, cnt, loc.get_ptr());
-            stamp.initialize(N, 0);
-            stamp_id = 0;
             owner.initialize(N);
             gq_s.initialize(N);
             gq_t.initialize(N);
             cand.initialize(N);
             tmp_dist.initialize(N);
-            first_part.initialize(N);
         }
 
         // hop distance inside the sub graph, unreachable = large; dist has nl entries
@@ -219,13 +196,13 @@ namespace HeiProMap {
         void collect_candidates(const char side, const char other_side, const int *dist_other) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "collect_candidates");
             cand_n = 0;
-            ++stamp_id;
+            std::fill_n(owner.get_ptr(), nl, 0); // candidates already collected
             for (int v = 0; v < nl; ++v) {
                 if (label[v] != side) { continue; }
                 for (int i = first[v]; i < first[v + 1]; ++i) {
                     const int w = arcs[i].to;
-                    if (w >= nl || label[w] == side || is_terminal(w) || stamp[w] == stamp_id) { continue; }
-                    stamp[w] = stamp_id;
+                    if (w >= nl || label[w] == side || is_terminal(w) || owner[w]) { continue; }
+                    owner[w] = 1;
                     cand[cand_n++] = Cand{label[w] == other_side ? 1 : 0, -dist_other[w], rng(), w};
                 }
             }
@@ -564,13 +541,14 @@ namespace HeiProMap {
             return m;
         }
 
-        // splits the sub problem; first_part[v] = 1 if local vertex v belongs to the first part
+        // splits the sub problem; afterwards best_res.in_source[v] = 1 if local vertex v belongs to the first part
         void bisect(const weight_t lo, const weight_t hi, const bool symmetric, const u64 num_seeds) {
-            std::fill_n(first_part.get_ptr(), nl, 1);
+            best_res.reset();
+            best_res.in_source.initialize(nl);
+            std::fill_n(best_res.in_source.get_ptr(), nl, 1);
             if (nl < 2) { return; }
 
             const int ns = pick_seeds(num_seeds);
-            best_res.reset();
             pair_salt = rng();
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "all_pairs");
 
@@ -591,7 +569,6 @@ namespace HeiProMap {
             // the number of random draws inside the pairs depends on pruning: restore a fixed stream
             rng.seed(pair_salt + 1);
 
-            if (best_res.valid) { std::memcpy(first_part.get_ptr(), best_res.in_source.get_ptr(), nl); }
         }
 
         /**
@@ -611,11 +588,12 @@ namespace HeiProMap {
             for (partition_t i = 0; i < k_prime; ++i) { prefix[i + 1] = prefix[i] + max_weights[i]; }
             scratch_order.initialize(end - begin);
 
-            task_stack.reset(k_prime + 2);
-            task_stack.push({begin, end, 0, k_prime});
+            task_stack.clear();
+            task_stack.push_back({begin, end, 0, k_prime});
 
             while (!task_stack.empty()) {
-                const Task task = task_stack.pop();
+                const Task task = task_stack.back();
+                task_stack.pop_back();
                 const partition_t K = task.hi - task.lo;
                 const size_t cnt = task.e - task.b;
 
@@ -641,12 +619,12 @@ namespace HeiProMap {
                 // stable partition of the range: first part to the front
                 size_t n1 = 0, n2 = 0;
                 for (size_t i = 0; i < cnt; ++i) {
-                    if (first_part[i]) { verts[n1++] = verts[i]; } else { scratch_order[n2++] = verts[i]; }
+                    if (best_res.in_source[i]) { verts[n1++] = verts[i]; } else { scratch_order[n2++] = verts[i]; }
                 }
                 std::memcpy(verts + n1, scratch_order.get_ptr(), n2 * sizeof(vertex_t));
 
-                task_stack.push({task.b, task.b + n1, task.lo, mid});
-                task_stack.push({task.b + n1, task.e, mid, task.hi});
+                task_stack.push_back({task.b, task.b + n1, task.lo, mid});
+                task_stack.push_back({task.b + n1, task.e, mid, task.hi});
             }
         }
 
@@ -674,11 +652,9 @@ namespace HeiProMap {
             AlignedArray<partition_t> stride; // PEs below one part of level j
             stride.initialize(l);
             partition_t k = 1;
-            size_t stack_cap = 2;
             for (size_t j = 0; j < l; ++j) {
                 stride[j] = k;
                 k *= hierarchy[j];
-                stack_cap += hierarchy[j];
             }
             const weight_t lmax = (weight_t) std::ceil((1.0 + imbalance) * (f64) g.g_weight / (f64) k);
 
@@ -692,12 +668,12 @@ namespace HeiProMap {
                 size_t level; // index into hierarchy, split into hierarchy[level] parts
                 partition_t offset;
             };
-            Stack<Item> stack;
-            stack.reset(stack_cap);
-            stack.push({0, (size_t) g.n, l - 1, 0});
+            std::vector<Item> stack;
+            stack.push_back({0, (size_t) g.n, l - 1, 0});
 
             while (!stack.empty()) {
-                const Item item = stack.pop();
+                const Item item = stack.back();
+                stack.pop_back();
 
                 const partition_t kk = hierarchy[item.level];
                 p.mw.assign(kk, (weight_t) stride[item.level] * lmax);
@@ -713,7 +689,7 @@ namespace HeiProMap {
                             p_manager.set(u, g.v_weight(u), item.offset + i);
                         }
                     } else {
-                        stack.push({p.blk_b[i], p.blk_e[i], item.level - 1, item.offset + i * stride[item.level]});
+                        stack.push_back({p.blk_b[i], p.blk_e[i], item.level - 1, item.offset + i * stride[item.level]});
                     }
                 }
             }

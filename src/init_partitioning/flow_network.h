@@ -70,7 +70,12 @@ namespace HeiProMap {
 
         // Boykov-Kolmogorov state
         AlignedArray<char> label, isact;
-        AlignedArray<int> pa, act, orph, ts, dst;
+        struct Verified {
+            int time; // bk_time at which the distance was verified
+            int dist; // distance to the root of the tree
+        };
+        AlignedArray<int> pa, act, orph;
+        AlignedArray<Verified> verified;
         int bk_time = 0;
         int act_h = 0, act_t = 0, orph_n = 0;
 
@@ -124,8 +129,7 @@ namespace HeiProMap {
             pa.initialize(N, -1);
             act.initialize(N + 1);
             orph.initialize(N);
-            ts.initialize(N, 0);
-            dst.initialize(N, 0);
+            verified.initialize(N, Verified{0, 0});
         }
 
         // ---------------------------------------------------------------- Boykov-Kolmogorov
@@ -204,7 +208,7 @@ namespace HeiProMap {
                 // distance of q to its root, valid only if the chain reaches a root without orphans
                 int d = 0, x = q;
                 while (true) {
-                    if (ts[x] == bk_time) { d += dst[x]; break; }
+                    if (verified[x].time == bk_time) { d += verified[x].dist; break; }
                     const int a = pa[x];
                     if (a == -1) { d += 1; break; }
                     if (a == -3) { d = INT_MAX; break; }
@@ -214,9 +218,8 @@ namespace HeiProMap {
                 if (d == INT_MAX) { continue; }
                 // mark the chain as verified for this time stamp
                 int y = q, dd = d;
-                while (ts[y] != bk_time) {
-                    ts[y] = bk_time;
-                    dst[y] = dd--;
+                while (verified[y].time != bk_time) {
+                    verified[y] = Verified{bk_time, dd--};
                     const int a = pa[y];
                     if (a == -1) { break; }
                     y = arcs[a].to;
@@ -225,8 +228,7 @@ namespace HeiProMap {
             }
             if (best >= 0) {
                 pa[p] = best;
-                ts[p] = bk_time;
-                dst[p] = best_d + 1;
+                verified[p] = Verified{bk_time, best_d + 1};
                 return;
             }
             label[p] = 0;
