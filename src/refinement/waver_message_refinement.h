@@ -189,18 +189,25 @@ namespace HeiProMap {
             }
 
             // Snapshot and restore rows for zero-overhead trial moves without updating boundary managers
+            struct RowSnapshot {
+                partition_t x;
+                std::vector<Entry> row;
+            };
+
             void snapshot_rows(const std::vector<partition_t> &affected,
-                               std::vector<std::pair<partition_t, std::vector<Entry>>> &out) {
-                out.clear();
-                for (const partition_t x: affected) {
+                               std::vector<RowSnapshot> &out) {
+                if (out.size() < affected.size()) { out.resize(affected.size()); }
+                for (size_t i = 0; i < affected.size(); ++i) {
+                    const partition_t x = affected[i];
                     if (!valid[x]) { build(x); }
-                    out.emplace_back(x, rows[x]);
+                    out[i].x = x;
+                    out[i].row = rows[x];
                 }
             }
 
-            void restore_rows(const std::vector<std::pair<partition_t, std::vector<Entry>>> &snap) {
-                for (const auto &[x, r]: snap) {
-                    rows[x] = r;
+            void restore_rows(const std::vector<RowSnapshot> &snap, size_t count) {
+                for (size_t i = 0; i < count; ++i) {
+                    rows[snap[i].x] = snap[i].row;
                 }
             }
 

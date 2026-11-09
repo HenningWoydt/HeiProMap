@@ -113,7 +113,7 @@ namespace HeiProMap {
             const WaverBusyRefinementConfiguration &busy;
             WaverRegionLoad tracker;
             std::vector<char> in_set_mark;
-            std::vector<std::pair<partition_t, std::vector<typename WaverMessageRefinement::QuotientRows::Entry>>> snapshot_buf;
+            std::vector<typename WaverMessageRefinement::QuotientRows::RowSnapshot> snapshot_buf;
 
 
             f64 load(const partition_t x) {
@@ -214,6 +214,16 @@ namespace HeiProMap {
                     partition_t best = NO_ID;
                     f64 best_gain = 0.0;
                     full.clear();
+
+                    // Precompute base_cost = sum_{x in {a} U group.ext} load(x)^power
+                    // and cache membership in {a} U group.ext
+                    std::vector<partition_t> base_affected;
+                    base_affected.push_back(a);
+                    for (const auto &[d, dw]: group.ext) { base_affected.push_back(d); }
+                    std::sort(base_affected.begin(), base_affected.end());
+                    base_affected.erase(std::unique(base_affected.begin(), base_affected.end()), base_affected.end());
+                    const f64 base_cost = cost(base_affected);
+
                     for (const partition_t c: targets) {
                         if (pm.bweights[c] + group.weight > pm.get_lmax(c)) {
                             if (busy.chain && busy.exact && c != a) { full.push_back(c); }
@@ -236,15 +246,18 @@ namespace HeiProMap {
                             undo(m);
                             before = cost(affected);
                         } else {
-                            affected.assign({a, c});
-                            for (const auto &[d, dw]: group.ext) { affected.push_back(d); }
-                            std::sort(affected.begin(), affected.end());
-                            affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
-                            before = cost(affected);
+                            const bool c_in_base = std::binary_search(base_affected.begin(), base_affected.end(), c);
+                            before = c_in_base ? base_cost : base_cost + std::pow(load(c), busy.power);
+
+                            affected = base_affected;
+                            if (!c_in_base) {
+                                affected.insert(std::lower_bound(affected.begin(), affected.end(), c), c);
+                            }
+
                             quotient.snapshot_rows(affected, snapshot_buf);
                             quotient.apply_group_move(a, c, group.ext, group.weight_to_own);
                             after = cost(affected);
-                            quotient.restore_rows(snapshot_buf);
+                            quotient.restore_rows(snapshot_buf, affected.size());
                         }
                         ++tried;
                         const f64 gain = before - after;
