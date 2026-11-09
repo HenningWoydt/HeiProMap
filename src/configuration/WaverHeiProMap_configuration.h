@@ -527,7 +527,9 @@ namespace HeiProMap {
             waver_message_refinement_config.max_iters = 1;
 
             waver_scatter_refinement_config.enabled = true;
+            waver_scatter_refinement_config.max_rounds = 1;
             waver_chain_refinement_config.enabled = true;
+            waver_chain_refinement_config.max_rounds = 1;
             waver_chain_refinement_config.max_depth = 2;
 
             waver_long_message_refinement_config.enabled = false;
