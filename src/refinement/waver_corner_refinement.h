@@ -61,11 +61,18 @@ namespace HeiProMap {
                 s.rebuild_members();
                 s.set_swap_cutoff();
                 u64 moves = 0;
-                // the busiest PEs first
+                // the busiest PEs first (isolate the top fraction without fully sorting all K elements)
                 std::vector<u32> order(K);
                 for (u32 p = 0; p < K; ++p) { order[p] = p; }
-                std::sort(order.begin(), order.end(), [&](u32 a, u32 b) { return s.load[a] > s.load[b]; });
                 const u32 limit = std::max<u32>(1, static_cast<u32>(std::ceil(cfg.top_fraction * static_cast<f64>(K))));
+                if (limit < K) {
+                    std::nth_element(order.begin(), order.begin() + limit, order.end(),
+                                     [&](u32 a, u32 b) { return s.load[a] > s.load[b]; });
+                    std::sort(order.begin(), order.begin() + limit,
+                              [&](u32 a, u32 b) { return s.load[a] > s.load[b]; });
+                } else {
+                    std::sort(order.begin(), order.end(), [&](u32 a, u32 b) { return s.load[a] > s.load[b]; });
+                }
                 for (u32 i = 0; i < limit && i < K; ++i) { moves += s.sweep_pe(order[i]); }
                 total_moves += moves;
                 if (cfg.verbose) {

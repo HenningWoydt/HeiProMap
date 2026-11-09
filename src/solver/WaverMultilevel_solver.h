@@ -1113,6 +1113,7 @@ namespace HeiProMap {
                 std::vector<std::vector<size_t> > out_of(nv);
                 for (size_t e = 0; e < out_vertex.size(); ++e) { out_of[out_vertex[e]].push_back(e); }
                 for (int sweep = 0; sweep < 20; ++sweep) {
+                    f64 max_diff = 0.0;
                     for (size_t i = 0; i < nv; ++i) {
                         // the anchor to the spectral position keeps the cell from collapsing onto its terminals
                         const f64 anchor = std::max(degree[i], 1.0);
@@ -1127,9 +1128,13 @@ namespace HeiProMap {
                             sc += out_w[e] * term_col[e];
                             sw += out_w[e];
                         }
-                        row[i] = sr / sw;
-                        col[i] = sc / sw;
+                        const f64 nr = sr / sw, nc = sc / sw;
+                        const f64 diff = std::abs(nr - row[i]) + std::abs(nc - col[i]);
+                        if (diff > max_diff) { max_diff = diff; }
+                        row[i] = nr;
+                        col[i] = nc;
                     }
+                    if (max_diff < 1e-4) { break; }
                 }
                 // spread by rank: the child rows by the row coordinate, then the cells of a row by the column
                 std::vector<size_t> by_row(nv);
