@@ -376,7 +376,23 @@ namespace HeiProMap {
             f64 *y0 = out[0]->get_ptr(), *y1 = out[1]->get_ptr(), *y2 = out[2]->get_ptr();
             #pragma omp parallel for num_threads(threads_for(c.n)) schedule(dynamic, 2048)
             for (size_t u = 0; u < c.n; ++u) {
-                f64 s0 = deg[u] * x0[u], s1 = deg[u] * x1[u], s2 = deg[u] * x2[u];
+                const f64 du = deg[u];
+#if defined(__AVX2__) && defined(__FMA__)
+                __m256d acc = _mm256_set_pd(0.0, du * x2[u], du * x1[u], du * x0[u]);
+                for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) {
+                    const f64 wj = c.weight(j);
+                    const u32 v = c.adj[j];
+                    __m256d vw = _mm256_set1_pd(wj);
+                    __m256d vx = _mm256_set_pd(0.0, x2[v], x1[v], x0[v]);
+                    acc = _mm256_fnmadd_pd(vw, vx, acc);
+                }
+                f64 buf[4];
+                _mm256_storeu_pd(buf, acc);
+                y0[u] = buf[0];
+                y1[u] = buf[1];
+                y2[u] = buf[2];
+#else
+                f64 s0 = du * x0[u], s1 = du * x1[u], s2 = du * x2[u];
                 for (size_t j = c.off[u]; j < c.off[u + 1]; ++j) {
                     const f64 wj = c.weight(j);
                     const u32 v = c.adj[j];
@@ -387,6 +403,7 @@ namespace HeiProMap {
                 y0[u] = s0;
                 y1[u] = s1;
                 y2[u] = s2;
+#endif
             }
         }
 
