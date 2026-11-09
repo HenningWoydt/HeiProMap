@@ -80,11 +80,15 @@ namespace HeiProMap {
         // continue every job (no keep_fraction, exact pruning). small_n = 0 = off.
         u64 small_n = 300;
         u64 small_seeds = 8;
+        // levels below the top: -1 = same as above, otherwise these values replace kway_rounds / small_seeds /
+        // refine_rounds there (the top level decides most of the QAP, the lower levels are cheap to settle)
+        s64 low_kway_rounds = -1, low_small_seeds = 2, low_refine_rounds = -1;
         bool small_exact = true; // small bisections: keep_fraction 1 and prune_factor 1
         // seed_budget of the top hierarchy level (its few, large bisections decide most of the QAP); 0 = no limit
         u64 top_seed_budget = 0;
         // seed pairs that do not contain the first seed: only this fraction (the farthest apart) is tried; 1 = all
         f64 pair_fraction = 1.0;
+        int pair_proxy = 0; // 0 = hop distance, 1 = sum of the seed ball cuts
         // move vertices out of overloaded blocks after every k'-partition (smallest cut increase first)
         bool repair = true;
         // first max flow of every seed pair with IBFS instead of BK (identical result, currently slower)
@@ -210,6 +214,7 @@ namespace HeiProMap {
         bool use_ibfs = false;
         bool repair = true;
         f64 pair_fraction = 1.0;
+        int pair_proxy = 0; // 0 = hop distance, 1 = sum of the seed ball cuts
         size_t small_n = 0, small_seeds = 0;
         bool small_exact = true;
         AlignedArray<int> ref_q, ref_d, ref_d1, ref_d2;
@@ -565,6 +570,33 @@ namespace HeiProMap {
             return ns;
         }
 
+        // cut of the BFS ball of weight init_fraction * total_w around v (proxy for how cheap it is to separate v)
+        s64 ball_cut(const int v0) {
+            const weight_t target = std::max<weight_t>(1, (weight_t) (init_fraction * (f64) total_w));
+            std::vector<char> in(nl, 0);
+            std::vector<int> q;
+            q.push_back(v0);
+            in[v0] = 1;
+            weight_t w = 0;
+            for (size_t h = 0; h < q.size() && w < target; ++h) {
+                const int u = q[h];
+                w += vw[u];
+                for (int i = first[u]; i < first[u + 1]; ++i) {
+                    const int x = arcs[i].to;
+                    if (x < nl && !in[x]) { in[x] = 1; q.push_back(x); }
+                }
+            }
+            // vertices queued but beyond the target weight are not part of the ball
+            const size_t ball_n = [&]() { weight_t a = 0; size_t c = 0; while (c < q.size() && a < target) { a += vw[q[c]]; ++c; } return c; }();
+            for (size_t h = ball_n; h < q.size(); ++h) { in[q[h]] = 0; }
+            s64 cut = 0;
+            for (size_t h = 0; h < ball_n; ++h) {
+                const int u = q[h];
+                for (int i = first[u]; i < first[u + 1]; ++i) { if (arcs[i].to < nl && !in[arcs[i].to]) { cut += base_arcs[i].cap; } }
+            }
+            return cut;
+        }
+
         /// all jobs: every seed pair, and the other orientation if the sides differ (seeds[j] must end up in the
         /// first part: source side weight window mirrored). Allocates the snapshot slots.
         size_t make_jobs(const weight_t lo, const weight_t hi, const bool symmetric, const int ns) {
@@ -572,20 +604,29 @@ namespace HeiProMap {
             jobs.resize(max_jobs);
             job_order.resize(max_jobs);
             size_t nj = 0;
-            // pairs without the first seed: only the pair_fraction farthest ones (hop distance)
-            int min_far = -1;
+            // pairs without the first seed: only the pair_fraction best ones, ranked by a cheap proxy of their cut:
+            // pair_proxy 0: hop distance (farther is better); 1: sum of the cuts of the BFS balls around both seeds
+            std::vector<s64> pscore;
+            s64 thr = 0;
+            bool has_thr = false;
+            auto score = [&](const int i, const int j) -> s64 {
+                if (pair_proxy == 0) { return -(s64) dist_rows[(size_t) i * (size_t) nl + (size_t) seeds[j]]; }
+                return pscore[i] + pscore[j];
+            };
             if (pair_fraction < 1.0 && ns > 2) {
-                std::vector<int> ds;
+                if (pair_proxy != 0) { pscore.resize(ns); for (int i = 0; i < ns; ++i) { pscore[i] = ball_cut(seeds[i]); } }
+                std::vector<s64> ds;
                 for (int i = 1; i < ns; ++i) {
-                    for (int j = i + 1; j < ns; ++j) { ds.push_back(dist_rows[(size_t) i * (size_t) nl + (size_t) seeds[j]]); }
+                    for (int j = i + 1; j < ns; ++j) { ds.push_back(score(i, j)); }
                 }
-                std::sort(ds.begin(), ds.end(), std::greater<int>());
+                std::sort(ds.begin(), ds.end());
                 const size_t keep_pairs = std::max<size_t>(1, (size_t) std::ceil(pair_fraction * (f64) ds.size()));
-                min_far = ds[std::min(keep_pairs, ds.size()) - 1];
+                thr = ds[std::min(keep_pairs, ds.size()) - 1];
+                has_thr = true;
             }
             for (int i = 0; i < ns; ++i) {
                 for (int j = i + 1; j < ns; ++j) {
-                    if (i > 0 && min_far >= 0 && dist_rows[(size_t) i * (size_t) nl + (size_t) seeds[j]] < min_far) { continue; }
+                    if (i > 0 && has_thr && score(i, j) > thr) { continue; }
                     jobs[nj++] = Job{seeds[i], seeds[j], lo, hi, i, j, false, 0};
                     if (!symmetric) { jobs[nj++] = Job{seeds[j], seeds[i], total_w - hi, total_w - lo, j, i, true, 0}; }
                 }
@@ -1055,6 +1096,7 @@ namespace HeiProMap {
             refine_band = config.refine_band;
             kway_rounds = (size_t) config.kway_rounds;
             pair_fraction = config.pair_fraction;
+            pair_proxy = config.pair_proxy;
             repair = config.repair;
             use_ibfs = config.ibfs;
             small_n = (size_t) config.small_n;
@@ -1099,7 +1141,16 @@ namespace HeiProMap {
             const size_t top = hierarchy.size() - 1;
             const u64 ns = level == top ? config.num_seeds : (level == 0 ? config.num_seeds_bottom : config.num_seeds_mid);
             seed_budget = (size_t) (level == top ? top_budget : config.seed_budget);
+            const size_t kr = kway_rounds, ss = small_seeds, rr = refine_rounds;
+            if (level != top) {
+                if (config.low_kway_rounds >= 0) { kway_rounds = (size_t) config.low_kway_rounds; }
+                if (config.low_small_seeds >= 0) { small_seeds = (size_t) config.low_small_seeds; }
+                if (config.low_refine_rounds >= 0) { refine_rounds = (size_t) config.low_refine_rounds; }
+            }
             kway_partition(g, order, b, e, kk, mw.data(), ns);
+            kway_rounds = kr;
+            small_seeds = ss;
+            refine_rounds = rr;
         }
 
         /**

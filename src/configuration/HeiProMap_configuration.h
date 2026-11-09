@@ -216,11 +216,15 @@ namespace HeiProMap {
             {"--partitioning", "", "Initial partitioning algorithm (multisection, greedy, flow-bisection).", "", "", false},
             {"--flow-bisection-seed-pool", "", "Flow bisection: every seed is drawn at random from the N farthest vertices (1 = the farthest, deterministic).", "1", "", false},
             {"--flow-bisection-kway-rounds", "", "Flow bisection: passes of pairwise flow refinement between adjacent blocks of every level, 0 = off.", "3", "", false},
+            {"--flow-bisection-low-kway-rounds", "", "Flow bisection: kway rounds for the levels below the top, -1 = same as the top level.", "-1", "", false},
+            {"--flow-bisection-low-small-seeds", "", "Flow bisection: small seeds for the levels below the top, -1 = same as the top level.", "2", "", false},
+            {"--flow-bisection-low-refine-rounds", "", "Flow bisection: refine rounds for the levels below the top, -1 = same as the top level.", "-1", "", false},
             {"--flow-bisection-small-n", "", "Flow bisection: bisections with fewer vertices use many seeds and no pruning heuristics, 0 = off.", "300", "", false},
             {"--flow-bisection-small-seeds", "", "Flow bisection: number of seeds of the small bisections.", "8", "", false},
             {"--flow-bisection-small-exact", "", "Flow bisection: small bisections continue every job and prune exactly (0/1).", "1", "", false},
             {"--flow-bisection-top-budget", "", "Flow bisection: seed budget of the top hierarchy level, 0 = no limit.", "0", "", false},
             {"--flow-bisection-pair-fraction", "", "Flow bisection: fraction of the seed pairs (not containing the first seed) that are tried.", "1.0", "", false},
+            {"--flow-bisection-pair-proxy", "", "Flow bisection: ranking of the seed pairs for pair-fraction: 0 = hop distance, 1 = sum of the seed ball cuts.", "0", "", false},
             {"--flow-bisection-repair", "", "Flow bisection: move vertices out of overloaded blocks after every k'-partition (0/1).", "1", "", false},
             {"--flow-bisection-ibfs", "", "Flow bisection: use IBFS instead of BK for the first max flow of every seed pair (0/1).", "0", "", false},
             {"--flow-bisection-refine-rounds", "", "Flow bisection: max number of improving flow refinements (corridor around the cut) of every bisection, 0 = off.", "100", "", false},
@@ -536,6 +540,15 @@ namespace HeiProMap {
             if (is_set("--flow-bisection-kway-rounds")) {
                 flow_bisection_config.kway_rounds = std::stoull(get("--flow-bisection-kway-rounds"));
             }
+            if (is_set("--flow-bisection-low-kway-rounds")) {
+                flow_bisection_config.low_kway_rounds = std::stoll(get("--flow-bisection-low-kway-rounds"));
+            }
+                        if (is_set("--flow-bisection-low-small-seeds")) {
+                flow_bisection_config.low_small_seeds = std::stoll(get("--flow-bisection-low-small-seeds"));
+            }
+                        if (is_set("--flow-bisection-low-refine-rounds")) {
+                flow_bisection_config.low_refine_rounds = std::stoll(get("--flow-bisection-low-refine-rounds"));
+            }
             if (is_set("--flow-bisection-small-n")) {
                 flow_bisection_config.small_n = std::stoull(get("--flow-bisection-small-n"));
             }
@@ -547,6 +560,9 @@ namespace HeiProMap {
             }
             if (is_set("--flow-bisection-top-budget")) {
                 flow_bisection_config.top_seed_budget = std::stoull(get("--flow-bisection-top-budget"));
+            }
+            if (is_set("--flow-bisection-pair-proxy")) {
+                flow_bisection_config.pair_proxy = std::stoi(get("--flow-bisection-pair-proxy"));
             }
             if (is_set("--flow-bisection-pair-fraction")) {
                 flow_bisection_config.pair_fraction = std::stod(get("--flow-bisection-pair-fraction"));
