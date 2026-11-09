@@ -36,6 +36,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+#if defined(__x86_64__) || defined(_M_X64)
+#include <immintrin.h>
+#endif
 
 #include "../definitions.h"
 #include "../datastructures/csr_graph.h"
@@ -630,18 +633,66 @@ namespace HeiProMap {
         }
 
         // Solves (L + delta*I) x = b in place with the Cholesky factor f (lower triangle, row-major, n x n).
-        static void cholesky_solve(const std::vector<f64> &f, const size_t n, Vec &x) {
+        static void cholesky_solve(const f64 * __restrict__ f, const size_t n, Vec &x) {
+            f64 * __restrict__ xp = x.get_ptr();
+            // Forward solve: L y = b
             for (size_t i = 0; i < n; ++i) {
-                f64 s = x[i];
-                for (size_t k = 0; k < i; ++k) s -= f[i * n + k] * x[k];
-                x[i] = s / f[i * n + i];
+                const f64 * __restrict__ fi = f + i * n;
+                size_t k = 0;
+#if defined(__AVX2__) && defined(__FMA__)
+                __m256d acc0 = _mm256_setzero_pd();
+                __m256d acc1 = _mm256_setzero_pd();
+                for (; k + 7 < i; k += 8) {
+                    acc0 = _mm256_fmadd_pd(_mm256_loadu_pd(fi + k), _mm256_loadu_pd(xp + k), acc0);
+                    acc1 = _mm256_fmadd_pd(_mm256_loadu_pd(fi + k + 4), _mm256_loadu_pd(xp + k + 4), acc1);
+                }
+                acc0 = _mm256_add_pd(acc0, acc1);
+                for (; k + 3 < i; k += 4) {
+                    acc0 = _mm256_fmadd_pd(_mm256_loadu_pd(fi + k), _mm256_loadu_pd(xp + k), acc0);
+                }
+                f64 buf[4];
+                _mm256_storeu_pd(buf, acc0);
+                f64 s = xp[i] - (buf[0] + buf[1] + buf[2] + buf[3]);
+#else
+                f64 s = xp[i];
+#endif
+                for (; k < i; ++k) s -= fi[k] * xp[k];
+                xp[i] = s / fi[i];
             }
+            // Backward solve: L^T x = y
+            // Unit-stride contiguous row traversal via axpy update
             for (size_t i = n; i-- > 0;) {
-                f64 s = x[i];
-                for (size_t k = i + 1; k < n; ++k) s -= f[k * n + i] * x[k];
-                x[i] = s / f[i * n + i];
+                const f64 xi = xp[i] / f[i * n + i];
+                xp[i] = xi;
+                const f64 * __restrict__ fi = f + i * n;
+                size_t k = 0;
+#if defined(__AVX2__) && defined(__FMA__)
+                __m256d v_xi = _mm256_set1_pd(xi);
+                for (; k + 7 < i; k += 8) {
+                    __m256d x0 = _mm256_loadu_pd(xp + k);
+                    __m256d x1 = _mm256_loadu_pd(xp + k + 4);
+                    __m256d f0 = _mm256_loadu_pd(fi + k);
+                    __m256d f1 = _mm256_loadu_pd(fi + k + 4);
+                    x0 = _mm256_fnmadd_pd(f0, v_xi, x0);
+                    x1 = _mm256_fnmadd_pd(f1, v_xi, x1);
+                    _mm256_storeu_pd(xp + k, x0);
+                    _mm256_storeu_pd(xp + k + 4, x1);
+                }
+                for (; k + 3 < i; k += 4) {
+                    __m256d x0 = _mm256_loadu_pd(xp + k);
+                    __m256d f0 = _mm256_loadu_pd(fi + k);
+                    x0 = _mm256_fnmadd_pd(f0, v_xi, x0);
+                    _mm256_storeu_pd(xp + k, x0);
+                }
+#endif
+                for (; k < i; ++k) {
+                    xp[k] -= fi[k] * xi;
+                }
             }
         }
+
+        // Buffer for Cholesky factorization to avoid repeated heap allocation across local splits
+        std::vector<f64> cholesky_buffer_;
 
         // Exact inverse subspace iteration with a dense Cholesky factor of L + delta*I.
         void dense_solve(const CSRGraph &g) {
@@ -651,7 +702,13 @@ namespace HeiProMap {
             const f64 maxdeg = n == 0 ? 0.0 : *std::max_element(deg.begin(), deg.begin() + n);
             const f64 delta = std::max(1e-300, 1e-8 * maxdeg);
 
-            std::vector<f64> f(n * n, 0.0);
+            const size_t n2 = n * n;
+            if (cholesky_buffer_.size() < n2) {
+                cholesky_buffer_.resize(n2);
+            }
+            f64 * __restrict__ f = cholesky_buffer_.data();
+            std::fill(f, f + n2, 0.0);
+
             for (vertex_t v = 0; v < g.n; ++v) {
                 f[v * n + v] += deg[v] + delta;
                 for (size_t j = g.neighborhoods[v]; j < g.neighborhoods[v + 1]; ++j) {
@@ -659,20 +716,74 @@ namespace HeiProMap {
                     if (u < v) f[v * n + u] -= static_cast<f64>(g.edge_w(j));
                 }
             }
-            for (size_t j = 0; j < n; ++j) {
-                f64 d = f[j * n + j];
-                for (size_t k = 0; k < j; ++k) d -= f[j * n + k] * f[j * n + k];
-                if (!(d > 0.0)) {
-                    std::cout << "  [spectral] dense Cholesky failed, falling back to CG" << std::endl;
-                    resmooth(g, kFallbackRounds, 4 * kCgDepth);
-                    return;
+
+            // Blocked left-looking Cholesky factorization for high L1/L2 cache hit rate
+            constexpr size_t kBlockSize = 64;
+            const int th = threads_for(n);
+
+            for (size_t jb = 0; jb < n; jb += kBlockSize) {
+                const size_t b = std::min(kBlockSize, n - jb);
+                const size_t j_end = jb + b;
+
+                // Step 1: Update panel [jb .. n-1] x [jb .. j_end-1] with all previous column blocks kb < jb
+                for (size_t kb = 0; kb < jb; kb += kBlockSize) {
+                    const size_t kb_len = std::min(kBlockSize, jb - kb);
+                    #pragma omp parallel for num_threads(th) schedule(static, 32) if(th > 1)
+                    for (size_t i = jb; i < n; ++i) {
+                        f64 * __restrict__ fi = f + i * n;
+                        const f64 * __restrict__ Lik = fi + kb;
+                        const size_t j_limit = std::min(i + 1, j_end);
+                        for (size_t j = jb; j < j_limit; ++j) {
+                            const f64 * __restrict__ Ljk = f + j * n + kb;
+                            size_t m = 0;
+#if defined(__AVX2__) && defined(__FMA__)
+                            __m256d acc0 = _mm256_setzero_pd();
+                            __m256d acc1 = _mm256_setzero_pd();
+                            for (; m + 7 < kb_len; m += 8) {
+                                acc0 = _mm256_fmadd_pd(_mm256_loadu_pd(Lik + m), _mm256_loadu_pd(Ljk + m), acc0);
+                                acc1 = _mm256_fmadd_pd(_mm256_loadu_pd(Lik + m + 4), _mm256_loadu_pd(Ljk + m + 4), acc1);
+                            }
+                            acc0 = _mm256_add_pd(acc0, acc1);
+                            for (; m + 3 < kb_len; m += 4) {
+                                acc0 = _mm256_fmadd_pd(_mm256_loadu_pd(Lik + m), _mm256_loadu_pd(Ljk + m), acc0);
+                            }
+                            f64 buf[4];
+                            _mm256_storeu_pd(buf, acc0);
+                            f64 dot = buf[0] + buf[1] + buf[2] + buf[3];
+#else
+                            f64 dot = 0.0;
+#endif
+                            for (; m < kb_len; ++m) dot += Lik[m] * Ljk[m];
+                            fi[j] -= dot;
+                        }
+                    }
                 }
-                const f64 dj = std::sqrt(d);
-                f[j * n + j] = dj;
-                for (size_t i = j + 1; i < n; ++i) {
-                    f64 s = f[i * n + j];
-                    for (size_t k = 0; k < j; ++k) s -= f[i * n + k] * f[j * n + k];
-                    f[i * n + j] = s / dj;
+
+                // Step 2: Factor current panel [jb .. n-1] x [jb .. j_end-1]
+                for (size_t j = jb; j < j_end; ++j) {
+                    f64 * __restrict__ fj = f + j * n;
+                    f64 d = fj[j];
+                    for (size_t m = jb; m < j; ++m) {
+                        d -= fj[m] * fj[m];
+                    }
+                    if (!(d > 0.0)) {
+                        std::cout << "  [spectral] dense Cholesky failed, falling back to CG" << std::endl;
+                        resmooth(g, kFallbackRounds, 4 * kCgDepth);
+                        return;
+                    }
+                    const f64 dj = std::sqrt(d);
+                    fj[j] = dj;
+                    const f64 inv_dj = 1.0 / dj;
+
+                    #pragma omp parallel for num_threads(th) schedule(static, 64) if(th > 1 && (n - j > 256))
+                    for (size_t i = j + 1; i < n; ++i) {
+                        f64 * __restrict__ fi = f + i * n;
+                        f64 s = fi[j];
+                        for (size_t m = jb; m < j; ++m) {
+                            s -= fi[m] * fj[m];
+                        }
+                        fi[j] = s * inv_dj;
+                    }
                 }
             }
 

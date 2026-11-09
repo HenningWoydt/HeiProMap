@@ -77,9 +77,11 @@ namespace HeiProMap {
     //   beta_end/alpha_link/beta_link terms: per-edge, skipping intra-group edges
     //
     class WaverGroupMoves;
+    class WaverBusyRefinement;
 
     class WaverMessageRefinement {
         friend class WaverGroupMoves; // uses the quotient rows, the move and its cost delta
+        friend class WaverBusyRefinement;
 
         // A move must gain more than the floating point noise of the delta, or zero-gain moves cycle.
         static constexpr f64 kMinGain = 1e-6;
@@ -183,6 +185,22 @@ namespace HeiProMap {
                     // the edges between the group and the rest of a are cut now
                     add(a, c, to_a);
                     add(c, a, to_a);
+                }
+            }
+
+            // Snapshot and restore rows for zero-overhead trial moves without updating boundary managers
+            void snapshot_rows(const std::vector<partition_t> &affected,
+                               std::vector<std::pair<partition_t, std::vector<Entry>>> &out) {
+                out.clear();
+                for (const partition_t x: affected) {
+                    if (!valid[x]) { build(x); }
+                    out.emplace_back(x, rows[x]);
+                }
+            }
+
+            void restore_rows(const std::vector<std::pair<partition_t, std::vector<Entry>>> &snap) {
+                for (const auto &[x, r]: snap) {
+                    rows[x] = r;
                 }
             }
 

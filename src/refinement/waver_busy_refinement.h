@@ -113,6 +113,7 @@ namespace HeiProMap {
             const WaverBusyRefinementConfiguration &busy;
             WaverRegionLoad tracker;
             std::vector<char> in_set_mark;
+            std::vector<std::pair<partition_t, std::vector<typename WaverMessageRefinement::QuotientRows::Entry>>> snapshot_buf;
 
 
             f64 load(const partition_t x) {
@@ -240,10 +241,10 @@ namespace HeiProMap {
                             std::sort(affected.begin(), affected.end());
                             affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
                             before = cost(affected);
-                            apply(group, a, c);
+                            quotient.snapshot_rows(affected, snapshot_buf);
+                            quotient.apply_group_move(a, c, group.ext, group.weight_to_own);
                             after = cost(affected);
-                            typename Base::Move m{group.group, a, c};
-                            undo(m);
+                            quotient.restore_rows(snapshot_buf);
                         }
                         ++tried;
                         const f64 gain = before - after;
