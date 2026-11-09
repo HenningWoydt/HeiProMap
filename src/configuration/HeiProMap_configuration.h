@@ -211,7 +211,21 @@ namespace HeiProMap {
             // optional
             {"--hm-level", "", "Level of hierarchical multisection.", "0", "", false},
             {"--initial-c", "", "Initial contracting limit.", "64", "", false},
+            {"--dump-multisection", "", "After every multisection item (one kaffpa call) write its graph, partition and stats to this directory.", "", "", false},
+            {"--save-coarsest-graph", "", "Write the coarsest graph (METIS format, with weights) to this file before initial partitioning.", "", "", false},
             {"--partitioning", "", "Initial partitioning algorithm (multisection, greedy, flow-bisection).", "", "", false},
+            {"--flow-bisection-seed-pool", "", "Flow bisection: every seed is drawn at random from the N farthest vertices (1 = the farthest, deterministic).", "1", "", false},
+            {"--flow-bisection-kway-rounds", "", "Flow bisection: passes of pairwise flow refinement between adjacent blocks of every level, 0 = off.", "3", "", false},
+            {"--flow-bisection-small-n", "", "Flow bisection: bisections with fewer vertices use many seeds and no pruning heuristics, 0 = off.", "300", "", false},
+            {"--flow-bisection-small-seeds", "", "Flow bisection: number of seeds of the small bisections.", "8", "", false},
+            {"--flow-bisection-small-exact", "", "Flow bisection: small bisections continue every job and prune exactly (0/1).", "1", "", false},
+            {"--flow-bisection-top-budget", "", "Flow bisection: seed budget of the top hierarchy level, 0 = no limit.", "0", "", false},
+            {"--flow-bisection-pair-fraction", "", "Flow bisection: fraction of the seed pairs (not containing the first seed) that are tried.", "1.0", "", false},
+            {"--flow-bisection-repair", "", "Flow bisection: move vertices out of overloaded blocks after every k'-partition (0/1).", "1", "", false},
+            {"--flow-bisection-ibfs", "", "Flow bisection: use IBFS instead of BK for the first max flow of every seed pair (0/1).", "0", "", false},
+            {"--flow-bisection-refine-rounds", "", "Flow bisection: max number of improving flow refinements (corridor around the cut) of every bisection, 0 = off.", "100", "", false},
+            {"--flow-bisection-refine-band", "", "Flow bisection: weight fraction of the corridor (the refinement tries 0.2, 0.5, 1, 2, 4 times this).", "0.1", "", false},
+            {"--flow-bisection-adaptive", "", "Flow bisection: every hierarchy level gets its own (adaptive) imbalance like the multisection, instead of the global one (true/false).", "true", "", false},
             {"--flow-bisection-prune", "", "Flow bisection: stop a seed pair once its cut cannot beat the best feasible cut (true/false).", "true", "", false},
             {"--flow-bisection-init-fraction", "", "Flow bisection: both terminals are first grown to this fraction of the sub graph weight (0 = single vertex).", "0.1", "", false},
             {"--flow-bisection-prune-factor", "", "Flow bisection: drop a pair when its flow reaches this factor times the best feasible cut (1 = exact).", "0.95", "", false},
@@ -309,6 +323,7 @@ namespace HeiProMap {
         u64 hm_level = 0;
 
         u64 initial_c = 64;
+        std::string coarsest_graph_out;
         bool use_parallel_contraction = false;
 
         // if true: no quotient graph / block connectivity datastructures, simple refiners are used
@@ -505,9 +520,52 @@ namespace HeiProMap {
             if (is_set("--initial-c")) {
                 initial_c = std::stoull(get("--initial-c"));
             }
+            if (is_set("--dump-multisection")) {
+                global_multisection_config.dump_dir = get("--dump-multisection");
+            }
+            if (is_set("--save-coarsest-graph")) {
+                coarsest_graph_out = get("--save-coarsest-graph");
+            }
             if (is_set("--partitioning")) {
                 partitioning_algorithm_string = get("--partitioning");
                 partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            }
+            if (is_set("--flow-bisection-seed-pool")) {
+                flow_bisection_config.seed_pool = std::stoull(get("--flow-bisection-seed-pool"));
+            }
+            if (is_set("--flow-bisection-kway-rounds")) {
+                flow_bisection_config.kway_rounds = std::stoull(get("--flow-bisection-kway-rounds"));
+            }
+            if (is_set("--flow-bisection-small-n")) {
+                flow_bisection_config.small_n = std::stoull(get("--flow-bisection-small-n"));
+            }
+            if (is_set("--flow-bisection-small-seeds")) {
+                flow_bisection_config.small_seeds = std::stoull(get("--flow-bisection-small-seeds"));
+            }
+            if (is_set("--flow-bisection-small-exact")) {
+                flow_bisection_config.small_exact = std::stoi(get("--flow-bisection-small-exact")) != 0;
+            }
+            if (is_set("--flow-bisection-top-budget")) {
+                flow_bisection_config.top_seed_budget = std::stoull(get("--flow-bisection-top-budget"));
+            }
+            if (is_set("--flow-bisection-pair-fraction")) {
+                flow_bisection_config.pair_fraction = std::stod(get("--flow-bisection-pair-fraction"));
+            }
+            if (is_set("--flow-bisection-repair")) {
+                flow_bisection_config.repair = std::stoi(get("--flow-bisection-repair")) != 0;
+            }
+            if (is_set("--flow-bisection-ibfs")) {
+                flow_bisection_config.ibfs = std::stoi(get("--flow-bisection-ibfs")) != 0;
+            }
+            if (is_set("--flow-bisection-refine-rounds")) {
+                flow_bisection_config.refine_rounds = std::stoull(get("--flow-bisection-refine-rounds"));
+            }
+            if (is_set("--flow-bisection-refine-band")) {
+                flow_bisection_config.refine_band = std::stod(get("--flow-bisection-refine-band"));
+            }
+            if (is_set("--flow-bisection-adaptive")) {
+                const std::string val = get("--flow-bisection-adaptive");
+                flow_bisection_config.adaptive_imbalance = (val == "true" || val == "1");
             }
             if (is_set("--flow-bisection-prune")) {
                 const std::string val = get("--flow-bisection-prune");

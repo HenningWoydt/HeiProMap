@@ -28,6 +28,7 @@
 #define HEIPROMAP_FLOW_NETWORK_H
 
 #include <climits>
+#include <vector>
 #include <cstring>
 
 #include "../definitions.h"
@@ -77,6 +78,11 @@ namespace HeiProMap {
         AlignedArray<int> pa, act, orph;
         AlignedArray<Verified> verified;
         int bk_time = 0;
+        // IBFS (first solve from scratch)
+        AlignedArray<int> ib_d, ib_cur;
+        std::vector<int> ib_fs, ib_ft, ib_nx, ib_q;
+        std::vector<std::vector<int>> ib_bk;
+        std::vector<int> *ib_next = nullptr, *ib_otherf = nullptr;
         int act_h = 0, act_t = 0, orph_n = 0;
 
         // scratch of build_network
@@ -130,6 +136,8 @@ namespace HeiProMap {
             act.initialize(N + 1);
             orph.initialize(N);
             verified.initialize(N, Verified{0, 0});
+            ib_d.initialize(N);
+            ib_cur.initialize(N);
         }
 
         // ---------------------------------------------------------------- Boykov-Kolmogorov
@@ -272,6 +280,190 @@ namespace HeiProMap {
                 v = par;
             }
             return bn;
+        }
+
+
+        // ---------------------------------------------------------------- IBFS
+        // Incremental breadth-first search max flow (Goldberg, Hed, Kaplan, Tarjan, Werneck 2011) from scratch for the
+        // terminals set since reset_trees (no bk_start). Uses the same tree representation as BK (label, pa), and at
+        // the end completes both trees, so bk_maxflow can continue from the result (incremental piercing).
+        // Returns the flow; at `limit` it returns early (the state is then not usable).
+
+        // v left its tree or was relabeled: its children become orphans
+        void ibfs_orphan_children(const int v, const char lab) {
+            for (int j = first[v]; j < first[v + 1]; ++j) {
+                const int w = arcs[j].to;
+                if (label[w] == lab && pa[w] == arcs[j].rev) { bk_orphan(w); }
+            }
+        }
+
+        // adoption of all orphans; tr = tree grown in this pass (levels up to D + 1), the other one has levels up to Do
+        void ibfs_adopt(const char tr, const int D, const int Do) {
+            auto proc = [&](const int v) {
+                if (pa[v] != -3) { return; }
+                const char lab = label[v];
+                const int dv = ib_d[v];
+                const int maxlev = lab == tr ? D + 1 : Do;
+                // scan from the current arc on: stop at an admissible arc (new parent, same label); otherwise remember
+                // the first arc to the lowest neighbour. The arcs before the current arc come first in the list order.
+                bool found = false;
+                int best = -1, bd = INT_MAX;
+                const int c0 = ib_cur[v];
+                for (int i = c0; i < first[v + 1] && !found; ++i) {
+                    const Arc &a = arcs[i];
+                    const int u = a.to;
+                    if (label[u] != lab || ib_d[u] >= bd) { continue; }
+                    if (lab == 1 ? arcs[a.rev].cap > 0 : a.cap > 0) {
+                        best = i;
+                        bd = ib_d[u];
+                        if (bd == dv - 1) { found = true; }
+                    }
+                }
+                if (found) {
+                    pa[v] = best;
+                    ib_cur[v] = best;
+                    return;
+                }
+                {
+                    int bestB = -1, bdB = INT_MAX;
+                    for (int i = first[v]; i < c0; ++i) {
+                        const Arc &a = arcs[i];
+                        const int u = a.to;
+                        if (label[u] != lab || ib_d[u] >= bdB) { continue; }
+                        if (lab == 1 ? arcs[a.rev].cap > 0 : a.cap > 0) { bestB = i; bdB = ib_d[u]; }
+                    }
+                    if (bdB <= bd) { best = bestB; bd = bdB; }
+                }
+                if (best < 0 || bd + 1 > maxlev) {
+                    label[v] = 0;
+                    pa[v] = -1;
+                    ibfs_orphan_children(v, lab);
+                    return;
+                }
+                pa[v] = best;
+                ib_cur[v] = best;
+                if (bd + 1 != dv) {
+                    ib_d[v] = bd + 1;
+                    ibfs_orphan_children(v, lab);
+                    if (lab == tr) { if (bd + 1 == D + 1) { ib_next->push_back(v); } }
+                    else if (bd + 1 == Do) { ib_otherf->push_back(v); }
+                }
+            };
+            size_t lvl = ib_bk.size();
+            auto drain = [&]() {
+                while (orph_n > 0) {
+                    const int w = orph[--orph_n];
+                    const size_t l = ib_d[w];
+                    if (l >= ib_bk.size()) { ib_bk.resize(l + 1); }
+                    ib_bk[l].push_back(w);
+                    if (l < lvl) { lvl = l; }
+                }
+            };
+            drain();
+            while (lvl < ib_bk.size()) {
+                if (ib_bk[lvl].empty()) { ++lvl; continue; }
+                const int v = ib_bk[lvl].back();
+                ib_bk[lvl].pop_back();
+                if (pa[v] == -3) { proc(v); }
+                drain();
+            }
+        }
+
+        // one pass: grows tree tr by one level. 0 = limit reached, 1 = continue, 2 = no vertex at the next level
+        int ibfs_pass(const char tr, int &D, const int Do, std::vector<int> &f, std::vector<int> &other_f,
+                      s64 &flow, const s64 limit) {
+            const char other = 3 - tr;
+            // frontier: the vertices of the tree at level D (entries may be stale or duplicated)
+            size_t m = 0;
+            for (size_t x = 0; x < f.size(); ++x) {
+                const int v = f[x];
+                if (label[v] == tr && ib_d[v] == D && pa[v] != -3 && !isact[v]) { isact[v] = 1; f[m++] = v; }
+            }
+            f.resize(m);
+            for (size_t x = 0; x < m; ++x) { isact[f[x]] = 0; }
+            ib_nx.clear();
+            ib_next = &ib_nx;
+            ib_otherf = &other_f;
+            for (size_t x = 0; x < f.size(); ++x) {
+                const int v = f[x];
+                if (label[v] != tr || ib_d[v] != D) { continue; }
+                int i = first[v];
+                while (i < first[v + 1]) {
+                    if (label[v] != tr || ib_d[v] != D) { break; }
+                    const Arc &a = arcs[i];
+                    const bool res = tr == 1 ? a.cap > 0 : arcs[a.rev].cap > 0;
+                    if (!res) { ++i; continue; }
+                    const int w = a.to;
+                    if (label[w] == 0) {
+                        label[w] = tr;
+                        pa[w] = a.rev;
+                        ib_d[w] = D + 1;
+                        ib_cur[w] = first[w];
+                        ib_nx.push_back(w);
+                        ++i;
+                    } else if (label[w] == other) {
+                        flow += bk_augment(tr == 1 ? i : a.rev, tr == 1 ? v : w);
+                        if (flow >= limit) { return 0; }
+                        ibfs_adopt(tr, D, Do);
+                    } else {
+                        ++i;
+                    }
+                }
+            }
+            // next frontier
+            m = 0;
+            for (size_t x = 0; x < ib_nx.size(); ++x) {
+                const int v = ib_nx[x];
+                if (label[v] == tr && ib_d[v] == D + 1 && pa[v] != -3 && !isact[v]) { isact[v] = 1; ib_nx[m++] = v; }
+            }
+            ib_nx.resize(m);
+            for (size_t x = 0; x < m; ++x) { isact[ib_nx[x]] = 0; }
+            if (m == 0) { return 2; }
+            f.swap(ib_nx);
+            ++D;
+            return 1;
+        }
+
+        // grows the tree of `lab` over all residual arcs (BFS) so that it is exactly the reachable (S) / reaching (T) set
+        void ibfs_complete(const char lab) {
+            ib_q.clear();
+            for (int v = 0; v < nl; ++v) { if (label[v] == lab) { ib_q.push_back(v); } }
+            for (size_t h = 0; h < ib_q.size(); ++h) {
+                const int x = ib_q[h];
+                for (int i = first[x]; i < first[x + 1]; ++i) {
+                    const int w = arcs[i].to;
+                    if (label[w] != 0) { continue; }
+                    if (lab == 1 ? arcs[i].cap > 0 : arcs[arcs[i].rev].cap > 0) {
+                        label[w] = lab;
+                        pa[w] = arcs[i].rev;
+                        ib_q.push_back(w);
+                    }
+                }
+            }
+        }
+
+        s64 ibfs_maxflow(const s64 limit = INF) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "ibfs");
+            s64 flow = 0;
+            ib_fs.clear();
+            ib_ft.clear();
+            for (int v = 0; v < nl; ++v) {
+                if (label[v] == 1) { ib_d[v] = 0; ib_cur[v] = first[v]; ib_fs.push_back(v); }
+                else if (label[v] == 2) { ib_d[v] = 0; ib_cur[v] = first[v]; ib_ft.push_back(v); }
+            }
+            orph_n = 0;
+            act_h = act_t = 0;
+            int Ds = 0, Dt = 0;
+            while (!ib_fs.empty() && !ib_ft.empty()) {
+                int r;
+                if (ib_fs.size() <= ib_ft.size()) { r = ibfs_pass(1, Ds, Dt, ib_fs, ib_ft, flow, limit); }
+                else { r = ibfs_pass(2, Dt, Ds, ib_ft, ib_fs, flow, limit); }
+                if (r == 0) { return flow; }
+                if (r == 2) { break; }
+            }
+            ibfs_complete(1);
+            ibfs_complete(2);
+            return flow;
         }
 
         // grows the trees until no active vertex is left; returns the added flow (early return at `limit`)

@@ -27,6 +27,8 @@
 #ifndef HEIPROMAP_GLOBAL_MULTISECTION_H
 #define HEIPROMAP_GLOBAL_MULTISECTION_H
 
+#include <filesystem>
+#include <fstream>
 #include <vector>
 #include <iostream>
 #include <cmath>
@@ -131,6 +133,8 @@ namespace HeiProMap {
         u64 v_cycle_depth = 1;
         bool collect_dataset = false;
         std::string data_dir = "data";
+        // if not empty: after every item (one kaffpa call) its graph, partition and stats are written here
+        std::string dump_dir;
         LabelPropagationConfiguration label_propagation_config = LabelPropagationConfiguration("Label Propagation");
         QuotientGraphRefinementConfiguration quotient_graph_refinement_config = QuotientGraphRefinementConfiguration("Quotient Graph");
         FlowBasedRefinementConfiguration flow_based_refinement_config = FlowBasedRefinementConfiguration("Flow Based");
@@ -204,11 +208,13 @@ namespace HeiProMap {
 
             // initialize stack;
             std::vector<Item> stack = {first_graph};
+            u64 dump_counter = 0;
 
             // process the stack
             while (!stack.empty()) {
                 Item item = stack.back(); // process first item
                 stack.pop_back(); // remove top item
+                const auto item_sp = get_time_point();
 
                 if (config.mode == GLOBAL_MULTISECTION_KAFFPA_STRONG) {
                     kaffpa_partition(*item.g, item.k, item.imb, KAFFPA_PARTITION_STRONG, item.seed, partition, config.kappa, config.collect_dataset, config.data_dir);
@@ -230,6 +236,9 @@ namespace HeiProMap {
                     for (u64 v = 0; v < cycles; ++v) {
                         refine_partition(*item.g, item.k, item.imb, item.seed + v, partition, config);
                     }
+                }
+                if (!config.dump_dir.empty()) {
+                    dump_item(config.dump_dir, dump_counter++, l, item, partition, get_milli_seconds(item_sp, get_time_point()));
                 }
 
                 /*
@@ -358,6 +367,64 @@ namespace HeiProMap {
                     delete item.g;
                 }
             }
+        }
+
+        // Writes graph (METIS), partition and stats of one item to <dir>/item_<counter>_<path>/ and appends a line
+        // to <dir>/index.csv. The item is one kaffpa call: split the sub graph into item.k blocks with item.imb.
+        static void dump_item(const std::string &dir, const u64 counter, const partition_t l, const Item &item,
+                              const AlignedArray<partition_t> &partition, const f64 ms) {
+            std::string path_str;
+            for (const partition_t id: *item.identifier) { path_str += "_" + std::to_string(id); }
+            const std::string name = "item_" + std::to_string(1000 + counter).substr(1) + (path_str.empty() ? "_root" : path_str);
+            const std::string item_dir = dir + "/" + name;
+            std::error_code ec;
+            std::filesystem::create_directories(item_dir, ec);
+
+            item.g->write_graph(item_dir + "/graph.graph");
+
+            std::vector<weight_t> bw(item.k, 0);
+            weight_t cut2 = 0;
+            for (vertex_t u = 0; u < item.g->n; ++u) {
+                bw[partition[u]] += item.g->v_weight(u);
+                for (size_t i = item.g->neighborhoods[u]; i < item.g->neighborhoods[u + 1]; ++i) {
+                    if (partition[item.g->edges_v[i]] != partition[u]) { cut2 += item.g->edge_w(i); }
+                }
+            }
+            const weight_t max_bw = *std::max_element(bw.begin(), bw.end());
+            const f64 avg = (f64) item.g->g_weight / (f64) item.k;
+            const weight_t allowed = (weight_t) std::ceil((1.0 + item.imb) * avg);
+
+            std::ofstream pf(item_dir + "/partition.txt");
+            for (vertex_t u = 0; u < item.g->n; ++u) { pf << partition[u] << "\n"; }
+
+            std::ofstream sf(item_dir + "/stats.json");
+            sf << "{\n"
+               << "  \"item\": " << counter << ",\n"
+               << "  \"depth\": " << item.identifier->size() << ",\n"
+               << "  \"levels\": " << l << ",\n"
+               << "  \"path\": \"" << path_str << "\",\n"
+               << "  \"n\": " << item.g->n << ",\n"
+               << "  \"m\": " << item.g->m / 2 << ",\n"
+               << "  \"total_weight\": " << item.g->g_weight << ",\n"
+               << "  \"k\": " << item.k << ",\n"
+               << "  \"imbalance_allowed\": " << item.imb << ",\n"
+               << "  \"seed\": " << item.seed << ",\n"
+               << "  \"edge_cut\": " << cut2 / 2 << ",\n"
+               << "  \"max_block_weight\": " << max_bw << ",\n"
+               << "  \"allowed_block_weight\": " << allowed << ",\n"
+               << "  \"imbalance_actual\": " << (avg > 0 ? (f64) max_bw / avg - 1.0 : 0.0) << ",\n"
+               << "  \"time_ms\": " << ms << ",\n"
+               << "  \"block_weights\": [";
+            for (partition_t b = 0; b < item.k; ++b) { sf << (b ? ", " : "") << bw[b]; }
+            sf << "]\n}\n";
+
+            const std::string index = dir + "/index.csv";
+            const bool fresh = !std::filesystem::exists(index);
+            std::ofstream xf(index, std::ios::app);
+            if (fresh) { xf << "item,path,depth,n,m,k,imb_allowed,edge_cut,max_block_w,allowed_block_w,time_ms\n"; }
+            xf << name << "," << (path_str.empty() ? "root" : path_str) << "," << item.identifier->size() << ","
+               << item.g->n << "," << item.g->m / 2 << "," << item.k << "," << item.imb << "," << cut2 / 2 << ","
+               << max_bw << "," << allowed << "," << ms << "\n";
         }
 
         static f64 determine_adaptive_imbalance(const f64 global_imbalance,

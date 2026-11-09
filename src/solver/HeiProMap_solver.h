@@ -447,6 +447,10 @@ namespace HeiProMap {
             level_imbalance = ac.imbalance;
             level_lmax = std::ceil((1.0 + level_imbalance) * ((f64) graphs[0].g_weight / (f64) ac.k));
 
+            if (!ac.coarsest_graph_out.empty()) {
+                graphs.back().write_graph(ac.coarsest_graph_out);
+            }
+
             partition(level, level_imbalance);
             initial_n_empty_partitions = 0;
             initial_n_overloaded_partitions = 0;

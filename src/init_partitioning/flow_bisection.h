@@ -60,6 +60,35 @@ namespace HeiProMap {
         // (the star around the first seed costs about one first solve per seed, and a solve scales with the arcs).
         // 0 = no limit.
         u64 seed_budget = 300000;
+        // Every hierarchy level gets its own imbalance (same formula as the multisection): the upper levels are
+        // tight and leave slack to the lower ones. false: every part may weigh stride * lmax (global imbalance).
+        bool adaptive_imbalance = true;
+        // Seed diversity: every seed is drawn uniformly from the `seed_pool` vertices that are farthest from the
+        // seeds so far (1 = always the farthest one, deterministic up to the start vertex).
+        u64 seed_pool = 1;
+        // Flow refinement of every bisection: a corridor around the best cut is freed (the `refine_band` fraction of
+        // the weight closest to the cut), everything outside is terminal, and the flow is solved again (with the
+        // same balanced piercing). A better cut is accepted and the corridor tried again, otherwise the corridor is
+        // widened (0.2, 0.5, 1, 2, 4 times `refine_band`); after an improvement it starts again with the narrowest. At most
+        // `refine_rounds` improvements (it normally stops earlier, when no corridor improves the cut); 0 = off.
+        u64 refine_rounds = 100;
+        f64 refine_band = 0.1;
+        // After the recursive bisection of a level: passes of flow refinement between all pairs of adjacent blocks
+        // (largest shared cut first), each pair as a bisection of the union of both blocks. 0 = off.
+        u64 kway_rounds = 3;
+        // Bisections of fewer than `small_n` vertices are cheap: they use `small_seeds` seeds (no seed budget) and
+        // continue every job (no keep_fraction, exact pruning). small_n = 0 = off.
+        u64 small_n = 300;
+        u64 small_seeds = 8;
+        bool small_exact = true; // small bisections: keep_fraction 1 and prune_factor 1
+        // seed_budget of the top hierarchy level (its few, large bisections decide most of the QAP); 0 = no limit
+        u64 top_seed_budget = 0;
+        // seed pairs that do not contain the first seed: only this fraction (the farthest apart) is tried; 1 = all
+        f64 pair_fraction = 1.0;
+        // move vertices out of overloaded blocks after every k'-partition (smallest cut increase first)
+        bool repair = true;
+        // first max flow of every seed pair with IBFS instead of BK (identical result, currently slower)
+        bool ibfs = false;
     };
 
     /**
@@ -151,6 +180,7 @@ namespace HeiProMap {
         std::vector<weight_t> prefix, mw;
         std::vector<size_t> blk_b, blk_e; // result of kway_partition: range of every block
         AlignedArray<int> loc;
+        std::vector<int> blk_of; // refine_kway: block of a vertex, -1 outside
         std::vector<Task> task_stack;
         // snapshots of the networks after the first solve of every job of a bisection
         AlignedArray<Arc> slot_arcs;
@@ -173,6 +203,18 @@ namespace HeiProMap {
         f64 keep_fraction = 1.0;
         size_t bound_jobs = 0;
         size_t seed_budget = 0;
+        size_t seed_pool = 1;
+        size_t refine_rounds = 0;
+        f64 refine_band = 0.1;
+        size_t kway_rounds = 0;
+        bool use_ibfs = false;
+        bool repair = true;
+        f64 pair_fraction = 1.0;
+        size_t small_n = 0, small_seeds = 0;
+        bool small_exact = true;
+        AlignedArray<int> ref_q, ref_d, ref_d1, ref_d2;
+        AlignedArray<char> ref_core;
+        std::vector<std::pair<int, int> > far_top; // (distance, vertex), farthest first
 
         /// network of the vertices verts[0, cnt) (loc must be set for them) and the buffers of the partitioner
         void setup_network(const CSRGraph &g, const vertex_t *verts, const int cnt) {
@@ -340,8 +382,12 @@ namespace HeiProMap {
                 const weight_t target = (weight_t) (init_fraction * (f64) total_w);
                 grow_initial_terminals(j.a, j.b, std::min(target, j.hi), std::min(target, total_w - j.lo));
             }
-            bk_start();
-            j.lower = bk_maxflow(limit);
+            if (use_ibfs) {
+                j.lower = ibfs_maxflow(limit);
+            } else {
+                bk_start();
+                j.lower = bk_maxflow(limit);
+            }
             if (j.lower >= limit) { return; }
             std::memcpy(slot_label.get_ptr() + (size_t) slot * N, label.get_ptr(), N);
             std::memcpy(slot_pa.get_ptr() + (size_t) slot * N, pa.get_ptr(), N * sizeof(int));
@@ -368,7 +414,6 @@ namespace HeiProMap {
         void run_job(const Job &j, const int slot, const int *dist_a, const int *dist_b, PairResult &best,
                      const s64 cut_bound = INF) {
             const int a = j.a, b = j.b;
-            const weight_t lo = j.lo, hi = j.hi;
             rng.seed(pair_salt ^ ((u64) a * 1000003ULL + (u64) b * 7919ULL + 17));
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "run_pair");
             std::memcpy(arcs.get_ptr(), slot_arcs.get_ptr() + (size_t) slot * na, na * sizeof(Arc));
@@ -377,9 +422,15 @@ namespace HeiProMap {
             std::fill_n(isact.get_ptr(), N, 0);
             act_h = act_t = 0;
             orph_n = 0;
+            continue_job(j.lo, j.hi, j.lower, dist_a, dist_b, best, cut_bound);
+        }
 
+        // Continues from a solved max flow (value flow0, trees and residual network in the working arrays): pierces
+        // the lighter side until the cut is balanced; the result is merged into `best`.
+        void continue_job(const weight_t lo, const weight_t hi, const s64 flow0, const int *dist_a, const int *dist_b,
+                          PairResult &best, const s64 cut_bound) {
             const weight_t avg_w = std::max<weight_t>(1, total_w / std::max(1, nl));
-            s64 flow = j.lower;
+            s64 flow = flow0;
             PairResult &cur = scr_res;
             cur.reset();
 
@@ -473,6 +524,21 @@ namespace HeiProMap {
             }
         }
 
+        // a random one of the seed_pool vertices (not yet a seed) with the largest distance d; -1 if none is left
+        int pick_far(const int *d) {
+            far_top.clear();
+            for (int v = 0; v < nl; ++v) {
+                if (owner[v]) { continue; }
+                if (far_top.size() == seed_pool && d[v] <= far_top.back().first) { continue; }
+                auto it = far_top.begin();
+                while (it != far_top.end() && it->first >= d[v]) { ++it; }
+                far_top.insert(it, {d[v], v});
+                if (far_top.size() > seed_pool) { far_top.pop_back(); }
+            }
+            if (far_top.empty()) { return -1; }
+            return far_top.size() == 1 ? far_top[0].second : far_top[rng() % far_top.size()].second;
+        }
+
         /// farthest point sampling on the hop distance; fills seeds and dist_rows, returns the number of seeds
         int pick_seeds(const u64 num_seeds) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "seed_selection");
@@ -481,22 +547,18 @@ namespace HeiProMap {
             dist_rows.initialize((size_t) n_seeds * (size_t) nl);
             int ns = 0;
             hop_distance((int) (rng() % (u64) nl), tmp_dist.get_ptr());
-            int s0 = 0;
-            for (int v = 0; v < nl; ++v) { if (tmp_dist[v] > tmp_dist[s0]) { s0 = v; } }
+            std::fill_n(owner.get_ptr(), nl, 0);
+            int s0 = pick_far(tmp_dist.get_ptr());
             // tmp_dist now holds the distance to the nearest seed, owner marks the seeds
             std::fill_n(tmp_dist.get_ptr(), nl, std::numeric_limits<int>::max());
-            std::fill_n(owner.get_ptr(), nl, 0);
             int next = s0;
             while (ns < n_seeds) {
                 int *row = dist_rows.get_ptr() + (size_t) ns * (size_t) nl;
                 seeds[ns++] = next;
                 owner[next] = 1;
                 hop_distance(next, row);
-                int arg = -1;
-                for (int v = 0; v < nl; ++v) {
-                    tmp_dist[v] = std::min(tmp_dist[v], row[v]);
-                    if (!owner[v] && (arg < 0 || tmp_dist[v] > tmp_dist[arg])) { arg = v; }
-                }
+                for (int v = 0; v < nl; ++v) { tmp_dist[v] = std::min(tmp_dist[v], row[v]); }
+                const int arg = pick_far(tmp_dist.get_ptr());
                 if (arg < 0) { break; }
                 next = arg;
             }
@@ -510,8 +572,20 @@ namespace HeiProMap {
             jobs.resize(max_jobs);
             job_order.resize(max_jobs);
             size_t nj = 0;
+            // pairs without the first seed: only the pair_fraction farthest ones (hop distance)
+            int min_far = -1;
+            if (pair_fraction < 1.0 && ns > 2) {
+                std::vector<int> ds;
+                for (int i = 1; i < ns; ++i) {
+                    for (int j = i + 1; j < ns; ++j) { ds.push_back(dist_rows[(size_t) i * (size_t) nl + (size_t) seeds[j]]); }
+                }
+                std::sort(ds.begin(), ds.end(), std::greater<int>());
+                const size_t keep_pairs = std::max<size_t>(1, (size_t) std::ceil(pair_fraction * (f64) ds.size()));
+                min_far = ds[std::min(keep_pairs, ds.size()) - 1];
+            }
             for (int i = 0; i < ns; ++i) {
                 for (int j = i + 1; j < ns; ++j) {
+                    if (i > 0 && min_far >= 0 && dist_rows[(size_t) i * (size_t) nl + (size_t) seeds[j]] < min_far) { continue; }
                     jobs[nj++] = Job{seeds[i], seeds[j], lo, hi, i, j, false, 0};
                     if (!symmetric) { jobs[nj++] = Job{seeds[j], seeds[i], total_w - hi, total_w - lo, j, i, true, 0}; }
                 }
@@ -599,6 +673,94 @@ namespace HeiProMap {
             return m;
         }
 
+        // hop distance from the vertices with mark[v] == m (several sources); order (optional) gets the visit order
+        void multi_hop_distance(const char *mark, const char m, int *dist, int *order) {
+            constexpr int FAR = 1 << 29;
+            std::fill_n(dist, nl, FAR);
+            int qh = 0, qt = 0;
+            for (int v = 0; v < nl; ++v) { if (mark[v] == m) { dist[v] = 0; order[qt++] = v; } }
+            while (qh < qt) {
+                const int u = order[qh++];
+                for (int i = first[u]; i < first[u + 1]; ++i) {
+                    const int v = arcs[i].to;
+                    if (v < nl && dist[v] == FAR) {
+                        dist[v] = dist[u] + 1;
+                        order[qt++] = v;
+                    }
+                }
+            }
+        }
+
+        // Flow refinement of best_res (feasible): free a corridor around the cut, make the rest of both sides
+        // terminal and solve again. See FlowBisectionConfiguration::refine_rounds.
+        void refine_bisection(const weight_t lo, const weight_t hi) {
+            if (refine_rounds == 0 || !best_res.valid || best_res.violation != 0 || best_res.cut <= 0 || nl < 4) { return; }
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "refine_bisection");
+            ref_q.initialize(N);
+            ref_d.initialize(N);
+            ref_d1.initialize(N);
+            ref_d2.initialize(N);
+            ref_core.initialize(N);
+            AlignedArray<char> &side = ref_core; // 1 source side, 2 sink side (before the corridor is cut out)
+            // corridor widths: tried from narrow to wide; after an improvement start again with the narrowest one
+            static constexpr f64 BAND_FACTORS[] = {0.2, 0.5, 1.0, 2.0, 4.0};
+            constexpr size_t N_BANDS = sizeof(BAND_FACTORS) / sizeof(BAND_FACTORS[0]);
+            size_t band_idx = 0;
+            f64 f = refine_band * BAND_FACTORS[0];
+            size_t improvements = 0;
+            auto next_band = [&]() { f = ++band_idx < N_BANDS ? refine_band * BAND_FACTORS[band_idx] : 2.0; };
+            while (improvements < refine_rounds && f < 0.95 && best_res.cut > 0) {
+                // boundary vertices: sources of the BFS that orders the vertices by distance to the cut
+                for (int v = 0; v < nl; ++v) { side[v] = best_res.in_source[v] ? 1 : 2; }
+                int qt = 0;
+                for (int v = 0; v < nl; ++v) {
+                    for (int i = first[v]; i < first[v + 1]; ++i) {
+                        if (side[arcs[i].to] != side[v]) { ref_q[qt++] = v; break; }
+                    }
+                }
+                if (qt == 0) { return; }
+                std::fill_n(ref_d.get_ptr(), nl, 1 << 29);
+                for (int x = 0; x < qt; ++x) { ref_d[ref_q[x]] = 0; }
+                for (int qh = 0; qh < qt; ++qh) {
+                    const int u = ref_q[qh];
+                    for (int i = first[u]; i < first[u + 1]; ++i) {
+                        const int v = arcs[i].to;
+                        if (v < nl && ref_d[v] == (1 << 29)) { ref_d[v] = ref_d[u] + 1; ref_q[qt++] = v; }
+                    }
+                }
+                // corridor = the closest vertices up to f * total weight; terminals = the rest of each side
+                const f64 corridor_w = f * (f64) total_w;
+                weight_t acc = 0;
+                for (int x = 0; x < qt && (f64) acc < corridor_w; ++x) {
+                    acc += vw[ref_q[x]];
+                    side[ref_q[x]] = 0;
+                }
+                int n1 = 0, n2 = 0;
+                for (int v = 0; v < nl; ++v) { n1 += side[v] == 1; n2 += side[v] == 2; }
+                if (n1 == 0 || n2 == 0) { next_band(); continue; }
+
+                multi_hop_distance(side.get_ptr(), 1, ref_d1.get_ptr(), ref_q.get_ptr());
+                multi_hop_distance(side.get_ptr(), 2, ref_d2.get_ptr(), ref_q.get_ptr());
+
+                std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
+                reset_trees();
+                for (int v = 0; v < nl; ++v) { if (side[v]) { set_terminal(v, side[v]); } }
+                bk_start();
+                const s64 before = best_res.cut;
+                const s64 flow = bk_maxflow(before);
+                if (flow >= before) { next_band(); continue; }
+                rng.seed(pair_salt ^ (0x9E3779B97F4A7C15ULL * (improvements + 1)));
+                continue_job(lo, hi, flow, ref_d1.get_ptr(), ref_d2.get_ptr(), best_res, before);
+                if (best_res.valid && best_res.violation == 0 && best_res.cut < before) {
+                    ++improvements;
+                    band_idx = 0;
+                    f = refine_band * BAND_FACTORS[0];
+                } else {
+                    next_band();
+                }
+            }
+        }
+
         // splits the sub problem; afterwards best_res.in_source[v] = 1 if local vertex v belongs to the first part
         void bisect(const weight_t lo, const weight_t hi, const bool symmetric, const u64 num_seeds) {
             best_res.reset();
@@ -607,7 +769,15 @@ namespace HeiProMap {
             if (nl < 2) { return; }
 
             u64 seeds_cap = num_seeds;
-            if (seed_budget > 0) {
+            const bool small = small_n > 0 && (size_t) nl < small_n;
+            const f64 keep_saved = keep_fraction, pf_saved = prune_factor;
+            if (small) {
+                seeds_cap = std::max<u64>(num_seeds, small_seeds);
+                if (small_exact) {
+                    keep_fraction = 1.0;
+                    prune_factor = 1.0;
+                }
+            } else if (seed_budget > 0) {
                 seeds_cap = std::min<u64>(num_seeds, std::max<u64>(2, 1 + seed_budget / std::max<size_t>(1, na)));
             }
             const int ns = pick_seeds(seeds_cap);
@@ -627,6 +797,10 @@ namespace HeiProMap {
             const size_t run_jobs = std::max<size_t>(1, (size_t) std::ceil((double) nj * keep_fraction));
             const size_t to_run = ran_slot >= 0 ? (run_jobs > 1 ? run_jobs - 1 : 0) : run_jobs;
             for (size_t r = 0; r < std::min(to_run, m); ++r) { run_slot(job_order[r]); }
+
+            keep_fraction = keep_saved;
+            prune_factor = pf_saved;
+            refine_bisection(lo, hi);
 
             // the number of random draws inside the pairs depends on pruning: restore a fixed stream
             rng.seed(pair_salt + 1);
@@ -688,9 +862,246 @@ namespace HeiProMap {
                 task_stack.push_back({task.b, task.b + n1, task.lo, mid});
                 task_stack.push_back({task.b + n1, task.e, mid, task.hi});
             }
+            if (repair && k_prime > 1) { repair_kway(g, order, begin, end, k_prime, max_weights); }
+            if (kway_rounds > 0 && k_prime > 2) { refine_kway(g, order, begin, end, k_prime, max_weights); }
+        }
+
+        // Repairs overloaded blocks of the finished k'-partition (a bisection could not hit its weight window):
+        // repeatedly moves the vertex with the smallest cut increase from an overloaded block to a neighbouring block
+        // where it fits (or at least lowers the overload). Returns true if anything moved.
+        bool repair_kway(const CSRGraph &g, vertex_t *order, const size_t begin, const size_t end,
+                         const partition_t k_prime, const weight_t *max_weights) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "repair_kway");
+            std::vector<weight_t> bw(k_prime, 0);
+            bool any_over = false;
+            for (partition_t b = 0; b < k_prime; ++b) {
+                for (size_t x = blk_b[b]; x < blk_e[b]; ++x) { bw[b] += g.v_weight(order[x]); }
+                any_over |= bw[b] > max_weights[b];
+            }
+            if (!any_over) { return false; }
+            if (blk_of.size() < (size_t) g.n) { blk_of.assign(g.n, -1); }
+            for (partition_t b = 0; b < k_prime; ++b) {
+                for (size_t x = blk_b[b]; x < blk_e[b]; ++x) { blk_of[order[x]] = (int) b; }
+            }
+            std::vector<s64> conn(k_prime, 0);
+            std::vector<partition_t> touched;
+            bool moved_any = false;
+            while (true) {
+                // most overloaded block
+                partition_t ob = k_prime;
+                weight_t worst = 0;
+                for (partition_t b = 0; b < k_prime; ++b) {
+                    if (bw[b] - max_weights[b] > worst) { worst = bw[b] - max_weights[b]; ob = b; }
+                }
+                if (ob == k_prime) { break; }
+                // best move out of ob: (fits, cut increase, larger weight)
+                vertex_t best_u = 0;
+                int best_c = -1;
+                bool best_fits = false;
+                s64 best_delta = 0;
+                weight_t best_w = 0;
+                for (size_t x = begin; x < end; ++x) {
+                    const vertex_t u = order[x];
+                    if (blk_of[u] != (int) ob) { continue; }
+                    const weight_t wu = g.v_weight(u);
+                    touched.clear();
+                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
+                        const int c = blk_of[g.edges_v[e]];
+                        if (c < 0) { continue; }
+                        if (conn[c] == 0) { touched.push_back((partition_t) c); }
+                        conn[c] += g.edge_w(e);
+                    }
+                    for (const partition_t c: touched) {
+                        if (c != ob) {
+                            const weight_t after = bw[c] + wu;
+                            const bool fits = after <= max_weights[c];
+                            // otherwise it must at least lower the overload of the pair
+                            const bool helps = std::max<weight_t>(0, after - max_weights[c]) < std::max<weight_t>(0, bw[ob] - max_weights[ob]) && wu <= bw[ob] - max_weights[ob] + (max_weights[c] - std::min(bw[c], max_weights[c]));
+                            if (fits || helps) {
+                                const s64 delta = conn[ob] - conn[c];
+                                if (best_c < 0 || (fits && !best_fits) || (fits == best_fits && (delta < best_delta || (delta == best_delta && wu > best_w)))) {
+                                    best_u = u; best_c = (int) c; best_fits = fits; best_delta = delta; best_w = wu;
+                                }
+                            }
+                        }
+                    }
+                    for (const partition_t c: touched) { conn[c] = 0; }
+                }
+                if (best_c < 0) { break; }
+                bw[ob] -= best_w;
+                bw[best_c] += best_w;
+                blk_of[best_u] = best_c;
+                moved_any = true;
+                // the order array is rebuilt at the end; keep the scan consistent by tracking blk_of only
+            }
+            if (moved_any) {
+                std::vector<size_t> pos(k_prime + 1, 0);
+                for (size_t x = begin; x < end; ++x) { ++pos[blk_of[order[x]] + 1]; }
+                for (partition_t b = 0; b < k_prime; ++b) { pos[b + 1] += pos[b]; }
+                scratch_order.initialize(end - begin);
+                std::vector<size_t> fill(pos.begin(), pos.end() - 1);
+                for (size_t x = begin; x < end; ++x) { const vertex_t u = order[x]; scratch_order[fill[blk_of[u]]++] = u; }
+                for (size_t x = begin; x < end; ++x) { order[x] = scratch_order[x - begin]; }
+                for (partition_t b = 0; b < k_prime; ++b) { blk_b[b] = begin + pos[b]; blk_e[b] = begin + pos[b + 1]; }
+            }
+            for (size_t x = begin; x < end; ++x) { blk_of[order[x]] = -1; }
+            return moved_any;
+        }
+
+        // Pairwise flow refinement of the finished k'-partition (blocks = ranges blk_b/blk_e of order). Every pair of
+        // adjacent blocks is refined as a bisection of its union (the edges to other blocks are cut either way).
+        void refine_kway(const CSRGraph &g, vertex_t *order, const size_t begin, const size_t end,
+                         const partition_t k_prime, const weight_t *max_weights) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "refine_kway");
+            if (blk_of.size() < (size_t) g.n) { blk_of.assign(g.n, -1); }
+            for (partition_t b = 0; b < k_prime; ++b) {
+                for (size_t x = blk_b[b]; x < blk_e[b]; ++x) { blk_of[order[x]] = (int) b; }
+            }
+            std::vector<std::vector<vertex_t> > members(k_prime);
+            for (partition_t b = 0; b < k_prime; ++b) { members[b].assign(order + blk_b[b], order + blk_e[b]); }
+            std::vector<weight_t> shared;
+            std::vector<vertex_t> verts;
+            // a pair is only refined again if one of its blocks changed since its last refinement
+            std::vector<u64> ver(k_prime, 1), seen((size_t) k_prime * k_prime, 0);
+            bool changed_any = false;
+            for (size_t round = 0; round < kway_rounds; ++round) {
+                shared.assign((size_t) k_prime * k_prime, 0);
+                for (size_t x = begin; x < end; ++x) {
+                    const vertex_t u = order[x];
+                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
+                        const vertex_t v = g.edges_v[e];
+                        const int bu = blk_of[u], bv = blk_of[v];
+                        if (bv >= 0 && bu < bv) { shared[(size_t) bu * k_prime + bv] += g.edge_w(e); }
+                    }
+                }
+                std::vector<std::pair<weight_t, std::pair<int, int> > > pairs;
+                for (partition_t a = 0; a < k_prime; ++a) {
+                    for (partition_t b = a + 1; b < k_prime; ++b) {
+                        if (shared[(size_t) a * k_prime + b] > 0) { pairs.push_back({shared[(size_t) a * k_prime + b], {(int) a, (int) b}}); }
+                    }
+                }
+                std::sort(pairs.begin(), pairs.end(), [](const auto &x, const auto &y) { return x.first > y.first; });
+                bool improved = false;
+                for (const auto &pr: pairs) {
+                    const int a = pr.second.first, b = pr.second.second;
+                    const u64 stamp = ver[a] * 1000003ULL + ver[b];
+                    if (seen[(size_t) a * k_prime + b] == stamp) { continue; }
+                    seen[(size_t) a * k_prime + b] = stamp;
+                    verts.clear();
+                    verts.insert(verts.end(), members[a].begin(), members[a].end());
+                    verts.insert(verts.end(), members[b].begin(), members[b].end());
+                    const int cnt = (int) verts.size();
+                    if (cnt < 4) { continue; }
+                    for (int i = 0; i < cnt; ++i) { loc[verts[i]] = i; }
+                    setup_network(g, verts.data(), cnt);
+                    for (int i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
+                    best_res.reset();
+                    best_res.in_source.initialize(nl);
+                    weight_t w1 = 0;
+                    s64 cut = 0;
+                    for (int v = 0; v < nl; ++v) { best_res.in_source[v] = v < (int) members[a].size() ? 1 : 0; }
+                    for (int v = 0; v < nl; ++v) {
+                        if (best_res.in_source[v]) { w1 += vw[v]; }
+                        for (int i = first[v]; i < first[v + 1]; ++i) {
+                            if (arcs[i].to < nl && best_res.in_source[arcs[i].to] != best_res.in_source[v] && best_res.in_source[v]) {
+                                cut += base_arcs[i].cap;
+                            }
+                        }
+                    }
+                    const weight_t lo_w = std::max<weight_t>(0, total_w - max_weights[b]);
+                    const weight_t hi_w = max_weights[a];
+                    if (w1 < lo_w || w1 > hi_w || cut <= 0) { continue; }
+                    best_res.valid = true;
+                    best_res.violation = 0;
+                    best_res.cut = cut;
+                    pair_salt = rng();
+                    refine_bisection(lo_w, hi_w);
+                    if (!(best_res.valid && best_res.violation == 0 && best_res.cut < cut)) { continue; }
+                    improved = changed_any = true;
+                    ++ver[a];
+                    ++ver[b];
+                    members[a].clear();
+                    members[b].clear();
+                    for (int v = 0; v < nl; ++v) {
+                        const int blk = best_res.in_source[v] ? a : b;
+                        members[blk].push_back(verts[v]);
+                        blk_of[verts[v]] = blk;
+                    }
+                }
+                if (!improved) { break; }
+            }
+            if (changed_any) {
+                size_t pos = begin;
+                for (partition_t b = 0; b < k_prime; ++b) {
+                    blk_b[b] = pos;
+                    for (const vertex_t u: members[b]) { order[pos++] = u; }
+                    blk_e[b] = pos;
+                }
+            }
+            for (partition_t b = 0; b < k_prime; ++b) { for (const vertex_t u: members[b]) { blk_of[u] = -1; } }
         }
 
     public:
+        /// copies the parameters of the configuration (the partitioner is reusable and not thread safe)
+        void configure(const FlowBisectionConfiguration &config) {
+            prune = config.prune;
+            init_fraction = config.init_fraction;
+            prune_factor = config.prune_factor;
+            keep_fraction = config.keep_fraction;
+            bound_jobs = (size_t) config.bound_jobs;
+            seed_budget = (size_t) config.seed_budget;
+            seed_pool = (size_t) std::max<u64>(1, config.seed_pool);
+            refine_rounds = (size_t) config.refine_rounds;
+            refine_band = config.refine_band;
+            kway_rounds = (size_t) config.kway_rounds;
+            pair_fraction = config.pair_fraction;
+            repair = config.repair;
+            use_ibfs = config.ibfs;
+            small_n = (size_t) config.small_n;
+            small_exact = config.small_exact;
+            small_seeds = (size_t) config.small_seeds;
+        }
+
+        /// deterministic random stream of a part
+        void reseed(const u64 seed, const u64 part) {
+            rng.seed((seed + 1) * 0x9E3779B97F4A7C15ULL ^ (part + 1) * 0xC2B2AE3D27D4EB4FULL);
+        }
+
+        /// loc must have g.n entries (all -1)
+        void init_loc(const vertex_t n) { loc.initialize(n, -1); }
+
+        /// result of the last split_item: block i owns order[block_begin(i), block_end(i))
+        size_t block_begin(const partition_t i) const { return blk_b[i]; }
+        size_t block_end(const partition_t i) const { return blk_e[i]; }
+
+        /**
+         * Splits the vertices order[b, e) (one part of hierarchy level `level`) into hierarchy[level] parts, each
+         * of which may weigh at most (#PEs below it) * lmax (or less with the adaptive imbalance). `stride[j]` is
+         * the number of PEs below one part of level j, k the total number of PEs.
+         */
+        void split_item(const CSRGraph &g, vertex_t *order, const size_t b, const size_t e, const size_t level,
+                        const std::vector<partition_t> &hierarchy, const partition_t *stride, const partition_t k,
+                        const weight_t lmax, const f64 imbalance, const FlowBisectionConfiguration &config,
+                        const u64 top_budget) {
+            const partition_t kk = hierarchy[level];
+            weight_t part_max = (weight_t) stride[level] * lmax;
+            if (config.adaptive_imbalance) {
+                // imbalance of this item such that the remaining (level + 1) levels can share the global slack
+                weight_t item_w = 0;
+                for (size_t x = b; x < e; ++x) { item_w += g.v_weight(order[x]); }
+                const f64 local_k = (f64) stride[level] * (f64) kk; // PEs below this item
+                f64 imb = ((1.0 + imbalance) * local_k * (f64) g.g_weight) / ((f64) k * (f64) std::max<weight_t>(1, item_w));
+                imb = std::max(0.0, std::pow(imb, 1.0 / (f64) (level + 1)) - 1.0);
+                const weight_t adaptive = (weight_t) std::ceil((1.0 + imb) * (f64) item_w / (f64) kk);
+                part_max = std::min(part_max, adaptive);
+            }
+            mw.assign(kk, part_max);
+            const size_t top = hierarchy.size() - 1;
+            const u64 ns = level == top ? config.num_seeds : (level == 0 ? config.num_seeds_bottom : config.num_seeds_mid);
+            seed_budget = (size_t) (level == top ? top_budget : config.seed_budget);
+            kway_partition(g, order, b, e, kk, mw.data(), ns);
+        }
+
         /**
          * Multisection driven by flow based recursive bisection: split along the highest hierarchy
          * level first, then the next one, down to the lowest. Every part of a level may weigh at most
@@ -703,17 +1114,11 @@ namespace HeiProMap {
                               const FlowBisectionConfiguration &config,
                               const u64 seed) {
             FlowBisectionPartitioner p;
-            p.prune = config.prune;
-            p.init_fraction = config.init_fraction;
-            p.prune_factor = config.prune_factor;
-            p.keep_fraction = config.keep_fraction;
-            p.bound_jobs = (size_t) config.bound_jobs;
-            p.seed_budget = (size_t) config.seed_budget;
+            p.configure(config);
             p.rng.seed(seed * 0x9E3779B97F4A7C15ULL + 12345);
 
             const size_t l = hierarchy.size();
-            AlignedArray<partition_t> stride; // PEs below one part of level j
-            stride.initialize(l);
+            std::vector<partition_t> stride(l); // PEs below one part of level j
             partition_t k = 1;
             for (size_t j = 0; j < l; ++j) {
                 stride[j] = k;
@@ -721,7 +1126,7 @@ namespace HeiProMap {
             }
             const weight_t lmax = (weight_t) std::ceil((1.0 + imbalance) * (f64) g.g_weight / (f64) k);
 
-            p.loc.initialize(g.n, -1);
+            p.init_loc(g.n);
             AlignedArray<vertex_t> order;
             order.initialize(g.n);
             for (vertex_t u = 0; u < g.n; ++u) { order[u] = u; }
@@ -737,14 +1142,9 @@ namespace HeiProMap {
             while (!stack.empty()) {
                 const Item item = stack.back();
                 stack.pop_back();
-
+                p.split_item(g, order.get_ptr(), item.b, item.e, item.level, hierarchy, stride.data(), k, lmax,
+                             imbalance, config, config.top_seed_budget);
                 const partition_t kk = hierarchy[item.level];
-                p.mw.assign(kk, (weight_t) stride[item.level] * lmax);
-                const size_t top = hierarchy.size() - 1;
-                const u64 ns = item.level == top ? config.num_seeds
-                               : (item.level == 0 ? config.num_seeds_bottom : config.num_seeds_mid);
-                p.kway_partition(g, order.get_ptr(), item.b, item.e, kk, p.mw.data(), ns);
-
                 for (partition_t i = 0; i < kk; ++i) {
                     if (item.level == 0) {
                         for (size_t x = p.blk_b[i]; x < p.blk_e[i]; ++x) {
