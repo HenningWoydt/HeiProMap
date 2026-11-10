@@ -670,7 +670,7 @@ namespace HeiProMap {
                 {
                     u64 tid = omp_get_thread_num();
                     vertex_t chunk = (g_uncontracted.n + ac.threads - 1) / ac.threads;
-                    vertex_t start_u = tid * chunk;
+                    vertex_t start_u = std::min(g_uncontracted.n, tid * chunk);
                     vertex_t end_u = std::min(g_uncontracted.n, start_u + chunk);
 
                     for (vertex_t u = start_u; u < end_u; ++u) {

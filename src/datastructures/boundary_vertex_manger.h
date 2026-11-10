@@ -242,7 +242,7 @@ namespace HeiProMap {
             {
                 u64 tid = omp_get_thread_num();
                 vertex_t chunk = (m_n + num_threads - 1) / num_threads;
-                vertex_t start_u = tid * chunk;
+                vertex_t start_u = std::min(m_n, tid * chunk);
                 vertex_t end_u = std::min(m_n, start_u + chunk);
                 std::fill_n(m_n_boundary_edges.get_ptr() + start_u, end_u - start_u, 0);
             }
