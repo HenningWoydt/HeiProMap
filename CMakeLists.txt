@@ -160,9 +160,3 @@ target_link_libraries(Deep-HeiProMap PRIVATE HeiProMapLib)
 set_target_properties(Deep-HeiProMap PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
 target_link_options(Deep-HeiProMap PRIVATE "-Wl,--disable-new-dtags")
 
-
-# Standalone initial partitioning (see init_part/)
-add_executable(InitPart init_part/init_part.cpp)
-target_link_libraries(InitPart PRIVATE HeiProMapLib)
-set_target_properties(InitPart PROPERTIES BUILD_RPATH "${KAHIP_ROOT}/lib")
-target_link_options(InitPart PRIVATE "-Wl,--disable-new-dtags")
