@@ -10,7 +10,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BIN = ROOT / "build" / "HeiProMap"
 DATA = ROOT.parent / "ProMapRepo" / "data" / "mapping"
-CACHE = Path(__file__).resolve().parent / "full_cache.json"
 FILES = {"144": "144.graph", "2cubes_sphere": "2cubes_sphere.mtx.graph", "598a": "598a.graph",
          "G2_circuit": "G2_circuit.mtx.graph", "cont-300": "cont-300.mtx.graph", "cop20k_A": "cop20k_A.mtx.graph",
          "fe_ocean": "fe_ocean.graph", "fe_rotor": "fe_rotor.graph", "thermomech_TC": "thermomech_TC.mtx.graph",
@@ -19,13 +18,13 @@ for _n in ["Dubcova3", "bmwcra_1", "boneS01", "cfd2", "shipsec5"]:
     FILES[_n] = _n + ".mtx.graph"
 for _n in ["m14b", "auto", "afshell9", "ecology2", "thermal2", "G3_circuit", "nlr"]:
     FILES[_n] = _n + ".graph"
-COMMON = ["--hierarchy", "4:8:6", "--distance", "1:10:100", "--imbalance", "0.03", "--config", "strong", "--threads", "1"]
+COMMON = ["--hierarchy", "4:8:6", "--distance", "1:10:100", "--imbalance", "0.03", "--threads", "1"]
 
 
-def run(graph, seed, alg, extra):
+def run(graph, seed, alg, extra, profile="strong"):
     with tempfile.NamedTemporaryFile(suffix=".txt") as tmp:
         cmd = [str(BIN), "--graph", str(DATA / FILES[graph]), "--mapping", tmp.name, "--seed", str(seed),
-               "--partitioning", alg] + COMMON + extra
+               "--partitioning", alg, "--config", profile] + COMMON + extra
         out = subprocess.run(cmd, capture_output=True, text=True).stdout
     q = re.search(r"Final QAP\s*:\s*(\d+)", out)
     t = re.search(r"Total solve time\s*:\s*([\d.]+)", out)
@@ -44,8 +43,10 @@ def main():
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--graphs", default="")
     ap.add_argument("--extra", default="")
+    ap.add_argument("--profile", default="strong")
     ap.add_argument("--refresh", action="store_true")
     a = ap.parse_args()
+    CACHE = Path(__file__).resolve().parent / ("full_cache.json" if a.profile == "strong" else f"full_cache_{a.profile}.json")
     graphs = a.graphs.split(",") if a.graphs else list(FILES)
     extra = a.extra.split()
     cache = {} if a.refresh or not CACHE.exists() else json.loads(CACHE.read_text())
@@ -55,10 +56,10 @@ def main():
         for s in range(a.seeds):
             key = f"{g}|{s}"
             if key not in cache:
-                cache[key] = run(g, s, "multisection", [])
+                cache[key] = run(g, s, "multisection", [], a.profile)
                 CACHE.write_text(json.dumps(cache))
             b.append(cache[key])
-            n.append(run(g, s, "flow-bisection", extra))
+            n.append(run(g, s, "flow-bisection", extra, a.profile))
             print(f"  {g} seed {s}: base {b[-1]['qap']} ({b[-1]['ms']:.0f} ms)  new {n[-1]['qap']} ({n[-1]['ms']:.0f} ms)", flush=True)
         m = lambda L, k: sum(x[k] for x in L) / len(L)
         rows.append((g, m(b, "qap"), m(n, "qap"), m(b, "ms"), m(n, "ms"), m(b, "init_ms"), m(n, "init_ms")))

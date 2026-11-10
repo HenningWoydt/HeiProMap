@@ -784,7 +784,7 @@ namespace HeiProMap {
             config_name = "fast";
             collect_dataset = false;
 
-            initial_c = 64;
+            initial_c = 32; // flow-bisection: small coarse graphs are enough
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
@@ -806,8 +806,12 @@ namespace HeiProMap {
             size_constrained_lp_config.use_degree_ordering = true;
 
             // set multisection
-            partitioning_algorithm_string = "multisection";
+            partitioning_algorithm_string = "flow-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
+            flow_bisection_config.num_seeds = 6;
+            flow_bisection_config.ml_n = 500;
+            flow_bisection_config.kway_rounds = 1;
+            flow_bisection_config.low_kway_rounds = 0;
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             // global_multisection_config.mode_string = "kaffpa-fast";
