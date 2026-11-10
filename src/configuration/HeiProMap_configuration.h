@@ -873,6 +873,10 @@ namespace HeiProMap {
             partitioning_algorithm_string = "flow-bisection";
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             flow_bisection_config.seed_budget = 0; // eco can afford all seeds on large and dense graphs
+            flow_bisection_config.num_seeds = 8;
+            flow_bisection_config.ml_n = 500;
+            flow_bisection_config.kway_rounds = 1;
+            flow_bisection_config.low_kway_rounds = 3;
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             // global_multisection_config.mode_string = "kaffpa-fast";
