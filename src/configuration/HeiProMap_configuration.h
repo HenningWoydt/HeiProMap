@@ -219,6 +219,8 @@ namespace HeiProMap {
             {"--flow-bisection-low-kway-rounds", "", "Flow bisection: kway rounds for the levels below the top, -1 = same as the top level.", "-1", "", false},
             {"--flow-bisection-low-small-seeds", "", "Flow bisection: small seeds for the levels below the top, -1 = same as the top level.", "2", "", false},
             {"--flow-bisection-low-refine-rounds", "", "Flow bisection: refine rounds for the levels below the top, -1 = same as the top level.", "-1", "", false},
+            {"--flow-bisection-ml-n", "", "Flow bisection: multilevel top level, contracts to this many vertices, 0 = off.", "1000", "", false},
+            {"--flow-bisection-ml-cap", "", "Flow bisection: cluster weight cap divisor of the multilevel top level.", "20", "", false},
             {"--flow-bisection-small-n", "", "Flow bisection: bisections with fewer vertices use many seeds and no pruning heuristics, 0 = off.", "300", "", false},
             {"--flow-bisection-small-seeds", "", "Flow bisection: number of seeds of the small bisections.", "8", "", false},
             {"--flow-bisection-small-exact", "", "Flow bisection: small bisections continue every job and prune exactly (0/1).", "1", "", false},
@@ -235,7 +237,7 @@ namespace HeiProMap {
             {"--flow-bisection-prune-factor", "", "Flow bisection: drop a pair when its flow reaches this factor times the best feasible cut (1 = exact).", "0.95", "", false},
             {"--flow-bisection-keep-fraction", "", "Flow bisection: fraction of the (pair, orientation) jobs, best lower bound first, that is continued after the first solve.", "0.5", "", false},
             {"--flow-bisection-bound-jobs", "", "Flow bisection: number of jobs whose first solve is complete; the best one is run first and bounds the first solves of the others (0 = off).", "4", "", false},
-            {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "6", "", false},
+            {"--flow-bisection-seeds", "", "Number of seed vertices (all pairs are tried) for flow-bisection.", "16", "", false},
             {"--flow-bisection-seed-budget", "", "Flow bisection: a bisection with A arcs uses at most 1 + budget / A seeds (large sub problems get fewer seeds). 0 = no limit.", "300000", "", false},
             {"--flow-bisection-seeds-mid", "", "Flow bisection: seeds on the hierarchy levels between the top and the bottom one (the cuts there weigh less in the QAP).", "2", "", false},
             {"--flow-bisection-seeds-bottom", "", "Flow bisection: seeds on the bottom hierarchy level (cheapest distance).", "2", "", false},
@@ -548,6 +550,12 @@ namespace HeiProMap {
             }
                         if (is_set("--flow-bisection-low-refine-rounds")) {
                 flow_bisection_config.low_refine_rounds = std::stoll(get("--flow-bisection-low-refine-rounds"));
+            }
+            if (is_set("--flow-bisection-ml-n")) {
+                flow_bisection_config.ml_n = std::stoull(get("--flow-bisection-ml-n"));
+            }
+            if (is_set("--flow-bisection-ml-cap")) {
+                flow_bisection_config.ml_cap = std::stod(get("--flow-bisection-ml-cap"));
             }
             if (is_set("--flow-bisection-small-n")) {
                 flow_bisection_config.small_n = std::stoull(get("--flow-bisection-small-n"));

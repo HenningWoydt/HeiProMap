@@ -31,6 +31,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -40,7 +41,7 @@
 namespace HeiProMap {
     struct FlowBisectionConfiguration {
         // number of far-apart seed vertices; all pairs of seeds are tried
-        u64 num_seeds = 6;        // top hierarchy level
+        u64 num_seeds = 16;       // top hierarchy level
         u64 num_seeds_mid = 2;    // levels between top and bottom
         u64 num_seeds_bottom = 2; // bottom level
         // stop a pair as soon as its flow value reaches the best feasible cut found so far (exact)
@@ -82,6 +83,11 @@ namespace HeiProMap {
         u64 small_seeds = 8;
         // levels below the top: -1 = same as above, otherwise these values replace kway_rounds / small_seeds /
         // refine_rounds there (the top level decides most of the QAP, the lower levels are cheap to settle)
+        // multilevel top level: the graph of the top level split is contracted (heavy edge matching) until it has at
+        // most ml_n vertices, split there, and refined (repair + pairwise flow refinement) on the way back. 0 = off.
+        u64 ml_n = 1000;
+        // vertices in a cluster weigh at most (total weight) / (ml_cap * k')
+        f64 ml_cap = 20.0;
         s64 low_kway_rounds = -1, low_small_seeds = 2, low_refine_rounds = -1;
         bool small_exact = true; // small bisections: keep_fraction 1 and prune_factor 1
         // seed_budget of the top hierarchy level (its few, large bisections decide most of the QAP); 0 = no limit
@@ -1082,7 +1088,148 @@ namespace HeiProMap {
             for (partition_t b = 0; b < k_prime; ++b) { for (const vertex_t u: members[b]) { blk_of[u] = -1; } }
         }
 
+        // ------------------------------------------------------------------------------ multilevel top level
+        static std::unique_ptr<CSRGraph> induced(const CSRGraph &g, const vertex_t *verts, const size_t cnt) {
+            std::vector<vertex_t> idx(g.n, (vertex_t) -1);
+            for (size_t x = 0; x < cnt; ++x) { idx[verts[x]] = (vertex_t) x; }
+            vertex_t mm = 0;
+            weight_t ww = 0;
+            for (size_t x = 0; x < cnt; ++x) {
+                const vertex_t u = verts[x];
+                ww += g.v_weight(u);
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) { mm += idx[g.edges_v[i]] != (vertex_t) -1; }
+            }
+            auto sg = std::make_unique<CSRGraph>((vertex_t) cnt, mm, ww);
+            size_t pos = 0;
+            for (size_t v = 0; v < cnt; ++v) {
+                const vertex_t u = verts[v];
+                sg->v_weights[v] = g.v_weight(u);
+                sg->neighborhoods[v] = pos;
+                for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                    const vertex_t w = idx[g.edges_v[i]];
+                    if (w == (vertex_t) -1) { continue; }
+                    sg->edges_v[pos] = w;
+                    sg->edges_w[pos] = g.edge_w(i);
+                    ++pos;
+                }
+            }
+            sg->neighborhoods[cnt] = pos;
+            return sg;
+        }
+
+        // heavy edge matching (rating w / (w(u) w(v))) with a cluster weight cap; map[v] = coarse vertex
+        std::unique_ptr<CSRGraph> coarsen(const CSRGraph &f, const weight_t cap, std::vector<vertex_t> &map) {
+            const vertex_t n = f.n;
+            std::vector<vertex_t> perm(n);
+            for (vertex_t v = 0; v < n; ++v) { perm[v] = v; }
+            std::shuffle(perm.begin(), perm.end(), rng);
+            map.assign(n, (vertex_t) -1);
+            vertex_t cn = 0;
+            for (const vertex_t u : perm) {
+                if (map[u] != (vertex_t) -1) { continue; }
+                vertex_t best = (vertex_t) -1;
+                f64 br = -1.0;
+                for (size_t i = f.neighborhoods[u]; i < f.neighborhoods[u + 1]; ++i) {
+                    const vertex_t v = f.edges_v[i];
+                    if (v == u || map[v] != (vertex_t) -1 || f.v_weight(u) + f.v_weight(v) > cap) { continue; }
+                    const f64 r = (f64) f.edge_w(i) / ((f64) f.v_weight(u) * (f64) f.v_weight(v));
+                    if (r > br) { br = r; best = v; }
+                }
+                map[u] = cn;
+                if (best != (vertex_t) -1) { map[best] = cn; }
+                ++cn;
+            }
+            std::vector<std::vector<vertex_t>> members(cn);
+            for (vertex_t v = 0; v < n; ++v) { members[map[v]].push_back(v); }
+            std::vector<vertex_t> mark(cn, (vertex_t) -1), slot(cn, 0);
+            std::vector<std::vector<std::pair<vertex_t, weight_t>>> adj(cn);
+            vertex_t marcs = 0;
+            for (vertex_t c = 0; c < cn; ++c) {
+                for (const vertex_t v : members[c]) {
+                    for (size_t i = f.neighborhoods[v]; i < f.neighborhoods[v + 1]; ++i) {
+                        const vertex_t d = map[f.edges_v[i]];
+                        if (d == c) { continue; }
+                        if (mark[d] != c) { mark[d] = c; slot[d] = (vertex_t) adj[c].size(); adj[c].push_back({d, 0}); }
+                        adj[c][slot[d]].second += f.edge_w(i);
+                    }
+                }
+                marcs += (vertex_t) adj[c].size();
+            }
+            auto cg = std::make_unique<CSRGraph>(cn, marcs, f.g_weight);
+            size_t pos = 0;
+            for (vertex_t c = 0; c < cn; ++c) {
+                weight_t w = 0;
+                for (const vertex_t v : members[c]) { w += f.v_weight(v); }
+                cg->v_weights[c] = w;
+                cg->neighborhoods[c] = pos;
+                for (const auto &pr : adj[c]) { cg->edges_v[pos] = pr.first; cg->edges_w[pos] = pr.second; ++pos; }
+            }
+            cg->neighborhoods[cn] = pos;
+            return cg;
+        }
+
+        // k'-partition of order[b, e) by multilevel: contract, split the coarsest graph, refine while uncontracting
+        void multilevel_kway(const CSRGraph &g, vertex_t *order, const size_t b, const size_t e, const partition_t kk,
+                             const weight_t *mw, const u64 ns) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "multilevel");
+            const size_t cnt = e - b;
+            std::vector<std::unique_ptr<CSRGraph>> lv;
+            std::vector<std::vector<vertex_t>> maps;
+            lv.push_back(induced(g, order + b, cnt));
+            const weight_t cap = std::max<weight_t>(1, (weight_t) ((f64) lv[0]->g_weight / (saved_cfg.ml_cap * (f64) kk)));
+            while ((u64) lv.back()->n > saved_cfg.ml_n) {
+                std::vector<vertex_t> mp;
+                auto cg = coarsen(*lv.back(), cap, mp);
+                if ((f64) cg->n > 0.92 * (f64) lv.back()->n) { break; }
+                maps.push_back(std::move(mp));
+                lv.push_back(std::move(cg));
+            }
+            // partition of the coarsest graph
+            std::vector<int> part;
+            auto run = [&](const CSRGraph &gr, std::vector<int> *init, const bool full) {
+                FlowBisectionPartitioner q;
+                q.configure(saved_cfg);
+                q.seed_budget = seed_budget;
+                q.rng = rng;
+                q.init_loc(gr.n);
+                std::vector<vertex_t> ord(gr.n);
+                for (vertex_t v = 0; v < gr.n; ++v) { ord[v] = v; }
+                if (full) {
+                    q.kway_partition(gr, ord.data(), 0, gr.n, kk, mw, ns);
+                } else {
+                    std::vector<size_t> c(kk + 1, 0);
+                    for (vertex_t v = 0; v < gr.n; ++v) { ++c[(*init)[v] + 1]; }
+                    for (partition_t i = 0; i < kk; ++i) { c[i + 1] += c[i]; }
+                    q.blk_b.assign(kk, 0);
+                    q.blk_e.assign(kk, 0);
+                    for (partition_t i = 0; i < kk; ++i) { q.blk_b[i] = c[i]; q.blk_e[i] = c[i + 1]; }
+                    std::vector<size_t> cur(c.begin(), c.end() - 1);
+                    for (vertex_t v = 0; v < gr.n; ++v) { ord[cur[(*init)[v]]++] = v; }
+                    if (q.repair) { q.repair_kway(gr, ord.data(), 0, gr.n, kk, mw); }
+                    if (q.kway_rounds > 0 && kk > 2) { q.refine_kway(gr, ord.data(), 0, gr.n, kk, mw); }
+                }
+                part.assign(gr.n, 0);
+                for (partition_t i = 0; i < kk; ++i) { for (size_t x = q.blk_b[i]; x < q.blk_e[i]; ++x) { part[ord[x]] = (int) i; } }
+                if (&gr == lv[0].get()) {
+                    blk_b.assign(kk, 0);
+                    blk_e.assign(kk, 0);
+                    for (partition_t i = 0; i < kk; ++i) { blk_b[i] = b + q.blk_b[i]; blk_e[i] = b + q.blk_e[i]; }
+                    std::vector<vertex_t> old(order + b, order + e);
+                    for (size_t x = 0; x < cnt; ++x) { order[b + x] = old[ord[x]]; }
+                }
+            };
+            run(*lv.back(), nullptr, true);
+            for (size_t l = lv.size() - 1; l-- > 0;) {
+                std::vector<int> fine(lv[l]->n);
+                for (vertex_t v = 0; v < lv[l]->n; ++v) { fine[v] = part[maps[l][v]]; }
+                run(*lv[l], &fine, false);
+            }
+            if (lv.size() == 1) { return; } // nothing contracted: run() above already wrote the result
+        }
+
     public:
+        FlowBisectionConfiguration saved_cfg;
+
         /// copies the parameters of the configuration (the partitioner is reusable and not thread safe)
         void configure(const FlowBisectionConfiguration &config) {
             prune = config.prune;
@@ -1102,6 +1249,7 @@ namespace HeiProMap {
             small_n = (size_t) config.small_n;
             small_exact = config.small_exact;
             small_seeds = (size_t) config.small_seeds;
+            saved_cfg = config;
         }
 
         /// deterministic random stream of a part
@@ -1147,7 +1295,8 @@ namespace HeiProMap {
                 if (config.low_small_seeds >= 0) { small_seeds = (size_t) config.low_small_seeds; }
                 if (config.low_refine_rounds >= 0) { refine_rounds = (size_t) config.low_refine_rounds; }
             }
-            kway_partition(g, order, b, e, kk, mw.data(), ns);
+            if (config.ml_n > 0 && level == top && (e - b) > 2 * config.ml_n) { multilevel_kway(g, order, b, e, kk, mw.data(), ns); }
+            else { kway_partition(g, order, b, e, kk, mw.data(), ns); }
             kway_rounds = kr;
             small_seeds = ss;
             refine_rounds = rr;

@@ -15,6 +15,10 @@ FILES = {"144": "144.graph", "2cubes_sphere": "2cubes_sphere.mtx.graph", "598a":
          "G2_circuit": "G2_circuit.mtx.graph", "cont-300": "cont-300.mtx.graph", "cop20k_A": "cop20k_A.mtx.graph",
          "fe_ocean": "fe_ocean.graph", "fe_rotor": "fe_rotor.graph", "thermomech_TC": "thermomech_TC.mtx.graph",
          "wave": "wave.graph"}
+for _n in ["Dubcova3", "bmwcra_1", "boneS01", "cfd2", "shipsec5"]:
+    FILES[_n] = _n + ".mtx.graph"
+for _n in ["m14b", "auto", "afshell9", "ecology2", "thermal2", "G3_circuit", "nlr"]:
+    FILES[_n] = _n + ".graph"
 COMMON = ["--hierarchy", "4:8:6", "--distance", "1:10:100", "--imbalance", "0.03", "--config", "strong", "--threads", "1"]
 
 
