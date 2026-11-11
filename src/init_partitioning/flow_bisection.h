@@ -1334,7 +1334,7 @@ namespace HeiProMap {
                     std::vector<size_t> cur(c.begin(), c.end() - 1);
                     for (vertex_t v = 0; v < gr.n; ++v) { ord[cur[(*init)[v]]++] = v; }
                     if (q.repair) { q.repair_kway(gr, ord.data(), 0, gr.n, kk, mw); }
-                    if (q.kway_rounds > 0 && kk > 2) { q.refine_kway(gr, ord.data(), 0, gr.n, kk, mw); }
+                    if (q.kway_rounds > 0 && kk > 1) { q.refine_kway(gr, ord.data(), 0, gr.n, kk, mw); }
                 }
                 part.assign(gr.n, 0);
                 for (partition_t i = 0; i < kk; ++i) { for (size_t x = q.blk_b[i]; x < q.blk_e[i]; ++x) { part[ord[x]] = (int) i; } }
@@ -1432,6 +1432,52 @@ namespace HeiProMap {
             refine_rounds = rr;
         }
 
+        // Final balance repair on the whole k-partition: moves vertices out of blocks heavier than lmax (smallest cut
+        // increase first, target must stay within lmax, or at least be lighter than the source after the move).
+        static void repair_global(const CSRGraph &g, PartitionManager &pm, const partition_t k, const weight_t lmax) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "repair_global");
+            std::vector<weight_t> bw(k, 0);
+            std::vector<std::vector<vertex_t> > members(k);
+            for (vertex_t u = 0; u < g.n; ++u) { bw[pm[u]] += g.v_weight(u); members[pm[u]].push_back(u); }
+            std::vector<s64> conn(k, 0);
+            std::vector<partition_t> touched;
+            for (int pass = 0; pass < 4; ++pass) {
+                bool any = false;
+                for (partition_t ob = 0; ob < k; ++ob) {
+                    while (bw[ob] > lmax) {
+                        vertex_t bu = 0; int bc = -1; bool bfits = false; s64 bd = 0; weight_t bwu = 0;
+                        for (const vertex_t u: members[ob]) {
+                            if ((partition_t) pm[u] != ob) { continue; }
+                            const weight_t wu = g.v_weight(u);
+                            touched.clear();
+                            for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
+                                const partition_t c = pm[g.edges_v[e]];
+                                if (conn[c] == 0) { touched.push_back(c); }
+                                conn[c] += g.edge_w(e);
+                            }
+                            for (const partition_t c: touched) {
+                                if (c == ob) { continue; }
+                                const bool fits = bw[c] + wu <= lmax;
+                                const bool helps = bw[c] + wu < bw[ob];
+                                if (!fits && !helps) { continue; }
+                                const s64 d = conn[ob] - conn[c];
+                                if (bc < 0 || (fits && !bfits) || (fits == bfits && (d < bd || (d == bd && wu > bwu)))) {
+                                    bu = u; bc = (int) c; bfits = fits; bd = d; bwu = wu;
+                                }
+                            }
+                            for (const partition_t c: touched) { conn[c] = 0; }
+                        }
+                        if (bc < 0) { break; }
+                        pm.move(bu, bwu, ob, (partition_t) bc);
+                        bw[ob] -= bwu; bw[bc] += bwu;
+                        members[bc].push_back(bu);
+                        any = true;
+                    }
+                }
+                if (!any) { break; }
+            }
+        }
+
         /**
          * Multisection driven by flow based recursive bisection: split along the highest hierarchy
          * level first, then the next one, down to the lowest. Every part of a level may weigh at most
@@ -1487,6 +1533,7 @@ namespace HeiProMap {
                     }
                 }
             }
+            repair_global(g, p_manager, k, lmax);
             if (config.qap_rounds > 0) { p.refine_qap(g, p_manager, hierarchy, distance, lmax, config.qap_rounds); }
         }
     };

@@ -824,7 +824,7 @@ namespace HeiProMap {
             flow_bisection_config.ml_n = 500;
             flow_bisection_config.qap_rounds = 0;
             flow_bisection_config.kway_rounds = 1;
-            flow_bisection_config.low_kway_rounds = 0;
+            flow_bisection_config.low_kway_rounds = 1;
             global_multisection_config.mode_string = "heipa-fast";
             global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
             // global_multisection_config.mode_string = "kaffpa-fast";
