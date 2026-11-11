@@ -30,9 +30,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <random>
+#include <unordered_map>
 #include <vector>
 
 #include "flow_network.h"
@@ -81,6 +83,15 @@ namespace HeiProMap {
         // continue every job (no keep_fraction, exact pruning). small_n = 0 = off.
         u64 small_n = 300;
         u64 small_seeds = 8;
+        // After the whole multisection: passes of QAP aware flow refinement between all pairs of adjacent PEs (each pair
+        // as a bisection of the union with the distances to all other blocks as source / sink arcs, so the min cut is
+        // the exact change of the QAP). 0 = off.
+        u64 qap_rounds = 1;
+        // only pairs of PEs whose lowest common ancestor is one of the `qap_top_levels` highest hierarchy levels are
+        // refined (the pairs with the largest distances, where a move changes the QAP the most); 0 = all pairs
+        u64 qap_top_levels = 1;
+        // number of corridor widths of the pair refinement (of the 5 of refine_bisection)
+        u64 qap_bands = 5;
         // levels below the top: -1 = same as above, otherwise these values replace kway_rounds / small_seeds /
         // refine_rounds there (the top level decides most of the QAP, the lower levels are cheap to settle)
         // multilevel top level: the graph of the top level split is contracted (heavy edge matching) until it has at
@@ -217,6 +228,7 @@ namespace HeiProMap {
         size_t refine_rounds = 0;
         f64 refine_band = 0.1;
         size_t kway_rounds = 0;
+        size_t max_bands = 5;
         bool use_ibfs = false;
         bool repair = true;
         f64 pair_fraction = 1.0;
@@ -228,8 +240,9 @@ namespace HeiProMap {
         std::vector<std::pair<int, int> > far_top; // (distance, vertex), farthest first
 
         /// network of the vertices verts[0, cnt) (loc must be set for them) and the buffers of the partitioner
-        void setup_network(const CSRGraph &g, const vertex_t *verts, const int cnt) {
-            build_network(g, verts, cnt, loc.get_ptr());
+        void setup_network(const CSRGraph &g, const vertex_t *verts, const int cnt,
+                           const s64 *pen_s = nullptr, const s64 *pen_t = nullptr, const s64 scale = 1) {
+            build_network(g, verts, cnt, loc.get_ptr(), pen_s, pen_t, scale);
             owner.initialize(N);
             gq_s.initialize(N);
             gq_t.initialize(N);
@@ -751,7 +764,7 @@ namespace HeiProMap {
             AlignedArray<char> &side = ref_core; // 1 source side, 2 sink side (before the corridor is cut out)
             // corridor widths: tried from narrow to wide; after an improvement start again with the narrowest one
             static constexpr f64 BAND_FACTORS[] = {0.2, 0.5, 1.0, 2.0, 4.0};
-            constexpr size_t N_BANDS = sizeof(BAND_FACTORS) / sizeof(BAND_FACTORS[0]);
+            const size_t N_BANDS = std::min<size_t>(max_bands, sizeof(BAND_FACTORS) / sizeof(BAND_FACTORS[0]));
             size_t band_idx = 0;
             f64 f = refine_band * BAND_FACTORS[0];
             size_t improvements = 0;
@@ -762,7 +775,7 @@ namespace HeiProMap {
                 int qt = 0;
                 for (int v = 0; v < nl; ++v) {
                     for (int i = first[v]; i < first[v + 1]; ++i) {
-                        if (side[arcs[i].to] != side[v]) { ref_q[qt++] = v; break; }
+                        if (arcs[i].to < nl && side[arcs[i].to] != side[v]) { ref_q[qt++] = v; break; }
                     }
                 }
                 if (qt == 0) { return; }
@@ -792,6 +805,7 @@ namespace HeiProMap {
                 std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
                 reset_trees();
                 for (int v = 0; v < nl; ++v) { if (side[v]) { set_terminal(v, side[v]); } }
+                if (N > nl) { set_terminal(nl, 1); set_terminal(nl + 1, 2); }
                 bk_start();
                 const s64 before = best_res.cut;
                 const s64 flow = bk_maxflow(before);
@@ -1088,6 +1102,120 @@ namespace HeiProMap {
             for (partition_t b = 0; b < k_prime; ++b) { for (const vertex_t u: members[b]) { blk_of[u] = -1; } }
         }
 
+        // QAP aware pairwise flow refinement of the finished partition of the whole graph into k PEs (see
+        // FlowBisectionConfiguration::qap_rounds). Pairs of adjacent PEs, largest shared cost first; a pair is
+        // refined again only if one of its blocks changed. Moves are applied to p_manager.
+        u64 qap_top_levels = 0, qap_bands = 5;
+        void refine_qap(const CSRGraph &g, PartitionManager &pm, const std::vector<partition_t> &hierarchy,
+                        const std::vector<weight_t> &distance, const weight_t lmax, const u64 rounds) {
+            HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "refine_qap");
+            const size_t L = hierarchy.size();
+            std::vector<partition_t> stride(L + 1);
+            stride[0] = 1;
+            for (size_t j = 0; j < L; ++j) { stride[j + 1] = stride[j] * hierarchy[j]; }
+            const partition_t k = stride[L];
+            // grp[l][x]: the level l + 1 ancestor of PE x. The distance of two PEs is distance[l] of the lowest common level
+            std::vector<std::vector<partition_t> > grp(L, std::vector<partition_t>(k));
+            for (size_t l = 0; l < L; ++l) { for (partition_t x = 0; x < k; ++x) { grp[l][x] = x / stride[l + 1]; } }
+            auto level = [&](const partition_t x, const partition_t y) -> size_t {
+                for (size_t l = 0; l < L; ++l) { if (grp[l][x] == grp[l][y]) { return l; } }
+                return L - 1;
+            };
+            auto dist = [&](const partition_t x, const partition_t y) -> s64 { return (s64) distance[level(x, y)]; };
+            const size_t min_level = qap_top_levels > 0 && qap_top_levels < L ? L - qap_top_levels : 0;
+            max_bands = qap_bands;
+            std::vector<int> part(g.n);
+            std::vector<std::vector<vertex_t> > members(k);
+            for (vertex_t u = 0; u < g.n; ++u) { part[u] = (int) pm[u]; members[part[u]].push_back(u); }
+            std::unordered_map<u64, s64> shared;
+            std::vector<s64> pen_s, pen_t;
+            std::vector<vertex_t> verts;
+            std::vector<u64> ver(k, 1);
+            std::unordered_map<u64, u64> seen;
+            for (u64 round = 0; round < rounds; ++round) {
+                shared.clear();
+                for (vertex_t u = 0; u < g.n; ++u) {
+                    for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
+                        const int bu = part[u], bv = part[g.edges_v[e]];
+                        if (bu < bv && level(bu, bv) >= min_level) { shared[(u64) bu * k + bv] += (s64) g.edge_w(e) * dist(bu, bv); }
+                    }
+                }
+                std::vector<std::pair<s64, std::pair<int, int> > > pairs;
+                for (const auto &kv: shared) { pairs.push_back({kv.second, {(int) (kv.first / k), (int) (kv.first % k)}}); }
+                std::sort(pairs.begin(), pairs.end(), [](const auto &x, const auto &y) { return x.first != y.first ? x.first > y.first : x.second < y.second; });
+                bool improved = false;
+                for (const auto &pr: pairs) {
+                    const int a = pr.second.first, b = pr.second.second;
+                    const u64 stamp = ver[a] * 1000003ULL + ver[b];
+                    u64 &sn = seen[(u64) a * k + b];
+                    if (sn == stamp) { continue; }
+                    sn = stamp;
+                    verts.clear();
+                    verts.insert(verts.end(), members[a].begin(), members[a].end());
+                    verts.insert(verts.end(), members[b].begin(), members[b].end());
+                    const int cnt = (int) verts.size();
+                    if (cnt < 4) { continue; }
+                    // arcs to S* (paid if the vertex ends in b) and T* (paid if it ends in a): the distances to all other
+                    // blocks; the common part min(l, r) is paid either way and dropped
+                    pen_s.assign(cnt, 0);
+                    pen_t.assign(cnt, 0);
+                    for (int v = 0; v < cnt; ++v) {
+                        const vertex_t u = verts[v];
+                        s64 l = 0, r = 0;
+                        for (size_t e = g.neighborhoods[u]; e < g.neighborhoods[u + 1]; ++e) {
+                            const int c = part[g.edges_v[e]];
+                            if (c == a || c == b) { continue; }
+                            const s64 w = g.edge_w(e);
+                            l += w * dist(a, c);
+                            r += w * dist(b, c);
+                        }
+                        const s64 m = std::min(l, r);
+                        pen_t[v] = l - m;
+                        pen_s[v] = r - m;
+                    }
+                    for (int i = 0; i < cnt; ++i) { loc[verts[i]] = i; }
+                    setup_network(g, verts.data(), cnt, pen_s.data(), pen_t.data(), dist(a, b));
+                    for (int i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
+                    best_res.reset();
+                    best_res.in_source.initialize(nl);
+                    weight_t w1 = 0;
+                    s64 cut = 0;
+                    const int na_ = (int) members[a].size();
+                    for (int v = 0; v < nl; ++v) {
+                        const bool src = v < na_;
+                        best_res.in_source[v] = src;
+                        if (src) { w1 += vw[v]; cut += pen_t[v]; } else { cut += pen_s[v]; }
+                        for (int i = first[v]; i < first[v + 1]; ++i) {
+                            if (src && arcs[i].to < nl && arcs[i].to >= na_) { cut += base_arcs[i].cap; }
+                        }
+                    }
+                    const weight_t lo_w = std::max<weight_t>(0, total_w - lmax);
+                    const weight_t hi_w = lmax;
+                    if (w1 < lo_w || w1 > hi_w || cut <= 0) { continue; }
+                    best_res.valid = true;
+                    best_res.violation = 0;
+                    best_res.cut = cut;
+                    pair_salt = rng();
+                    refine_bisection(lo_w, hi_w);
+                    if (!(best_res.valid && best_res.violation == 0 && best_res.cut < cut)) { continue; }
+                    improved = true;
+                    ++ver[a];
+                    ++ver[b];
+                    members[a].clear();
+                    members[b].clear();
+                    for (int v = 0; v < nl; ++v) {
+                        const int blk = best_res.in_source[v] ? a : b;
+                        const vertex_t u = verts[v];
+                        if (part[u] != blk) { pm.move(u, g.v_weight(u), (partition_t) part[u], (partition_t) blk); }
+                        part[u] = blk;
+                        members[blk].push_back(u);
+                    }
+                }
+                if (!improved) { break; }
+            }
+            max_bands = 5;
+        }
+
         // ------------------------------------------------------------------------------ multilevel top level
         static std::unique_ptr<CSRGraph> induced(const CSRGraph &g, const vertex_t *verts, const size_t cnt) {
             std::vector<vertex_t> idx(g.n, (vertex_t) -1);
@@ -1245,6 +1373,8 @@ namespace HeiProMap {
             pair_fraction = config.pair_fraction;
             pair_proxy = config.pair_proxy;
             repair = config.repair;
+            qap_top_levels = config.qap_top_levels;
+            qap_bands = config.qap_bands;
             use_ibfs = config.ibfs;
             small_n = (size_t) config.small_n;
             small_exact = config.small_exact;
@@ -1310,6 +1440,7 @@ namespace HeiProMap {
         static void partition(const CSRGraph &g,
                               PartitionManager &p_manager,
                               const std::vector<partition_t> &hierarchy,
+                              const std::vector<weight_t> &distance,
                               const f64 imbalance,
                               const FlowBisectionConfiguration &config,
                               const u64 seed) {
@@ -1356,6 +1487,7 @@ namespace HeiProMap {
                     }
                 }
             }
+            if (config.qap_rounds > 0) { p.refine_qap(g, p_manager, hierarchy, distance, lmax, config.qap_rounds); }
         }
     };
 } // namespace HeiProMap

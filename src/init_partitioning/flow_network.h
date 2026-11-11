@@ -89,12 +89,17 @@ namespace HeiProMap {
         AlignedArray<int> deg_buf, pos_buf;
 
         /// builds the network of the vertices verts[0, cnt); loc[v] is the local index of a vertex of the graph or -1
-        void build_network(const CSRGraph &g, const vertex_t *verts, const int cnt, const int *loc) {
+        /// With pen_s / pen_t (QAP aware refinement) two extra nodes are added: nl = S* (a source terminal) and nl + 1
+        /// = T* (a sink terminal). The vertex u gets an arc S* - u of capacity pen_s[u] (paid if u ends on the sink
+        /// side) and u - T* of capacity pen_t[u] (paid if u ends on the source side). `scale` multiplies all edge weights.
+        void build_network(const CSRGraph &g, const vertex_t *verts, const int cnt, const int *loc,
+                           const s64 *pen_s = nullptr, const s64 *pen_t = nullptr, const s64 scale = 1) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "build_network");
             nl = cnt;
-            N = nl;
+            N = nl + (pen_s != nullptr ? 2 : 0);
 
-            vw.initialize(nl);
+            vw.initialize(N);
+            for (int i = nl; i < N; ++i) { vw[i] = 0; }
             deg_buf.initialize(N);
             pos_buf.initialize(N);
             first.initialize(N + 1);
@@ -109,6 +114,12 @@ namespace HeiProMap {
                 }
             }
 
+            if (pen_s != nullptr) {
+                for (int u = 0; u < nl; ++u) {
+                    if (pen_s[u] > 0) { deg_buf[u]++; deg_buf[nl]++; }
+                    if (pen_t[u] > 0) { deg_buf[u]++; deg_buf[nl + 1]++; }
+                }
+            }
             first[0] = 0;
             for (int i = 0; i < N; ++i) { first[i + 1] = first[i] + deg_buf[i]; }
             na = (size_t) first[N];
@@ -121,11 +132,25 @@ namespace HeiProMap {
                 for (size_t i = g.neighborhoods[gu]; i < g.neighborhoods[gu + 1]; ++i) {
                     const int v = loc[g.edges_v[i]];
                     if (v < 0 || u >= v) { continue; } // each undirected edge once
-                    const s64 w = g.edge_w(i);
+                    const s64 w = (s64) g.edge_w(i) * scale;
                     const int a = pos_buf[u]++;
                     const int b = pos_buf[v]++;
                     arcs[a] = {v, b, w};
                     arcs[b] = {u, a, w};
+                }
+            }
+            if (pen_s != nullptr) {
+                for (int u = 0; u < nl; ++u) {
+                    if (pen_s[u] > 0) {
+                        const int a = pos_buf[u]++, b = pos_buf[nl]++;
+                        arcs[a] = {nl, b, pen_s[u]};
+                        arcs[b] = {u, a, pen_s[u]};
+                    }
+                    if (pen_t[u] > 0) {
+                        const int a = pos_buf[u]++, b = pos_buf[nl + 1]++;
+                        arcs[a] = {nl + 1, b, pen_t[u]};
+                        arcs[b] = {u, a, pen_t[u]};
+                    }
                 }
             }
             std::memcpy(base_arcs.get_ptr(), arcs.get_ptr(), na * sizeof(Arc));
@@ -160,9 +185,9 @@ namespace HeiProMap {
 
         // empty trees (no terminals), nothing active
         void reset_trees() {
-            std::fill_n(label.get_ptr(), nl, 0);
-            std::fill_n(pa.get_ptr(), nl, -1);
-            std::fill_n(isact.get_ptr(), nl, 0);
+            std::fill_n(label.get_ptr(), N, 0);
+            std::fill_n(pa.get_ptr(), N, -1);
+            std::fill_n(isact.get_ptr(), N, 0);
             act_h = act_t = 0;
             orph_n = 0;
         }
@@ -175,7 +200,7 @@ namespace HeiProMap {
 
         // trees from scratch: the terminals set since reset_trees are the roots
         void bk_start() {
-            for (int v = 0; v < nl; ++v) { if (label[v]) { bk_activate(v); } }
+            for (int v = 0; v < N; ++v) { if (label[v]) { bk_activate(v); } }
         }
 
         // v becomes a source terminal while the trees are kept

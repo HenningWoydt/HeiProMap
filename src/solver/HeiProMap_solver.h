@@ -530,7 +530,7 @@ namespace HeiProMap {
                         if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                             GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
                         } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_FLOW_BISECTION) {
-                            FlowBisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, level_imbalance, ac.flow_bisection_config, ac.seed + thread_id);
+                            FlowBisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.flow_bisection_config, ac.seed + thread_id);
                         } else {
                             greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, local_p_managers[thread_id], thread_vertices[thread_id]);
                         }
@@ -550,7 +550,7 @@ namespace HeiProMap {
                     if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
                         GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
                     } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_FLOW_BISECTION) {
-                        FlowBisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, level_imbalance, ac.flow_bisection_config, ac.seed);
+                        FlowBisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.flow_bisection_config, ac.seed);
                     } else {
                         AlignedArray<vertex_t> vertices;
                         vertices.initialize(graphs.back().n);

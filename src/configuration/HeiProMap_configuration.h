@@ -220,6 +220,9 @@ namespace HeiProMap {
             {"--flow-bisection-low-small-seeds", "", "Flow bisection: small seeds for the levels below the top, -1 = same as the top level.", "2", "", false},
             {"--flow-bisection-low-refine-rounds", "", "Flow bisection: refine rounds for the levels below the top, -1 = same as the top level.", "-1", "", false},
             {"--flow-bisection-ml-n", "", "Flow bisection: multilevel top level, contracts to this many vertices, 0 = off.", "1000", "", false},
+            {"--flow-bisection-qap-rounds", "", "Flow bisection: passes of QAP aware flow refinement between adjacent PEs after the multisection, 0 = off.", "1", "", false},
+            {"--flow-bisection-qap-top-levels", "", "Flow bisection: QAP refinement only for PE pairs whose lowest common level is one of this many highest hierarchy levels, 0 = all pairs.", "1", "", false},
+            {"--flow-bisection-qap-bands", "", "Flow bisection: number of corridor widths (1-5) of the QAP refinement.", "5", "", false},
             {"--flow-bisection-ml-cap", "", "Flow bisection: cluster weight cap divisor of the multilevel top level.", "20", "", false},
             {"--flow-bisection-small-n", "", "Flow bisection: bisections with fewer vertices use many seeds and no pruning heuristics, 0 = off.", "300", "", false},
             {"--flow-bisection-small-seeds", "", "Flow bisection: number of seeds of the small bisections.", "8", "", false},
@@ -554,6 +557,15 @@ namespace HeiProMap {
             if (is_set("--flow-bisection-ml-n")) {
                 flow_bisection_config.ml_n = std::stoull(get("--flow-bisection-ml-n"));
             }
+            if (is_set("--flow-bisection-qap-rounds")) {
+                flow_bisection_config.qap_rounds = std::stoull(get("--flow-bisection-qap-rounds"));
+            }
+            if (is_set("--flow-bisection-qap-top-levels")) {
+                flow_bisection_config.qap_top_levels = std::stoull(get("--flow-bisection-qap-top-levels"));
+            }
+            if (is_set("--flow-bisection-qap-bands")) {
+                flow_bisection_config.qap_bands = std::stoull(get("--flow-bisection-qap-bands"));
+            }
             if (is_set("--flow-bisection-ml-cap")) {
                 flow_bisection_config.ml_cap = std::stod(get("--flow-bisection-ml-cap"));
             }
@@ -810,6 +822,7 @@ namespace HeiProMap {
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             flow_bisection_config.num_seeds = 6;
             flow_bisection_config.ml_n = 500;
+            flow_bisection_config.qap_rounds = 0;
             flow_bisection_config.kway_rounds = 1;
             flow_bisection_config.low_kway_rounds = 0;
             global_multisection_config.mode_string = "heipa-fast";
