@@ -284,7 +284,8 @@ namespace HeiProMap {
                                 continue;
                             }
 
-                            if (edge.used_epoch == m_edge_round_epoch) {
+                            // not edge.used_epoch: the half edge is deleted (and re-created unmarked) when its weight drops to 0
+                            if (is_edge_used(q_graph, u_id, v_id)) {
                                 continue;
                             }
 
@@ -295,7 +296,7 @@ namespace HeiProMap {
                             }
 
                             matching.emplace_back(u_id, v_id);
-                            edge.used_epoch = m_edge_round_epoch;
+                            mark_edge_used(q_graph, u_id, v_id);
 
                             m_vertex_frozen_epoch[u_id] = epoch_dist1;
                             m_vertex_frozen_epoch[v_id] = epoch_dist1;
