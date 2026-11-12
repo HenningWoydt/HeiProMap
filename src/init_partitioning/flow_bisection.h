@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <limits>
 #include <memory>
+#include <omp.h>
 #include <random>
 #include <unordered_map>
 #include <vector>
@@ -218,6 +219,12 @@ namespace HeiProMap {
         const int *pq_dist = nullptr;
         std::mt19937_64 rng;
         u64 pair_salt = 0;
+    public:
+        // helper instances for the parallel pairwise refinement of refine_kway: pair refinements run on
+        // (*helpers)[helper_off + t] for t < helper_threads. nullptr / 1 thread: sequential on this instance.
+        std::vector<std::unique_ptr<FlowBisectionPartitioner> > *helpers = nullptr;
+        size_t helper_off = 0, helper_threads = 1;
+    private:
         bool prune = true;
         f64 init_fraction = 0.1;
         f64 prune_factor = 1.0;
@@ -1009,8 +1016,54 @@ namespace HeiProMap {
             return moved_any;
         }
 
+        // Refines the pair of blocks (ma, mb) as a bisection of their union (the edges to other blocks are cut either
+        // way). Returns true if the cut of the union decreased; the new sides are then in best_res.in_source (indexed
+        // like verts = ma followed by mb). The random stream of this instance is not changed.
+        bool refine_pair(const CSRGraph &g, const std::vector<vertex_t> &ma, const std::vector<vertex_t> &mb,
+                         std::vector<vertex_t> &verts, const weight_t max_a, const weight_t max_b, const u64 salt) {
+            const std::mt19937_64 saved_rng = rng;
+            verts.clear();
+            verts.insert(verts.end(), ma.begin(), ma.end());
+            verts.insert(verts.end(), mb.begin(), mb.end());
+            const int cnt = (int) verts.size();
+            bool ok = false;
+            if (cnt >= 4) {
+                for (int i = 0; i < cnt; ++i) { loc[verts[i]] = i; }
+                setup_network(g, verts.data(), cnt);
+                for (int i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
+                best_res.reset();
+                best_res.in_source.initialize(nl);
+                weight_t w1 = 0;
+                s64 cut = 0;
+                for (int v = 0; v < nl; ++v) { best_res.in_source[v] = v < (int) ma.size() ? 1 : 0; }
+                for (int v = 0; v < nl; ++v) {
+                    if (best_res.in_source[v]) { w1 += vw[v]; }
+                    for (int i = first[v]; i < first[v + 1]; ++i) {
+                        if (arcs[i].to < nl && best_res.in_source[arcs[i].to] != best_res.in_source[v] && best_res.in_source[v]) {
+                            cut += base_arcs[i].cap;
+                        }
+                    }
+                }
+                const weight_t lo_w = std::max<weight_t>(0, total_w - max_b);
+                const weight_t hi_w = max_a;
+                if (!(w1 < lo_w || w1 > hi_w || cut <= 0)) {
+                    best_res.valid = true;
+                    best_res.violation = 0;
+                    best_res.cut = cut;
+                    pair_salt = salt;
+                    refine_bisection(lo_w, hi_w);
+                    ok = best_res.valid && best_res.violation == 0 && best_res.cut < cut;
+                }
+            }
+            rng = saved_rng;
+            return ok;
+        }
+
         // Pairwise flow refinement of the finished k'-partition (blocks = ranges blk_b/blk_e of order). Every pair of
-        // adjacent blocks is refined as a bisection of its union (the edges to other blocks are cut either way).
+        // adjacent blocks is refined as a bisection of its union (the edges to other blocks are cut either way). The
+        // pairs (largest shared cut first) are scheduled in batches of block-disjoint pairs; the pairs of a batch are
+        // independent and run in parallel on the helper instances. A pair is only refined again if one of its blocks
+        // changed since its last refinement. The result does not depend on the number of threads.
         void refine_kway(const CSRGraph &g, vertex_t *order, const size_t begin, const size_t end,
                          const partition_t k_prime, const weight_t *max_weights) {
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "refine_kway");
@@ -1022,9 +1075,32 @@ namespace HeiProMap {
             for (partition_t b = 0; b < k_prime; ++b) { members[b].assign(order + blk_b[b], order + blk_e[b]); }
             std::vector<weight_t> shared;
             std::vector<vertex_t> verts;
-            // a pair is only refined again if one of its blocks changed since its last refinement
             std::vector<u64> ver(k_prime, 1), seen((size_t) k_prime * k_prime, 0);
             bool changed_any = false;
+
+            // refines one pair on the instance w; true if the pair improved (members and blk_of are updated)
+            auto process = [&](FlowBisectionPartitioner &w, const std::pair<int, int> &pr, std::vector<vertex_t> &vbuf, const u64 round_salt) -> bool {
+                const int a = pr.first, b = pr.second;
+                if (&w != this) {
+                    w.refine_rounds = refine_rounds;
+                    w.refine_band = refine_band;
+                    w.max_bands = max_bands;
+                }
+                const u64 salt = round_salt ^ ((u64) a * 0x9E3779B97F4A7C15ULL) ^ ((u64) b * 0xC2B2AE3D27D4EB4FULL);
+                if (!w.refine_pair(g, members[a], members[b], vbuf, max_weights[a], max_weights[b], salt)) { return false; }
+                members[a].clear();
+                members[b].clear();
+                const int nv = (int) vbuf.size();
+                for (int v = 0; v < nv; ++v) {
+                    const int blk = w.best_res.in_source[v] ? a : b;
+                    members[blk].push_back(vbuf[v]);
+                    blk_of[vbuf[v]] = blk;
+                }
+                ++ver[a];
+                ++ver[b];
+                return true;
+            };
+
             for (size_t round = 0; round < kway_rounds; ++round) {
                 shared.assign((size_t) k_prime * k_prime, 0);
                 for (size_t x = begin; x < end; ++x) {
@@ -1042,52 +1118,49 @@ namespace HeiProMap {
                     }
                 }
                 std::sort(pairs.begin(), pairs.end(), [](const auto &x, const auto &y) { return x.first > y.first; });
+                const u64 round_salt = rng();
                 bool improved = false;
-                for (const auto &pr: pairs) {
-                    const int a = pr.second.first, b = pr.second.second;
-                    const u64 stamp = ver[a] * 1000003ULL + ver[b];
-                    if (seen[(size_t) a * k_prime + b] == stamp) { continue; }
-                    seen[(size_t) a * k_prime + b] = stamp;
-                    verts.clear();
-                    verts.insert(verts.end(), members[a].begin(), members[a].end());
-                    verts.insert(verts.end(), members[b].begin(), members[b].end());
-                    const int cnt = (int) verts.size();
-                    if (cnt < 4) { continue; }
-                    for (int i = 0; i < cnt; ++i) { loc[verts[i]] = i; }
-                    setup_network(g, verts.data(), cnt);
-                    for (int i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
-                    best_res.reset();
-                    best_res.in_source.initialize(nl);
-                    weight_t w1 = 0;
-                    s64 cut = 0;
-                    for (int v = 0; v < nl; ++v) { best_res.in_source[v] = v < (int) members[a].size() ? 1 : 0; }
-                    for (int v = 0; v < nl; ++v) {
-                        if (best_res.in_source[v]) { w1 += vw[v]; }
-                        for (int i = first[v]; i < first[v + 1]; ++i) {
-                            if (arcs[i].to < nl && best_res.in_source[arcs[i].to] != best_res.in_source[v] && best_res.in_source[v]) {
-                                cut += base_arcs[i].cap;
+                std::vector<char> used(k_prime, 0);
+                std::vector<std::pair<int, int> > todo, batch, rest;
+                todo.reserve(pairs.size());
+                for (const auto &pr: pairs) { todo.push_back(pr.second); }
+                while (!todo.empty()) {
+                    std::fill(used.begin(), used.end(), 0);
+                    batch.clear();
+                    rest.clear();
+                    for (const auto &pr: todo) {
+                        const int a = pr.first, b = pr.second;
+                        const u64 stamp = ver[a] * 1000003ULL + ver[b];
+                        if (seen[(size_t) a * k_prime + b] == stamp) { continue; }
+                        if (used[a] || used[b]) { rest.push_back(pr); continue; }
+                        used[a] = used[b] = 1;
+                        seen[(size_t) a * k_prime + b] = stamp;
+                        batch.push_back(pr);
+                    }
+                    const size_t nt = helpers ? std::min<size_t>(helper_threads, batch.size()) : 1;
+                    if (nt <= 1) {
+                        for (const auto &pr: batch) {
+                            if (process(*this, pr, verts, round_salt)) { improved = changed_any = true; }
+                        }
+                    } else {
+                        bool any = false;
+                        #pragma omp parallel num_threads(nt)
+                        {
+                            FlowBisectionPartitioner &w = *(*helpers)[helper_off + (size_t) omp_get_thread_num()];
+                            std::vector<vertex_t> vbuf;
+                            bool local = false;
+                            #pragma omp for schedule(dynamic, 1) nowait
+                            for (size_t bi = 0; bi < batch.size(); ++bi) {
+                                if (process(w, batch[bi], vbuf, round_salt)) { local = true; }
+                            }
+                            if (local) {
+                                #pragma omp critical(hpm_flow_kway_improved)
+                                any = true;
                             }
                         }
+                        if (any) { improved = changed_any = true; }
                     }
-                    const weight_t lo_w = std::max<weight_t>(0, total_w - max_weights[b]);
-                    const weight_t hi_w = max_weights[a];
-                    if (w1 < lo_w || w1 > hi_w || cut <= 0) { continue; }
-                    best_res.valid = true;
-                    best_res.violation = 0;
-                    best_res.cut = cut;
-                    pair_salt = rng();
-                    refine_bisection(lo_w, hi_w);
-                    if (!(best_res.valid && best_res.violation == 0 && best_res.cut < cut)) { continue; }
-                    improved = changed_any = true;
-                    ++ver[a];
-                    ++ver[b];
-                    members[a].clear();
-                    members[b].clear();
-                    for (int v = 0; v < nl; ++v) {
-                        const int blk = best_res.in_source[v] ? a : b;
-                        members[blk].push_back(verts[v]);
-                        blk_of[verts[v]] = blk;
-                    }
+                    todo.swap(rest);
                 }
                 if (!improved) { break; }
             }
@@ -1319,6 +1392,9 @@ namespace HeiProMap {
                 q.configure(saved_cfg);
                 q.seed_budget = seed_budget;
                 q.rng = rng;
+                q.helpers = helpers;
+                q.helper_off = helper_off;
+                q.helper_threads = helper_threads;
                 q.init_loc(gr.n);
                 std::vector<vertex_t> ord(gr.n);
                 for (vertex_t v = 0; v < gr.n; ++v) { ord[v] = v; }
@@ -1489,11 +1565,9 @@ namespace HeiProMap {
                               const std::vector<weight_t> &distance,
                               const f64 imbalance,
                               const FlowBisectionConfiguration &config,
-                              const u64 seed) {
-            FlowBisectionPartitioner p;
-            p.configure(config);
-            p.rng.seed(seed * 0x9E3779B97F4A7C15ULL + 12345);
-
+                              const u64 seed,
+                              const u64 threads = 1) {
+            const u64 T = std::max<u64>(1, threads);
             const size_t l = hierarchy.size();
             std::vector<partition_t> stride(l); // PEs below one part of level j
             partition_t k = 1;
@@ -1503,38 +1577,77 @@ namespace HeiProMap {
             }
             const weight_t lmax = (weight_t) std::ceil((1.0 + imbalance) * (f64) g.g_weight / (f64) k);
 
-            p.init_loc(g.n);
+            // one partitioner per thread for the items (mains) and one per thread for the pair refinements (helpers)
+            std::vector<std::unique_ptr<FlowBisectionPartitioner> > mains(T), helpers(T);
+            for (u64 t = 0; t < T; ++t) {
+                for (auto *v: {&mains, &helpers}) {
+                    (*v)[t] = std::make_unique<FlowBisectionPartitioner>();
+                    (*v)[t]->configure(config);
+                    (*v)[t]->init_loc(g.n);
+                }
+            }
             AlignedArray<vertex_t> order;
             order.initialize(g.n);
             for (vertex_t u = 0; u < g.n; ++u) { order[u] = u; }
 
             struct Item {
                 size_t b, e; // range in order
-                size_t level; // index into hierarchy, split into hierarchy[level] parts
                 partition_t offset;
             };
-            std::vector<Item> stack;
-            stack.push_back({0, (size_t) g.n, l - 1, 0});
-
-            while (!stack.empty()) {
-                const Item item = stack.back();
-                stack.pop_back();
-                p.split_item(g, order.get_ptr(), item.b, item.e, item.level, hierarchy, stride.data(), k, lmax,
-                             imbalance, config, config.top_seed_budget);
-                const partition_t kk = hierarchy[item.level];
-                for (partition_t i = 0; i < kk; ++i) {
-                    if (item.level == 0) {
-                        for (size_t x = p.blk_b[i]; x < p.blk_e[i]; ++x) {
-                            const vertex_t u = order[x];
-                            p_manager.set(u, g.v_weight(u), item.offset + i);
+            // top-down, level by level (the items of a level are independent). A level with at least T items: the items
+            // are distributed over the threads, every item runs sequentially. Fewer items: the threads are divided over
+            // the items, every k-way call uses its threads for the pairwise refinement.
+            std::vector<Item> cur = {{0, (size_t) g.n, 0}};
+            for (size_t level = l; level-- > 0;) {
+                const size_t m = cur.size();
+                const partition_t kk = hierarchy[level];
+                std::vector<std::vector<std::pair<size_t, size_t> > > parts(m);
+                auto process = [&](const size_t i, const size_t off, const size_t t) {
+                    FlowBisectionPartitioner &w = *mains[off];
+                    w.helpers = &helpers;
+                    w.helper_off = off;
+                    w.helper_threads = t;
+                    w.reseed(seed, ((u64) level << 32) ^ (u64) cur[i].offset); // the result does not depend on the schedule
+                    w.split_item(g, order.get_ptr(), cur[i].b, cur[i].e, level, hierarchy, stride.data(), k, lmax,
+                                 imbalance, config, config.top_seed_budget);
+                    parts[i].resize(kk);
+                    for (partition_t c = 0; c < kk; ++c) { parts[i][c] = {w.blk_b[c], w.blk_e[c]}; }
+                };
+                if (m >= T) {
+                    #pragma omp parallel for num_threads(T) schedule(dynamic, 1) if (T > 1)
+                    for (size_t i = 0; i < m; ++i) { process(i, (size_t) omp_get_thread_num(), 1); }
+                } else if (m == 1) {
+                    process(0, 0, T);
+                } else {
+                    const int saved_levels = omp_get_max_active_levels();
+                    omp_set_max_active_levels(2);
+                    #pragma omp parallel for num_threads(m) schedule(static, 1)
+                    for (size_t i = 0; i < m; ++i) {
+                        const size_t base = T / m, rem = T % m;
+                        process(i, i * base + std::min(i, rem), base + (i < rem ? 1 : 0));
+                    }
+                    omp_set_max_active_levels(saved_levels);
+                }
+                std::vector<Item> next;
+                for (size_t i = 0; i < m; ++i) {
+                    for (partition_t c = 0; c < kk; ++c) {
+                        if (level == 0) {
+                            for (size_t x = parts[i][c].first; x < parts[i][c].second; ++x) {
+                                const vertex_t u = order[x];
+                                p_manager.set(u, g.v_weight(u), cur[i].offset + c);
+                            }
+                        } else {
+                            next.push_back({parts[i][c].first, parts[i][c].second, cur[i].offset + c * stride[level]});
                         }
-                    } else {
-                        stack.push_back({p.blk_b[i], p.blk_e[i], item.level - 1, item.offset + i * stride[item.level]});
                     }
                 }
+                cur.swap(next);
             }
             repair_global(g, p_manager, k, lmax);
-            if (config.qap_rounds > 0) { p.refine_qap(g, p_manager, hierarchy, distance, lmax, config.qap_rounds); }
+            if (config.qap_rounds > 0) {
+                mains[0]->reseed(seed, ~(u64) 0);
+                mains[0]->refine_qap(g, p_manager, hierarchy, distance, lmax, config.qap_rounds);
+            }
         }
     };
 } // namespace HeiProMap

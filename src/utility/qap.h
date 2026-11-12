@@ -106,6 +106,36 @@ namespace HeiProMap {
         return qap;
     }
 
+    /**
+     * get_qap with an OpenMP reduction over the vertices (dynamic chunks, the degrees are skewed).
+     * Integer sums: the result is identical to get_qap. threads <= 1 runs the sequential version.
+     */
+    template<typename GraphT, typename PartitionManagerT, typename DistanceOracleT>
+    inline weight_t get_qap_parallel(const GraphT &g,
+                                     const PartitionManagerT &p_manager,
+                                     const DistanceOracleT &d_oracle,
+                                     const u64 threads) {
+        if (threads <= 1) { return get_qap(g, p_manager, d_oracle); }
+        HEIPROMAP_PROFILE_SCOPE("misc", "misc", "get_qap");
+
+        weight_t qap = 0;
+
+        #pragma omp parallel for num_threads(threads) schedule(dynamic, 4096) reduction(+:qap)
+        for (vertex_t u = 0; u < g.n; ++u) {
+            const partition_t u_id = p_manager[u];
+
+            for (size_t i = g.neighborhoods[u]; i < g.neighborhoods[u + 1]; ++i) {
+                const vertex_t v = g.edges_v[i];
+                const weight_t w = g.edge_w(i);
+                const partition_t v_id = p_manager[v];
+                const weight_t d = d_oracle.get(u_id, v_id);
+                qap += (d * w);
+            }
+        }
+
+        return qap;
+    }
+
     template<typename GraphT, typename PartitionManagerT>
     inline weight_t get_edge_cut(GraphT &g,
                                  PartitionManagerT &p_manager) {

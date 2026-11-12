@@ -330,19 +330,19 @@ namespace HeiProMap {
                     for (partition_t i = 0; i < ac.k; ++i) {
                         p_manager.set_lmax(i, lmax);
                     }
-                    std::cout << "QAP before flow refinement: " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    std::cout << "QAP before flow refinement: " << get_qap_parallel(graphs[0], p_manager, d_oracle, ac.threads) << std::endl;
                     if (ac.simple_refinement) {
                         simple_flow_refine.refine(graphs[0], d_oracle, bv_manager, p_manager);
                     } else {
                         flow_based_refinement.refine(graphs[0], d_oracle, bv_manager, p_manager, q_graph, block_conn);
                     }
-                    std::cout << "QAP after flow refinement : " << get_qap(graphs[0], p_manager, d_oracle) << std::endl;
+                    std::cout << "QAP after flow refinement : " << get_qap_parallel(graphs[0], p_manager, d_oracle, ac.threads) << std::endl;
                 }
             } else {
                 internal_solve();
             }
 
-            weight_t qap = get_qap(graphs[0], p_manager, d_oracle);
+            weight_t qap = get_qap_parallel(graphs[0], p_manager, d_oracle, ac.threads);
 
             std::vector<partition_t> p(graphs[0].n);
             for (vertex_t u = 0; u < graphs[0].n; ++u) { p[u] = p_manager[u]; }
@@ -468,7 +468,7 @@ namespace HeiProMap {
             level_infos[level].max_b_weight = p_manager.max_weight();
             level_infos[level].lmax = level_lmax;
             level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
-            level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
+            level_infos[level].comm_cost = get_qap_parallel(graphs.back(), p_manager, d_oracle, ac.threads);
             level_infos[level].empty_partitions = p_manager.n_empty_blocks();
             level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
             level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
@@ -489,7 +489,7 @@ namespace HeiProMap {
                 level_infos[level].max_b_weight = p_manager.max_weight();
                 level_infos[level].lmax = level_lmax;
                 level_infos[level].imb = (f64) level_infos[level].max_b_weight / ((f64) graphs[0].g_weight / (f64) ac.k);
-                level_infos[level].comm_cost = get_qap(graphs.back(), p_manager, d_oracle);
+                level_infos[level].comm_cost = get_qap_parallel(graphs.back(), p_manager, d_oracle, ac.threads);
                 level_infos[level].empty_partitions = p_manager.n_empty_blocks();
                 level_infos[level].oload_partitions = p_manager.n_oload_blocks(level_lmax);
                 level_infos[level].sum_oload_weights = p_manager.sum_oload_weight(level_lmax);
@@ -507,59 +507,17 @@ namespace HeiProMap {
                     exit(EXIT_FAILURE);
                 }
 
-                if (ac.threads > 1) {
-                    std::vector<PartitionManager> local_p_managers;
-                    std::vector<weight_t> local_qaps;
-
-                    local_p_managers.reserve(ac.threads);
-                    local_qaps.reserve(ac.threads);
-
-                    for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                        local_p_managers.emplace_back();
-                        local_p_managers.back().initialize(graphs.back().n, ac.k, graphs.back().g_weight);
-                        local_qaps.emplace_back(std::numeric_limits<weight_t>::max());
-                    }
-
-                    std::vector<AlignedArray<vertex_t>> thread_vertices(ac.threads);
-                    for (u64 t = 0; t < ac.threads; ++t) {
-                        thread_vertices[t].initialize(graphs.back().n);
-                    }
-
-                    #pragma omp parallel for schedule(static) num_threads(ac.threads)
-                    for (u64 thread_id = 0; thread_id < ac.threads; ++thread_id) {
-                        if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
-                            GlobalMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, thread_id);
-                        } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_FLOW_BISECTION) {
-                            FlowBisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, ac.distance, level_imbalance, ac.flow_bisection_config, ac.seed + thread_id);
-                        } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
-                            GggMultisectionPartitioner::partition(graphs.back(), local_p_managers[thread_id], ac.hierarchy, level_imbalance, ac.seed + thread_id);
-                        } else {
-                            greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed + thread_id, local_p_managers[thread_id], thread_vertices[thread_id]);
-                        }
-
-                        local_qaps[thread_id] = get_qap(graphs.back(), local_p_managers[thread_id], d_oracle);
-                    }
-
-                    size_t best_idx = 0;
-                    for (u64 thread_id = 1; thread_id < ac.threads; ++thread_id) {
-                        if (local_qaps[thread_id] < local_qaps[best_idx]) {
-                            best_idx = thread_id;
-                        }
-                    }
-
-                    p_manager.copy_from(local_p_managers[best_idx]);
+                // the initial partitioning always runs once (also with several threads: no best-of-x over thread seeds)
+                if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
+                    GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
+                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_FLOW_BISECTION) {
+                    FlowBisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.flow_bisection_config, ac.seed, ac.threads);
+                } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
+                    GggMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, level_imbalance, ac.seed);
                 } else {
-                    if (ac.partitioning_algorithm_id == PARTITIONING_ALG_MULTISECTION) {
-                        GlobalMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.global_multisection_config, 0);
-                    } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_FLOW_BISECTION) {
-                        FlowBisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, ac.distance, level_imbalance, ac.flow_bisection_config, ac.seed);
-                    } else if (ac.partitioning_algorithm_id == PARTITIONING_ALG_GREEDY_GRAPH_GROWING) {
-                        GggMultisectionPartitioner::partition(graphs.back(), p_manager, ac.hierarchy, level_imbalance, ac.seed);
-                    } else {
-                        AlignedArray<vertex_t> vertices;
-                        vertices.initialize(graphs.back().n);
-                        greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, p_manager, vertices);
-                    }
+                    AlignedArray<vertex_t> vertices;
+                    vertices.initialize(graphs.back().n);
+                    greedy_partition(graphs.back(), d_oracle, level_imbalance, ac.seed, p_manager, vertices);
                 }
 
                 // initialize boundary vertices and quotient graph
@@ -601,7 +559,7 @@ namespace HeiProMap {
                     }
                 }
 
-                initial_qap = get_qap(graphs.back(), p_manager, d_oracle);
+                initial_qap = get_qap_parallel(graphs.back(), p_manager, d_oracle, ac.threads);
                 initial_max_block_weight = max(p_manager.get_bweights());
             }
             auto ep = get_time_point();
