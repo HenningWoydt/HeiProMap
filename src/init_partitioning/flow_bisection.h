@@ -101,6 +101,9 @@ namespace HeiProMap {
         u64 ml_n = 1000;
         // vertices in a cluster weigh at most (total weight) / (ml_cap * k')
         f64 ml_cap = 20.0;
+        // the lower levels use the multilevel scheme too for items of at least this many vertices (their plain
+        // recursive bisection ends in one long sequential refinement of the first, large bisection). 0 = top level only.
+        u64 ml_min_n = 20000;
         s64 low_kway_rounds = -1, low_small_seeds = 2, low_refine_rounds = -1;
         bool small_exact = true; // small bisections: keep_fraction 1 and prune_factor 1
         // seed_budget of the top hierarchy level (its few, large bisections decide most of the QAP); 0 = no limit
@@ -243,7 +246,7 @@ namespace HeiProMap {
         int pair_proxy = 0; // 0 = hop distance, 1 = sum of the seed ball cuts
         size_t small_n = 0, small_seeds = 0;
         bool small_exact = true;
-        AlignedArray<int> ref_q, ref_d, ref_d1, ref_d2;
+        AlignedArray<int> ref_q, ref_q2, ref_d, ref_d1, ref_d2;
         AlignedArray<char> ref_core;
         std::vector<std::pair<int, int> > far_top; // (distance, vertex), farthest first
 
@@ -765,6 +768,7 @@ namespace HeiProMap {
             if (refine_rounds == 0 || !best_res.valid || best_res.violation != 0 || best_res.cut <= 0 || nl < 4) { return; }
             HEIPROMAP_PROFILE_SCOPE("partition", "FlowBisection", "refine_bisection");
             ref_q.initialize(N);
+            ref_q2.initialize(N);
             ref_d.initialize(N);
             ref_d1.initialize(N);
             ref_d2.initialize(N);
@@ -777,38 +781,43 @@ namespace HeiProMap {
             f64 f = refine_band * BAND_FACTORS[0];
             size_t improvements = 0;
             auto next_band = [&]() { f = ++band_idx < N_BANDS ? refine_band * BAND_FACTORS[band_idx] : 2.0; };
+            // ref_q holds the vertices ordered by their distance to the cut (BFS from the boundary). It only depends on
+            // best_res, so it is reused by the next widths until the cut improves.
+            bool order_valid = false;
+            int order_n = 0;
             while (improvements < refine_rounds && f < 0.95 && best_res.cut > 0) {
-                // boundary vertices: sources of the BFS that orders the vertices by distance to the cut
                 for (int v = 0; v < nl; ++v) { side[v] = best_res.in_source[v] ? 1 : 2; }
-                int qt = 0;
-                for (int v = 0; v < nl; ++v) {
-                    for (int i = first[v]; i < first[v + 1]; ++i) {
-                        if (arcs[i].to < nl && side[arcs[i].to] != side[v]) { ref_q[qt++] = v; break; }
+                if (!order_valid) {
+                    // boundary vertices: sources of the BFS that orders the vertices by distance to the cut
+                    int qt = 0;
+                    for (int v = 0; v < nl; ++v) {
+                        for (int i = first[v]; i < first[v + 1]; ++i) {
+                            if (arcs[i].to < nl && side[arcs[i].to] != side[v]) { ref_q[qt++] = v; break; }
+                        }
                     }
-                }
-                if (qt == 0) { return; }
-                std::fill_n(ref_d.get_ptr(), nl, 1 << 29);
-                for (int x = 0; x < qt; ++x) { ref_d[ref_q[x]] = 0; }
-                for (int qh = 0; qh < qt; ++qh) {
-                    const int u = ref_q[qh];
-                    for (int i = first[u]; i < first[u + 1]; ++i) {
-                        const int v = arcs[i].to;
-                        if (v < nl && ref_d[v] == (1 << 29)) { ref_d[v] = ref_d[u] + 1; ref_q[qt++] = v; }
+                    if (qt == 0) { return; }
+                    std::fill_n(ref_d.get_ptr(), nl, 1 << 29);
+                    for (int x = 0; x < qt; ++x) { ref_d[ref_q[x]] = 0; }
+                    for (int qh = 0; qh < qt; ++qh) {
+                        const int u = ref_q[qh];
+                        for (int i = first[u]; i < first[u + 1]; ++i) {
+                            const int v = arcs[i].to;
+                            if (v < nl && ref_d[v] == (1 << 29)) { ref_d[v] = ref_d[u] + 1; ref_q[qt++] = v; }
+                        }
                     }
+                    order_n = qt;
+                    order_valid = true;
                 }
                 // corridor = the closest vertices up to f * total weight; terminals = the rest of each side
                 const f64 corridor_w = f * (f64) total_w;
                 weight_t acc = 0;
-                for (int x = 0; x < qt && (f64) acc < corridor_w; ++x) {
+                for (int x = 0; x < order_n && (f64) acc < corridor_w; ++x) {
                     acc += vw[ref_q[x]];
                     side[ref_q[x]] = 0;
                 }
                 int n1 = 0, n2 = 0;
                 for (int v = 0; v < nl; ++v) { n1 += side[v] == 1; n2 += side[v] == 2; }
                 if (n1 == 0 || n2 == 0) { next_band(); continue; }
-
-                multi_hop_distance(side.get_ptr(), 1, ref_d1.get_ptr(), ref_q.get_ptr());
-                multi_hop_distance(side.get_ptr(), 2, ref_d2.get_ptr(), ref_q.get_ptr());
 
                 std::memcpy(arcs.get_ptr(), base_arcs.get_ptr(), na * sizeof(Arc));
                 reset_trees();
@@ -818,12 +827,16 @@ namespace HeiProMap {
                 const s64 before = best_res.cut;
                 const s64 flow = bk_maxflow(before);
                 if (flow >= before) { next_band(); continue; }
+                // only needed to guide the piercing of an improving attempt
+                multi_hop_distance(side.get_ptr(), 1, ref_d1.get_ptr(), ref_q2.get_ptr());
+                multi_hop_distance(side.get_ptr(), 2, ref_d2.get_ptr(), ref_q2.get_ptr());
                 rng.seed(pair_salt ^ (0x9E3779B97F4A7C15ULL * (improvements + 1)));
                 continue_job(lo, hi, flow, ref_d1.get_ptr(), ref_d2.get_ptr(), best_res, before);
                 if (best_res.valid && best_res.violation == 0 && best_res.cut < before) {
                     ++improvements;
                     band_idx = 0;
                     f = refine_band * BAND_FACTORS[0];
+                    order_valid = false;
                 } else {
                     next_band();
                 }
@@ -1558,7 +1571,7 @@ namespace HeiProMap {
                 if (config.low_small_seeds >= 0) { small_seeds = (size_t) config.low_small_seeds; }
                 if (config.low_refine_rounds >= 0) { refine_rounds = (size_t) config.low_refine_rounds; }
             }
-            if (config.ml_n > 0 && level == top && (e - b) > 2 * config.ml_n) { multilevel_kway(g, order, b, e, kk, mw.data(), ns); }
+            if (config.ml_n > 0 && (level == top || (config.ml_min_n > 0 && (e - b) >= config.ml_min_n)) && (e - b) > 2 * config.ml_n) { multilevel_kway(g, order, b, e, kk, mw.data(), ns); }
             else { kway_partition(g, order, b, e, kk, mw.data(), ns); }
             kway_rounds = kr;
             small_seeds = ss;

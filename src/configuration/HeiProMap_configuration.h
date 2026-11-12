@@ -225,6 +225,7 @@ namespace HeiProMap {
             {"--flow-bisection-qap-top-levels", "", "Flow bisection: QAP refinement only for PE pairs whose lowest common level is one of this many highest hierarchy levels, 0 = all pairs.", "1", "", false},
             {"--flow-bisection-qap-bands", "", "Flow bisection: number of corridor widths (1-5) of the QAP refinement.", "5", "", false},
             {"--flow-bisection-ml-cap", "", "Flow bisection: cluster weight cap divisor of the multilevel top level.", "20", "", false},
+            {"--flow-bisection-ml-min-n", "", "Flow bisection: lower levels use the multilevel scheme for items of at least this many vertices, 0 = top level only.", "20000", "", false},
             {"--flow-bisection-small-n", "", "Flow bisection: bisections with fewer vertices use many seeds and no pruning heuristics, 0 = off.", "300", "", false},
             {"--flow-bisection-small-seeds", "", "Flow bisection: number of seeds of the small bisections.", "8", "", false},
             {"--flow-bisection-small-exact", "", "Flow bisection: small bisections continue every job and prune exactly (0/1).", "1", "", false},
@@ -569,6 +570,9 @@ namespace HeiProMap {
             }
             if (is_set("--flow-bisection-ml-cap")) {
                 flow_bisection_config.ml_cap = std::stod(get("--flow-bisection-ml-cap"));
+            }
+            if (is_set("--flow-bisection-ml-min-n")) {
+                flow_bisection_config.ml_min_n = std::stoull(get("--flow-bisection-ml-min-n"));
             }
             if (is_set("--flow-bisection-small-n")) {
                 flow_bisection_config.small_n = std::stoull(get("--flow-bisection-small-n"));
