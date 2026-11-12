@@ -172,6 +172,7 @@ namespace HeiProMap {
 #include "../utility/utils.h"
 #include "../init_partitioning/global_multisection.h"
 #include "../init_partitioning/flow_bisection.h"
+#include "../init_partitioning/ggg_multisection.h"
 #include "../refinement/label_propagation_refinement.h"
 #include "../refinement/quotient_graph_refinement.h"
 #include "../refinement/flow_based_refinement.h"
