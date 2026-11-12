@@ -797,7 +797,7 @@ namespace HeiProMap {
             config_name = "fast";
             collect_dataset = false;
 
-            initial_c = 32; // flow-bisection: small coarse graphs are enough
+            initial_c = 8; // flow-bisection: tiny coarse graphs are enough (c=8 is 45% faster than 32 for ~1% QAP)
 
             // set GPA matching algorithm
             // coarsening_algorithm_string = "size-constrained-lp";
