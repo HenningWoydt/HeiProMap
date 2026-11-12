@@ -930,6 +930,8 @@ namespace HeiProMap {
 
         // ranges of at least this many vertices run their bisection tree as parallel tasks
         static constexpr size_t PAR_TREE_MIN_N = 20000;
+        // ... or whose tree has at least this many blocks (many bisections, also on a small graph)
+        static constexpr partition_t PAR_TREE_MIN_K = 16;
 
         /**
          * Computes a k'-partition of the vertices order[begin, end) (induced subgraph of g) by recursive
@@ -955,7 +957,7 @@ namespace HeiProMap {
                 return base_seed ^ (0x9E3779B97F4A7C15ULL * ((u64) t.lo + 1)) ^ (0xC2B2AE3D27D4EB4FULL * ((u64) t.hi + 1));
             };
 
-            if (helpers && helper_threads > 1 && k_prime > 2 && end - begin >= PAR_TREE_MIN_N) {
+            if (helpers && helper_threads > 1 && k_prime > 2 && (end - begin >= PAR_TREE_MIN_N || k_prime >= PAR_TREE_MIN_K)) {
                 std::function<void(Task)> run = [&](const Task tk) {
                     const partition_t K = tk.hi - tk.lo;
                     if (K == 1 || tk.e - tk.b < 2) {
