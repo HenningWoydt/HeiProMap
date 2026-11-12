@@ -32,6 +32,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <limits>
+#include <functional>
 #include <memory>
 #include <omp.h>
 #include <random>
@@ -875,11 +876,55 @@ namespace HeiProMap {
 
         }
 
+        // Bisects the range of a task of kway_partition on this instance (the network of the range is built here):
+        // afterwards order[task.b, task.e) holds the vertices of the first part, then the rest; returns the size of the
+        // first part. pref = prefix sums of the block weight limits; the random stream is seeded with task_seed.
+        size_t bisect_range(const CSRGraph &g, vertex_t *order, const Task &task, const weight_t *pref, const u64 num_seeds,
+                            const u64 task_seed) {
+            const partition_t K = task.hi - task.lo;
+            const size_t cnt = task.e - task.b;
+            const partition_t mid = task.lo + (K + 1) / 2;
+            const weight_t max1 = pref[mid] - pref[task.lo];
+            const weight_t max2 = pref[task.hi] - pref[mid];
+
+            vertex_t *verts = order + task.b;
+            for (size_t i = 0; i < cnt; ++i) { loc[verts[i]] = (int) i; }
+            setup_network(g, verts, (int) cnt);
+            for (size_t i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
+
+            const weight_t lo_w = std::max<weight_t>(0, total_w - max2);
+            rng.seed(task_seed);
+            bisect(lo_w, max1, max1 == max2, num_seeds);
+
+            // stable partition of the range: first part to the front
+            if (scratch_order.size() < cnt) { scratch_order.initialize(cnt); }
+            size_t n1 = 0, n2 = 0;
+            for (size_t i = 0; i < cnt; ++i) {
+                if (best_res.in_source[i]) { verts[n1++] = verts[i]; } else { scratch_order[n2++] = verts[i]; }
+            }
+            std::memcpy(verts + n1, scratch_order.get_ptr(), n2 * sizeof(vertex_t));
+            return n1;
+        }
+
+        // the per item values that split_item overrides (a helper instance works for the item of its leader)
+        void adopt_item_params(const FlowBisectionPartitioner &o) {
+            seed_budget = o.seed_budget;
+            small_seeds = o.small_seeds;
+            refine_rounds = o.refine_rounds;
+            refine_band = o.refine_band;
+            max_bands = o.max_bands;
+        }
+
+        // ranges of at least this many vertices run their bisection tree as parallel tasks
+        static constexpr size_t PAR_TREE_MIN_N = 20000;
+
         /**
          * Computes a k'-partition of the vertices order[begin, end) (induced subgraph of g) by recursive
          * flow based bisection, in place: afterwards block i owns order[blk_b[i], blk_e[i]) (the blocks
          * appear in increasing order). Block i may weigh at most max_weights[i]. `loc` is -1 outside
-         * of this function.
+         * of this function. With helper threads the bisections of the tree run as parallel tasks (after the first
+         * bisection its two halves are independent); every bisection is seeded from its block range, so the result
+         * does not depend on the schedule.
          */
         void kway_partition(const CSRGraph &g, vertex_t *order, const size_t begin, const size_t end,
                             const partition_t k_prime, const weight_t *max_weights,
@@ -892,44 +937,56 @@ namespace HeiProMap {
             for (partition_t i = 0; i < k_prime; ++i) { prefix[i + 1] = prefix[i] + max_weights[i]; }
             scratch_order.initialize(end - begin);
 
-            task_stack.clear();
-            task_stack.push_back({begin, end, 0, k_prime});
+            const u64 base_seed = rng();
+            auto task_seed = [&](const Task &t) -> u64 {
+                return base_seed ^ (0x9E3779B97F4A7C15ULL * ((u64) t.lo + 1)) ^ (0xC2B2AE3D27D4EB4FULL * ((u64) t.hi + 1));
+            };
 
-            while (!task_stack.empty()) {
-                const Task task = task_stack.back();
-                task_stack.pop_back();
-                const partition_t K = task.hi - task.lo;
-                const size_t cnt = task.e - task.b;
-
-                if (K == 1 || cnt < 2) {
-                    // fewer vertices than needed: everything goes to the first block of the range
-                    blk_b[task.lo] = task.b;
-                    blk_e[task.lo] = task.e;
-                    continue;
+            if (helpers && helper_threads > 1 && k_prime > 2 && end - begin >= PAR_TREE_MIN_N) {
+                std::function<void(Task)> run = [&](const Task tk) {
+                    const partition_t K = tk.hi - tk.lo;
+                    if (K == 1 || tk.e - tk.b < 2) {
+                        // fewer vertices than needed: everything goes to the first block of the range
+                        blk_b[tk.lo] = tk.b;
+                        blk_e[tk.lo] = tk.e;
+                        return;
+                    }
+                    FlowBisectionPartitioner &w = *(*helpers)[helper_off + (size_t) omp_get_thread_num()];
+                    w.adopt_item_params(*this);
+                    const size_t n1 = w.bisect_range(g, order, tk, prefix.data(), num_seeds, task_seed(tk));
+                    const partition_t mid = tk.lo + (K + 1) / 2;
+                    const Task c1{tk.b, tk.b + n1, tk.lo, mid}, c2{tk.b + n1, tk.e, mid, tk.hi};
+                    #pragma omp task firstprivate(c1)
+                    run(c1);
+                    #pragma omp task firstprivate(c2)
+                    run(c2);
+                };
+                #pragma omp parallel num_threads(helper_threads)
+                {
+                    #pragma omp single
+                    run(Task{begin, end, 0, k_prime});
                 }
-
-                const partition_t mid = task.lo + (K + 1) / 2;
-                const weight_t max1 = prefix[mid] - prefix[task.lo];
-                const weight_t max2 = prefix[task.hi] - prefix[mid];
-
-                vertex_t *verts = order + task.b;
-                for (size_t i = 0; i < cnt; ++i) { loc[verts[i]] = (int) i; }
-                setup_network(g, verts, (int) cnt);
-                for (size_t i = 0; i < cnt; ++i) { loc[verts[i]] = -1; }
-
-                const weight_t lo_w = std::max<weight_t>(0, total_w - max2);
-                bisect(lo_w, max1, max1 == max2, num_seeds);
-
-                // stable partition of the range: first part to the front
-                size_t n1 = 0, n2 = 0;
-                for (size_t i = 0; i < cnt; ++i) {
-                    if (best_res.in_source[i]) { verts[n1++] = verts[i]; } else { scratch_order[n2++] = verts[i]; }
+            } else {
+                task_stack.clear();
+                task_stack.push_back({begin, end, 0, k_prime});
+                while (!task_stack.empty()) {
+                    const Task task = task_stack.back();
+                    task_stack.pop_back();
+                    const partition_t K = task.hi - task.lo;
+                    if (K == 1 || task.e - task.b < 2) {
+                        // fewer vertices than needed: everything goes to the first block of the range
+                        blk_b[task.lo] = task.b;
+                        blk_e[task.lo] = task.e;
+                        continue;
+                    }
+                    const partition_t mid = task.lo + (K + 1) / 2;
+                    const size_t n1 = bisect_range(g, order, task, prefix.data(), num_seeds, task_seed(task));
+                    task_stack.push_back({task.b, task.b + n1, task.lo, mid});
+                    task_stack.push_back({task.b + n1, task.e, mid, task.hi});
                 }
-                std::memcpy(verts + n1, scratch_order.get_ptr(), n2 * sizeof(vertex_t));
-
-                task_stack.push_back({task.b, task.b + n1, task.lo, mid});
-                task_stack.push_back({task.b + n1, task.e, mid, task.hi});
             }
+            // the random stream of this instance after the tree must not depend on where the bisections ran
+            rng.seed(base_seed ^ 0xD1B54A32D192ED03ULL);
             if (repair && k_prime > 1) { repair_kway(g, order, begin, end, k_prime, max_weights); }
             if (kway_rounds > 0 && k_prime > 2) { refine_kway(g, order, begin, end, k_prime, max_weights); }
         }
