@@ -214,7 +214,7 @@ namespace HeiProMap {
             {"--initial-c", "", "Initial contracting limit.", "64", "", false},
             {"--dump-multisection", "", "After every multisection item (one kaffpa call) write its graph, partition and stats to this directory.", "", "", false},
             {"--save-coarsest-graph", "", "Write the coarsest graph (METIS format, with weights) to this file before initial partitioning.", "", "", false},
-            {"--partitioning", "", "Initial partitioning algorithm (multisection, greedy, flow-bisection).", "", "", false},
+            {"--partitioning", "", "Initial partitioning algorithm (multisection, greedy, greedy-graph-growing, flow-bisection). Default: flow-bisection in the fast, eco and strong profiles.", "", "", false},
             {"--flow-bisection-seed-pool", "", "Flow bisection: every seed is drawn at random from the N farthest vertices (1 = the farthest, deterministic).", "1", "", false},
             {"--flow-bisection-kway-rounds", "", "Flow bisection: passes of pairwise flow refinement between adjacent blocks of every level, 0 = off.", "3", "", false},
             {"--flow-bisection-low-kway-rounds", "", "Flow bisection: kway rounds for the levels below the top, -1 = same as the top level.", "-1", "", false},
@@ -951,7 +951,7 @@ namespace HeiProMap {
             size_constrained_lp_config.use_degree_ordering = true;
 
             // set multisection
-            partitioning_algorithm_string = "multisection";
+            partitioning_algorithm_string = "flow-bisection"; // the multisection (kaffpa-strong below) is still available with --partitioning multisection
             partitioning_algorithm_id = string_to_partitioning_algorithm(partitioning_algorithm_string);
             // global_multisection_config.mode_string = "heipa-fast";
             // global_multisection_config.mode = GLOBAL_MULTISECTION_HEIPA_FAST;
